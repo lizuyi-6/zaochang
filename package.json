@@ -15,7 +15,10 @@
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
+    "framer-motion": "12.23.12",
     "lucide-react": "0.468.0",
+    "motion-dom": "12.23.12",
+    "motion-utils": "12.23.6",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6"

@@ -129,7 +129,8 @@ test("server-renders the creator community", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
   assert.match(html, /<title>造场 \| 创作者的试玩社区<\/title>/);
-  assert.match(html, /今天，大家都在造什么/);
+  assert.match(html, /今天，大家/);
+  assert.match(html, /都在造什么/);
   assert.match(html, /发布作品/);
   assert.match(html, /果子钱包/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
@@ -149,6 +150,27 @@ test("renders authenticated member state from forwarded identity", async () => {
   assert.match(html, /林一/);
   assert.doesNotMatch(html, />登录<\/a>/);
 });
+
+for (const [pathname, marker] of [
+  ["/discover", "从一个能玩的版本开始"],
+  ["/feed", "作品之外，正在发生"],
+  ["/studio", "你的作品，正在怎样生长"],
+  ["/studio/new", "发布一件新作品"],
+  ["/wallet", "果子在作品之间流动"],
+  ["/circles", "围绕做东西，形成关系"],
+  ["/challenges", "给创作一个共同起点"],
+  ["/collections", "想再回来玩的作品"],
+  ["/profile", "发布的作品"],
+  ["/product/mori", "开始体验"],
+]) {
+  test(`renders distinct route ${pathname}`, async () => {
+    const response = await fetch(`${baseUrl}${pathname}`, {
+      headers: { accept: "text/html" },
+    });
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), new RegExp(marker));
+  });
+}
 
 test("rejects anonymous product publishing", async () => {
   const response = await fetch(`${baseUrl}/api/products`, {
