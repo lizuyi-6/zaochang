@@ -162,6 +162,7 @@ for (const [pathname, marker] of [
   ["/collections", "想再回来玩的作品"],
   ["/profile", "发布的作品"],
   ["/product/mori", "开始体验"],
+  ["/galaxy", "穿过静默的星尘"],
 ]) {
   test(`renders distinct route ${pathname}`, async () => {
     const response = await fetch(`${baseUrl}${pathname}`, {

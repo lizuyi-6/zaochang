@@ -87,6 +87,8 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
       .slice(0, 6);
   }, [query]);
 
+  if (pathname === "/galaxy") return <>{children}</>;
+
   const routeName = pathname.startsWith("/product/") ? "作品体验" : routeNames[pathname] ?? "造场";
 
   return (
