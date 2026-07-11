@@ -25,10 +25,22 @@ import {
   type GalaxyId,
   type OrbitConfig,
   type PlanetId,
+  type PlanetSurface,
   type PlanetStory,
   type TargetId,
 } from "./cosmic-atlas";
 import styles from "./galaxy.module.css";
+
+const PLANET_SURFACE_INDEX: Record<PlanetSurface, number> = {
+  gas: 0,
+  lava: 1,
+  ice: 2,
+  ocean: 3,
+  desert: 4,
+  forest: 5,
+  rogue: 6,
+  crystal: 7,
+};
 
 const starVertexShader = `
   uniform float uTime;
@@ -155,24 +167,66 @@ const planetFragmentShader = `
   varying vec3 vViewDirection;
   varying vec3 vLocalPosition;
 
+  float hash(vec3 p) {
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+  }
+
+  float noise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+      f.z
+    );
+  }
+
+  float fbm(vec3 p) {
+    float value = noise(p) * 0.54;
+    p = p * 2.03 + 7.1;
+    value += noise(p) * 0.27;
+    p = p * 2.01 + 3.7;
+    value += noise(p) * 0.13;
+    p = p * 2.04 + 1.9;
+    value += noise(p) * 0.06;
+    return value;
+  }
+
   void main() {
-    float latitude = vLocalPosition.y * 4.8;
-    float longitude = atan(vLocalPosition.z, vLocalPosition.x);
-    float current = sin(latitude * 3.2 + sin(longitude * 3.0 - uTime * 0.09) * 1.6);
-    float storm = sin(longitude * 7.0 + latitude * 1.8 + uTime * 0.12) * 0.5 + 0.5;
-    float bands = smoothstep(-0.8, 0.92, current * 0.72 + storm * 0.28);
-    vec3 midnight = vec3(0.008, 0.014, 0.055);
-    vec3 ocean = vec3(0.035, 0.16, 0.29);
-    vec3 electric = vec3(0.32, 0.48, 0.64);
-    vec3 color = mix(midnight, ocean, bands);
-    color = mix(color, electric, pow(max(0.0, storm - 0.62), 2.0) * 0.72);
-    float rawLight = dot(normalize(vNormal), normalize(vec3(-0.42, 0.46, 0.78)));
-    float light = smoothstep(-0.24, 0.62, rawLight);
-    float nightGlow = smoothstep(-0.78, -0.18, rawLight) * 0.055;
-    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0), 3.2);
-    color *= 0.08 + light * 0.9;
-    color += nightGlow * vec3(0.18, 0.22, 0.36);
-    color += fresnel * vec3(0.19, 0.43, 0.62) * 0.46;
+    vec3 p = normalize(vLocalPosition);
+    vec3 normal = normalize(vNormal);
+    vec3 viewDirection = normalize(vViewDirection);
+    float longitude = atan(p.z, p.x);
+    float slowTime = uTime * 0.018;
+    float broadWarp = fbm(p * 3.2 + vec3(slowTime, 1.7, -slowTime * 0.4));
+    float fineWarp = fbm(p * 8.5 - vec3(0.0, slowTime * 0.8, slowTime));
+    float latitude = asin(clamp(p.y, -1.0, 1.0));
+    float mainBand = sin(latitude * 20.0 + broadWarp * 4.6 + sin(longitude * 2.0) * 0.38);
+    float filament = sin(latitude * 61.0 - fineWarp * 3.4 + longitude * 0.72);
+    float bandSignal = mainBand * 0.34 + filament * 0.055 + (broadWarp - 0.5) * 0.52;
+    float bands = clamp(0.5 + bandSignal * 0.5, 0.0, 1.0);
+    vec2 stormSpace = vec2((longitude - 0.78) * 0.58, (p.y + 0.14) * 2.9);
+    float stormRadius = length(stormSpace);
+    float stormSpiral = sin(atan(stormSpace.y, stormSpace.x) * 4.0 - stormRadius * 24.0 + uTime * 0.04);
+    float storm = exp(-stormRadius * stormRadius * 10.0) * (0.58 + stormSpiral * 0.22);
+    vec3 midnight = vec3(0.012, 0.04, 0.07);
+    vec3 cobalt = vec3(0.045, 0.18, 0.27);
+    vec3 pearl = vec3(0.3, 0.43, 0.48);
+    vec3 color = mix(midnight, cobalt, 0.22 + bands * 0.64);
+    float cloudPlume = smoothstep(0.68, 0.9, fineWarp * 0.62 + bands * 0.24 + storm * 0.5);
+    color = mix(color, pearl, cloudPlume * 0.34 + storm * 0.38);
+    vec3 lightDirection = normalize(vec3(-0.44, 0.5, 0.74));
+    float rawLight = dot(normal, lightDirection);
+    float light = smoothstep(-0.28, 0.78, rawLight);
+    float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.4);
+    vec3 halfDirection = normalize(lightDirection + viewDirection);
+    float sheen = pow(max(dot(normal, halfDirection), 0.0), 38.0) * smoothstep(0.0, 0.3, rawLight);
+    color *= 0.045 + light * 0.96;
+    color += sheen * vec3(0.5, 0.66, 0.72) * 0.22;
+    color += fresnel * vec3(0.12, 0.38, 0.56) * 0.38;
     gl_FragColor = vec4(color, 1.0);
   }
 `;
@@ -200,24 +254,45 @@ const nyxFragmentShader = `
     );
   }
 
+  float fbm(vec3 p) {
+    float value = noise(p) * 0.56;
+    p = p * 2.07 + 4.3;
+    value += noise(p) * 0.27;
+    p = p * 2.03 + 8.1;
+    value += noise(p) * 0.12;
+    p = p * 2.01 + 2.6;
+    value += noise(p) * 0.05;
+    return value;
+  }
+
   void main() {
     vec3 p = normalize(vLocalPosition);
-    float terrain = noise(p * 5.2 + vec3(uTime * 0.008, 0.0, 0.0));
-    float faultA = abs(sin((p.x * 1.25 + p.y * 0.68 + terrain * 0.42) * 18.0));
-    float faultB = abs(sin((p.z * 1.4 - p.y * 0.74 - terrain * 0.36) * 15.0));
-    float fissure = 1.0 - smoothstep(0.02, 0.13, min(faultA, faultB));
-    float ember = smoothstep(0.6, 0.88, terrain + fissure * 0.32);
-    vec3 basalt = vec3(0.018, 0.004, 0.008);
-    vec3 iron = vec3(0.17, 0.018, 0.026);
-    vec3 fire = vec3(1.0, 0.19, 0.035);
-    vec3 color = mix(basalt, iron, smoothstep(0.22, 0.82, terrain));
-    color = mix(color, fire, fissure * (0.46 + ember * 0.54));
-    float rawLight = dot(normalize(vNormal), normalize(vec3(-0.5, 0.38, 0.76)));
-    float light = smoothstep(-0.36, 0.7, rawLight);
-    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0), 3.0);
-    color *= 0.15 + light * 0.82;
-    color += fissure * fire * 0.38;
-    color += fresnel * vec3(0.42, 0.055, 0.08) * 0.48;
+    float drift = uTime * 0.0035;
+    float continental = fbm(p * 3.4 + vec3(drift, 2.1, -drift));
+    vec3 warped = p * 7.2 + vec3(continental * 2.8, -continental * 1.9, continental * 2.2);
+    float plateA = fbm(warped);
+    float plateB = fbm(warped.yzx * 1.31 + 5.7);
+    float ridgeA = abs(plateA - 0.49);
+    float ridgeB = abs(plateB - 0.515);
+    float fissure = 1.0 - smoothstep(0.008, 0.042, min(ridgeA, ridgeB * 1.18));
+    float hairline = 1.0 - smoothstep(0.004, 0.018, abs(fbm(p * 16.0 + plateA) - 0.51));
+    fissure = max(fissure, hairline * 0.28);
+    float cooled = smoothstep(0.24, 0.82, continental * 0.7 + plateA * 0.3);
+    vec3 basalt = vec3(0.009, 0.005, 0.008);
+    vec3 iron = vec3(0.11, 0.025, 0.022);
+    vec3 ember = vec3(1.4, 0.16, 0.018);
+    vec3 hotCore = vec3(2.2, 0.72, 0.12);
+    vec3 color = mix(basalt, iron, cooled * 0.72);
+    vec3 emission = mix(ember, hotCore, smoothstep(0.35, 0.92, plateB)) * fissure;
+    vec3 normal = normalize(vNormal);
+    vec3 viewDirection = normalize(vViewDirection);
+    vec3 lightDirection = normalize(vec3(-0.5, 0.42, 0.75));
+    float rawLight = dot(normal, lightDirection);
+    float light = smoothstep(-0.34, 0.72, rawLight);
+    float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.2);
+    color *= 0.055 + light * 0.78;
+    color += emission * (0.5 + (1.0 - light) * 0.2);
+    color += fresnel * vec3(0.31, 0.035, 0.025) * 0.33;
     gl_FragColor = vec4(color, 1.0);
   }
 `;
@@ -245,24 +320,45 @@ const caelumFragmentShader = `
     );
   }
 
+  float fbm(vec3 p) {
+    float value = noise(p) * 0.55;
+    p = p * 2.04 + 6.2;
+    value += noise(p) * 0.27;
+    p = p * 2.01 + 2.8;
+    value += noise(p) * 0.13;
+    p = p * 2.06 + 8.4;
+    value += noise(p) * 0.05;
+    return value;
+  }
+
   void main() {
     vec3 p = normalize(vLocalPosition);
-    float drift = noise(p * 4.6 + vec3(0.0, uTime * 0.004, 0.0));
-    float facet = abs(sin((p.x * 1.2 + p.z * 0.72 + drift * 0.34) * 13.0));
-    float crack = 1.0 - smoothstep(0.015, 0.085, facet);
-    float polar = pow(abs(p.y), 3.2);
-    vec3 abyss = vec3(0.01, 0.018, 0.075);
-    vec3 glacier = vec3(0.13, 0.32, 0.52);
-    vec3 frost = vec3(0.58, 0.8, 0.9);
-    vec3 color = mix(abyss, glacier, smoothstep(0.18, 0.86, drift));
-    color = mix(color, frost, polar * 0.42 + crack * 0.2);
-    float rawLight = dot(normalize(vNormal), normalize(vec3(-0.34, 0.58, 0.72)));
-    float light = smoothstep(-0.4, 0.76, rawLight);
-    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0), 2.6);
-    float aurora = fresnel * (0.55 + 0.45 * sin(p.y * 18.0 + uTime * 0.08));
-    color *= 0.12 + light * 0.9;
-    color += crack * vec3(0.16, 0.48, 0.82) * 0.26;
-    color += aurora * vec3(0.18, 0.5, 0.78) * 0.48;
+    float driftTime = uTime * 0.0028;
+    float shelf = fbm(p * 3.8 + vec3(0.0, driftTime, -driftTime));
+    float compressed = fbm(p * 9.5 + vec3(shelf * 2.3));
+    float fractureA = abs(compressed - 0.505);
+    float fractureB = abs(fbm(p.zxy * 13.0 + shelf * 3.0) - 0.49);
+    float crack = 1.0 - smoothstep(0.009, 0.045, min(fractureA, fractureB * 1.22));
+    float crystalDust = smoothstep(0.76, 0.94, noise(p * 34.0 + 9.0));
+    float polar = pow(abs(p.y), 4.2);
+    vec3 abyss = vec3(0.008, 0.016, 0.055);
+    vec3 glacier = vec3(0.08, 0.25, 0.43);
+    vec3 frost = vec3(0.55, 0.78, 0.86);
+    vec3 color = mix(abyss, glacier, smoothstep(0.18, 0.82, shelf));
+    color = mix(color, frost, polar * 0.34 + crystalDust * 0.18);
+    vec3 normal = normalize(vNormal);
+    vec3 viewDirection = normalize(vViewDirection);
+    vec3 lightDirection = normalize(vec3(-0.34, 0.58, 0.72));
+    float rawLight = dot(normal, lightDirection);
+    float light = smoothstep(-0.38, 0.78, rawLight);
+    float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.7);
+    vec3 halfDirection = normalize(lightDirection + viewDirection);
+    float iceSpecular = pow(max(dot(normal, halfDirection), 0.0), 76.0) * smoothstep(0.0, 0.24, rawLight);
+    float aurora = fresnel * smoothstep(0.42, 0.92, sin(p.y * 13.0 + p.x * 5.0 + uTime * 0.035) * 0.5 + 0.5);
+    color *= 0.06 + light * 0.94;
+    color += crack * vec3(0.12, 0.5, 1.05) * (0.16 + (1.0 - light) * 0.09);
+    color += iceSpecular * vec3(0.82, 0.93, 1.0) * 0.34;
+    color += aurora * vec3(0.12, 0.82, 0.72) * 0.45;
     gl_FragColor = vec4(color, 1.0);
   }
 `;
@@ -271,6 +367,7 @@ const archivePlanetFragmentShader = `
   uniform float uTime;
   uniform float uSeed;
   uniform float uPattern;
+  uniform float uSurface;
   uniform vec3 uColorA;
   uniform vec3 uColorB;
   uniform vec3 uGlow;
@@ -295,26 +392,96 @@ const archivePlanetFragmentShader = `
     );
   }
 
+  float fbm(vec3 p) {
+    float value = noise(p) * 0.54;
+    p = p * 2.03 + 7.2;
+    value += noise(p) * 0.27;
+    p = p * 2.01 + 3.8;
+    value += noise(p) * 0.13;
+    p = p * 2.04 + 1.6;
+    value += noise(p) * 0.06;
+    return value;
+  }
+
   void main() {
     vec3 p = normalize(vLocalPosition);
-    float slowTime = uTime * (0.006 + fract(uSeed) * 0.004);
-    float broad = noise(p * (3.4 + fract(uPattern) * 2.2) + vec3(slowTime, -slowTime * 0.4, uSeed));
-    float detail = noise(p * (8.0 + uPattern * 0.85) - vec3(slowTime * 0.6, 0.0, slowTime));
-    float latitude = sin((p.y + broad * 0.16) * (10.0 + uPattern * 1.7)) * 0.5 + 0.5;
-    float longitude = sin((atan(p.z, p.x) + detail * 0.3) * (5.0 + fract(uSeed) * 5.0)) * 0.5 + 0.5;
-    float veins = 1.0 - smoothstep(0.025, 0.12, abs(latitude - longitude));
-    float continents = smoothstep(0.44, 0.72, broad * 0.72 + detail * 0.28);
-    float selector = fract(uPattern * 0.3819);
-    float terrain = mix(continents, latitude, smoothstep(0.22, 0.58, selector));
-    terrain = mix(terrain, max(continents, veins), smoothstep(0.62, 0.9, selector));
-    vec3 color = mix(uColorA, uColorB, terrain);
-    float rawLight = dot(normalize(vNormal), normalize(vec3(-0.42, 0.52, 0.74)));
-    float light = smoothstep(-0.38, 0.72, rawLight);
-    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0), 2.8);
-    float livingGlow = pow(max(0.0, detail - 0.66), 2.0) + veins * 0.34;
-    color *= 0.1 + light * 0.9;
-    color += uGlow * livingGlow * (0.16 + selector * 0.2);
-    color += uGlow * fresnel * 0.34;
+    vec3 normal = normalize(vNormal);
+    vec3 viewDirection = normalize(vViewDirection);
+    vec3 lightDirection = normalize(vec3(-0.42, 0.52, 0.74));
+    float rawLight = dot(normal, lightDirection);
+    float daylight = smoothstep(-0.3, 0.78, rawLight);
+    float night = 1.0 - smoothstep(-0.28, 0.08, rawLight);
+    float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.9);
+    float slowTime = uTime * (0.003 + fract(uSeed) * 0.0015);
+    float broad = fbm(p * (3.0 + fract(uPattern) * 1.4) + vec3(slowTime, -slowTime * 0.45, uSeed));
+    float detail = fbm(p * (8.2 + fract(uPattern) * 3.1) - vec3(slowTime * 0.7, 0.0, slowTime));
+    vec3 albedo = mix(uColorA, uColorB, broad);
+    vec3 emission = vec3(0.0);
+    vec3 cloudColor = mix(vec3(0.78, 0.82, 0.82), uGlow, 0.08);
+    float clouds = 0.0;
+    float specularStrength = 0.08;
+    float specularPower = 24.0;
+
+    if (uSurface < 3.5) {
+      float continental = fbm(p * 2.8 + vec3(uSeed, 0.0, -uSeed));
+      float islands = smoothstep(0.58, 0.72, continental * 0.78 + broad * 0.22);
+      float wave = sin((p.y + detail * 0.045) * 58.0 + atan(p.z, p.x) * 1.4) * 0.5 + 0.5;
+      vec3 deepWater = mix(uColorA, uColorB * 0.58, 0.16 + broad * 0.2 + wave * 0.035);
+      vec3 land = mix(uColorB * 0.48, uGlow * 0.52, smoothstep(0.55, 0.92, detail));
+      albedo = mix(deepWater, land, islands);
+      float coast = 1.0 - smoothstep(0.012, 0.055, abs(continental - 0.64));
+      emission = uGlow * coast * night * 0.18;
+      float cloudField = fbm(p * 5.2 + vec3(-slowTime * 1.7, 2.0, slowTime));
+      float cloudBand = sin((p.y + cloudField * 0.09) * 17.0 + atan(p.z, p.x)) * 0.5 + 0.5;
+      clouds = smoothstep(0.7, 0.88, cloudField * 0.74 + cloudBand * 0.26) * (0.62 - islands * 0.16);
+      specularStrength = 0.34;
+      specularPower = 82.0;
+    } else if (uSurface < 4.5) {
+      float warp = fbm(p * 3.2 + uSeed);
+      float dune = sin((p.x + warp * 0.18) * 48.0 + p.y * 8.0 + atan(p.z, p.x) * 3.0) * 0.5 + 0.5;
+      float strata = smoothstep(0.22, 0.86, fbm(p * vec3(5.0, 13.0, 5.0) + warp * 2.0));
+      float rock = smoothstep(0.69, 0.88, detail);
+      albedo = mix(uColorA, uColorB, 0.2 + dune * 0.065 + strata * 0.54);
+      albedo = mix(albedo, uGlow * 0.54, rock * 0.34);
+      specularStrength = 0.05;
+      specularPower = 18.0;
+    } else if (uSurface < 5.5) {
+      float continentField = fbm(p * 3.5 + vec3(uSeed, -slowTime, slowTime));
+      float continents = smoothstep(0.43, 0.69, continentField);
+      float canopy = fbm(p * 11.0 + broad * 2.6);
+      float branchField = abs(fbm(p * 7.2 + continentField * 3.0) - 0.51);
+      float rivers = 1.0 - smoothstep(0.015, 0.07, branchField);
+      albedo = mix(uColorA, uColorB, continents * (0.34 + canopy * 0.56));
+      albedo = mix(albedo, uGlow * 0.26, rivers * continents * 0.28);
+      emission = uGlow * rivers * continents * night * 0.19;
+      clouds = smoothstep(0.74, 0.9, fbm(p * 6.2 - vec3(slowTime, 0.0, slowTime * 0.6))) * 0.34;
+      specularStrength = 0.16;
+      specularPower = 36.0;
+    } else if (uSurface < 6.5) {
+      float terrain = fbm(p * 4.8 + vec3(uSeed, 0.0, slowTime));
+      float fault = 1.0 - smoothstep(0.018, 0.064, abs(fbm(p * 9.0 + terrain * 3.0) - 0.5));
+      float settlements = smoothstep(0.74, 0.91, noise(p * 36.0 + uSeed * 4.0)) * fault;
+      albedo = mix(uColorA, uColorB, 0.12 + terrain * 0.5);
+      emission = mix(uGlow, vec3(1.0, 0.54, 0.24), 0.34) * settlements * night * 0.78;
+      specularStrength = 0.11;
+      specularPower = 28.0;
+    } else {
+      float internal = fbm(p * 5.6 + vec3(uSeed, slowTime, -slowTime));
+      float vein = 1.0 - smoothstep(0.018, 0.075, abs(fbm(p * 12.0 + internal * 3.4) - 0.5));
+      float facetTone = pow(abs(dot(p, normalize(vec3(0.37, 0.81, -0.44)))), 2.4);
+      albedo = mix(uColorA, uColorB, 0.2 + internal * 0.45 + facetTone * 0.28);
+      emission = uGlow * vein * (0.11 + night * 0.24);
+      specularStrength = 0.3;
+      specularPower = 58.0;
+    }
+
+    vec3 halfDirection = normalize(lightDirection + viewDirection);
+    float specular = pow(max(dot(normal, halfDirection), 0.0), specularPower) * specularStrength * smoothstep(-0.02, 0.24, rawLight);
+    vec3 color = albedo * (0.045 + daylight * 0.96);
+    color += cloudColor * clouds * (0.08 + daylight * 0.48);
+    color += emission;
+    color += vec3(0.92, 0.94, 0.91) * specular;
+    color += uGlow * fresnel * (uSurface > 6.5 ? 0.42 : 0.25);
     gl_FragColor = vec4(color, 1.0);
   }
 `;
@@ -340,19 +507,69 @@ const accretionFragmentShader = `
     float radius = length(vLocalPosition.xy);
     float angle = atan(vLocalPosition.y, vLocalPosition.x);
     float radialMask = smoothstep(3.7, 4.16, radius) * (1.0 - smoothstep(11.2, 13.45, radius));
-    float spiralA = sin(angle * 14.0 - radius * 2.7 - uTime * 0.24);
-    float spiralB = sin(angle * 31.0 - radius * 5.1 + uTime * 0.15);
+    float flow = uTime * 4.4 / pow(max(radius, 3.7), 1.12);
+    float spiralA = sin(angle * 14.0 - radius * 2.7 - flow);
+    float spiralB = sin(angle * 31.0 - radius * 5.1 + flow * 0.64);
     float granular = hash(floor(angle * 96.0) + floor(radius * 18.0) * 7.0);
     float strands = smoothstep(0.08, 0.9, spiralA * 0.52 + spiralB * 0.25 + granular * 0.54);
     float heat = 1.0 - smoothstep(3.9, 12.8, radius);
-    float doppler = sin(angle + 0.78) * 0.5 + 0.5;
-    vec3 cold = vec3(0.12, 0.24, 0.62);
-    vec3 warm = vec3(1.0, 0.55, 0.18);
-    vec3 white = vec3(1.0, 0.91, 0.7);
-    vec3 color = mix(cold, warm, doppler * 0.7 + heat * 0.3);
-    color = mix(color, white, heat * 0.58 + strands * 0.18);
-    float alpha = radialMask * (0.035 + strands * 0.24 + heat * 0.18);
+    float doppler = cos(angle - 0.22) * 0.5 + 0.5;
+    vec3 ember = vec3(0.54, 0.11, 0.018);
+    vec3 amber = vec3(1.16, 0.42, 0.075);
+    vec3 whiteGold = vec3(1.42, 1.08, 0.72);
+    vec3 color = mix(ember, amber, doppler * 0.64 + heat * 0.2);
+    color = mix(color, whiteGold, heat * 0.66 + strands * 0.16 + doppler * 0.08);
+    float alpha = radialMask * (0.028 + strands * 0.23 + heat * 0.17) * mix(0.58, 1.0, doppler);
     alpha *= 1.0 + uPassage * 0.22;
+    gl_FragColor = vec4(color, alpha);
+  }
+`;
+
+const lensedArcVertexShader = `
+  varying vec2 vUv;
+
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const lensedArcFragmentShader = `
+  uniform float uTime;
+  uniform float uPassage;
+  varying vec2 vUv;
+
+  float hash(float value) {
+    return fract(sin(value * 127.1) * 43758.5453);
+  }
+
+  void main() {
+    vec2 p = (vUv - 0.5) * 2.0;
+    p.y += p.x * 0.018;
+    float radius = length(p);
+    float angle = atan(p.y, p.x);
+    float horizonRadius = 0.266;
+    float photonRadius = 0.282;
+    float side = p.x / max(radius, 0.001) * 0.5 + 0.5;
+    float doppler = mix(0.48, 1.0, smoothstep(0.04, 0.96, side));
+
+    float photonCore = 1.0 - smoothstep(0.0025, 0.0075, abs(radius - photonRadius));
+    float photonHalo = 1.0 - smoothstep(0.008, 0.026, abs(radius - photonRadius));
+    float polar = pow(abs(sin(angle)), 1.6);
+    float arcRadius = photonRadius * (1.245 + 0.105 * abs(cos(angle)));
+    float arcDistance = abs(radius - arcRadius);
+    float lensedArc = (1.0 - smoothstep(0.012, 0.042, arcDistance)) * smoothstep(0.28, 0.74, polar);
+    float arcHalo = (1.0 - smoothstep(0.035, 0.088, arcDistance)) * smoothstep(0.2, 0.68, polar);
+    float filament = 0.58 + 0.42 * sin(angle * 53.0 - uTime * 0.12 + hash(floor(angle * 19.0)) * 6.2831);
+    lensedArc *= 0.68 + filament * 0.32;
+
+    vec3 deepAmber = vec3(0.78, 0.22, 0.035);
+    vec3 warmWhite = vec3(1.34, 1.03, 0.68);
+    vec3 color = mix(deepAmber, warmWhite, smoothstep(0.08, 0.94, side));
+    color = mix(color, vec3(1.45, 1.28, 0.92), photonCore * 0.72);
+    float alpha = photonCore * 0.42 + photonHalo * 0.034 + lensedArc * 0.37 * doppler + arcHalo * 0.032;
+    alpha *= 1.0 + uPassage * 0.18;
+    if (radius < horizonRadius * 1.01 || radius > 0.62 || alpha < 0.006) discard;
     gl_FragColor = vec4(color, alpha);
   }
 `;
@@ -370,12 +587,53 @@ const atmosphereVertexShader = `
 `;
 
 const atmosphereFragmentShader = `
+  uniform vec3 uColor;
+  uniform float uOpacity;
   varying vec3 vNormal;
   varying vec3 vViewDirection;
 
   void main() {
-    float intensity = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewDirection))), 2.15);
-    gl_FragColor = vec4(0.24, 0.36, 0.58, intensity * 0.54);
+    float rim = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewDirection))), 2.35);
+    float falloff = smoothstep(0.04, 0.92, rim);
+    gl_FragColor = vec4(uColor * (0.72 + rim * 0.46), falloff * uOpacity);
+  }
+`;
+
+const planetaryRingVertexShader = `
+  varying float vRadius;
+  varying float vAngle;
+
+  void main() {
+    vRadius = length(position.xy);
+    vAngle = atan(position.y, position.x);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const planetaryRingFragmentShader = `
+  uniform float uTime;
+  uniform float uSeed;
+  uniform float uInner;
+  uniform float uOuter;
+  uniform vec3 uColor;
+  varying float vRadius;
+  varying float vAngle;
+
+  float hash(float value) {
+    return fract(sin(value * 91.173 + uSeed * 17.19) * 43758.5453);
+  }
+
+  void main() {
+    float radial = clamp((vRadius - uInner) / max(0.001, uOuter - uInner), 0.0, 1.0);
+    float edge = smoothstep(0.0, 0.055, radial) * (1.0 - smoothstep(0.91, 1.0, radial));
+    float broad = sin(radial * 82.0 + sin(vAngle * 3.0 + uSeed) * 1.7) * 0.5 + 0.5;
+    float fine = sin(radial * 311.0 - uTime * 0.045) * 0.5 + 0.5;
+    float grain = hash(floor(radial * 190.0) + floor(vAngle * 36.0) * 0.17);
+    float lane = smoothstep(0.18, 0.8, broad * 0.58 + fine * 0.18 + grain * 0.38);
+    float division = 1.0 - smoothstep(0.018, 0.05, abs(radial - 0.42 - sin(vAngle * 2.0) * 0.012));
+    vec3 color = mix(uColor * 0.28, uColor * 1.35 + vec3(0.14, 0.1, 0.055), lane);
+    float alpha = edge * (0.018 + lane * 0.19 + fine * 0.026) * (1.0 - division * 0.72);
+    gl_FragColor = vec4(color, alpha);
   }
 `;
 
@@ -572,7 +830,7 @@ export function GalaxyExperience() {
         preserveDrawingBuffer: false,
       });
     } catch {
-      setWebglError(true);
+      queueMicrotask(() => setWebglError(true));
       document.body.style.overflow = previousOverflow;
       return;
     }
@@ -836,20 +1094,34 @@ export function GalaxyExperience() {
     accretionDisk.renderOrder = 4;
     blackHoleVisual.add(accretionDisk);
 
-    const photonMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffd69b,
+    const lensedArcMaterial = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uPassage: { value: 0 } },
+      vertexShader: lensedArcVertexShader,
+      fragmentShader: lensedArcFragmentShader,
       transparent: true,
-      opacity: 0.72,
       depthWrite: false,
+      depthTest: false,
       blending: THREE.AdditiveBlending,
     });
-    const photonRing = new THREE.Mesh(new THREE.TorusGeometry(3.72, 0.065, 10, mobile ? 128 : 240), photonMaterial);
-    const photonRingOuter = new THREE.Mesh(new THREE.TorusGeometry(3.98, 0.028, 8, mobile ? 128 : 240), photonMaterial.clone());
-    photonRing.rotation.set(1.13, 0.08, -0.24);
-    photonRingOuter.rotation.set(1.24, -0.06, 0.18);
-    photonRing.renderOrder = 9;
-    photonRingOuter.renderOrder = 9;
-    blackHoleVisual.add(photonRing, photonRingOuter);
+    animatedMaterials.push(lensedArcMaterial);
+    const lensedArcPlane = new THREE.Mesh(new THREE.PlaneGeometry(27, 27), lensedArcMaterial);
+    lensedArcPlane.renderOrder = 10;
+    lensedArcPlane.frustumCulled = false;
+    scene.add(lensedArcPlane);
+
+    const eventMaskPlane = new THREE.Mesh(
+      new THREE.CircleGeometry(3.62, mobile ? 80 : 144),
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    eventMaskPlane.renderOrder = 9;
+    eventMaskPlane.frustumCulled = false;
+    scene.add(eventMaskPlane);
 
     const crownCount = mobile ? 4800 : 14000;
     const crownPositions = new Float32Array(crownCount * 3);
@@ -866,7 +1138,7 @@ export function GalaxyExperience() {
       crownPositions[offset] = Math.cos(angle) * radius;
       crownPositions[offset + 1] = thickness;
       crownPositions[offset + 2] = Math.sin(angle) * radius;
-      crownColor.set(crownRandom() > 0.72 ? 0xf6c486 : crownRandom() > 0.42 ? 0x9fc8ef : 0x7566bd);
+      crownColor.set(crownRandom() > 0.72 ? 0xffd79a : crownRandom() > 0.42 ? 0xd9b177 : 0x9d879f);
       crownColors[offset] = crownColor.r;
       crownColors[offset + 1] = crownColor.g;
       crownColors[offset + 2] = crownColor.b;
@@ -979,6 +1251,7 @@ export function GalaxyExperience() {
       cameraAnchor.position.set(...(mobile ? target.mobileCameraOffset : target.cameraOffset));
       const focusAnchor = new THREE.Object3D();
       focusAnchor.position.set(...(mobile ? target.mobileFocusOffset : target.focusOffset));
+      if (mobile) focusAnchor.position.y -= target.visual.radius > 1.8 ? 2.35 : 1.55;
       parent.add(cameraAnchor, focusAnchor);
       return { cameraAnchor, focusAnchor };
     }
@@ -1001,6 +1274,10 @@ export function GalaxyExperience() {
     aureliaVisual.add(planet);
 
     const atmosphereMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(PLANET_BY_ID.aurelia.visual.atmosphere) },
+        uOpacity: { value: 0.48 },
+      },
       vertexShader: atmosphereVertexShader,
       fragmentShader: atmosphereFragmentShader,
       transparent: true,
@@ -1011,37 +1288,7 @@ export function GalaxyExperience() {
     const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(2.23, 72, 56), atmosphereMaterial);
     aureliaVisual.add(atmosphere);
 
-    const ringGeometry = new THREE.RingGeometry(2.7, 4.35, mobile ? 160 : 320, 1);
-    const ringMaterial = new THREE.ShaderMaterial({
-      vertexShader: `
-        varying float vRadius;
-        varying vec2 vUv;
-        void main() {
-          vRadius = length(position.xy);
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying float vRadius;
-        varying vec2 vUv;
-        void main() {
-          float stripe = sin(vRadius * 25.0) * 0.5 + 0.5;
-          float fine = sin(vRadius * 83.0) * 0.5 + 0.5;
-          float edge = smoothstep(0.0, 0.12, vUv.y) * smoothstep(1.0, 0.86, vUv.y);
-          vec3 color = mix(vec3(0.14, 0.17, 0.28), vec3(0.58, 0.52, 0.44), stripe);
-          float alpha = (0.045 + stripe * 0.13 + fine * 0.035) * edge;
-          gl_FragColor = vec4(color, alpha);
-        }
-      `,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    });
-    const rings = new THREE.Mesh(ringGeometry, ringMaterial);
-    rings.rotation.x = Math.PI / 2;
-    rings.rotation.z = 0.08;
+    const rings = createPlanetaryRing(2.68, 4.35, 0xb8a78f, 1.1, [Math.PI / 2, 0, 0.08]);
     aureliaVisual.add(rings);
 
     const moonOrbit = new THREE.Group();
@@ -1054,15 +1301,51 @@ export function GalaxyExperience() {
     moonOrbit.add(moon);
 
     function addAtmosphere(parent: THREE.Group, radius: number, color: number, opacity: number) {
-      const material = new THREE.MeshBasicMaterial({
-        color,
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          uColor: { value: new THREE.Color(color) },
+          uOpacity: { value: opacity },
+        },
+        vertexShader: atmosphereVertexShader,
+        fragmentShader: atmosphereFragmentShader,
         transparent: true,
-        opacity,
+        depthWrite: false,
         blending: THREE.AdditiveBlending,
         side: THREE.BackSide,
       });
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 56, 40), material);
       parent.add(mesh);
+    }
+
+    function createPlanetaryRing(
+      innerRadius: number,
+      outerRadius: number,
+      color: number,
+      seed: number,
+      tilt: [number, number, number],
+    ) {
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uSeed: { value: seed },
+          uInner: { value: innerRadius },
+          uOuter: { value: outerRadius },
+          uColor: { value: new THREE.Color(color) },
+        },
+        vertexShader: planetaryRingVertexShader,
+        fragmentShader: planetaryRingFragmentShader,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      });
+      animatedMaterials.push(material);
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(innerRadius, outerRadius, mobile ? 160 : 280, 1),
+        material,
+      );
+      ring.rotation.set(...tilt);
+      return ring;
     }
 
     const nyx = new THREE.Group();
@@ -1167,6 +1450,7 @@ export function GalaxyExperience() {
           uTime: { value: 0 },
           uSeed: { value: definition.visual.seed },
           uPattern: { value: definition.visual.pattern },
+          uSurface: { value: PLANET_SURFACE_INDEX[definition.visual.surface] },
           uColorA: { value: new THREE.Color(definition.visual.colorA) },
           uColorB: { value: new THREE.Color(definition.visual.colorB) },
           uGlow: { value: new THREE.Color(definition.visual.glow) },
@@ -1175,30 +1459,29 @@ export function GalaxyExperience() {
         fragmentShader: archivePlanetFragmentShader,
       });
       animatedMaterials.push(material);
-      const geometry = definition.visual.geometry === "crystal"
-        ? new THREE.IcosahedronGeometry(definition.visual.radius, mobile ? 2 : 4)
-        : new THREE.SphereGeometry(definition.visual.radius, mobile ? 44 : 72, mobile ? 30 : 52);
+      let geometry: THREE.BufferGeometry;
+      if (definition.visual.geometry === "crystal") {
+        const crystalGeometry = new THREE.IcosahedronGeometry(definition.visual.radius, mobile ? 2 : 3);
+        geometry = crystalGeometry.index ? crystalGeometry.toNonIndexed() : crystalGeometry;
+        if (geometry !== crystalGeometry) crystalGeometry.dispose();
+        geometry.computeVertexNormals();
+      } else {
+        geometry = new THREE.SphereGeometry(definition.visual.radius, mobile ? 44 : 72, mobile ? 30 : 52);
+      }
       const mesh = new THREE.Mesh(geometry, material);
       visual.add(mesh);
       addAtmosphere(visual, definition.visual.radius * 1.075, definition.visual.atmosphere, 0.14);
 
       if (definition.visual.ringColor && definition.visual.ringScale) {
-        const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(
-            definition.visual.radius * definition.visual.ringScale,
-            Math.max(0.008, definition.visual.radius * 0.012),
-            6,
-            mobile ? 96 : 160,
-          ),
-          new THREE.MeshBasicMaterial({
-            color: definition.visual.ringColor,
-            transparent: true,
-            opacity: 0.38,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-          }),
+        const outerRadius = definition.visual.radius * definition.visual.ringScale;
+        const innerScale = 1.08 + Math.min(0.22, (definition.visual.ringScale - 1.08) * 0.35);
+        const ring = createPlanetaryRing(
+          definition.visual.radius * innerScale,
+          outerRadius,
+          definition.visual.ringColor,
+          definition.visual.seed,
+          definition.visual.ringTilt ?? [1.22, 0.12, -0.18],
         );
-        ring.rotation.set(...(definition.visual.ringTilt ?? [1.22, 0.12, -0.18]));
         visual.add(ring);
       }
 
@@ -1276,10 +1559,19 @@ export function GalaxyExperience() {
       const target = id === "singularity" ? SINGULARITY : PLANET_BY_ID[id];
       activeBody = bodies.get(id) ?? bodies.get("singularity")!;
       const activeGalaxyId = id === "singularity" ? null : PLANET_BY_ID[id].galaxyId;
+      const singularityActive = id === "singularity";
       galaxySpaces.forEach((runtime, galaxyId) => {
         runtime.planets.visible = activeGalaxyId === galaxyId;
         runtime.visual.scale.setScalar(activeGalaxyId === null ? 1.65 : activeGalaxyId === galaxyId ? 0.72 : 0.9);
       });
+      PLANETS.forEach((definition) => {
+        const runtime = bodies.get(definition.id);
+        if (runtime) runtime.group.visible = !singularityActive && definition.id === id;
+      });
+      eventHorizon.visible = singularityActive;
+      accretionDisk.visible = singularityActive;
+      eventMaskPlane.visible = singularityActive;
+      lensedArcPlane.visible = singularityActive;
       targetAccent.set(target.accent);
       targetFog.set(0x04030b).lerp(targetAccent, 0.045);
       appliedTarget = id;
@@ -1453,9 +1745,8 @@ export function GalaxyExperience() {
         });
         galaxy.rotation.y = elapsed * 0.004 * quietMotion;
         dust.rotation.y = -elapsed * 0.003 * quietMotion;
-        blackHoleVisual.rotation.y = elapsed * 0.0035 * quietMotion;
-        photonRing.rotation.z = elapsed * 0.018 * quietMotion;
-        photonRingOuter.rotation.z = -elapsed * 0.012 * quietMotion;
+        horizonCrown.rotation.y = elapsed * 0.0035 * quietMotion;
+        horizonCrown.rotation.z = 0.15 + Math.sin(elapsed * 0.008) * 0.018 * quietMotion;
         galaxySpaces.forEach((runtime, id) => {
           const index = GALAXIES.findIndex((galaxyDefinition) => galaxyDefinition.id === id);
           runtime.visual.rotation.y += (0.00016 + index * 0.000025) * quietMotion;
@@ -1505,6 +1796,10 @@ export function GalaxyExperience() {
       camera.position.lerp(targetCamera, prefersReducedMotion ? 0.16 : 0.045);
       currentLook.lerp(targetLook, prefersReducedMotion ? 0.16 : 0.052);
       camera.lookAt(currentLook);
+      blackHoleRoot.getWorldPosition(lensedArcPlane.position);
+      lensedArcPlane.quaternion.copy(camera.quaternion);
+      eventMaskPlane.position.copy(lensedArcPlane.position);
+      eventMaskPlane.quaternion.copy(camera.quaternion);
       const baseFov = appliedTarget === "singularity" ? (compactScene ? 58 : 54) : 48;
       camera.fov = THREE.MathUtils.lerp(camera.fov, baseFov + warp * 6 + passage * 9, 0.06);
       camera.updateProjectionMatrix();
@@ -1528,9 +1823,12 @@ export function GalaxyExperience() {
       const crownInnerRadiusPx = Math.abs(projectedEdge.x - projectedBlackHole.x) * renderedWidth * 0.5;
       renderer.domElement.dataset.target = appliedTarget;
       renderer.domElement.dataset.focusKind = appliedTarget === "singularity" ? "singularity" : "planet";
+      renderer.domElement.dataset.lensingMode = "lensed-arcs";
+      renderer.domElement.dataset.surfaceFamily = appliedTarget === "singularity" ? "singularity" : PLANET_BY_ID[appliedTarget].visual.surface;
       renderer.domElement.dataset.parentGalaxy = appliedTarget === "singularity" ? "none" : PLANET_BY_ID[appliedTarget].galaxyId;
       renderer.domElement.dataset.galaxyCount = String(GALAXIES.length);
       renderer.domElement.dataset.planetCount = String(PLANETS.length);
+      renderer.domElement.dataset.visiblePlanetCount = String(PLANETS.filter((definition) => bodies.get(definition.id)?.group.visible).length);
       renderer.domElement.dataset.targetNdcX = projectedTarget.x.toFixed(4);
       renderer.domElement.dataset.targetNdcY = projectedTarget.y.toFixed(4);
       renderer.domElement.dataset.targetRadiusPx = targetRadiusPx.toFixed(2);
@@ -1541,7 +1839,7 @@ export function GalaxyExperience() {
       renderer.domElement.dataset.blackHoleRadiusPx = blackHoleRadiusPx.toFixed(2);
       renderer.domElement.dataset.crownInnerRadiusPx = crownInnerRadiusPx.toFixed(2);
       renderer.domElement.dataset.crownOuterRadiusPx = crownOuterRadiusPx.toFixed(2);
-      renderer.domElement.dataset.blackHoleVisible = String(Math.abs(projectedBlackHole.x) < 1.15 && Math.abs(projectedBlackHole.y) < 1.15 && projectedBlackHole.z > -1 && projectedBlackHole.z < 1);
+      renderer.domElement.dataset.blackHoleVisible = String(appliedTarget === "singularity" && Math.abs(projectedBlackHole.x) < 1.15 && Math.abs(projectedBlackHole.y) < 1.15 && projectedBlackHole.z > -1 && projectedBlackHole.z < 1);
       renderer.domElement.dataset.orbitResidual = Math.max(...PLANETS.map((definition) => {
         const runtime = bodies.get(definition.id);
         return runtime ? getOrbitResidual(runtime.group, definition.orbit) : Number.POSITIVE_INFINITY;

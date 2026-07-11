@@ -26,9 +26,12 @@ export type OrbitConfig = {
   opacity: number;
 };
 
+export type PlanetSurface = "gas" | "lava" | "ice" | "ocean" | "desert" | "forest" | "rogue" | "crystal";
+
 export type PlanetVisual = {
   radius: number;
   geometry: "sphere" | "crystal";
+  surface: PlanetSurface;
   colorA: number;
   colorB: number;
   glow: number;
@@ -109,9 +112,9 @@ export const PLANETS: PlanetStory[] = [
     coda: "我们以为自己在回忆，其实只是旧日的光终于抵达。", lightAge: "38.6 MIN", epoch: "THE FIRST WITNESS", distance: "04.72 AU", accent: "#b88961",
     archiveTitle: "第一位见证者没有名字",
     archive: ["AURELIA 的星环并非尘埃，而是一座缓慢展开的天文档案。每一层环带都保存着一颗早已熄灭的恒星抵达这里时留下的光谱。", "环上的居民终生只负责辨认一种颜色。他们知道自己无法读完宇宙，于是把准确看见一小部分，当作对浩瀚最诚实的回答。"],
-    cameraOffset: [6.8, 3.4, 14], focusOffset: [-3.1, -0.15, 0], mobileCameraOffset: [3.2, 3.2, 13.8], mobileFocusOffset: [-0.25, -0.1, 0],
+    cameraOffset: [6.8, 3.4, 14], focusOffset: [-3.45, -0.15, 0], mobileCameraOffset: [3.2, 3.2, 13.8], mobileFocusOffset: [-0.25, -0.1, 0],
     orbit: { radiusX: 4.7, radiusZ: 3.7, tilt: 0.3, phase: 0.65, speed: 0.009, color: 0x8b665d, opacity: 0.075 },
-    visual: { radius: 2.08, geometry: "sphere", colorA: 0x07112f, colorB: 0x4f8fb8, glow: 0x6aa8ca, atmosphere: 0x668eb8, seed: 1.1, pattern: 0.2, ringColor: 0xb8a78f, ringScale: 2.08, moons: 1 },
+    visual: { radius: 2.08, geometry: "sphere", surface: "gas", colorA: 0x07112f, colorB: 0x4f8fb8, glow: 0x6aa8ca, atmosphere: 0x668eb8, seed: 1.1, pattern: 0.2, ringColor: 0xb8a78f, ringScale: 2.08, moons: 1 },
   },
   {
     id: "nyx", galaxyId: "origo", index: "01.2", name: "NYX", type: "EMBER WORLD", chapter: "造史",
@@ -121,7 +124,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["NYX 的裂谷每隔七十年重新发光，统治者便宣称那是祖先对自己的认证。直到一名测绘者发现，熔流只是在重复更古老的地质节律。", "真相没有立刻推翻王朝。人们先失去了共同相信的天空，随后才开始艰难地学习：没有神谕，也必须共同决定明天。"],
     cameraOffset: [-3.8, 2.8, 10.4], focusOffset: [-2.4, 0, 0], mobileCameraOffset: [-2.5, 2.8, 10], mobileFocusOffset: [0, -0.1, 0],
     orbit: { radiusX: 7.7, radiusZ: 6.2, tilt: -0.5, phase: 3.65, speed: 0.006, color: 0x4f476d, opacity: 0.055 },
-    visual: { radius: 1.06, geometry: "sphere", colorA: 0x080103, colorB: 0x55121a, glow: 0xf04828, atmosphere: 0xc8524c, seed: 2.4, pattern: 1.1, ringColor: 0xb45a4f, ringScale: 1.4 },
+    visual: { radius: 1.06, geometry: "sphere", surface: "lava", colorA: 0x080103, colorB: 0x55121a, glow: 0xf04828, atmosphere: 0xc8524c, seed: 2.4, pattern: 1.1, ringColor: 0xb45a4f, ringScale: 1.4 },
   },
   {
     id: "caelum", galaxyId: "origo", index: "01.3", name: "CAELUM", type: "ICE WORLD", chapter: "余响",
@@ -131,7 +134,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["CAELUM 的晶层会在决定发生前生成相应裂纹。城邦据此消除了灾难，也逐渐不再允许任何无法预测的行动。", "最后一位占卜师砸碎了自己的观测镜。她说，自由并不保证更好的结局，只保证结局仍然属于活着的人。"],
     cameraOffset: [-2.2, 3.3, 10.8], focusOffset: [-2.2, 0, 0], mobileCameraOffset: [0.5, 3, 10.2], mobileFocusOffset: [-0.2, 0, 0],
     orbit: { radiusX: 11, radiusZ: 8.8, tilt: 0.7, phase: 5.75, speed: 0.0045, color: 0x6977a8, opacity: 0.045 },
-    visual: { radius: 1.42, geometry: "sphere", colorA: 0x07102f, colorB: 0x6da7c8, glow: 0x72b9ee, atmosphere: 0x8fb9da, seed: 3.6, pattern: 2.2, ringColor: 0x86b6d9, ringScale: 1.3 },
+    visual: { radius: 1.42, geometry: "sphere", surface: "ice", colorA: 0x07102f, colorB: 0x6da7c8, glow: 0x72b9ee, atmosphere: 0x8fb9da, seed: 3.6, pattern: 2.2, ringColor: 0x86b6d9, ringScale: 1.3 },
   },
   {
     id: "solenne", galaxyId: "mnemora", index: "02.1", name: "SOLENNE", type: "AMBER TIDE WORLD", chapter: "旧昼",
@@ -141,7 +144,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["SOLENNE 的潮声不会复述思想，只记得一个人曾向世界说出的句子。因此这里的人在临别前格外谨慎，不愿让最后的话成为怨恨。", "也有人一生沉默，只在黄昏时对海说出自己的名字。数百年后，陌生的孩子仍会从浪里听见他，并相信无人应当彻底消失。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 4.2, radiusZ: 3.4, tilt: 0.35, phase: 0.4, speed: 0.008, color: 0xb58355, opacity: 0.07 },
-    visual: { radius: 1.52, geometry: "sphere", colorA: 0x1a0d24, colorB: 0xc28145, glow: 0xf2b66d, atmosphere: 0xd49a63, seed: 4.2, pattern: 0.65, moons: 1 },
+    visual: { radius: 1.52, geometry: "sphere", surface: "ocean", colorA: 0x1a0d24, colorB: 0xc28145, glow: 0xf2b66d, atmosphere: 0xd49a63, seed: 4.2, pattern: 0.65, moons: 1 },
   },
   {
     id: "talaman", galaxyId: "mnemora", index: "02.2", name: "TALAMAN", type: "MIGRANT MONUMENT WORLD", chapter: "碑砂",
@@ -151,7 +154,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["TALAMAN 的石碑会沿磁场缓慢迁徙。史官试图用锁链固定它们，第二天却发现锁链也成为碑文的一部分，记录下谁害怕历史改变位置。", "后来的人不再修建纪念碑，而是为每个年代留下一片空地。他们说，真正公正的历史必须允许后来者带着新证据走进来。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 6.8, radiusZ: 5.7, tilt: -0.42, phase: 2.7, speed: 0.0058, color: 0x856958, opacity: 0.055 },
-    visual: { radius: 1.26, geometry: "crystal", colorA: 0x140c10, colorB: 0x9d6546, glow: 0xe0a77c, atmosphere: 0xb77759, seed: 5.8, pattern: 1.55 },
+    visual: { radius: 1.26, geometry: "sphere", surface: "desert", colorA: 0x140c10, colorB: 0x9d6546, glow: 0xe0a77c, atmosphere: 0xb77759, seed: 5.8, pattern: 1.55 },
   },
   {
     id: "merivel", galaxyId: "mnemora", index: "02.3", name: "MERIVEL", type: "SUSPENDED GARDEN WORLD", chapter: "迟雨",
@@ -161,7 +164,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["MERIVEL 的云园由历代照料者共同维护。播种者不知道雨会落在哪里，收获者也无从感谢最初托起水汽的人。", "他们仍保留一条古老规则：任何一代只能使用一半降水。另一半必须重新送回高空，交给一个尚未出现、也无法回报他们的春天。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 9.4, radiusZ: 8.1, tilt: 0.62, phase: 5.1, speed: 0.0042, color: 0x62877d, opacity: 0.045 },
-    visual: { radius: 1.38, geometry: "sphere", colorA: 0x061c2a, colorB: 0x4c9d88, glow: 0x99d9b9, atmosphere: 0x74b9a7, seed: 6.9, pattern: 2.45, ringColor: 0x78bfa9, ringScale: 1.35, ringTilt: [1.18, 0.15, -0.3], moons: 2 },
+    visual: { radius: 1.38, geometry: "sphere", surface: "forest", colorA: 0x061c2a, colorB: 0x4c9d88, glow: 0x99d9b9, atmosphere: 0x74b9a7, seed: 6.9, pattern: 2.45, ringColor: 0x78bfa9, ringScale: 1.35, ringTilt: [1.18, 0.15, -0.3], moons: 2 },
   },
   {
     id: "eidora", galaxyId: "miralume", index: "03.1", name: "EIDORA", type: "MIRROR ICE WORLD", chapter: "镜眠",
@@ -171,7 +174,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["EIDORA 的旅行者常在冰面前停留数年，观看另一个自己拥有不同的爱人、职业和故乡。有人因此幸福，也有人再也无法返回现实。", "守镜人从不劝他们选择哪一边，只会在冰开始融化时提醒：可能性值得被看见，却不能替你承担任何一次真正的生活。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 4.4, radiusZ: 3.6, tilt: -0.28, phase: 1.2, speed: 0.0075, color: 0x7189b0, opacity: 0.07 },
-    visual: { radius: 1.4, geometry: "crystal", colorA: 0x090e31, colorB: 0x8ebee0, glow: 0xb5d9f4, atmosphere: 0x91b8e1, seed: 7.7, pattern: 3.25, ringColor: 0xa7c9e5, ringScale: 1.2, ringTilt: [1.3, -0.2, 0.25] },
+    visual: { radius: 1.4, geometry: "crystal", surface: "crystal", colorA: 0x090e31, colorB: 0x8ebee0, glow: 0xb5d9f4, atmosphere: 0x91b8e1, seed: 7.7, pattern: 3.25, ringColor: 0xa7c9e5, ringScale: 1.2, ringTilt: [1.3, -0.2, 0.25] },
   },
   {
     id: "neravia", galaxyId: "miralume", index: "03.2", name: "NERAVIA", type: "DRIFT OCEAN WORLD", chapter: "潮生",
@@ -181,7 +184,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["NERAVIA 的月亮不是天体，而是一座由漂流城轮流托举的灯塔。担任月亮的人必须放弃姓名，因为求救者不该先判断灯属于哪个阵营。", "一年后，守夜者回到人群，没有勋章也没有特权。只有远海归来的船会为他留下一盏灯，证明匿名的善意也能拥有漫长回声。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 6.9, radiusZ: 5.8, tilt: 0.48, phase: 3.3, speed: 0.0054, color: 0x547992, opacity: 0.052 },
-    visual: { radius: 1.58, geometry: "sphere", colorA: 0x031329, colorB: 0x2b87a2, glow: 0x6dc7d8, atmosphere: 0x5ea9c5, seed: 8.5, pattern: 0.95, moons: 1 },
+    visual: { radius: 1.58, geometry: "sphere", surface: "ocean", colorA: 0x031329, colorB: 0x2b87a2, glow: 0x6dc7d8, atmosphere: 0x5ea9c5, seed: 8.5, pattern: 0.95, moons: 1 },
   },
   {
     id: "arbor-null", galaxyId: "miralume", index: "03.3", name: "ARBOR NULL", type: "HOLLOW FOREST WORLD", chapter: "空枝",
@@ -191,7 +194,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["ARBOR NULL 的森林中心没有物质，所有根系却朝那里弯曲。居民每天为那处空白浇水，并把重要的争论带到树影缺席的地方进行。", "没有人能证明中心曾经存在。但长久的照料让彼此敌对的村落共享了同一片土壤，有时共同维护的空白比确定的神更能使人靠近。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 9.7, radiusZ: 8.4, tilt: -0.66, phase: 5.6, speed: 0.004, color: 0x57745f, opacity: 0.043 },
-    visual: { radius: 1.34, geometry: "sphere", colorA: 0x020d0b, colorB: 0x406f55, glow: 0x7fc39b, atmosphere: 0x6f9e7d, seed: 9.9, pattern: 4.15, ringColor: 0x72a686, ringScale: 1.65, ringTilt: [1.08, 0.32, -0.12] },
+    visual: { radius: 1.34, geometry: "sphere", surface: "forest", colorA: 0x020d0b, colorB: 0x406f55, glow: 0x7fc39b, atmosphere: 0x6f9e7d, seed: 9.9, pattern: 4.15, ringColor: 0x72a686, ringScale: 1.65, ringTilt: [1.08, 0.32, -0.12] },
   },
   {
     id: "novaia", galaxyId: "antevera", index: "04.1", name: "NOVAIA", type: "REVERSE BLOOM WORLD", chapter: "白芽",
@@ -201,7 +204,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["NOVAIA 的白芽从果实向种子生长。孩子醒来时记得一座尚未建成的花园，老人则按照他们模糊的描述修路、引水、留下空地。", "没有一代见过完整花期，却没有人因此停工。他们相信希望不是提前看见结果，而是愿意让陌生的未来拥有落脚之处。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 4.3, radiusZ: 3.5, tilt: 0.32, phase: 0.9, speed: -0.0072, color: 0x789d8a, opacity: 0.07 },
-    visual: { radius: 1.48, geometry: "sphere", colorA: 0x0d2420, colorB: 0xa9d7b7, glow: 0xd9f0cf, atmosphere: 0xa6d3be, seed: 10.8, pattern: 2.85, ringColor: 0xa7d6bd, ringScale: 1.2, moons: 3 },
+    visual: { radius: 1.48, geometry: "sphere", surface: "forest", colorA: 0x0d2420, colorB: 0xa9d7b7, glow: 0xd9f0cf, atmosphere: 0xa6d3be, seed: 10.8, pattern: 2.85, ringColor: 0xa7d6bd, ringScale: 1.2, moons: 3 },
   },
   {
     id: "peregris", galaxyId: "antevera", index: "04.2", name: "PEREGRIS", type: "ROGUE WORLD", chapter: "无岸",
@@ -211,7 +214,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["PEREGRIS 没有太阳，城市依靠过客带来的星图校准航向。每张图都只记录来路，不标注终点，因为这颗星不会两次经过同一片天空。", "居民告别时从不说留下。他们会说：若有一天你忘记自己从哪里出发，这里仍有人替你保存那段方向。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 7.1, radiusZ: 6, tilt: -0.5, phase: 3.7, speed: -0.005, color: 0x68756f, opacity: 0.05 },
-    visual: { radius: 1.2, geometry: "sphere", colorA: 0x020506, colorB: 0x35413d, glow: 0xc6c9b2, atmosphere: 0x8d9e96, seed: 11.6, pattern: 1.85 },
+    visual: { radius: 1.2, geometry: "sphere", surface: "rogue", colorA: 0x020506, colorB: 0x35413d, glow: 0xc6c9b2, atmosphere: 0x8d9e96, seed: 11.6, pattern: 1.85 },
   },
   {
     id: "chronara", galaxyId: "antevera", index: "04.3", name: "CHRONARA", type: "TWILIGHT CRYSTAL WORLD", chapter: "终钟",
@@ -221,7 +224,7 @@ export const PLANETS: PlanetStory[] = [
     archive: ["CHRONARA 的钟声每次响起，城市便主动拆除一条街，把材料制成携带文字、作物与音乐的航行种子。居民知道大多数种子永远不会抵达。", "最后留下的人没有建造纪念碑。他们只校准那座面向空无的钟，因为文明最后的尊严，不是被未来记住，而是仍愿意把未来交出去。"],
     cameraOffset: camera.desktop, focusOffset: camera.focus, mobileCameraOffset: camera.mobile, mobileFocusOffset: camera.mobileFocus,
     orbit: { radiusX: 9.8, radiusZ: 8.5, tilt: 0.7, phase: 5.8, speed: -0.0038, color: 0x8a8068, opacity: 0.042 },
-    visual: { radius: 1.42, geometry: "crystal", colorA: 0x17120b, colorB: 0xb5a064, glow: 0xf0dda0, atmosphere: 0xc4b887, seed: 12.9, pattern: 3.75, ringColor: 0xd3c28c, ringScale: 1.45, ringTilt: [1.2, -0.12, 0.36] },
+    visual: { radius: 1.42, geometry: "crystal", surface: "crystal", colorA: 0x17120b, colorB: 0xb5a064, glow: 0xf0dda0, atmosphere: 0xc4b887, seed: 12.9, pattern: 3.75, ringColor: 0xd3c28c, ringScale: 1.45, ringTilt: [1.2, -0.12, 0.36] },
   },
 ];
 

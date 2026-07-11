@@ -417,7 +417,8 @@
   .overview .hero h1 { font-size: 29px; }
   .hero p { font-size: 11px; line-height: 1.7; max-width: 340px; }
   .hero blockquote { font-size: 10px; line-height: 1.55; margin-top: 13px; padding-left: 10px; }
-  .storyExpanded { max-height: calc(100dvh - 276px); overflow-y: auto; padding-right: 8px; scrollbar-width: thin; }
+  .storyExpanded { max-height: calc(100dvh - 276px); overflow-y: auto; padding-right: 8px; scrollbar-width: none; }
+  .storyExpanded::-webkit-scrollbar { display: none; }
   .storyExpanded h1 { font-size: 27px; margin-bottom: 13px; }
   .archiveBody { gap: 9px; }
   .archiveBody p { font-size: 10px; line-height: 1.62; }
