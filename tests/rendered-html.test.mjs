@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { GALAXIES, PLANETS, PLANETS_BY_GALAXY } from "../app/galaxy/cosmic-atlas.ts";
 
 const port = 4179;
 const baseUrl = `http://127.0.0.1:${port}`;
@@ -164,7 +165,7 @@ for (const [pathname, marker] of [
   ["/collections", "想再回来玩的作品"],
   ["/profile", "发布的作品"],
   ["/product/mori", "开始体验"],
-  ["/galaxy", "穿过静默的星尘"],
+  ["/galaxy", "界外纪包含 4 个星系与 12 颗可观测行星"],
 ]) {
   test(`renders distinct route ${pathname}`, async () => {
     const response = await fetch(`${baseUrl}${pathname}`, {
@@ -175,15 +176,31 @@ for (const [pathname, marker] of [
   });
 }
 
-test("renders the original philosophical galaxy entry chapter", async () => {
+test("renders the singularity atlas and its original planetary archive", async () => {
   const response = await fetch(`${baseUrl}/galaxy`, {
     headers: { accept: "text/html" },
   });
   assert.equal(response.status, 200);
   const html = await response.text();
+  assert.match(html, /我们在奇点之外，为尚未诞生的世界命名/);
+  assert.match(html, /BEYOND THE HORIZON/);
   assert.match(html, /所有光都曾独自出发/);
-  assert.match(html, /THE FIRST WITNESS/);
-  assert.match(html, /自洽三维星系/);
+  assert.match(html, /第一位见证者没有名字/);
+  assert.match(html, /源光/);
+  assert.match(html, /忆潮/);
+  assert.match(html, /镜梦/);
+  assert.match(html, /未至/);
+  assert.match(html, /12 颗可观测行星/);
+});
+
+test("cosmic atlas keeps four galaxies with three unique stories each", () => {
+  assert.equal(GALAXIES.length, 4);
+  assert.equal(PLANETS.length, 12);
+  for (const galaxy of GALAXIES) assert.equal(PLANETS_BY_GALAXY[galaxy.id].length, 3);
+  assert.equal(new Set(PLANETS.map((planet) => planet.id)).size, 12);
+  assert.equal(new Set(PLANETS.map((planet) => planet.title)).size, 12);
+  assert.equal(new Set(PLANETS.map((planet) => planet.archiveTitle)).size, 12);
+  assert.equal(PLANETS.every((planet) => planet.archive.length === 2 && planet.archive.every((paragraph) => paragraph.length >= 45)), true);
 });
 
 test("rejects anonymous product publishing", async () => {

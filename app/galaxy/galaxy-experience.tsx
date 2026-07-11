@@ -5,8 +5,10 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import {
   ArrowLeft,
+  BookOpen,
   Expand,
   MoonStar,
+  Orbit,
   Pause,
   Play,
   Sparkles,
@@ -14,99 +16,19 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import * as THREE from "three";
+import {
+  GALAXIES,
+  PLANET_BY_ID,
+  PLANETS,
+  PLANETS_BY_GALAXY,
+  SINGULARITY,
+  type GalaxyId,
+  type OrbitConfig,
+  type PlanetId,
+  type PlanetStory,
+  type TargetId,
+} from "./cosmic-atlas";
 import styles from "./galaxy.module.css";
-
-type TargetId = "aurelia" | "nyx" | "caelum";
-
-type OrbitConfig = {
-  radiusX: number;
-  radiusZ: number;
-  tilt: number;
-  phase: number;
-  speed: number;
-  color: number;
-  opacity: number;
-};
-
-const ORBITS: Record<TargetId, OrbitConfig> = {
-  aurelia: { radiusX: 4.7, radiusZ: 3.7, tilt: 0.3, phase: 0.65, speed: 0.009, color: 0x8b665d, opacity: 0.075 },
-  nyx: { radiusX: 7.7, radiusZ: 6.2, tilt: -0.5, phase: 3.65, speed: 0.006, color: 0x4f476d, opacity: 0.055 },
-  caelum: { radiusX: 11, radiusZ: 8.8, tilt: 0.7, phase: 5.75, speed: 0.0045, color: 0x6977a8, opacity: 0.045 },
-};
-
-const SYSTEMS: Array<{
-  id: TargetId;
-  index: string;
-  name: string;
-  type: string;
-  chapter: string;
-  title: string;
-  body: string;
-  coda: string;
-  lightAge: string;
-  epoch: string;
-  distance: string;
-  accent: string;
-  cameraOffset: [number, number, number];
-  focusOffset: [number, number, number];
-  mobileCameraOffset: [number, number, number];
-  mobileFocusOffset: [number, number, number];
-}> = [
-  {
-    id: "aurelia",
-    index: "01",
-    name: "AURELIA",
-    type: "RING GIANT",
-    chapter: "起源",
-    title: "所有光都曾独自出发",
-    body: "在名字、历史和见证者出现以前，恒星已经把漫长的沉默写进宇宙。",
-    coda: "我们以为自己在回忆，其实只是旧日的光终于抵达。",
-    lightAge: "38.6 MIN",
-    epoch: "THE FIRST WITNESS",
-    distance: "04.72 AU",
-    accent: "#b88961",
-    cameraOffset: [6.8, 3.4, 14],
-    focusOffset: [-3.1, -0.15, 0],
-    mobileCameraOffset: [3.2, 3.2, 13.8],
-    mobileFocusOffset: [-0.25, -0.1, 0],
-  },
-  {
-    id: "nyx",
-    index: "02",
-    name: "NYX",
-    type: "EMBER WORLD",
-    chapter: "造史",
-    title: "人类把偶然称为命运",
-    body: "我们用故事组织陌生人，用年代丈量恐惧，再把选择写成仿佛必然的历史。",
-    coda: "文明向前，并不代表它知道要去哪里。",
-    lightAge: "67.7 MIN",
-    epoch: "THE SHARED FICTION",
-    distance: "08.13 AU",
-    accent: "#9a6674",
-    cameraOffset: [-3.8, 2.8, 10.4],
-    focusOffset: [-2.4, 0, 0],
-    mobileCameraOffset: [-2.5, 2.8, 10],
-    mobileFocusOffset: [0, -0.1, 0],
-  },
-  {
-    id: "caelum",
-    index: "03",
-    name: "CAELUM",
-    type: "ICE WORLD",
-    chapter: "余响",
-    title: "未来先于我们醒来",
-    body: "当记忆可以被保存、预测和重写，真正稀缺的也许不再是答案，而是决定成为什么。",
-    coda: "终点不是被计算出来的，它仍等待一次自由的选择。",
-    lightAge: "107.3 MIN",
-    epoch: "BEYOND THE LAST PROPHECY",
-    distance: "12.90 AU",
-    accent: "#6977a8",
-    cameraOffset: [-2.2, 3.3, 10.8],
-    focusOffset: [-2.2, 0, 0],
-    mobileCameraOffset: [0.5, 3, 10.2],
-    mobileFocusOffset: [-0.2, 0, 0],
-  },
-];
 
 const starVertexShader = `
   uniform float uTime;
@@ -345,6 +267,96 @@ const caelumFragmentShader = `
   }
 `;
 
+const archivePlanetFragmentShader = `
+  uniform float uTime;
+  uniform float uSeed;
+  uniform float uPattern;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uGlow;
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+  varying vec3 vLocalPosition;
+
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + vec3(uSeed * 0.017, uSeed * 0.031, uSeed * 0.023));
+    p *= 18.0 + fract(uSeed) * 3.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+
+  float noise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+      f.z
+    );
+  }
+
+  void main() {
+    vec3 p = normalize(vLocalPosition);
+    float slowTime = uTime * (0.006 + fract(uSeed) * 0.004);
+    float broad = noise(p * (3.4 + fract(uPattern) * 2.2) + vec3(slowTime, -slowTime * 0.4, uSeed));
+    float detail = noise(p * (8.0 + uPattern * 0.85) - vec3(slowTime * 0.6, 0.0, slowTime));
+    float latitude = sin((p.y + broad * 0.16) * (10.0 + uPattern * 1.7)) * 0.5 + 0.5;
+    float longitude = sin((atan(p.z, p.x) + detail * 0.3) * (5.0 + fract(uSeed) * 5.0)) * 0.5 + 0.5;
+    float veins = 1.0 - smoothstep(0.025, 0.12, abs(latitude - longitude));
+    float continents = smoothstep(0.44, 0.72, broad * 0.72 + detail * 0.28);
+    float selector = fract(uPattern * 0.3819);
+    float terrain = mix(continents, latitude, smoothstep(0.22, 0.58, selector));
+    terrain = mix(terrain, max(continents, veins), smoothstep(0.62, 0.9, selector));
+    vec3 color = mix(uColorA, uColorB, terrain);
+    float rawLight = dot(normalize(vNormal), normalize(vec3(-0.42, 0.52, 0.74)));
+    float light = smoothstep(-0.38, 0.72, rawLight);
+    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0), 2.8);
+    float livingGlow = pow(max(0.0, detail - 0.66), 2.0) + veins * 0.34;
+    color *= 0.1 + light * 0.9;
+    color += uGlow * livingGlow * (0.16 + selector * 0.2);
+    color += uGlow * fresnel * 0.34;
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+const accretionVertexShader = `
+  varying vec3 vLocalPosition;
+  void main() {
+    vLocalPosition = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const accretionFragmentShader = `
+  uniform float uTime;
+  uniform float uPassage;
+  varying vec3 vLocalPosition;
+
+  float hash(float value) {
+    return fract(sin(value * 91.17) * 43758.5453);
+  }
+
+  void main() {
+    float radius = length(vLocalPosition.xy);
+    float angle = atan(vLocalPosition.y, vLocalPosition.x);
+    float radialMask = smoothstep(3.7, 4.16, radius) * (1.0 - smoothstep(11.2, 13.45, radius));
+    float spiralA = sin(angle * 14.0 - radius * 2.7 - uTime * 0.24);
+    float spiralB = sin(angle * 31.0 - radius * 5.1 + uTime * 0.15);
+    float granular = hash(floor(angle * 96.0) + floor(radius * 18.0) * 7.0);
+    float strands = smoothstep(0.08, 0.9, spiralA * 0.52 + spiralB * 0.25 + granular * 0.54);
+    float heat = 1.0 - smoothstep(3.9, 12.8, radius);
+    float doppler = sin(angle + 0.78) * 0.5 + 0.5;
+    vec3 cold = vec3(0.12, 0.24, 0.62);
+    vec3 warm = vec3(1.0, 0.55, 0.18);
+    vec3 white = vec3(1.0, 0.91, 0.7);
+    vec3 color = mix(cold, warm, doppler * 0.7 + heat * 0.3);
+    color = mix(color, white, heat * 0.58 + strands * 0.18);
+    float alpha = radialMask * (0.035 + strands * 0.24 + heat * 0.18);
+    alpha *= 1.0 + uPassage * 0.22;
+    gl_FragColor = vec4(color, alpha);
+  }
+`;
+
 const atmosphereVertexShader = `
   varying vec3 vNormal;
   varying vec3 vViewDirection;
@@ -460,25 +472,41 @@ function createOrbitLine(orbit: OrbitConfig) {
 
 export function GalaxyExperience() {
   const mountRef = useRef<HTMLDivElement>(null);
-  const targetRef = useRef<TargetId>("aurelia");
+  const targetRef = useRef<TargetId>("singularity");
   const cruiseRef = useRef(true);
   const pausedRef = useRef(false);
   const warpRef = useRef(0);
   const passageRef = useRef(0);
   const quietRef = useRef(false);
   const resetRef = useRef(0);
-  const [activeTarget, setActiveTarget] = useState<TargetId>("aurelia");
+  const [activeTarget, setActiveTarget] = useState<TargetId>("singularity");
   const [paused, setPaused] = useState(false);
   const [quiet, setQuiet] = useState(false);
   const [passageActive, setPassageActive] = useState(false);
+  const [storyExpanded, setStoryExpanded] = useState(false);
   const [ready, setReady] = useState(false);
   const [webglError, setWebglError] = useState(false);
 
   const selectTarget = useCallback((id: TargetId) => {
+    if (id !== "singularity" && targetRef.current === id) {
+      setStoryExpanded((expanded) => !expanded);
+      return;
+    }
     targetRef.current = id;
     warpRef.current = 0.22;
+    setStoryExpanded(false);
     setActiveTarget(id);
   }, []);
+
+  const selectGalaxy = useCallback((id: GalaxyId) => {
+    const firstPlanet = PLANETS_BY_GALAXY[id][0];
+    if (!firstPlanet) return;
+    if (targetRef.current === firstPlanet.id) {
+      setStoryExpanded(false);
+      return;
+    }
+    selectTarget(firstPlanet.id);
+  }, [selectTarget]);
 
   const toggleCruise = useCallback(() => {
     cruiseRef.current = !cruiseRef.current;
@@ -505,10 +533,11 @@ export function GalaxyExperience() {
   }, []);
 
   const resetView = useCallback(() => {
-    targetRef.current = "aurelia";
+    targetRef.current = "singularity";
     cruiseRef.current = true;
     resetRef.current += 1;
-    setActiveTarget("aurelia");
+    setStoryExpanded(false);
+    setActiveTarget("singularity");
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
@@ -558,8 +587,8 @@ export function GalaxyExperience() {
     renderer.domElement.setAttribute("aria-hidden", "true");
     mount.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 180);
-    camera.position.set(8, 3, 14);
+    const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 260);
+    camera.position.set(0, mobile ? 15 : 10.5, mobile ? 62 : 43);
     const currentLook = new THREE.Vector3();
     camera.lookAt(currentLook);
 
@@ -774,36 +803,178 @@ export function GalaxyExperience() {
     const rimLight = new THREE.PointLight(0x5968a6, 54, 32, 2);
     rimLight.position.set(2, 1, -2);
     scene.add(ambientLight, keyLight, rimLight);
-    const targetAccent = new THREE.Color(SYSTEMS[0].accent);
+    const targetAccent = new THREE.Color(SINGULARITY.accent);
     const targetFog = new THREE.Color(0x04030b).lerp(targetAccent, 0.045);
 
-    const core = new THREE.Mesh(
-      new THREE.SphereGeometry(0.3, 40, 40),
-      new THREE.MeshBasicMaterial({ color: 0xe2dccf }),
+    const blackHoleRoot = new THREE.Group();
+    const blackHoleVisual = new THREE.Group();
+    blackHoleRoot.add(blackHoleVisual);
+    universe.add(blackHoleRoot);
+
+    const eventHorizon = new THREE.Mesh(
+      new THREE.SphereGeometry(3.6, mobile ? 48 : 80, mobile ? 32 : 56),
+      new THREE.MeshBasicMaterial({ color: 0x000000, depthWrite: true }),
     );
-    core.position.set(0, 0, -0.5);
-    galaxy.add(core);
-    if (glowTexture) {
-      const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: glowTexture,
-        color: 0x8f9bc7,
+    eventHorizon.renderOrder = 8;
+    blackHoleVisual.add(eventHorizon);
+
+    const accretionMaterial = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uPassage: { value: 0 } },
+      vertexShader: accretionVertexShader,
+      fragmentShader: accretionFragmentShader,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    animatedMaterials.push(accretionMaterial);
+    const accretionDisk = new THREE.Mesh(
+      new THREE.RingGeometry(3.7, 13.5, mobile ? 192 : 320, 1),
+      accretionMaterial,
+    );
+    accretionDisk.rotation.set(1.13, 0.08, -0.24);
+    accretionDisk.renderOrder = 4;
+    blackHoleVisual.add(accretionDisk);
+
+    const photonMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffd69b,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const photonRing = new THREE.Mesh(new THREE.TorusGeometry(3.72, 0.065, 10, mobile ? 128 : 240), photonMaterial);
+    const photonRingOuter = new THREE.Mesh(new THREE.TorusGeometry(3.98, 0.028, 8, mobile ? 128 : 240), photonMaterial.clone());
+    photonRing.rotation.set(1.13, 0.08, -0.24);
+    photonRingOuter.rotation.set(1.24, -0.06, 0.18);
+    photonRing.renderOrder = 9;
+    photonRingOuter.renderOrder = 9;
+    blackHoleVisual.add(photonRing, photonRingOuter);
+
+    const crownCount = mobile ? 4800 : 14000;
+    const crownPositions = new Float32Array(crownCount * 3);
+    const crownColors = new Float32Array(crownCount * 3);
+    const crownScales = new Float32Array(crownCount);
+    const crownPhases = new Float32Array(crownCount);
+    const crownRandom = seededRandom(193117);
+    const crownColor = new THREE.Color();
+    for (let index = 0; index < crownCount; index += 1) {
+      const offset = index * 3;
+      const angle = crownRandom() * Math.PI * 2;
+      const radius = 16.2 + (crownRandom() - 0.5) * 2.3;
+      const thickness = (crownRandom() - 0.5) * 1.15;
+      crownPositions[offset] = Math.cos(angle) * radius;
+      crownPositions[offset + 1] = thickness;
+      crownPositions[offset + 2] = Math.sin(angle) * radius;
+      crownColor.set(crownRandom() > 0.72 ? 0xf6c486 : crownRandom() > 0.42 ? 0x9fc8ef : 0x7566bd);
+      crownColors[offset] = crownColor.r;
+      crownColors[offset + 1] = crownColor.g;
+      crownColors[offset + 2] = crownColor.b;
+      crownScales[index] = 0.65 + crownRandom() * 2.1;
+      crownPhases[index] = crownRandom() * Math.PI * 2;
+    }
+    const crownGeometry = new THREE.BufferGeometry();
+    crownGeometry.setAttribute("position", new THREE.BufferAttribute(crownPositions, 3));
+    crownGeometry.setAttribute("color", new THREE.BufferAttribute(crownColors, 3));
+    crownGeometry.setAttribute("aScale", new THREE.BufferAttribute(crownScales, 1));
+    crownGeometry.setAttribute("aPhase", new THREE.BufferAttribute(crownPhases, 1));
+    const crownMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: renderer.getPixelRatio() },
+        uWarp: { value: 0 },
+        uPassage: { value: 0 },
+        uMaxSize: { value: 4.6 },
+      },
+      vertexShader: starVertexShader,
+      fragmentShader: starFragmentShader,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    animatedMaterials.push(crownMaterial);
+    const horizonCrown = new THREE.Points(crownGeometry, crownMaterial);
+    horizonCrown.rotation.set(-0.2, 0, 0.15);
+    horizonCrown.frustumCulled = false;
+    blackHoleVisual.add(horizonCrown);
+
+    const overviewCameraAnchor = new THREE.Object3D();
+    overviewCameraAnchor.position.set(0, mobile ? 15 : 10.5, mobile ? 62 : 43);
+    const overviewFocusAnchor = new THREE.Object3D();
+    overviewFocusAnchor.position.set(mobile ? 0 : -5.8, mobile ? -2.6 : -0.7, 0);
+    blackHoleRoot.add(overviewCameraAnchor, overviewFocusAnchor);
+
+    const galaxySpaces = new Map<GalaxyId, { space: THREE.Group; visual: THREE.Group; planets: THREE.Group }>();
+    const galaxyPickables: Array<{ mesh: THREE.Mesh; id: PlanetId }> = [];
+    GALAXIES.forEach((definition, galaxyIndex) => {
+      const space = new THREE.Group();
+      space.position.set(...definition.position);
+      const visual = new THREE.Group();
+      visual.rotation.set((galaxyIndex - 1.5) * 0.13, galaxyIndex * 0.42, galaxyIndex % 2 ? -0.28 : 0.24);
+      const planets = new THREE.Group();
+      space.add(visual, planets);
+      system.add(space);
+      galaxySpaces.set(definition.id, { space, visual, planets });
+
+      const count = mobile ? 420 : 1200;
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const random = seededRandom(8147 + galaxyIndex * 9719);
+      const innerColor = new THREE.Color(definition.accent);
+      const outerColor = new THREE.Color(galaxyIndex % 2 ? 0x637ac2 : 0xb7d2e7);
+      const mixed = new THREE.Color();
+      for (let index = 0; index < count; index += 1) {
+        const offset = index * 3;
+        const radius = Math.pow(random(), 1.5) * 2.9;
+        const arm = ((index % (galaxyIndex === 2 ? 2 : 4)) / (galaxyIndex === 2 ? 2 : 4)) * Math.PI * 2;
+        const angle = arm + radius * (0.9 + galaxyIndex * 0.12) + (random() - 0.5) * 0.58;
+        positions[offset] = Math.cos(angle) * radius;
+        positions[offset + 1] = (random() - 0.5) * (0.24 + radius * 0.09);
+        positions[offset + 2] = Math.sin(angle) * radius;
+        mixed.copy(innerColor).lerp(outerColor, radius / 3.2);
+        colors[offset] = mixed.r;
+        colors[offset + 1] = mixed.g;
+        colors[offset + 2] = mixed.b;
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      const points = new THREE.Points(geometry, new THREE.PointsMaterial({
+        size: mobile ? 0.035 : 0.05,
+        vertexColors: true,
         transparent: true,
-        opacity: 0.18,
+        opacity: 0.78,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }));
-      coreGlow.position.copy(core.position);
-      coreGlow.scale.setScalar(3.6);
-      galaxy.add(coreGlow);
-    }
+      visual.add(points);
+      if (glowTexture) {
+        const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture,
+          color: definition.accent,
+          transparent: true,
+          opacity: 0.38,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }));
+        coreGlow.scale.setScalar(1.25);
+        visual.add(coreGlow);
+      }
+      const proxy = new THREE.Mesh(
+        new THREE.SphereGeometry(3.1, 16, 12),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
+      );
+      space.add(proxy);
+      galaxyPickables.push({ mesh: proxy, id: PLANETS_BY_GALAXY[definition.id][0].id });
+    });
 
-    system.add(
-      createOrbitLine(ORBITS.aurelia),
-      createOrbitLine(ORBITS.nyx),
-      createOrbitLine(ORBITS.caelum),
-    );
+    PLANETS.forEach((planetDefinition) => {
+      const parent = galaxySpaces.get(planetDefinition.galaxyId)?.planets;
+      if (parent) parent.add(createOrbitLine(planetDefinition.orbit));
+    });
 
-    function createViewAnchors(parent: THREE.Group, target: (typeof SYSTEMS)[number]) {
+    function createViewAnchors(parent: THREE.Group, target: PlanetStory) {
       const cameraAnchor = new THREE.Object3D();
       cameraAnchor.position.set(...(mobile ? target.mobileCameraOffset : target.cameraOffset));
       const focusAnchor = new THREE.Object3D();
@@ -813,9 +984,9 @@ export function GalaxyExperience() {
     }
 
     const aurelia = new THREE.Group();
-    setOrbitalPosition(aurelia, ORBITS.aurelia, 0);
-    system.add(aurelia);
-    const aureliaView = createViewAnchors(aurelia, SYSTEMS[0]);
+    setOrbitalPosition(aurelia, PLANET_BY_ID.aurelia.orbit, 0);
+    galaxySpaces.get("origo")?.planets.add(aurelia);
+    const aureliaView = createViewAnchors(aurelia, PLANET_BY_ID.aurelia);
     const aureliaVisual = new THREE.Group();
     aureliaVisual.rotation.z = -0.28;
     aurelia.add(aureliaVisual);
@@ -895,8 +1066,8 @@ export function GalaxyExperience() {
     }
 
     const nyx = new THREE.Group();
-    setOrbitalPosition(nyx, ORBITS.nyx, 0);
-    const nyxView = createViewAnchors(nyx, SYSTEMS[1]);
+    setOrbitalPosition(nyx, PLANET_BY_ID.nyx.orbit, 0);
+    const nyxView = createViewAnchors(nyx, PLANET_BY_ID.nyx);
     const nyxMaterial = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 } },
       vertexShader: planetVertexShader,
@@ -929,11 +1100,11 @@ export function GalaxyExperience() {
       nyxDebris.add(shard);
     });
     nyx.add(nyxDebris);
-    system.add(nyx);
+    galaxySpaces.get("origo")?.planets.add(nyx);
 
     const caelum = new THREE.Group();
-    setOrbitalPosition(caelum, ORBITS.caelum, 0);
-    const caelumView = createViewAnchors(caelum, SYSTEMS[2]);
+    setOrbitalPosition(caelum, PLANET_BY_ID.caelum.orbit, 0);
+    const caelumView = createViewAnchors(caelum, PLANET_BY_ID.caelum);
     const caelumMaterial = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 } },
       vertexShader: planetVertexShader,
@@ -965,17 +1136,110 @@ export function GalaxyExperience() {
     caelumHaloInner.rotation.set(1.32, -0.18, -0.28);
     caelumHalo.add(caelumHaloOuter, caelumHaloInner);
     caelum.add(caelumHalo);
-    system.add(caelum);
+    galaxySpaces.get("origo")?.planets.add(caelum);
 
-    const bodies = {
-      aurelia: { group: aurelia, cameraAnchor: aureliaView.cameraAnchor, focusAnchor: aureliaView.focusAnchor },
-      nyx: { group: nyx, cameraAnchor: nyxView.cameraAnchor, focusAnchor: nyxView.focusAnchor },
-      caelum: { group: caelum, cameraAnchor: caelumView.cameraAnchor, focusAnchor: caelumView.focusAnchor },
-    } satisfies Record<TargetId, { group: THREE.Group; cameraAnchor: THREE.Object3D; focusAnchor: THREE.Object3D }>;
+    type BodyRuntime = { group: THREE.Group; cameraAnchor: THREE.Object3D; focusAnchor: THREE.Object3D };
+    const bodies = new Map<TargetId, BodyRuntime>();
+    bodies.set("singularity", { group: blackHoleRoot, cameraAnchor: overviewCameraAnchor, focusAnchor: overviewFocusAnchor });
+    bodies.set("aurelia", { group: aurelia, cameraAnchor: aureliaView.cameraAnchor, focusAnchor: aureliaView.focusAnchor });
+    bodies.set("nyx", { group: nyx, cameraAnchor: nyxView.cameraAnchor, focusAnchor: nyxView.focusAnchor });
+    bodies.set("caelum", { group: caelum, cameraAnchor: caelumView.cameraAnchor, focusAnchor: caelumView.focusAnchor });
+
+    const genericPlanetRuntimes: Array<{
+      definition: PlanetStory;
+      group: THREE.Group;
+      visual: THREE.Group;
+      mesh: THREE.Mesh;
+      moonOrbit: THREE.Group;
+    }> = [];
+    PLANETS.slice(3).forEach((definition) => {
+      const group = new THREE.Group();
+      setOrbitalPosition(group, definition.orbit, 0);
+      const parent = galaxySpaces.get(definition.galaxyId)?.planets;
+      if (parent) parent.add(group);
+      const anchors = createViewAnchors(group, definition);
+      const visual = new THREE.Group();
+      visual.rotation.z = (definition.visual.seed % 1 - 0.5) * 0.7;
+      group.add(visual);
+
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uSeed: { value: definition.visual.seed },
+          uPattern: { value: definition.visual.pattern },
+          uColorA: { value: new THREE.Color(definition.visual.colorA) },
+          uColorB: { value: new THREE.Color(definition.visual.colorB) },
+          uGlow: { value: new THREE.Color(definition.visual.glow) },
+        },
+        vertexShader: planetVertexShader,
+        fragmentShader: archivePlanetFragmentShader,
+      });
+      animatedMaterials.push(material);
+      const geometry = definition.visual.geometry === "crystal"
+        ? new THREE.IcosahedronGeometry(definition.visual.radius, mobile ? 2 : 4)
+        : new THREE.SphereGeometry(definition.visual.radius, mobile ? 44 : 72, mobile ? 30 : 52);
+      const mesh = new THREE.Mesh(geometry, material);
+      visual.add(mesh);
+      addAtmosphere(visual, definition.visual.radius * 1.075, definition.visual.atmosphere, 0.14);
+
+      if (definition.visual.ringColor && definition.visual.ringScale) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(
+            definition.visual.radius * definition.visual.ringScale,
+            Math.max(0.008, definition.visual.radius * 0.012),
+            6,
+            mobile ? 96 : 160,
+          ),
+          new THREE.MeshBasicMaterial({
+            color: definition.visual.ringColor,
+            transparent: true,
+            opacity: 0.38,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+          }),
+        );
+        ring.rotation.set(...(definition.visual.ringTilt ?? [1.22, 0.12, -0.18]));
+        visual.add(ring);
+      }
+
+      const moonOrbit = new THREE.Group();
+      visual.add(moonOrbit);
+      for (let moonIndex = 0; moonIndex < (definition.visual.moons ?? 0); moonIndex += 1) {
+        const moonRadius = definition.visual.radius * (0.07 + moonIndex * 0.012);
+        const satellite = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(moonRadius, 1),
+          new THREE.MeshStandardMaterial({
+            color: new THREE.Color(definition.visual.glow).lerp(new THREE.Color(0x5d6070), 0.55),
+            roughness: 0.82,
+            metalness: 0.03,
+          }),
+        );
+        const angle = (moonIndex / Math.max(1, definition.visual.moons ?? 1)) * Math.PI * 2 + definition.visual.seed;
+        const orbitRadius = definition.visual.radius * (1.55 + moonIndex * 0.34);
+        satellite.position.set(Math.cos(angle) * orbitRadius, (moonIndex - 1) * moonRadius * 2.2, Math.sin(angle) * orbitRadius);
+        moonOrbit.add(satellite);
+      }
+
+      bodies.set(definition.id, { group, cameraAnchor: anchors.cameraAnchor, focusAnchor: anchors.focusAnchor });
+      genericPlanetRuntimes.push({ definition, group, visual, mesh, moonOrbit });
+    });
+
+    const visualRadiusByTarget = new Map<TargetId, number>([
+      ["singularity", 3.6],
+      ["aurelia", 4.35],
+      ["nyx", 1.62],
+      ["caelum", 2.08],
+    ]);
+    genericPlanetRuntimes.forEach(({ definition }) => {
+      visualRadiusByTarget.set(
+        definition.id,
+        Math.max(definition.visual.radius, definition.visual.radius * (definition.visual.ringScale ?? 1)),
+      );
+    });
 
     universe.updateMatrixWorld(true);
-    bodies.aurelia.cameraAnchor.getWorldPosition(camera.position);
-    bodies.aurelia.focusAnchor.getWorldPosition(currentLook);
+    overviewCameraAnchor.getWorldPosition(camera.position);
+    overviewFocusAnchor.getWorldPosition(currentLook);
     camera.lookAt(currentLook);
 
     const pointer = new THREE.Vector2();
@@ -984,6 +1248,8 @@ export function GalaxyExperience() {
       { mesh: planet, id: "aurelia" },
       { mesh: nyxPlanet, id: "nyx" },
       { mesh: caelumPlanet, id: "caelum" },
+      ...genericPlanetRuntimes.map((runtime) => ({ mesh: runtime.mesh, id: runtime.definition.id })),
+      ...galaxyPickables,
     ];
     const dragRotation = new THREE.Vector2();
     let dragging = false;
@@ -995,7 +1261,11 @@ export function GalaxyExperience() {
     const targetCamera = new THREE.Vector3();
     const targetLook = new THREE.Vector3();
     const projectedTarget = new THREE.Vector3();
-    let activeBody = bodies[targetRef.current];
+    const projectedBlackHole = new THREE.Vector3();
+    const projectedEdge = new THREE.Vector3();
+    const worldCenter = new THREE.Vector3();
+    const cameraAxis = new THREE.Vector3();
+    let activeBody = bodies.get(targetRef.current) ?? bodies.get("singularity")!;
     let zoom = 1;
     let elapsed = 0;
     let passage = 0;
@@ -1003,12 +1273,19 @@ export function GalaxyExperience() {
     let hidden = false;
 
     function applyTarget(id: TargetId) {
-      const target = SYSTEMS.find((item) => item.id === id) ?? SYSTEMS[0];
-      activeBody = bodies[id];
+      const target = id === "singularity" ? SINGULARITY : PLANET_BY_ID[id];
+      activeBody = bodies.get(id) ?? bodies.get("singularity")!;
+      const activeGalaxyId = id === "singularity" ? null : PLANET_BY_ID[id].galaxyId;
+      galaxySpaces.forEach((runtime, galaxyId) => {
+        runtime.planets.visible = activeGalaxyId === galaxyId;
+        runtime.visual.scale.setScalar(activeGalaxyId === null ? 1.65 : activeGalaxyId === galaxyId ? 0.72 : 0.9);
+      });
       targetAccent.set(target.accent);
       targetFog.set(0x04030b).lerp(targetAccent, 0.045);
       appliedTarget = id;
     }
+
+    applyTarget(targetRef.current);
 
     function handlePointerDown(event: PointerEvent) {
       dragging = true;
@@ -1053,9 +1330,19 @@ export function GalaxyExperience() {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target?.matches("button, a, input, textarea, select, [contenteditable='true']")) return;
-      if (event.key === "1") selectTarget("aurelia");
-      if (event.key === "2") selectTarget("nyx");
-      if (event.key === "3") selectTarget("caelum");
+      if (event.key === "0") selectTarget("singularity");
+      if (/^[1-4]$/.test(event.key)) {
+        if (targetRef.current === "singularity") {
+          const galaxy = GALAXIES[Number(event.key) - 1];
+          const firstPlanet = galaxy ? PLANETS_BY_GALAXY[galaxy.id][0] : undefined;
+          if (firstPlanet) selectTarget(firstPlanet.id);
+        } else {
+          const activePlanet = PLANET_BY_ID[targetRef.current];
+          const sibling = PLANETS_BY_GALAXY[activePlanet.galaxyId][Number(event.key) - 1];
+          if (sibling) selectTarget(sibling.id);
+        }
+      }
+      if (event.key === "Escape") selectTarget("singularity");
       if (event.key.toLowerCase() === "r") resetView();
       if (event.key.toLowerCase() === "q") toggleQuiet();
       if (event.code === "Space") {
@@ -1085,6 +1372,7 @@ export function GalaxyExperience() {
     let resizeFrame = 0;
     let renderedWidth = 0;
     let renderedHeight = 0;
+    let compactScene = mobile;
 
     function resize() {
       const width = Math.max(1, mount.clientWidth);
@@ -1092,6 +1380,17 @@ export function GalaxyExperience() {
       if (width === renderedWidth && height === renderedHeight) return;
       renderedWidth = width;
       renderedHeight = height;
+      const nextCompactScene = width <= 720;
+      if (nextCompactScene !== compactScene) {
+        compactScene = nextCompactScene;
+        overviewCameraAnchor.position.set(0, compactScene ? 15 : 10.5, compactScene ? 62 : 43);
+        overviewFocusAnchor.position.set(compactScene ? 0 : -5.8, compactScene ? -2.6 : -0.7, 0);
+        PLANETS.forEach((definition) => {
+          const runtime = bodies.get(definition.id);
+          runtime?.cameraAnchor.position.set(...(compactScene ? definition.mobileCameraOffset : definition.cameraOffset));
+          runtime?.focusAnchor.position.set(...(compactScene ? definition.mobileFocusOffset : definition.focusOffset));
+        });
+      }
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
@@ -1129,7 +1428,7 @@ export function GalaxyExperience() {
         appliedReset = resetRef.current;
         dragRotation.set(0, 0);
         zoom = 1;
-        applyTarget("aurelia");
+        applyTarget("singularity");
       }
 
       const warp = warpRef.current;
@@ -1144,11 +1443,23 @@ export function GalaxyExperience() {
 
       const quietMotion = quietRef.current ? 0.34 : 1;
       if (!pausedRef.current && !prefersReducedMotion) {
-        setOrbitalPosition(aurelia, ORBITS.aurelia, elapsed);
-        setOrbitalPosition(nyx, ORBITS.nyx, elapsed);
-        setOrbitalPosition(caelum, ORBITS.caelum, elapsed);
+        setOrbitalPosition(aurelia, PLANET_BY_ID.aurelia.orbit, elapsed);
+        setOrbitalPosition(nyx, PLANET_BY_ID.nyx.orbit, elapsed);
+        setOrbitalPosition(caelum, PLANET_BY_ID.caelum.orbit, elapsed);
+        genericPlanetRuntimes.forEach((runtime, index) => {
+          setOrbitalPosition(runtime.group, runtime.definition.orbit, elapsed);
+          runtime.visual.rotation.y = (index % 2 ? -1 : 1) * elapsed * (0.018 + (runtime.definition.visual.seed % 1) * 0.02) * quietMotion;
+          runtime.moonOrbit.rotation.y = elapsed * (0.055 + index * 0.002) * quietMotion;
+        });
         galaxy.rotation.y = elapsed * 0.004 * quietMotion;
         dust.rotation.y = -elapsed * 0.003 * quietMotion;
+        blackHoleVisual.rotation.y = elapsed * 0.0035 * quietMotion;
+        photonRing.rotation.z = elapsed * 0.018 * quietMotion;
+        photonRingOuter.rotation.z = -elapsed * 0.012 * quietMotion;
+        galaxySpaces.forEach((runtime, id) => {
+          const index = GALAXIES.findIndex((galaxyDefinition) => galaxyDefinition.id === id);
+          runtime.visual.rotation.y += (0.00016 + index * 0.000025) * quietMotion;
+        });
         backgroundStars.rotation.y = elapsed * 0.0012 * quietMotion;
         foregroundDust.position.z = Math.sin(elapsed * 0.028) * 0.42 * quietMotion;
         constellationGroup.rotation.y = Math.sin(elapsed * 0.018) * 0.012;
@@ -1191,21 +1502,50 @@ export function GalaxyExperience() {
       targetCamera.sub(targetLook).multiplyScalar(zoom).add(targetLook);
       targetCamera.x += pointer.x * 0.22 * quietMotion;
       targetCamera.y += pointer.y * 0.13 * quietMotion;
-      camera.position.lerp(targetCamera, prefersReducedMotion ? 0.12 : 0.024);
-      currentLook.lerp(targetLook, 0.028);
+      camera.position.lerp(targetCamera, prefersReducedMotion ? 0.16 : 0.045);
+      currentLook.lerp(targetLook, prefersReducedMotion ? 0.16 : 0.052);
       camera.lookAt(currentLook);
-      camera.fov = THREE.MathUtils.lerp(camera.fov, 48 + warp * 6 + passage * 9, 0.06);
+      const baseFov = appliedTarget === "singularity" ? (compactScene ? 58 : 54) : 48;
+      camera.fov = THREE.MathUtils.lerp(camera.fov, baseFov + warp * 6 + passage * 9, 0.06);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
       activeBody.group.getWorldPosition(projectedTarget).project(camera);
+      blackHoleRoot.getWorldPosition(projectedBlackHole).project(camera);
+      activeBody.group.getWorldPosition(worldCenter);
+      cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(visualRadiusByTarget.get(appliedTarget) ?? 1);
+      projectedEdge.copy(worldCenter).add(cameraAxis).project(camera);
+      const targetRadiusPx = Math.abs(projectedEdge.x - projectedTarget.x) * renderedWidth * 0.5;
+      const targetCenterPx = (projectedTarget.x + 1) * renderedWidth * 0.5;
+      blackHoleRoot.getWorldPosition(worldCenter);
+      cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(3.6);
+      projectedEdge.copy(worldCenter).add(cameraAxis).project(camera);
+      const blackHoleRadiusPx = Math.abs(projectedEdge.x - projectedBlackHole.x) * renderedWidth * 0.5;
+      cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(17.35);
+      projectedEdge.copy(worldCenter).add(cameraAxis).project(camera);
+      const crownOuterRadiusPx = Math.abs(projectedEdge.x - projectedBlackHole.x) * renderedWidth * 0.5;
+      cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(15.05);
+      projectedEdge.copy(worldCenter).add(cameraAxis).project(camera);
+      const crownInnerRadiusPx = Math.abs(projectedEdge.x - projectedBlackHole.x) * renderedWidth * 0.5;
       renderer.domElement.dataset.target = appliedTarget;
+      renderer.domElement.dataset.focusKind = appliedTarget === "singularity" ? "singularity" : "planet";
+      renderer.domElement.dataset.parentGalaxy = appliedTarget === "singularity" ? "none" : PLANET_BY_ID[appliedTarget].galaxyId;
+      renderer.domElement.dataset.galaxyCount = String(GALAXIES.length);
+      renderer.domElement.dataset.planetCount = String(PLANETS.length);
       renderer.domElement.dataset.targetNdcX = projectedTarget.x.toFixed(4);
       renderer.domElement.dataset.targetNdcY = projectedTarget.y.toFixed(4);
-      renderer.domElement.dataset.orbitResidual = Math.max(
-        getOrbitResidual(aurelia, ORBITS.aurelia),
-        getOrbitResidual(nyx, ORBITS.nyx),
-        getOrbitResidual(caelum, ORBITS.caelum),
-      ).toExponential(2);
+      renderer.domElement.dataset.targetRadiusPx = targetRadiusPx.toFixed(2);
+      renderer.domElement.dataset.targetLeftPx = (targetCenterPx - targetRadiusPx).toFixed(2);
+      renderer.domElement.dataset.cameraResidual = camera.position.distanceTo(targetCamera).toFixed(4);
+      renderer.domElement.dataset.blackHoleNdcX = projectedBlackHole.x.toFixed(4);
+      renderer.domElement.dataset.blackHoleNdcY = projectedBlackHole.y.toFixed(4);
+      renderer.domElement.dataset.blackHoleRadiusPx = blackHoleRadiusPx.toFixed(2);
+      renderer.domElement.dataset.crownInnerRadiusPx = crownInnerRadiusPx.toFixed(2);
+      renderer.domElement.dataset.crownOuterRadiusPx = crownOuterRadiusPx.toFixed(2);
+      renderer.domElement.dataset.blackHoleVisible = String(Math.abs(projectedBlackHole.x) < 1.15 && Math.abs(projectedBlackHole.y) < 1.15 && projectedBlackHole.z > -1 && projectedBlackHole.z < 1);
+      renderer.domElement.dataset.orbitResidual = Math.max(...PLANETS.map((definition) => {
+        const runtime = bodies.get(definition.id);
+        return runtime ? getOrbitResidual(runtime.group, definition.orbit) : Number.POSITIVE_INFINITY;
+      })).toExponential(2);
       bloom.strength = bloomBaseStrength - (quietRef.current ? 0.045 : 0) + warp * 0.18 + passage * 0.14;
       composer.render();
 
@@ -1245,18 +1585,26 @@ export function GalaxyExperience() {
     };
   }, [resetView, selectTarget, toggleCruise, toggleQuiet]);
 
-  const activeSystem = SYSTEMS.find((item) => item.id === activeTarget) ?? SYSTEMS[0];
+  const activePlanet = activeTarget === "singularity" ? null : PLANET_BY_ID[activeTarget];
+  const activeGalaxy = activePlanet ? GALAXIES.find((galaxy) => galaxy.id === activePlanet.galaxyId) ?? null : null;
+  const activeStory = activePlanet ?? SINGULARITY;
+  const siblingPlanets = activeGalaxy ? PLANETS_BY_GALAXY[activeGalaxy.id] : [];
 
   return (
-    <main className={`${styles.page} ${quiet ? styles.quiet : ""} ${passageActive ? styles.passageActive : ""}`} data-testid="galaxy-page">
+    <main
+      className={`${styles.page} ${activeTarget === "singularity" ? styles.overview : ""} ${quiet ? styles.quiet : ""} ${passageActive ? styles.passageActive : ""}`}
+      data-testid="galaxy-page"
+      data-mode={activeTarget === "singularity" ? "overview" : "planet"}
+      data-story-mode={storyExpanded ? "archive" : "short"}
+    >
       <div ref={mountRef} className={styles.scene} data-testid="galaxy-scene" />
       <div className={styles.vignette} aria-hidden="true" />
       <div className={styles.filmGrain} aria-hidden="true" />
 
       <div className={`${styles.loader} ${ready ? styles.loaderHidden : ""}`} aria-hidden={ready}>
         <span className={styles.loaderMark}><i /><i /><i /></span>
-        <strong>星光抵达之前</strong>
-        <small>请允许黑暗停留片刻</small>
+        <strong>见界环正在显现</strong>
+        <small>请允许宇宙先于名字抵达</small>
         <span className={styles.loaderLine}><i /></span>
       </div>
 
@@ -1274,37 +1622,88 @@ export function GalaxyExperience() {
         </Link>
         <div className={styles.brand}>
           <span className={styles.brandMark}><i /><i /><i /></span>
-          <div><strong>ASTRA</strong><small>AN OBSERVATION OF LIGHT</small></div>
+          <div><strong>ASTRA · 界外纪</strong><small>杭州视界奇点科技有限公司</small></div>
         </div>
       </header>
 
-      <section key={activeSystem.id} className={styles.hero} style={{ "--philosophy-accent": activeSystem.accent } as CSSProperties}>
-        <span className={styles.kicker}>{activeSystem.index} / {activeSystem.chapter} · {activeSystem.epoch}</span>
-        <h1>{activeSystem.title}</h1>
-        <p>{activeSystem.body}</p>
-        <blockquote>{activeSystem.coda}</blockquote>
-      </section>
-
-      <nav className={styles.systemNav} aria-label="星光章节">
-        {SYSTEMS.map((item) => (
+      <section
+        key={`${activeStory.id}-${storyExpanded ? "archive" : "short"}`}
+        className={`${styles.hero} ${storyExpanded ? styles.storyExpanded : ""}`}
+        style={{ "--philosophy-accent": activeStory.accent } as CSSProperties}
+        aria-live="polite"
+      >
+        <span className={styles.kicker}>{activeStory.index} / {activeStory.chapter} · {activeStory.epoch}</span>
+        <h1>{storyExpanded && activePlanet ? activePlanet.archiveTitle : activeStory.title}</h1>
+        {storyExpanded && activePlanet ? (
+          <div className={styles.archiveBody}>
+            {activePlanet.archive.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+          </div>
+        ) : <p>{activeStory.body}</p>}
+        <blockquote>{activeStory.coda}</blockquote>
+        {activePlanet && (
           <button
             type="button"
-            key={item.id}
-            className={activeTarget === item.id ? styles.systemActive : ""}
-            onClick={() => selectTarget(item.id)}
-            aria-pressed={activeTarget === item.id}
+            className={styles.storyToggle}
+            onClick={() => setStoryExpanded((expanded) => !expanded)}
+            aria-expanded={storyExpanded}
           >
-            <i style={{ background: item.accent }} />
-            <strong>{item.chapter}</strong>
-            <small>{item.name}</small>
+            {storyExpanded ? <ArrowLeft size={14} /> : <BookOpen size={14} />}
+            <span>{storyExpanded ? "返回短章" : "读取完整记录"}</span>
           </button>
-        ))}
+        )}
+      </section>
+
+      <nav className={styles.atlasNav} aria-label="界外纪宇宙图谱">
+        <div className={styles.galaxyNav} aria-label="选择星系">
+          <button
+            type="button"
+            className={activeTarget === "singularity" ? styles.navActive : ""}
+            onClick={() => selectTarget("singularity")}
+            aria-pressed={activeTarget === "singularity"}
+            aria-label="返回观渊奇点总览"
+          >
+            <Orbit size={14} />
+            <span><strong>观渊</strong><small>THE WITNESS WELL</small></span>
+          </button>
+          {GALAXIES.map((galaxy) => (
+            <button
+              type="button"
+              key={galaxy.id}
+              data-galaxy-id={galaxy.id}
+              className={activeGalaxy?.id === galaxy.id ? styles.navActive : ""}
+              onClick={() => selectGalaxy(galaxy.id)}
+              aria-pressed={activeGalaxy?.id === galaxy.id}
+              aria-label={`进入${galaxy.name}星系 ${galaxy.latin}`}
+            >
+              <i style={{ background: galaxy.accent }} />
+              <span><strong>{galaxy.name}</strong><small>{galaxy.latin}</small></span>
+            </button>
+          ))}
+        </div>
+        {activeGalaxy && (
+          <div className={styles.planetNav} aria-label={`${activeGalaxy.name}星系行星`}>
+            <span className={styles.galaxyThesis}>{activeGalaxy.index} · {activeGalaxy.thesis}</span>
+            {siblingPlanets.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                data-planet-id={item.id}
+                className={activeTarget === item.id ? styles.navActive : ""}
+                onClick={() => selectTarget(item.id)}
+                aria-pressed={activeTarget === item.id}
+              >
+                <i style={{ background: item.accent }} />
+                <span><strong>{item.chapter}</strong><small>{item.name}</small></span>
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
 
       <aside className={styles.observation} aria-live="polite">
-        <span>{activeSystem.name} · {activeSystem.type}</span>
-        <b>{activeSystem.lightAge}</b>
-        <small>光在抵达这里以前，已经独自走了很久。</small>
+        <span>{activeStory.name} · {activeStory.type}</span>
+        <b>{activeStory.lightAge}</b>
+        <small>{activeGalaxy?.thesis ?? "观渊不是中心，而是所有尺度失去傲慢的地方。"}</small>
       </aside>
 
       <div className={styles.controls} aria-label="星图控制">
@@ -1332,9 +1731,12 @@ export function GalaxyExperience() {
         </button>
       </div>
 
-      <p className={styles.temporalEcho}>世界一遍遍重写结局，只为了等一次不服从预言的选择。</p>
+      <p className={styles.temporalEcho}>见界环保存的不是答案，而是文明曾认真问过的问题。</p>
 
-      <p className={styles.srOnly}>穿过静默的星尘，观察关于起源、造史与余响的自洽三维星系。</p>
+      <div className={styles.srOnly}>
+        <p>界外纪包含 4 个星系与 12 颗可观测行星。穿过观渊与见界环，进入每颗行星独有的文明故事。</p>
+        <ul>{PLANETS.map((item) => <li key={item.id}>{item.chapter} {item.name}：{item.title}；完整档案：{item.archiveTitle}</li>)}</ul>
+      </div>
     </main>
   );
 }
