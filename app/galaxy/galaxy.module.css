@@ -111,7 +111,7 @@
 
 .hero {
   left: 7vw;
-  max-width: 500px;
+  max-width: 600px;
   position: absolute;
   top: 50%;
   transform: translateY(-42%);
@@ -133,11 +133,12 @@
 
 .hero h1 {
   font-family: "Songti SC", "Noto Serif SC", STSong, Georgia, serif;
-  font-size: 60px;
+  font-size: 56px;
   font-weight: 500;
   line-height: 1.18;
   margin: 19px 0 24px;
-  max-width: 480px;
+  max-width: 580px;
+  text-wrap: balance;
   text-shadow: 0 8px 42px rgb(0 0 0 / 70%);
 }
 
@@ -147,7 +148,7 @@
   font-size: 15px;
   line-height: 1.9;
   margin: 0;
-  max-width: 390px;
+  max-width: 470px;
 }
 
 .hero blockquote {

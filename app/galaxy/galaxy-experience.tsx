@@ -18,6 +18,22 @@ import styles from "./galaxy.module.css";
 
 type TargetId = "aurelia" | "nyx" | "caelum";
 
+type OrbitConfig = {
+  radiusX: number;
+  radiusZ: number;
+  tilt: number;
+  phase: number;
+  speed: number;
+  color: number;
+  opacity: number;
+};
+
+const ORBITS: Record<TargetId, OrbitConfig> = {
+  aurelia: { radiusX: 4.7, radiusZ: 3.7, tilt: 0.3, phase: 0.65, speed: 0.009, color: 0x8b665d, opacity: 0.075 },
+  nyx: { radiusX: 7.7, radiusZ: 6.2, tilt: -0.5, phase: 3.65, speed: 0.006, color: 0x4f476d, opacity: 0.055 },
+  caelum: { radiusX: 11, radiusZ: 8.8, tilt: 0.7, phase: 5.75, speed: 0.0045, color: 0x6977a8, opacity: 0.045 },
+};
+
 const SYSTEMS: Array<{
   id: TargetId;
   index: string;
@@ -31,64 +47,64 @@ const SYSTEMS: Array<{
   epoch: string;
   distance: string;
   accent: string;
-  camera: [number, number, number];
-  look: [number, number, number];
-  mobileCamera: [number, number, number];
-  mobileLook: [number, number, number];
+  cameraOffset: [number, number, number];
+  focusOffset: [number, number, number];
+  mobileCameraOffset: [number, number, number];
+  mobileFocusOffset: [number, number, number];
 }> = [
   {
     id: "aurelia",
     index: "01",
     name: "AURELIA",
     type: "RING GIANT",
-    chapter: "微光",
-    title: "我们从微光中来",
-    body: "恒星把自己燃成光，才让遥远的我们看见彼此。",
-    coda: "距离不是分离，是光仍在路上。",
+    chapter: "起源",
+    title: "所有光都曾独自出发",
+    body: "在名字、历史和见证者出现以前，恒星已经把漫长的沉默写进宇宙。",
+    coda: "我们以为自己在回忆，其实只是旧日的光终于抵达。",
     lightAge: "38.6 MIN",
-    epoch: "BEFORE MEMORY",
+    epoch: "THE FIRST WITNESS",
     distance: "04.72 AU",
     accent: "#b88961",
-    camera: [8.2, 2.6, 13.2],
-    look: [0.7, -0.35, 1.8],
-    mobileCamera: [6.5, 3, 14.8],
-    mobileLook: [2.6, 0, 1.8],
+    cameraOffset: [5.2, 3, 11.8],
+    focusOffset: [-1.7, -0.15, 0],
+    mobileCameraOffset: [3.2, 3.2, 13.8],
+    mobileFocusOffset: [-0.25, -0.1, 0],
   },
   {
     id: "nyx",
     index: "02",
     name: "NYX",
-    type: "EMBER MOON",
-    chapter: "漂流",
-    title: "黑暗并非空无",
-    body: "它保存尚未发生的事，也保存我们来不及说出的名字。",
-    coda: "你所凝视的，也正在改变你。",
+    type: "EMBER WORLD",
+    chapter: "造史",
+    title: "人类把偶然称为命运",
+    body: "我们用故事组织陌生人，用年代丈量恐惧，再把选择写成仿佛必然的历史。",
+    coda: "文明向前，并不代表它知道要去哪里。",
     lightAge: "67.7 MIN",
-    epoch: "AFTER FIRE",
+    epoch: "THE SHARED FICTION",
     distance: "08.13 AU",
     accent: "#9a6674",
-    camera: [-2.6, 2.8, 4.4],
-    look: [-5.4, 1.4, -4],
-    mobileCamera: [-3.6, 3, 6.6],
-    mobileLook: [-6.8, 1.4, -4],
+    cameraOffset: [-3.2, 2.4, 8.8],
+    focusOffset: [-1.4, 0, 0],
+    mobileCameraOffset: [-2.5, 2.8, 10],
+    mobileFocusOffset: [0, -0.1, 0],
   },
   {
     id: "caelum",
     index: "03",
     name: "CAELUM",
     type: "ICE WORLD",
-    chapter: "回声",
-    title: "寂静不是终点",
-    body: "万物只是换一种尺度，继续存在。",
-    coda: "此刻之后，星光仍会抵达。",
+    chapter: "余响",
+    title: "未来先于我们醒来",
+    body: "当记忆可以被保存、预测和重写，真正稀缺的也许不再是答案，而是决定成为什么。",
+    coda: "终点不是被计算出来的，它仍等待一次自由的选择。",
     lightAge: "107.3 MIN",
-    epoch: "THE LONG RETURN",
+    epoch: "BEYOND THE LAST PROPHECY",
     distance: "12.90 AU",
     accent: "#6977a8",
-    camera: [5.2, 4.4, 2.6],
-    look: [5.2, 2.4, -5.5],
-    mobileCamera: [5, 4.4, 3],
-    mobileLook: [6.4, 2.4, -5.5],
+    cameraOffset: [-1.8, 2.8, 8.8],
+    focusOffset: [-1.6, 0, 0],
+    mobileCameraOffset: [0.5, 3, 10.2],
+    mobileFocusOffset: [-0.2, 0, 0],
   },
 ];
 
@@ -323,13 +339,32 @@ function seededRandom(seed: number) {
   };
 }
 
-function createOrbitLine(radiusX: number, radiusZ: number, color: number, opacity: number, tilt: number) {
+function setOrbitalPosition(target: THREE.Object3D, orbit: OrbitConfig, elapsed: number) {
+  const angle = orbit.phase + elapsed * orbit.speed;
+  target.position.set(
+    Math.cos(angle) * orbit.radiusX,
+    Math.sin(angle) * orbit.tilt,
+    Math.sin(angle) * orbit.radiusZ,
+  );
+}
+
+function getOrbitResidual(target: THREE.Object3D, orbit: OrbitConfig) {
+  const ellipse = (target.position.x ** 2) / (orbit.radiusX ** 2) + (target.position.z ** 2) / (orbit.radiusZ ** 2);
+  const expectedY = (target.position.z / orbit.radiusZ) * orbit.tilt;
+  return Math.max(Math.abs(ellipse - 1), Math.abs(target.position.y - expectedY));
+}
+
+function createOrbitLine(orbit: OrbitConfig) {
   const points = Array.from({ length: 240 }, (_, index) => {
     const angle = (index / 240) * Math.PI * 2;
-    return new THREE.Vector3(Math.cos(angle) * radiusX, Math.sin(angle) * tilt, Math.sin(angle) * radiusZ);
+    return new THREE.Vector3(
+      Math.cos(angle) * orbit.radiusX,
+      Math.sin(angle) * orbit.tilt,
+      Math.sin(angle) * orbit.radiusZ,
+    );
   });
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+  const material = new THREE.LineBasicMaterial({ color: orbit.color, transparent: true, opacity: orbit.opacity });
   return new THREE.LineLoop(geometry, material);
 }
 
@@ -434,8 +469,8 @@ export function GalaxyExperience() {
     mount.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 180);
-    camera.position.set(...(mobile ? SYSTEMS[0].mobileCamera : SYSTEMS[0].camera));
-    const currentLook = new THREE.Vector3(...(mobile ? SYSTEMS[0].mobileLook : SYSTEMS[0].look));
+    camera.position.set(8, 3, 14);
+    const currentLook = new THREE.Vector3();
     camera.lookAt(currentLook);
 
     const composer = new EffectComposer(renderer);
@@ -673,15 +708,27 @@ export function GalaxyExperience() {
     }
 
     system.add(
-      createOrbitLine(5.4, 4.2, 0x6977a8, 0.075, 0.45),
-      createOrbitLine(8.4, 6.6, 0x4f476d, 0.055, -0.7),
-      createOrbitLine(11.5, 9.2, 0x8b665d, 0.045, 0.9),
+      createOrbitLine(ORBITS.aurelia),
+      createOrbitLine(ORBITS.nyx),
+      createOrbitLine(ORBITS.caelum),
     );
 
+    function createViewAnchors(parent: THREE.Group, target: (typeof SYSTEMS)[number]) {
+      const cameraAnchor = new THREE.Object3D();
+      cameraAnchor.position.set(...(mobile ? target.mobileCameraOffset : target.cameraOffset));
+      const focusAnchor = new THREE.Object3D();
+      focusAnchor.position.set(...(mobile ? target.mobileFocusOffset : target.focusOffset));
+      parent.add(cameraAnchor, focusAnchor);
+      return { cameraAnchor, focusAnchor };
+    }
+
     const aurelia = new THREE.Group();
-    aurelia.position.set(2.6, -0.35, 1.8);
-    aurelia.rotation.z = -0.28;
+    setOrbitalPosition(aurelia, ORBITS.aurelia, 0);
     system.add(aurelia);
+    const aureliaView = createViewAnchors(aurelia, SYSTEMS[0]);
+    const aureliaVisual = new THREE.Group();
+    aureliaVisual.rotation.z = -0.28;
+    aurelia.add(aureliaVisual);
 
     const planetMaterial = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 } },
@@ -690,7 +737,7 @@ export function GalaxyExperience() {
     });
     animatedMaterials.push(planetMaterial);
     const planet = new THREE.Mesh(new THREE.SphereGeometry(2.08, mobile ? 64 : 112, mobile ? 48 : 80), planetMaterial);
-    aurelia.add(planet);
+    aureliaVisual.add(planet);
 
     const atmosphereMaterial = new THREE.ShaderMaterial({
       vertexShader: atmosphereVertexShader,
@@ -701,7 +748,7 @@ export function GalaxyExperience() {
       side: THREE.BackSide,
     });
     const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(2.23, 72, 56), atmosphereMaterial);
-    aurelia.add(atmosphere);
+    aureliaVisual.add(atmosphere);
 
     const ringGeometry = new THREE.RingGeometry(2.7, 4.35, mobile ? 160 : 320, 1);
     const ringMaterial = new THREE.ShaderMaterial({
@@ -734,10 +781,10 @@ export function GalaxyExperience() {
     const rings = new THREE.Mesh(ringGeometry, ringMaterial);
     rings.rotation.x = Math.PI / 2;
     rings.rotation.z = 0.08;
-    aurelia.add(rings);
+    aureliaVisual.add(rings);
 
     const moonOrbit = new THREE.Group();
-    aurelia.add(moonOrbit);
+    aureliaVisual.add(moonOrbit);
     const moon = new THREE.Mesh(
       new THREE.SphereGeometry(0.28, 32, 24),
       new THREE.MeshStandardMaterial({ color: 0xbeb9b0, roughness: 0.82, metalness: 0.03 }),
@@ -758,7 +805,8 @@ export function GalaxyExperience() {
     }
 
     const nyx = new THREE.Group();
-    nyx.position.set(-6.8, 1.4, -4);
+    setOrbitalPosition(nyx, ORBITS.nyx, 0);
+    const nyxView = createViewAnchors(nyx, SYSTEMS[1]);
     const nyxPlanet = new THREE.Mesh(
       new THREE.SphereGeometry(1.06, 64, 48),
       new THREE.MeshStandardMaterial({ color: 0x3e1721, emissive: 0x4a151f, emissiveIntensity: 0.16, roughness: 0.88 }),
@@ -768,25 +816,45 @@ export function GalaxyExperience() {
     system.add(nyx);
 
     const caelum = new THREE.Group();
-    caelum.position.set(6.4, 2.4, -5.5);
+    setOrbitalPosition(caelum, ORBITS.caelum, 0);
+    const caelumView = createViewAnchors(caelum, SYSTEMS[2]);
     const caelumPlanet = new THREE.Mesh(
       new THREE.SphereGeometry(1.42, 72, 52),
       new THREE.MeshPhysicalMaterial({
-        color: 0x1f284d,
-        emissive: 0x182043,
-        emissiveIntensity: 0.14,
-        roughness: 0.28,
-        metalness: 0.18,
-        clearcoat: 0.72,
-        clearcoatRoughness: 0.22,
+        color: 0x314477,
+        emissive: 0x1a244b,
+        emissiveIntensity: 0.22,
+        roughness: 0.52,
+        metalness: 0.05,
+        clearcoat: 0.38,
+        clearcoatRoughness: 0.35,
       }),
     );
     caelum.add(caelumPlanet);
     addAtmosphere(caelum, 1.52, 0x6977a8, 0.1);
-    const caelumRing = createOrbitLine(2.05, 2.05, 0x6977a8, 0.18, 0.12);
+    const caelumRing = createOrbitLine({
+      radiusX: 2.05,
+      radiusZ: 2.05,
+      tilt: 0.12,
+      phase: 0,
+      speed: 0,
+      color: 0x6977a8,
+      opacity: 0.18,
+    });
     caelumRing.rotation.x = 0.35;
     caelum.add(caelumRing);
     system.add(caelum);
+
+    const bodies = {
+      aurelia: { group: aurelia, cameraAnchor: aureliaView.cameraAnchor, focusAnchor: aureliaView.focusAnchor },
+      nyx: { group: nyx, cameraAnchor: nyxView.cameraAnchor, focusAnchor: nyxView.focusAnchor },
+      caelum: { group: caelum, cameraAnchor: caelumView.cameraAnchor, focusAnchor: caelumView.focusAnchor },
+    } satisfies Record<TargetId, { group: THREE.Group; cameraAnchor: THREE.Object3D; focusAnchor: THREE.Object3D }>;
+
+    universe.updateMatrixWorld(true);
+    bodies.aurelia.cameraAnchor.getWorldPosition(camera.position);
+    bodies.aurelia.focusAnchor.getWorldPosition(currentLook);
+    camera.lookAt(currentLook);
 
     const pointer = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
@@ -802,11 +870,10 @@ export function GalaxyExperience() {
     let dragDistance = 0;
     let appliedTarget = targetRef.current;
     let appliedReset = resetRef.current;
-    const initialCamera = mobile ? SYSTEMS[0].mobileCamera : SYSTEMS[0].camera;
-    const initialLook = mobile ? SYSTEMS[0].mobileLook : SYSTEMS[0].look;
-    const desiredCamera = new THREE.Vector3(...initialCamera);
-    const desiredLook = new THREE.Vector3(...initialLook);
     const targetCamera = new THREE.Vector3();
+    const targetLook = new THREE.Vector3();
+    const projectedTarget = new THREE.Vector3();
+    let activeBody = bodies[targetRef.current];
     let zoom = 1;
     let elapsed = 0;
     let passage = 0;
@@ -815,8 +882,7 @@ export function GalaxyExperience() {
 
     function applyTarget(id: TargetId) {
       const target = SYSTEMS.find((item) => item.id === id) ?? SYSTEMS[0];
-      desiredCamera.set(...(mobile ? target.mobileCamera : target.camera));
-      desiredLook.set(...(mobile ? target.mobileLook : target.look));
+      activeBody = bodies[id];
       targetAccent.set(target.accent);
       targetFog.set(0x04030b).lerp(targetAccent, 0.045);
       appliedTarget = id;
@@ -894,9 +960,16 @@ export function GalaxyExperience() {
     window.addEventListener("keydown", handleKeyDown);
     document.addEventListener("visibilitychange", handleVisibility);
 
+    let resizeFrame = 0;
+    let renderedWidth = 0;
+    let renderedHeight = 0;
+
     function resize() {
       const width = Math.max(1, mount.clientWidth);
       const height = Math.max(1, mount.clientHeight);
+      if (width === renderedWidth && height === renderedHeight) return;
+      renderedWidth = width;
+      renderedHeight = height;
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
@@ -907,7 +980,10 @@ export function GalaxyExperience() {
       });
     }
 
-    const resizeObserver = new ResizeObserver(resize);
+    const resizeObserver = new ResizeObserver(() => {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = window.requestAnimationFrame(resize);
+    });
     resizeObserver.observe(mount);
     resize();
 
@@ -946,6 +1022,9 @@ export function GalaxyExperience() {
 
       const quietMotion = quietRef.current ? 0.34 : 1;
       if (!pausedRef.current && !prefersReducedMotion) {
+        setOrbitalPosition(aurelia, ORBITS.aurelia, elapsed);
+        setOrbitalPosition(nyx, ORBITS.nyx, elapsed);
+        setOrbitalPosition(caelum, ORBITS.caelum, elapsed);
         galaxy.rotation.y = elapsed * 0.004 * quietMotion;
         dust.rotation.y = -elapsed * 0.003 * quietMotion;
         backgroundStars.rotation.y = elapsed * 0.0012 * quietMotion;
@@ -974,21 +1053,33 @@ export function GalaxyExperience() {
       rimLight.color.lerp(targetAccent, 0.018);
       scene.fog?.color.lerp(targetFog, 0.012);
 
-      targetCamera.copy(desiredCamera);
+      universe.updateMatrixWorld(true);
+      activeBody.cameraAnchor.getWorldPosition(targetCamera);
+      activeBody.focusAnchor.getWorldPosition(targetLook);
       if (cruiseRef.current && !prefersReducedMotion) {
         const radius = quietRef.current ? 0.05 : 0.12;
         targetCamera.x += Math.sin(elapsed * 0.07) * radius;
         targetCamera.y += Math.cos(elapsed * 0.052) * radius * 0.55;
         targetCamera.z += Math.cos(elapsed * 0.07) * radius;
       }
-      targetCamera.sub(desiredLook).multiplyScalar(zoom).add(desiredLook);
+      targetCamera.sub(targetLook).multiplyScalar(zoom).add(targetLook);
       targetCamera.x += pointer.x * 0.22 * quietMotion;
       targetCamera.y += pointer.y * 0.13 * quietMotion;
       camera.position.lerp(targetCamera, prefersReducedMotion ? 0.12 : 0.024);
-      currentLook.lerp(desiredLook, 0.028);
+      currentLook.lerp(targetLook, 0.028);
       camera.lookAt(currentLook);
       camera.fov = THREE.MathUtils.lerp(camera.fov, 48 + warp * 6 + passage * 9, 0.06);
       camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+      activeBody.group.getWorldPosition(projectedTarget).project(camera);
+      renderer.domElement.dataset.target = appliedTarget;
+      renderer.domElement.dataset.targetNdcX = projectedTarget.x.toFixed(4);
+      renderer.domElement.dataset.targetNdcY = projectedTarget.y.toFixed(4);
+      renderer.domElement.dataset.orbitResidual = Math.max(
+        getOrbitResidual(aurelia, ORBITS.aurelia),
+        getOrbitResidual(nyx, ORBITS.nyx),
+        getOrbitResidual(caelum, ORBITS.caelum),
+      ).toExponential(2);
       bloom.strength = bloomBaseStrength - (quietRef.current ? 0.045 : 0) + warp * 0.18 + passage * 0.14;
       composer.render();
 
@@ -1001,6 +1092,7 @@ export function GalaxyExperience() {
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
+      window.cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       renderer.domElement.removeEventListener("pointermove", handlePointerMove);
@@ -1114,9 +1206,9 @@ export function GalaxyExperience() {
         </button>
       </div>
 
-      <p className={styles.temporalEcho}>你看见的星光，来自已经不存在的此刻。</p>
+      <p className={styles.temporalEcho}>世界一遍遍重写结局，只为了等一次不服从预言的选择。</p>
 
-      <p className={styles.srOnly}>穿过静默的星尘，观察关于微光、漂流与回声的实时三维银河。</p>
+      <p className={styles.srOnly}>穿过静默的星尘，观察关于起源、造史与余响的自洽三维星系。</p>
     </main>
   );
 }

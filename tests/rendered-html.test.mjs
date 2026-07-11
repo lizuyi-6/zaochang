@@ -175,6 +175,17 @@ for (const [pathname, marker] of [
   });
 }
 
+test("renders the original philosophical galaxy entry chapter", async () => {
+  const response = await fetch(`${baseUrl}/galaxy`, {
+    headers: { accept: "text/html" },
+  });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /所有光都曾独自出发/);
+  assert.match(html, /THE FIRST WITNESS/);
+  assert.match(html, /自洽三维星系/);
+});
+
 test("rejects anonymous product publishing", async () => {
   const response = await fetch(`${baseUrl}/api/products`, {
     method: "POST",
