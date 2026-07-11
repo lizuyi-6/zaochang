@@ -133,6 +133,8 @@ test("server-renders the creator community", async () => {
   assert.match(html, /都在造什么/);
   assert.match(html, /发布作品/);
   assert.match(html, /果子钱包/);
+  assert.match(html, /href="\/galaxy"/);
+  assert.match(html, /去看星光/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
 

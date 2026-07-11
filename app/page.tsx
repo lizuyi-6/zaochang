@@ -1,4 +1,4 @@
-import { ArrowRight, Clock3, Eye, Flame, Heart, Radio, Sparkles, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Clock3, Eye, Flame, Heart, Radio, Sparkles, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import { AnimatedNumber } from "./components/animated-number";
 import { ProductCard } from "./components/product-card";
@@ -30,6 +30,14 @@ export default function HomePage() {
             <div className="stage-orbit orbit-one" /><div className="stage-orbit orbit-two" />
             <span className="stage-coordinate coordinate-one">X 31.42 / Y 18.07</span>
             <span className="stage-coordinate coordinate-two">SIGNAL 98%</span>
+            <Link className="galaxy-gateway" href="/galaxy" aria-label="进入 ASTRA 宇宙记忆">
+              <span className="galaxy-gateway-sky" aria-hidden="true"><i /><i /><b /></span>
+              <span className="galaxy-gateway-copy">
+                <small>COMMUNITY / ELSEWHERE</small>
+                <strong>去看星光</strong>
+                <em>ASTRA <ArrowUpRight size={13} /></em>
+              </span>
+            </Link>
           </div>
         </section>
 
