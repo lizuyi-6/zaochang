@@ -1241,9 +1241,14 @@ export function GalaxyExperience() {
       galaxyPickables.push({ mesh: proxy, id: PLANETS_BY_GALAXY[definition.id][0].id });
     });
 
+    const planetaryOrbitLines: THREE.LineLoop[] = [];
     PLANETS.forEach((planetDefinition) => {
       const parent = galaxySpaces.get(planetDefinition.galaxyId)?.planets;
-      if (parent) parent.add(createOrbitLine(planetDefinition.orbit));
+      if (parent) {
+        const orbitLine = createOrbitLine(planetDefinition.orbit);
+        planetaryOrbitLines.push(orbitLine);
+        parent.add(orbitLine);
+      }
     });
 
     function createViewAnchors(parent: THREE.Group, target: PlanetStory) {
@@ -1562,6 +1567,7 @@ export function GalaxyExperience() {
       const singularityActive = id === "singularity";
       galaxySpaces.forEach((runtime, galaxyId) => {
         runtime.planets.visible = activeGalaxyId === galaxyId;
+        runtime.visual.visible = singularityActive;
         runtime.visual.scale.setScalar(activeGalaxyId === null ? 1.65 : activeGalaxyId === galaxyId ? 0.72 : 0.9);
       });
       PLANETS.forEach((definition) => {
@@ -1572,6 +1578,10 @@ export function GalaxyExperience() {
       accretionDisk.visible = singularityActive;
       eventMaskPlane.visible = singularityActive;
       lensedArcPlane.visible = singularityActive;
+      horizonCrown.visible = singularityActive;
+      galaxy.visible = singularityActive;
+      foregroundDust.visible = singularityActive;
+      planetaryOrbitLines.forEach((line) => { line.visible = false; });
       targetAccent.set(target.accent);
       targetFog.set(0x04030b).lerp(targetAccent, 0.045);
       appliedTarget = id;
@@ -1790,7 +1800,8 @@ export function GalaxyExperience() {
         targetCamera.y += Math.cos(elapsed * 0.052) * radius * 0.55;
         targetCamera.z += Math.cos(elapsed * 0.07) * radius;
       }
-      targetCamera.sub(targetLook).multiplyScalar(zoom).add(targetLook);
+      const isolationDistance = appliedTarget === "singularity" ? 1 : mobile ? 1.1 : 1.16;
+      targetCamera.sub(targetLook).multiplyScalar(zoom * isolationDistance).add(targetLook);
       targetCamera.x += pointer.x * 0.22 * quietMotion;
       targetCamera.y += pointer.y * 0.13 * quietMotion;
       camera.position.lerp(targetCamera, prefersReducedMotion ? 0.16 : 0.045);
@@ -1824,6 +1835,7 @@ export function GalaxyExperience() {
       renderer.domElement.dataset.target = appliedTarget;
       renderer.domElement.dataset.focusKind = appliedTarget === "singularity" ? "singularity" : "planet";
       renderer.domElement.dataset.lensingMode = "lensed-arcs";
+      renderer.domElement.dataset.sceneDensity = appliedTarget === "singularity" ? "atlas" : "solitude";
       renderer.domElement.dataset.surfaceFamily = appliedTarget === "singularity" ? "singularity" : PLANET_BY_ID[appliedTarget].visual.surface;
       renderer.domElement.dataset.parentGalaxy = appliedTarget === "singularity" ? "none" : PLANET_BY_ID[appliedTarget].galaxyId;
       renderer.domElement.dataset.galaxyCount = String(GALAXIES.length);

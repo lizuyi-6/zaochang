@@ -86,3 +86,12 @@
 - 交互证据：再次点击当前 CHRONARA 后 `data-story-mode` 从 `short` 变为 `archive`，再点一次恢复为 `short`；浏览器遍历 12 颗行星时未记录 pageerror 或 WebGL shader error。
 - 移动构图：390x844 与 360x800 的页面滚动尺寸均等于视口；展开 AURELIA 档案时故事区底部为 `624 / 580px`，图谱导航顶部为 `692 / 648px`，天体、正文与导航保持分区。
 - 当前边界：本轮采用稳定的电影化近似，没有实现多采样实时引力光线追踪或背景星光的真实测地线弯曲；Windows vinext 开发模式仍有 11 条 Geist `file://` 字体加载拒绝；未在真实低端 Android、Safari iOS、4K 屏幕或 GPU 丢失恢复场景做设备验证。
+
+## 2026-07-11 行星孤寂聚焦态
+
+- 状态：部分完成
+- 层级变化：保留用户认可的观渊总览，进入任一行星后切换为 `sceneDensity=solitude`；只显示当前目标行星，关闭见界环粒子带、局部星系核心、银河尘带、前景尘埃与行星轨道线。
+- 镜头变化：桌面行星镜头距离增加 `16%`，移动端增加 `10%`；NYX 与 EIDORA 在 1536x1000 聚焦态的视觉半径分别为 `139.41px / 130.62px`，周围只保留稀疏远星、淡星云和各自行星自身的环或卫星。
+- 浏览器证据：AURELIA、NYX、EIDORA 均报告 `visiblePlanetCount=1`、`blackHoleVisible=false`、`sceneDensity=solitude`，未记录 pageerror 或 WebGL shader error；观渊总览仍报告 `sceneDensity=atlas`。
+- 移动构图：390x844 的 AURELIA 短章故事区为 `y=448.81-624px`，图谱导航从 `692px` 开始，页面尺寸保持 `390x844`，没有横向或纵向页面溢出。
+- 当前边界：孤寂聚焦态仍保留目标行星自身的星环与卫星，作为该世界的身份特征；真实设备与低端 GPU 性能范围沿用上一节未覆盖项。
