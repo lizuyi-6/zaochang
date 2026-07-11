@@ -65,8 +65,8 @@ const SYSTEMS: Array<{
     epoch: "THE FIRST WITNESS",
     distance: "04.72 AU",
     accent: "#b88961",
-    cameraOffset: [5.2, 3, 11.8],
-    focusOffset: [-1.7, -0.15, 0],
+    cameraOffset: [6.8, 3.4, 14],
+    focusOffset: [-3.1, -0.15, 0],
     mobileCameraOffset: [3.2, 3.2, 13.8],
     mobileFocusOffset: [-0.25, -0.1, 0],
   },
@@ -83,8 +83,8 @@ const SYSTEMS: Array<{
     epoch: "THE SHARED FICTION",
     distance: "08.13 AU",
     accent: "#9a6674",
-    cameraOffset: [-3.2, 2.4, 8.8],
-    focusOffset: [-1.4, 0, 0],
+    cameraOffset: [-3.8, 2.8, 10.4],
+    focusOffset: [-2.4, 0, 0],
     mobileCameraOffset: [-2.5, 2.8, 10],
     mobileFocusOffset: [0, -0.1, 0],
   },
@@ -101,8 +101,8 @@ const SYSTEMS: Array<{
     epoch: "BEYOND THE LAST PROPHECY",
     distance: "12.90 AU",
     accent: "#6977a8",
-    cameraOffset: [-1.8, 2.8, 8.8],
-    focusOffset: [-1.6, 0, 0],
+    cameraOffset: [-2.2, 3.3, 10.8],
+    focusOffset: [-2.2, 0, 0],
     mobileCameraOffset: [0.5, 3, 10.2],
     mobileFocusOffset: [-0.2, 0, 0],
   },
@@ -251,6 +251,96 @@ const planetFragmentShader = `
     color *= 0.08 + light * 0.9;
     color += nightGlow * vec3(0.18, 0.22, 0.36);
     color += fresnel * vec3(0.19, 0.43, 0.62) * 0.46;
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+const nyxFragmentShader = `
+  uniform float uTime;
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+  varying vec3 vLocalPosition;
+
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13));
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+
+  float noise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+      f.z
+    );
+  }
+
+  void main() {
+    vec3 p = normalize(vLocalPosition);
+    float terrain = noise(p * 5.2 + vec3(uTime * 0.008, 0.0, 0.0));
+    float faultA = abs(sin((p.x * 1.25 + p.y * 0.68 + terrain * 0.42) * 18.0));
+    float faultB = abs(sin((p.z * 1.4 - p.y * 0.74 - terrain * 0.36) * 15.0));
+    float fissure = 1.0 - smoothstep(0.02, 0.13, min(faultA, faultB));
+    float ember = smoothstep(0.6, 0.88, terrain + fissure * 0.32);
+    vec3 basalt = vec3(0.018, 0.004, 0.008);
+    vec3 iron = vec3(0.17, 0.018, 0.026);
+    vec3 fire = vec3(1.0, 0.19, 0.035);
+    vec3 color = mix(basalt, iron, smoothstep(0.22, 0.82, terrain));
+    color = mix(color, fire, fissure * (0.46 + ember * 0.54));
+    float rawLight = dot(normalize(vNormal), normalize(vec3(-0.5, 0.38, 0.76)));
+    float light = smoothstep(-0.36, 0.7, rawLight);
+    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0), 3.0);
+    color *= 0.15 + light * 0.82;
+    color += fissure * fire * 0.38;
+    color += fresnel * vec3(0.42, 0.055, 0.08) * 0.48;
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+const caelumFragmentShader = `
+  uniform float uTime;
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+  varying vec3 vLocalPosition;
+
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + vec3(0.19, 0.07, 0.23));
+    p *= 19.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+
+  float noise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+      f.z
+    );
+  }
+
+  void main() {
+    vec3 p = normalize(vLocalPosition);
+    float drift = noise(p * 4.6 + vec3(0.0, uTime * 0.004, 0.0));
+    float facet = abs(sin((p.x * 1.2 + p.z * 0.72 + drift * 0.34) * 13.0));
+    float crack = 1.0 - smoothstep(0.015, 0.085, facet);
+    float polar = pow(abs(p.y), 3.2);
+    vec3 abyss = vec3(0.01, 0.018, 0.075);
+    vec3 glacier = vec3(0.13, 0.32, 0.52);
+    vec3 frost = vec3(0.58, 0.8, 0.9);
+    vec3 color = mix(abyss, glacier, smoothstep(0.18, 0.86, drift));
+    color = mix(color, frost, polar * 0.42 + crack * 0.2);
+    float rawLight = dot(normalize(vNormal), normalize(vec3(-0.34, 0.58, 0.72)));
+    float light = smoothstep(-0.4, 0.76, rawLight);
+    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0), 2.6);
+    float aurora = fresnel * (0.55 + 0.45 * sin(p.y * 18.0 + uTime * 0.08));
+    color *= 0.12 + light * 0.9;
+    color += crack * vec3(0.16, 0.48, 0.82) * 0.26;
+    color += aurora * vec3(0.18, 0.5, 0.78) * 0.48;
     gl_FragColor = vec4(color, 1.0);
   }
 `;
@@ -807,31 +897,55 @@ export function GalaxyExperience() {
     const nyx = new THREE.Group();
     setOrbitalPosition(nyx, ORBITS.nyx, 0);
     const nyxView = createViewAnchors(nyx, SYSTEMS[1]);
+    const nyxMaterial = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 } },
+      vertexShader: planetVertexShader,
+      fragmentShader: nyxFragmentShader,
+    });
+    animatedMaterials.push(nyxMaterial);
     const nyxPlanet = new THREE.Mesh(
       new THREE.SphereGeometry(1.06, 64, 48),
-      new THREE.MeshStandardMaterial({ color: 0x3e1721, emissive: 0x4a151f, emissiveIntensity: 0.16, roughness: 0.88 }),
+      nyxMaterial,
     );
     nyx.add(nyxPlanet);
-    addAtmosphere(nyx, 1.13, 0x9a6674, 0.1);
+    addAtmosphere(nyx, 1.14, 0xc8524c, 0.16);
+    const nyxDebris = new THREE.Group();
+    const nyxBelt = new THREE.Mesh(
+      new THREE.TorusGeometry(1.48, 0.012, 6, 160),
+      new THREE.MeshBasicMaterial({ color: 0xb45a4f, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending }),
+    );
+    nyxBelt.rotation.set(1.22, 0.28, -0.18);
+    nyxDebris.add(nyxBelt);
+    [
+      [1.52, 0.18, 0.22, 0.1],
+      [-1.18, -0.32, 0.92, 0.075],
+      [0.48, 0.56, -1.34, 0.06],
+    ].forEach(([x, y, z, scale], index) => {
+      const shard = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(scale, 0),
+        new THREE.MeshBasicMaterial({ color: index === 0 ? 0xe28d68 : 0x733238 }),
+      );
+      shard.position.set(x, y, z);
+      nyxDebris.add(shard);
+    });
+    nyx.add(nyxDebris);
     system.add(nyx);
 
     const caelum = new THREE.Group();
     setOrbitalPosition(caelum, ORBITS.caelum, 0);
     const caelumView = createViewAnchors(caelum, SYSTEMS[2]);
+    const caelumMaterial = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 } },
+      vertexShader: planetVertexShader,
+      fragmentShader: caelumFragmentShader,
+    });
+    animatedMaterials.push(caelumMaterial);
     const caelumPlanet = new THREE.Mesh(
       new THREE.SphereGeometry(1.42, 72, 52),
-      new THREE.MeshPhysicalMaterial({
-        color: 0x314477,
-        emissive: 0x1a244b,
-        emissiveIntensity: 0.22,
-        roughness: 0.52,
-        metalness: 0.05,
-        clearcoat: 0.38,
-        clearcoatRoughness: 0.35,
-      }),
+      caelumMaterial,
     );
     caelum.add(caelumPlanet);
-    addAtmosphere(caelum, 1.52, 0x6977a8, 0.1);
+    addAtmosphere(caelum, 1.53, 0x8fb9da, 0.16);
     const caelumRing = createOrbitLine({
       radiusX: 2.05,
       radiusZ: 2.05,
@@ -843,6 +957,14 @@ export function GalaxyExperience() {
     });
     caelumRing.rotation.x = 0.35;
     caelum.add(caelumRing);
+    const caelumHalo = new THREE.Group();
+    const haloMaterial = new THREE.MeshBasicMaterial({ color: 0x86b6d9, transparent: true, opacity: 0.24, blending: THREE.AdditiveBlending });
+    const caelumHaloOuter = new THREE.Mesh(new THREE.TorusGeometry(1.78, 0.012, 6, 180), haloMaterial);
+    const caelumHaloInner = new THREE.Mesh(new THREE.TorusGeometry(1.64, 0.008, 6, 160), haloMaterial.clone());
+    caelumHaloOuter.rotation.set(1.08, 0.26, 0.18);
+    caelumHaloInner.rotation.set(1.32, -0.18, -0.28);
+    caelumHalo.add(caelumHaloOuter, caelumHaloInner);
+    caelum.add(caelumHalo);
     system.add(caelum);
 
     const bodies = {
@@ -1033,7 +1155,11 @@ export function GalaxyExperience() {
         planet.rotation.y = elapsed * 0.026 * quietMotion;
         moonOrbit.rotation.y = elapsed * 0.11 * quietMotion;
         nyxPlanet.rotation.y = elapsed * 0.034 * quietMotion;
+        nyxDebris.rotation.y = elapsed * 0.052 * quietMotion;
+        nyxDebris.rotation.z = Math.sin(elapsed * 0.027) * 0.08;
         caelumPlanet.rotation.y = -elapsed * 0.024 * quietMotion;
+        caelumHalo.rotation.y = -elapsed * 0.031 * quietMotion;
+        caelumHalo.rotation.z = Math.sin(elapsed * 0.021) * 0.06;
         system.rotation.y = Math.sin(elapsed * 0.034) * 0.012 * quietMotion;
         diffractionStars.forEach((sprite) => {
           const pulse = 0.88 + Math.sin(elapsed * 0.38 + sprite.userData.phase) * 0.12;
