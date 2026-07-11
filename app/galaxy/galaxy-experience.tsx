@@ -6,15 +6,13 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import {
   ArrowLeft,
   Expand,
-  Gauge,
-  Orbit,
+  MoonStar,
   Pause,
   Play,
-  RotateCcw,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import * as THREE from "three";
 import styles from "./galaxy.module.css";
 
@@ -25,40 +23,72 @@ const SYSTEMS: Array<{
   index: string;
   name: string;
   type: string;
+  chapter: string;
+  title: string;
+  body: string;
+  coda: string;
+  lightAge: string;
+  epoch: string;
   distance: string;
   accent: string;
   camera: [number, number, number];
   look: [number, number, number];
+  mobileCamera: [number, number, number];
+  mobileLook: [number, number, number];
 }> = [
   {
     id: "aurelia",
     index: "01",
     name: "AURELIA",
     type: "RING GIANT",
+    chapter: "微光",
+    title: "我们从微光中来",
+    body: "恒星把自己燃成光，才让遥远的我们看见彼此。",
+    coda: "距离不是分离，是光仍在路上。",
+    lightAge: "38.6 MIN",
+    epoch: "BEFORE MEMORY",
     distance: "04.72 AU",
-    accent: "#7ce8ff",
-    camera: [7.2, 2.8, 11.4],
-    look: [2.6, -0.35, 1.8],
+    accent: "#b88961",
+    camera: [8.2, 2.6, 13.2],
+    look: [0.7, -0.35, 1.8],
+    mobileCamera: [6.5, 3, 14.8],
+    mobileLook: [2.6, 0, 1.8],
   },
   {
     id: "nyx",
     index: "02",
     name: "NYX",
     type: "EMBER MOON",
+    chapter: "漂流",
+    title: "黑暗并非空无",
+    body: "它保存尚未发生的事，也保存我们来不及说出的名字。",
+    coda: "你所凝视的，也正在改变你。",
+    lightAge: "67.7 MIN",
+    epoch: "AFTER FIRE",
     distance: "08.13 AU",
-    accent: "#ff6a7d",
-    camera: [-3.8, 3.1, 4.6],
-    look: [-6.8, 1.4, -4],
+    accent: "#9a6674",
+    camera: [-2.6, 2.8, 4.4],
+    look: [-5.4, 1.4, -4],
+    mobileCamera: [-3.6, 3, 6.6],
+    mobileLook: [-6.8, 1.4, -4],
   },
   {
     id: "caelum",
     index: "03",
     name: "CAELUM",
     type: "ICE WORLD",
+    chapter: "回声",
+    title: "寂静不是终点",
+    body: "万物只是换一种尺度，继续存在。",
+    coda: "此刻之后，星光仍会抵达。",
+    lightAge: "107.3 MIN",
+    epoch: "THE LONG RETURN",
     distance: "12.90 AU",
-    accent: "#8a7dff",
-    camera: [4.5, 4.8, 1.2],
-    look: [6.4, 2.4, -5.5],
+    accent: "#6977a8",
+    camera: [5.2, 4.4, 2.6],
+    look: [5.2, 2.4, -5.5],
+    mobileCamera: [5, 4.4, 3],
+    mobileLook: [6.4, 2.4, -5.5],
   },
 ];
 
@@ -66,6 +96,7 @@ const starVertexShader = `
   uniform float uTime;
   uniform float uPixelRatio;
   uniform float uWarp;
+  uniform float uPassage;
   uniform float uMaxSize;
   attribute float aScale;
   attribute float aPhase;
@@ -77,11 +108,13 @@ const starVertexShader = `
     float depthFactor = abs(transformed.z) * 0.03 + 1.0;
     transformed.xy *= 1.0 + uWarp * 0.34 * depthFactor;
     transformed.z += sign(transformed.z + 0.001) * uWarp * 5.5;
+    transformed.xy *= 1.0 + uPassage * 0.18 * depthFactor;
+    transformed.z += sign(transformed.z + 0.001) * uPassage * 3.2;
 
     vec4 viewPosition = modelViewMatrix * vec4(transformed, 1.0);
     float pulse = 0.76 + 0.24 * sin(uTime * 0.86 + aPhase);
     float pointSize = aScale * uPixelRatio * pulse * (54.0 / max(2.0, -viewPosition.z));
-    pointSize *= 1.0 + uWarp * 1.25;
+    pointSize *= 1.0 + uWarp * 1.25 + uPassage * 0.72;
     gl_PointSize = clamp(pointSize, 0.65, uMaxSize);
     gl_Position = projectionMatrix * viewPosition;
     vColor = color;
@@ -100,6 +133,67 @@ const starFragmentShader = `
     float core = 1.0 - smoothstep(0.0, 0.18, distanceToCenter);
     float halo = 1.0 - smoothstep(0.08, 1.0, distanceToCenter);
     gl_FragColor = vec4(vColor * (0.54 + core * 0.46), (halo * 0.5 + core * 0.32) * vAlpha);
+  }
+`;
+
+const nebulaVertexShader = `
+  varying vec3 vLocalPosition;
+
+  void main() {
+    vLocalPosition = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const nebulaFragmentShader = `
+  uniform float uTime;
+  uniform float uDetail;
+  uniform float uPassage;
+  varying vec3 vLocalPosition;
+
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + 0.1);
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+
+  float noise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+      f.z
+    );
+  }
+
+  float fbm(vec3 p) {
+    float value = noise(p) * 0.55;
+    p = p * 2.02 + 1.7;
+    value += noise(p) * 0.26;
+    if (uDetail > 0.5) {
+      p = p * 2.03 + 2.1;
+      value += noise(p) * 0.13;
+      p = p * 2.01 + 0.9;
+      value += noise(p) * 0.06;
+    }
+    return value;
+  }
+
+  void main() {
+    vec3 direction = normalize(vLocalPosition);
+    float time = uTime * 0.006;
+    float first = fbm(direction * 3.3 + vec3(time, -time * 0.7, time * 0.3));
+    float warped = fbm(direction * 6.2 + vec3(first * 1.8, -first, time));
+    float veil = smoothstep(0.5, 0.79, warped + first * 0.22);
+    float dust = smoothstep(0.62, 0.82, fbm(direction * 9.0 - vec3(time * 0.5)));
+    vec3 indigo = vec3(0.05, 0.035, 0.14);
+    vec3 mist = vec3(0.19, 0.22, 0.38);
+    vec3 color = mix(indigo, mist, smoothstep(0.44, 0.78, first));
+    float alpha = veil * 0.16 - dust * 0.055;
+    alpha *= 1.0 - uPassage * 0.58;
+    gl_FragColor = vec4(color, max(0.0, alpha));
   }
 `;
 
@@ -129,15 +223,18 @@ const planetFragmentShader = `
     float current = sin(latitude * 3.2 + sin(longitude * 3.0 - uTime * 0.09) * 1.6);
     float storm = sin(longitude * 7.0 + latitude * 1.8 + uTime * 0.12) * 0.5 + 0.5;
     float bands = smoothstep(-0.8, 0.92, current * 0.72 + storm * 0.28);
-    vec3 midnight = vec3(0.018, 0.055, 0.16);
-    vec3 ocean = vec3(0.02, 0.31, 0.58);
-    vec3 electric = vec3(0.18, 0.87, 1.0);
+    vec3 midnight = vec3(0.008, 0.014, 0.055);
+    vec3 ocean = vec3(0.035, 0.16, 0.29);
+    vec3 electric = vec3(0.32, 0.48, 0.64);
     vec3 color = mix(midnight, ocean, bands);
     color = mix(color, electric, pow(max(0.0, storm - 0.62), 2.0) * 0.72);
-    float light = max(dot(normalize(vNormal), normalize(vec3(-0.35, 0.5, 0.8))), 0.0);
+    float rawLight = dot(normalize(vNormal), normalize(vec3(-0.42, 0.46, 0.78)));
+    float light = smoothstep(-0.24, 0.62, rawLight);
+    float nightGlow = smoothstep(-0.78, -0.18, rawLight) * 0.055;
     float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0), 3.2);
-    color *= 0.32 + light * 0.92;
-    color += fresnel * vec3(0.08, 0.65, 1.0) * 0.82;
+    color *= 0.08 + light * 0.9;
+    color += nightGlow * vec3(0.18, 0.22, 0.36);
+    color += fresnel * vec3(0.19, 0.43, 0.62) * 0.46;
     gl_FragColor = vec4(color, 1.0);
   }
 `;
@@ -160,7 +257,7 @@ const atmosphereFragmentShader = `
 
   void main() {
     float intensity = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewDirection))), 2.15);
-    gl_FragColor = vec4(0.18, 0.78, 1.0, intensity * 0.82);
+    gl_FragColor = vec4(0.24, 0.36, 0.58, intensity * 0.54);
   }
 `;
 
@@ -177,6 +274,39 @@ function makeGlowTexture() {
   gradient.addColorStop(1, "rgba(255,255,255,0)");
   context.fillStyle = gradient;
   context.fillRect(0, 0, 256, 256);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function makeDiffractionTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  const glow = context.createRadialGradient(128, 128, 0, 128, 128, 118);
+  glow.addColorStop(0, "rgba(255,250,236,1)");
+  glow.addColorStop(0.06, "rgba(255,246,220,.96)");
+  glow.addColorStop(0.22, "rgba(164,187,255,.24)");
+  glow.addColorStop(1, "rgba(80,92,160,0)");
+  context.fillStyle = glow;
+  context.fillRect(0, 0, 256, 256);
+  const beam = context.createLinearGradient(0, 128, 256, 128);
+  beam.addColorStop(0, "rgba(255,255,255,0)");
+  beam.addColorStop(0.45, "rgba(226,235,255,.06)");
+  beam.addColorStop(0.5, "rgba(255,250,232,.78)");
+  beam.addColorStop(0.55, "rgba(226,235,255,.06)");
+  beam.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = beam;
+  context.fillRect(0, 126, 256, 4);
+  context.save();
+  context.translate(128, 128);
+  context.rotate(Math.PI / 2);
+  context.translate(-128, -128);
+  context.fillStyle = beam;
+  context.fillRect(0, 127, 256, 2);
+  context.restore();
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
@@ -209,21 +339,24 @@ export function GalaxyExperience() {
   const cruiseRef = useRef(true);
   const pausedRef = useRef(false);
   const warpRef = useRef(0);
+  const passageRef = useRef(0);
+  const quietRef = useRef(false);
   const resetRef = useRef(0);
   const [activeTarget, setActiveTarget] = useState<TargetId>("aurelia");
-  const [cruising, setCruising] = useState(true);
   const [paused, setPaused] = useState(false);
+  const [quiet, setQuiet] = useState(false);
+  const [passageActive, setPassageActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [webglError, setWebglError] = useState(false);
 
   const selectTarget = useCallback((id: TargetId) => {
     targetRef.current = id;
+    warpRef.current = 0.22;
     setActiveTarget(id);
   }, []);
 
   const toggleCruise = useCallback(() => {
     cruiseRef.current = !cruiseRef.current;
-    setCruising(cruiseRef.current);
   }, []);
 
   const togglePaused = useCallback(() => {
@@ -231,8 +364,19 @@ export function GalaxyExperience() {
     setPaused(pausedRef.current);
   }, []);
 
-  const triggerWarp = useCallback(() => {
-    warpRef.current = 1;
+  const toggleQuiet = useCallback(() => {
+    quietRef.current = !quietRef.current;
+    setQuiet(quietRef.current);
+  }, []);
+
+  const startPassage = useCallback(() => {
+    passageRef.current = 1;
+    setPassageActive(true);
+  }, []);
+
+  const stopPassage = useCallback(() => {
+    passageRef.current = 0;
+    setPassageActive(false);
   }, []);
 
   const resetView = useCallback(() => {
@@ -240,7 +384,6 @@ export function GalaxyExperience() {
     cruiseRef.current = true;
     resetRef.current += 1;
     setActiveTarget("aurelia");
-    setCruising(true);
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
@@ -263,8 +406,8 @@ export function GalaxyExperience() {
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const mobile = window.matchMedia("(max-width: 720px)").matches;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020208);
-    scene.fog = new THREE.FogExp2(0x03030a, 0.012);
+    scene.background = new THREE.Color(0x020109);
+    scene.fog = new THREE.FogExp2(0x04030b, 0.011);
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -280,25 +423,25 @@ export function GalaxyExperience() {
       return;
     }
 
-    renderer.setClearColor(0x020208, 1);
+    renderer.setClearColor(0x020109, 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.72;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.2 : 1.5));
+    renderer.toneMappingExposure = 0.64;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1 : 1.35));
     renderer.domElement.className = styles.canvas;
     renderer.domElement.dataset.testid = "galaxy-canvas";
     renderer.domElement.setAttribute("aria-hidden", "true");
     mount.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 180);
-    camera.position.set(...SYSTEMS[0].camera);
-    const currentLook = new THREE.Vector3(...SYSTEMS[0].look);
+    camera.position.set(...(mobile ? SYSTEMS[0].mobileCamera : SYSTEMS[0].camera));
+    const currentLook = new THREE.Vector3(...(mobile ? SYSTEMS[0].mobileLook : SYSTEMS[0].look));
     camera.lookAt(currentLook);
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloomBaseStrength = mobile ? 0.34 : 0.46;
-    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), bloomBaseStrength, 0.48, 0.38);
+    const bloomBaseStrength = mobile ? 0.18 : 0.26;
+    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), bloomBaseStrength, 0.42, 0.46);
     composer.addPass(bloom);
 
     const universe = new THREE.Group();
@@ -309,9 +452,26 @@ export function GalaxyExperience() {
 
     const animatedMaterials: THREE.ShaderMaterial[] = [];
     const glowTexture = makeGlowTexture();
+    const diffractionTexture = makeDiffractionTexture();
+    const nebulaMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uDetail: { value: mobile ? 0 : 1 },
+        uPassage: { value: 0 },
+      },
+      vertexShader: nebulaVertexShader,
+      fragmentShader: nebulaFragmentShader,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.BackSide,
+      blending: THREE.NormalBlending,
+    });
+    animatedMaterials.push(nebulaMaterial);
+    const nebulaSphere = new THREE.Mesh(new THREE.SphereGeometry(58, mobile ? 28 : 44, mobile ? 20 : 32), nebulaMaterial);
+    universe.add(nebulaSphere);
 
-    function createPoints(kind: "galaxy" | "dust" | "background") {
-      const count = kind === "galaxy" ? (mobile ? 15000 : 42000) : kind === "dust" ? (mobile ? 2600 : 8000) : (mobile ? 1800 : 5200);
+    function createPoints(kind: "galaxy" | "dust" | "background" | "foreground") {
+      const count = kind === "galaxy" ? (mobile ? 12000 : 35000) : kind === "dust" ? (mobile ? 1500 : 4200) : kind === "foreground" ? (mobile ? 260 : 720) : (mobile ? 1300 : 3800);
       const positions = new Float32Array(count * 3);
       const colors = new Float32Array(count * 3);
       const scales = new Float32Array(count);
@@ -320,7 +480,7 @@ export function GalaxyExperience() {
       const inner = new THREE.Color(kind === "dust" ? 0xff7ad9 : 0xfff2cf);
       const middle = new THREE.Color(kind === "dust" ? 0x7a5cff : 0x68d8ff);
       const outer = new THREE.Color(kind === "dust" ? 0x405cff : 0x6952ff);
-      const random = seededRandom(kind === "galaxy" ? 73117 : kind === "dust" ? 48163 : 19531);
+      const random = seededRandom(kind === "galaxy" ? 73117 : kind === "dust" ? 48163 : kind === "foreground" ? 88643 : 19531);
 
       for (let index = 0; index < count; index += 1) {
         const offset = index * 3;
@@ -334,6 +494,12 @@ export function GalaxyExperience() {
           const temperature = random();
           color.set(temperature > 0.82 ? 0xffd9b0 : temperature > 0.36 ? 0xb8d8ff : 0x8878ff);
           scales[index] = 0.5 + random() * 1.15;
+        } else if (kind === "foreground") {
+          positions[offset] = (random() - 0.5) * 32;
+          positions[offset + 1] = (random() - 0.5) * 18;
+          positions[offset + 2] = -3 + random() * 22;
+          color.set(random() > 0.7 ? 0xf2e8d5 : 0x7d87b8);
+          scales[index] = 0.18 + random() * 0.52;
         } else {
           const radius = Math.pow(random(), kind === "galaxy" ? 1.46 : 1.1) * (kind === "galaxy" ? 16 : 19);
           const branch = ((index % 5) / 5) * Math.PI * 2;
@@ -363,6 +529,7 @@ export function GalaxyExperience() {
           uTime: { value: 0 },
           uPixelRatio: { value: renderer.getPixelRatio() },
           uWarp: { value: 0 },
+          uPassage: { value: 0 },
           uMaxSize: { value: kind === "background" ? 2.4 : kind === "galaxy" ? 3.8 : 5.2 },
         },
         vertexShader: starVertexShader,
@@ -388,20 +555,84 @@ export function GalaxyExperience() {
     dust.rotation.x = -0.08;
     dust.rotation.z = -0.04;
     galaxy.add(dust);
+    const foregroundDust = createPoints("foreground");
+    universe.add(foregroundDust);
+
+    const constellationGroup = new THREE.Group();
+    const constellationPatterns: Array<{ points: Array<[number, number, number]>; color: number }> = [
+      { points: [[-15, 7, -18], [-12.5, 8.8, -20], [-9.6, 7.5, -21], [-7.4, 9.2, -23], [-4.8, 7.2, -22]], color: 0x7784b6 },
+      { points: [[8.5, 8.2, -22], [10.7, 6.5, -20], [13.3, 7.4, -23], [15.5, 5.2, -24], [12.1, 3.8, -22]], color: 0xa88f7e },
+      { points: [[-13, -5.2, -24], [-10.5, -3.4, -22], [-7.7, -5.7, -25], [-5.3, -3.6, -23]], color: 0x5968a6 },
+    ];
+    constellationPatterns.forEach((pattern) => {
+      const pointGeometry = new THREE.BufferGeometry().setFromPoints(pattern.points.map((point) => new THREE.Vector3(...point)));
+      const pointMaterial = new THREE.PointsMaterial({ color: pattern.color, size: mobile ? 0.065 : 0.085, transparent: true, opacity: 0.62, depthWrite: false });
+      constellationGroup.add(new THREE.Points(pointGeometry, pointMaterial));
+      const segmentPoints: THREE.Vector3[] = [];
+      for (let index = 0; index < pattern.points.length - 1; index += 1) {
+        segmentPoints.push(new THREE.Vector3(...pattern.points[index]), new THREE.Vector3(...pattern.points[index + 1]));
+      }
+      const lineGeometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: pattern.color, transparent: true, opacity: 0.11, blending: THREE.AdditiveBlending });
+      constellationGroup.add(new THREE.LineSegments(lineGeometry, lineMaterial));
+    });
+    universe.add(constellationGroup);
+
+    const diffractionStars: THREE.Sprite[] = [];
+    if (diffractionTexture) {
+      const random = seededRandom(61937);
+      const count = mobile ? 26 : 74;
+      for (let index = 0; index < count; index += 1) {
+        const material = new THREE.SpriteMaterial({
+          map: diffractionTexture,
+          color: index % 7 === 0 ? 0xd9c2a4 : 0xaab9e0,
+          transparent: true,
+          opacity: 0.24 + random() * 0.34,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const sprite = new THREE.Sprite(material);
+        const radius = 26 + random() * 34;
+        const theta = random() * Math.PI * 2;
+        const phi = Math.acos(2 * random() - 1);
+        sprite.position.set(radius * Math.sin(phi) * Math.cos(theta), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta));
+        const scale = 0.22 + random() * 0.78;
+        sprite.scale.setScalar(scale);
+        sprite.userData.baseScale = scale;
+        sprite.userData.phase = random() * Math.PI * 2;
+        diffractionStars.push(sprite);
+        universe.add(sprite);
+      }
+    }
+
+    const lightEchoes: THREE.Line[] = [];
+    const echoRandom = seededRandom(77291);
+    for (let index = 0; index < (mobile ? 1 : 4); index += 1) {
+      const length = 1.5 + echoRandom() * 2.6;
+      const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-length, -length * 0.16, 0.15)]);
+      const material = new THREE.LineBasicMaterial({ color: index % 2 ? 0xb9c7ec : 0xe5d4bd, transparent: true, opacity: 0, blending: THREE.AdditiveBlending });
+      const line = new THREE.Line(geometry, material);
+      line.position.set(-20 + echoRandom() * 16, -7 + echoRandom() * 15, -8 - echoRandom() * 16);
+      line.userData.phase = echoRandom() * 18;
+      line.userData.speed = 0.52 + echoRandom() * 0.48;
+      line.userData.baseY = line.position.y;
+      lightEchoes.push(line);
+      universe.add(line);
+    }
 
     if (glowTexture) {
       const nebulae = [
-        { position: [-8, 1, -8], color: 0x4a36ff, scale: 16 },
-        { position: [9, -2, -11], color: 0x0f8dff, scale: 20 },
-        { position: [1, 4, -15], color: 0xb638ff, scale: 13 },
-        { position: [-2, -5, -9], color: 0xff347f, scale: 12 },
+        { position: [-8, 1, -8], color: 0x272047, scale: 19 },
+        { position: [9, -2, -11], color: 0x5968a6, scale: 22 },
+        { position: [1, 4, -15], color: 0x3b315d, scale: 16 },
+        { position: [-2, -5, -9], color: 0x6c4f59, scale: 14 },
       ];
       nebulae.forEach((item) => {
         const material = new THREE.SpriteMaterial({
           map: glowTexture,
           color: item.color,
           transparent: true,
-          opacity: 0.055,
+          opacity: 0.034,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
         });
@@ -412,25 +643,27 @@ export function GalaxyExperience() {
       });
     }
 
-    const ambientLight = new THREE.AmbientLight(0x243b72, 1.2);
-    const keyLight = new THREE.DirectionalLight(0x9beaff, 4.2);
+    const ambientLight = new THREE.AmbientLight(0x202344, 0.78);
+    const keyLight = new THREE.DirectionalLight(0xe2d9c7, 2.7);
     keyLight.position.set(-8, 8, 10);
-    const rimLight = new THREE.PointLight(0x7a3cff, 90, 32, 2);
+    const rimLight = new THREE.PointLight(0x5968a6, 54, 32, 2);
     rimLight.position.set(2, 1, -2);
     scene.add(ambientLight, keyLight, rimLight);
+    const targetAccent = new THREE.Color(SYSTEMS[0].accent);
+    const targetFog = new THREE.Color(0x04030b).lerp(targetAccent, 0.045);
 
     const core = new THREE.Mesh(
       new THREE.SphereGeometry(0.3, 40, 40),
-      new THREE.MeshBasicMaterial({ color: 0xa8e7ff }),
+      new THREE.MeshBasicMaterial({ color: 0xe2dccf }),
     );
     core.position.set(0, 0, -0.5);
     galaxy.add(core);
     if (glowTexture) {
       const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({
         map: glowTexture,
-        color: 0x65c9ff,
+        color: 0x8f9bc7,
         transparent: true,
-        opacity: 0.28,
+        opacity: 0.18,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }));
@@ -440,9 +673,9 @@ export function GalaxyExperience() {
     }
 
     system.add(
-      createOrbitLine(5.4, 4.2, 0x5db4ff, 0.11, 0.45),
-      createOrbitLine(8.4, 6.6, 0x795cff, 0.09, -0.7),
-      createOrbitLine(11.5, 9.2, 0xff5fa3, 0.065, 0.9),
+      createOrbitLine(5.4, 4.2, 0x6977a8, 0.075, 0.45),
+      createOrbitLine(8.4, 6.6, 0x4f476d, 0.055, -0.7),
+      createOrbitLine(11.5, 9.2, 0x8b665d, 0.045, 0.9),
     );
 
     const aurelia = new THREE.Group();
@@ -488,8 +721,8 @@ export function GalaxyExperience() {
           float stripe = sin(vRadius * 25.0) * 0.5 + 0.5;
           float fine = sin(vRadius * 83.0) * 0.5 + 0.5;
           float edge = smoothstep(0.0, 0.12, vUv.y) * smoothstep(1.0, 0.86, vUv.y);
-          vec3 color = mix(vec3(0.16, 0.35, 0.58), vec3(0.5, 0.9, 1.0), stripe);
-          float alpha = (0.1 + stripe * 0.22 + fine * 0.08) * edge;
+          vec3 color = mix(vec3(0.14, 0.17, 0.28), vec3(0.58, 0.52, 0.44), stripe);
+          float alpha = (0.045 + stripe * 0.13 + fine * 0.035) * edge;
           gl_FragColor = vec4(color, alpha);
         }
       `,
@@ -507,7 +740,7 @@ export function GalaxyExperience() {
     aurelia.add(moonOrbit);
     const moon = new THREE.Mesh(
       new THREE.SphereGeometry(0.28, 32, 24),
-      new THREE.MeshStandardMaterial({ color: 0xcbe6ff, roughness: 0.72, metalness: 0.05 }),
+      new THREE.MeshStandardMaterial({ color: 0xbeb9b0, roughness: 0.82, metalness: 0.03 }),
     );
     moon.position.set(4.8, 0.45, 0.2);
     moonOrbit.add(moon);
@@ -528,10 +761,10 @@ export function GalaxyExperience() {
     nyx.position.set(-6.8, 1.4, -4);
     const nyxPlanet = new THREE.Mesh(
       new THREE.SphereGeometry(1.06, 64, 48),
-      new THREE.MeshStandardMaterial({ color: 0x5f0b24, emissive: 0x6e0a25, emissiveIntensity: 0.38, roughness: 0.8 }),
+      new THREE.MeshStandardMaterial({ color: 0x3e1721, emissive: 0x4a151f, emissiveIntensity: 0.16, roughness: 0.88 }),
     );
     nyx.add(nyxPlanet);
-    addAtmosphere(nyx, 1.13, 0xff375f, 0.18);
+    addAtmosphere(nyx, 1.13, 0x9a6674, 0.1);
     system.add(nyx);
 
     const caelum = new THREE.Group();
@@ -539,9 +772,9 @@ export function GalaxyExperience() {
     const caelumPlanet = new THREE.Mesh(
       new THREE.SphereGeometry(1.42, 72, 52),
       new THREE.MeshPhysicalMaterial({
-        color: 0x26317d,
-        emissive: 0x182a7c,
-        emissiveIntensity: 0.28,
+        color: 0x1f284d,
+        emissive: 0x182043,
+        emissiveIntensity: 0.14,
         roughness: 0.28,
         metalness: 0.18,
         clearcoat: 0.72,
@@ -549,8 +782,8 @@ export function GalaxyExperience() {
       }),
     );
     caelum.add(caelumPlanet);
-    addAtmosphere(caelum, 1.52, 0x7768ff, 0.16);
-    const caelumRing = createOrbitLine(2.05, 2.05, 0x8d81ff, 0.26, 0.12);
+    addAtmosphere(caelum, 1.52, 0x6977a8, 0.1);
+    const caelumRing = createOrbitLine(2.05, 2.05, 0x6977a8, 0.18, 0.12);
     caelumRing.rotation.x = 0.35;
     caelum.add(caelumRing);
     system.add(caelum);
@@ -569,17 +802,23 @@ export function GalaxyExperience() {
     let dragDistance = 0;
     let appliedTarget = targetRef.current;
     let appliedReset = resetRef.current;
-    let desiredCamera = new THREE.Vector3(...SYSTEMS[0].camera);
-    let desiredLook = new THREE.Vector3(...SYSTEMS[0].look);
+    const initialCamera = mobile ? SYSTEMS[0].mobileCamera : SYSTEMS[0].camera;
+    const initialLook = mobile ? SYSTEMS[0].mobileLook : SYSTEMS[0].look;
+    const desiredCamera = new THREE.Vector3(...initialCamera);
+    const desiredLook = new THREE.Vector3(...initialLook);
+    const targetCamera = new THREE.Vector3();
     let zoom = 1;
     let elapsed = 0;
+    let passage = 0;
     let frame = 0;
     let hidden = false;
 
     function applyTarget(id: TargetId) {
       const target = SYSTEMS.find((item) => item.id === id) ?? SYSTEMS[0];
-      desiredCamera = new THREE.Vector3(...target.camera);
-      desiredLook = new THREE.Vector3(...target.look);
+      desiredCamera.set(...(mobile ? target.mobileCamera : target.camera));
+      desiredLook.set(...(mobile ? target.mobileLook : target.look));
+      targetAccent.set(target.accent);
+      targetFog.set(0x04030b).lerp(targetAccent, 0.045);
       appliedTarget = id;
     }
 
@@ -630,6 +869,7 @@ export function GalaxyExperience() {
       if (event.key === "2") selectTarget("nyx");
       if (event.key === "3") selectTarget("caelum");
       if (event.key.toLowerCase() === "r") resetView();
+      if (event.key.toLowerCase() === "q") toggleQuiet();
       if (event.code === "Space") {
         event.preventDefault();
         toggleCruise();
@@ -697,41 +937,59 @@ export function GalaxyExperience() {
       const warp = warpRef.current;
       warpRef.current *= 0.94;
       if (warpRef.current < 0.002) warpRef.current = 0;
+      passage = THREE.MathUtils.lerp(passage, passageRef.current, passageRef.current > passage ? 0.055 : 0.032);
       animatedMaterials.forEach((material) => {
         if (material.uniforms.uTime) material.uniforms.uTime.value = prefersReducedMotion ? 0 : elapsed;
         if (material.uniforms.uWarp) material.uniforms.uWarp.value = warp;
+        if (material.uniforms.uPassage) material.uniforms.uPassage.value = prefersReducedMotion ? 0 : passage;
       });
 
+      const quietMotion = quietRef.current ? 0.34 : 1;
       if (!pausedRef.current && !prefersReducedMotion) {
-        galaxy.rotation.y = elapsed * 0.016;
-        dust.rotation.y = -elapsed * 0.011;
-        backgroundStars.rotation.y = elapsed * 0.0025;
-        planet.rotation.y = elapsed * 0.085;
-        moonOrbit.rotation.y = elapsed * 0.34;
-        nyxPlanet.rotation.y = elapsed * 0.11;
-        caelumPlanet.rotation.y = -elapsed * 0.072;
-        system.rotation.y = Math.sin(elapsed * 0.07) * 0.025;
+        galaxy.rotation.y = elapsed * 0.004 * quietMotion;
+        dust.rotation.y = -elapsed * 0.003 * quietMotion;
+        backgroundStars.rotation.y = elapsed * 0.0012 * quietMotion;
+        foregroundDust.position.z = Math.sin(elapsed * 0.028) * 0.42 * quietMotion;
+        constellationGroup.rotation.y = Math.sin(elapsed * 0.018) * 0.012;
+        planet.rotation.y = elapsed * 0.026 * quietMotion;
+        moonOrbit.rotation.y = elapsed * 0.11 * quietMotion;
+        nyxPlanet.rotation.y = elapsed * 0.034 * quietMotion;
+        caelumPlanet.rotation.y = -elapsed * 0.024 * quietMotion;
+        system.rotation.y = Math.sin(elapsed * 0.034) * 0.012 * quietMotion;
+        diffractionStars.forEach((sprite) => {
+          const pulse = 0.88 + Math.sin(elapsed * 0.38 + sprite.userData.phase) * 0.12;
+          sprite.scale.setScalar(sprite.userData.baseScale * pulse);
+        });
+        lightEchoes.forEach((line) => {
+          const cycle = (elapsed * line.userData.speed + line.userData.phase) % 18;
+          const active = cycle > 12 ? Math.sin(((cycle - 12) / 6) * Math.PI) : 0;
+          line.position.x = -20 + Math.max(0, cycle - 12) * 7.4;
+          line.position.y = line.userData.baseY + Math.sin(elapsed * 0.13 + line.userData.phase) * 0.25;
+          (line.material as THREE.LineBasicMaterial).opacity = active * (quietRef.current ? 0.07 : 0.13);
+        });
       }
 
-      universe.rotation.y = THREE.MathUtils.lerp(universe.rotation.y, dragRotation.x + pointer.x * 0.045, 0.035);
-      universe.rotation.x = THREE.MathUtils.lerp(universe.rotation.x, dragRotation.y - pointer.y * 0.025, 0.035);
+      universe.rotation.y = THREE.MathUtils.lerp(universe.rotation.y, dragRotation.x + pointer.x * 0.032 * quietMotion, 0.028);
+      universe.rotation.x = THREE.MathUtils.lerp(universe.rotation.x, dragRotation.y - pointer.y * 0.018 * quietMotion, 0.028);
+      rimLight.color.lerp(targetAccent, 0.018);
+      scene.fog?.color.lerp(targetFog, 0.012);
 
-      const targetCamera = desiredCamera.clone();
+      targetCamera.copy(desiredCamera);
       if (cruiseRef.current && !prefersReducedMotion) {
-        const radius = 0.42;
-        targetCamera.x += Math.sin(elapsed * 0.12) * radius;
-        targetCamera.y += Math.cos(elapsed * 0.09) * 0.22;
-        targetCamera.z += Math.cos(elapsed * 0.12) * radius;
+        const radius = quietRef.current ? 0.05 : 0.12;
+        targetCamera.x += Math.sin(elapsed * 0.07) * radius;
+        targetCamera.y += Math.cos(elapsed * 0.052) * radius * 0.55;
+        targetCamera.z += Math.cos(elapsed * 0.07) * radius;
       }
       targetCamera.sub(desiredLook).multiplyScalar(zoom).add(desiredLook);
-      targetCamera.x += pointer.x * 0.34;
-      targetCamera.y += pointer.y * 0.2;
-      camera.position.lerp(targetCamera, prefersReducedMotion ? 0.12 : 0.038);
-      currentLook.lerp(desiredLook, 0.045);
+      targetCamera.x += pointer.x * 0.22 * quietMotion;
+      targetCamera.y += pointer.y * 0.13 * quietMotion;
+      camera.position.lerp(targetCamera, prefersReducedMotion ? 0.12 : 0.024);
+      currentLook.lerp(desiredLook, 0.028);
       camera.lookAt(currentLook);
-      camera.fov = THREE.MathUtils.lerp(camera.fov, 48 + warp * 15, 0.08);
+      camera.fov = THREE.MathUtils.lerp(camera.fov, 48 + warp * 6 + passage * 9, 0.06);
       camera.updateProjectionMatrix();
-      bloom.strength = bloomBaseStrength + warp * 0.42;
+      bloom.strength = bloomBaseStrength - (quietRef.current ? 0.045 : 0) + warp * 0.18 + passage * 0.14;
       composer.render();
 
       frame += 1;
@@ -753,32 +1011,34 @@ export function GalaxyExperience() {
       window.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("visibilitychange", handleVisibility);
       scene.traverse((object) => {
-        if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Line) {
-          object.geometry?.dispose();
+        if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Line || object instanceof THREE.Sprite) {
+          if (!(object instanceof THREE.Sprite)) object.geometry?.dispose();
           const materials = Array.isArray(object.material) ? object.material : [object.material];
           materials.forEach((material) => material?.dispose());
         }
       });
       glowTexture?.dispose();
+      diffractionTexture?.dispose();
       composer.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
       renderer.domElement.remove();
       document.body.style.overflow = previousOverflow;
     };
-  }, [resetView, selectTarget, toggleCruise]);
+  }, [resetView, selectTarget, toggleCruise, toggleQuiet]);
 
   const activeSystem = SYSTEMS.find((item) => item.id === activeTarget) ?? SYSTEMS[0];
 
   return (
-    <main className={styles.page} data-testid="galaxy-page">
+    <main className={`${styles.page} ${quiet ? styles.quiet : ""} ${passageActive ? styles.passageActive : ""}`} data-testid="galaxy-page">
       <div ref={mountRef} className={styles.scene} data-testid="galaxy-scene" />
       <div className={styles.vignette} aria-hidden="true" />
-      <div className={styles.scanline} aria-hidden="true" />
+      <div className={styles.filmGrain} aria-hidden="true" />
 
       <div className={`${styles.loader} ${ready ? styles.loaderHidden : ""}`} aria-hidden={ready}>
         <span className={styles.loaderMark}><i /><i /><i /></span>
-        <strong>CALIBRATING STARFIELD</strong>
+        <strong>星光抵达之前</strong>
+        <small>请允许黑暗停留片刻</small>
         <span className={styles.loaderLine}><i /></span>
       </div>
 
@@ -796,22 +1056,18 @@ export function GalaxyExperience() {
         </Link>
         <div className={styles.brand}>
           <span className={styles.brandMark}><i /><i /><i /></span>
-          <div><strong>ASTRA</strong><small>ZAOCHANG / CELESTIAL LAB</small></div>
-        </div>
-        <div className={styles.headerStatus}>
-          <span><i /> LIVE FIELD</span>
-          <b>SECTOR 07G</b>
+          <div><strong>ASTRA</strong><small>AN OBSERVATION OF LIGHT</small></div>
         </div>
       </header>
 
-      <section className={styles.hero}>
-        <span className={styles.kicker}>REAL-TIME CELESTIAL INTERFACE / 2026</span>
-        <h1>ASTRA</h1>
-        <p>穿过静默的星尘。<br />让轨道、引力与光成为一种界面。</p>
-        <div className={styles.heroSignal}><span /><small>DEEP FIELD SIGNAL</small><b>98.7%</b></div>
+      <section key={activeSystem.id} className={styles.hero} style={{ "--philosophy-accent": activeSystem.accent } as CSSProperties}>
+        <span className={styles.kicker}>{activeSystem.index} / {activeSystem.chapter} · {activeSystem.epoch}</span>
+        <h1>{activeSystem.title}</h1>
+        <p>{activeSystem.body}</p>
+        <blockquote>{activeSystem.coda}</blockquote>
       </section>
 
-      <nav className={styles.systemNav} aria-label="星体导航">
+      <nav className={styles.systemNav} aria-label="星光章节">
         {SYSTEMS.map((item) => (
           <button
             type="button"
@@ -820,60 +1076,47 @@ export function GalaxyExperience() {
             onClick={() => selectTarget(item.id)}
             aria-pressed={activeTarget === item.id}
           >
-            <span style={{ color: item.accent }}>{item.index}</span>
-            <strong>{item.name}</strong>
-            <small>{item.type}</small>
             <i style={{ background: item.accent }} />
+            <strong>{item.chapter}</strong>
+            <small>{item.name}</small>
           </button>
         ))}
       </nav>
 
-      <aside className={styles.telemetry} aria-live="polite">
-        <span className={styles.telemetryLabel}>LOCKED OBJECT</span>
-        <strong>{activeSystem.name}</strong>
-        <div><span>CLASS</span><b>{activeSystem.type}</b></div>
-        <div><span>DISTANCE</span><b>{activeSystem.distance}</b></div>
-        <div><span>ORBIT</span><b>{cruising ? "AUTONOMOUS" : "MANUAL"}</b></div>
-        <div><span>RENDER</span><b>{paused ? "HOLD" : "REALTIME"}</b></div>
-        <i className={styles.telemetryRule}><span style={{ background: activeSystem.accent }} /></i>
+      <aside className={styles.observation} aria-live="polite">
+        <span>{activeSystem.name} · {activeSystem.type}</span>
+        <b>{activeSystem.lightAge}</b>
+        <small>光在抵达这里以前，已经独自走了很久。</small>
       </aside>
 
       <div className={styles.controls} aria-label="星图控制">
-        <button type="button" onClick={toggleCruise} className={cruising ? styles.controlActive : ""} title={cruising ? "关闭自动巡航" : "开启自动巡航"} aria-label={cruising ? "关闭自动巡航" : "开启自动巡航"}>
-          <Orbit size={18} /><span>巡航</span>
-        </button>
         <button type="button" onClick={togglePaused} title={paused ? "继续星图" : "暂停星图"} aria-label={paused ? "继续星图" : "暂停星图"}>
-          {paused ? <Play size={18} /> : <Pause size={18} />}<span>{paused ? "继续" : "暂停"}</span>
+          {paused ? <Play size={18} /> : <Pause size={18} />}
         </button>
-        <button type="button" onClick={triggerWarp} className={styles.warpControl} title="触发空间跃迁" aria-label="触发空间跃迁">
-          <Sparkles size={18} /><span>跃迁</span>
+        <button type="button" onClick={toggleQuiet} className={quiet ? styles.controlActive : ""} title={quiet ? "离开静默模式" : "进入静默模式"} aria-label={quiet ? "离开静默模式" : "进入静默模式"} aria-pressed={quiet}>
+          <MoonStar size={18} />
         </button>
-        <button type="button" onClick={resetView} title="重置视角" aria-label="重置视角">
-          <RotateCcw size={18} /><span>复位</span>
+        <button
+          type="button"
+          className={styles.passageControl}
+          onPointerDown={startPassage}
+          onPointerUp={stopPassage}
+          onPointerLeave={stopPassage}
+          onPointerCancel={stopPassage}
+          title="让时间经过"
+          aria-label="让时间经过"
+          aria-pressed={passageActive}
+        >
+          <Sparkles size={18} /><span>时间经过</span>
+        </button>
+        <button type="button" onClick={toggleFullscreen} title="切换全屏" aria-label="切换全屏">
+          <Expand size={17} />
         </button>
       </div>
 
-      <div className={styles.coordinates} aria-hidden="true">
-        <span>X 31.4207</span><span>Y 18.0721</span><span>Z 09.2188</span>
-      </div>
+      <p className={styles.temporalEcho}>你看见的星光，来自已经不存在的此刻。</p>
 
-      <div className={styles.cornerMarks} aria-hidden="true"><i /><i /><i /><i /></div>
-
-      <div className={styles.mobileMeta}>
-        <Gauge size={15} /><span>{activeSystem.name}</span><b>{activeSystem.distance}</b>
-      </div>
-
-      <button
-        type="button"
-        className={styles.fullscreen}
-        onClick={toggleFullscreen}
-        title="切换全屏"
-        aria-label="切换全屏"
-      >
-        <Expand size={17} />
-      </button>
-
-      <p className={styles.srOnly}>实时三维银河系，包含螺旋星系、粒子星尘、环形行星与三颗可切换星体。</p>
+      <p className={styles.srOnly}>穿过静默的星尘，观察关于微光、漂流与回声的实时三维银河。</p>
     </main>
   );
 }
