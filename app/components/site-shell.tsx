@@ -150,7 +150,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
               <span className="deep-avatar ink">{member.initial}</span><ChevronDown size={14} />
             </Link>
           ) : (
-            <a className="deep-signin" href="/signin-with-chatgpt?return_to=%2F">登录</a>
+            <a className="deep-signin" href="/signin?return_to=%2F">登录</a>
           )}
         </div>
       </header>

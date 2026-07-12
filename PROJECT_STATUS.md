@@ -171,3 +171,12 @@
 - 减少动态效果：浏览器模拟 `prefers-reduced-motion: reduce` 后，过渡层计算样式为 `display: none`。
 - 自动验证：`npm test` 为 `23 passed / 0 failed / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；目标 ESLint 为 0 errors / 1 个既有 `<img>` 性能警告。
 - 当前边界：未在真实低端 Android、Safari iOS、4K 或高刷新率屏幕验证；Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝，本轮没有修改框架字体链。
+
+## 2026-07-12 Google 与 GitHub OAuth 骨架
+
+- 状态：部分完成
+- 认证入口：新增 `/signin` 登录页，保留 ChatGPT 登录，并提供 Google/GitHub 两个可配置入口；未配置 Client ID/Secret 时显示“待配置”，不会伪造登录成功。
+- OAuth 路由：新增 `/api/auth/google/start`、`/api/auth/google/callback`、`/api/auth/github/start`、`/api/auth/github/callback` 和 `/api/auth/logout`。
+- 数据模型：新增 `oauth_accounts` 与 `auth_sessions` 表；第三方账号登录后映射到现有 `members`、钱包和作品数据。
+- 安全边界：OAuth state 使用 HttpOnly、SameSite=Lax 短期 Cookie 校验；会话 Cookie 只保存随机 token，数据库保存 SHA-256 哈希；Client Secret 仅从 Sites 运行时环境读取。
+- 配置缺口：尚未填入 Google/GitHub Client ID、Client Secret，也未在 Sites 运行时环境中执行迁移；完成真实第三方登录前必须配置凭据并应用 `drizzle/0001_oauth_accounts.sql`。

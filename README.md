@@ -87,6 +87,8 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 ## Useful Commands
 
+Google/GitHub OAuth 配置步骤见 [OAUTH_SETUP.md](./OAUTH_SETUP.md)。
+
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
 - `npm test`: build the starter and verify its rendered loading skeleton

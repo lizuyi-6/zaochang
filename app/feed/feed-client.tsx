@@ -33,7 +33,7 @@ export function FeedClient() {
     setSending(true);
     const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "post", content: text }) });
     if (response.status === 401) {
-      window.location.href = "/signin-with-chatgpt?return_to=%2Ffeed";
+      window.location.href = "/signin?return_to=%2Ffeed";
       return;
     }
     if (response.ok) {

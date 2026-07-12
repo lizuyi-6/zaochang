@@ -28,7 +28,7 @@ export function CreateProductFlow() {
     setSubmitting(true);
     const response = await fetch("/api/products", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, description, category, price, demoUrl, coverTheme: theme }) });
     if (response.status === 401) {
-      window.location.href = "/signin-with-chatgpt?return_to=%2Fstudio%2Fnew";
+      window.location.href = "/signin?return_to=%2Fstudio%2Fnew";
       return;
     }
     if (response.ok) setPublished(true);

@@ -18,7 +18,7 @@ export function ProductExperience({ product }: { product: Product }) {
     if (liked) return;
     const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "like", productId: product.id }) });
     if (response.status === 401) {
-      window.location.href = `/signin-with-chatgpt?return_to=${encodeURIComponent(`/product/${product.slug ?? product.id}`)}`;
+      window.location.href = `/signin?return_to=${encodeURIComponent(`/product/${product.slug ?? product.id}`)}`;
       return;
     }
     setLiked(true);
@@ -31,7 +31,7 @@ export function ProductExperience({ product }: { product: Product }) {
     }
     const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "tip", productId: product.id, amount }) });
     if (response.status === 401) {
-      window.location.href = `/signin-with-chatgpt?return_to=${encodeURIComponent(`/product/${product.id}`)}`;
+      window.location.href = `/signin?return_to=${encodeURIComponent(`/product/${product.id}`)}`;
       return;
     }
     const data = await response.json() as { error?: string };

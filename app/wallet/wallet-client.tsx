@@ -28,7 +28,7 @@ export function WalletClient() {
     setClaiming(true);
     const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "check_in" }) });
     if (response.status === 401) {
-      window.location.href = "/signin-with-chatgpt?return_to=%2Fwallet";
+      window.location.href = "/signin?return_to=%2Fwallet";
       return;
     }
     setNotice(response.ok ? "今日灵感补给 +8 果" : "今天已经领取过了");

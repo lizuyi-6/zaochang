@@ -170,6 +170,7 @@ for (const [pathname, marker] of [
   ["/galaxy/products", "用真实业务分类和明确状态快速找到产品"],
   ["/galaxy/apply", "发射产品信号"],
   ["/galaxy/incubator", "阶段轨道"],
+  ["/signin", "进入造场"],
 ]) {
   test(`renders distinct route ${pathname}`, async () => {
     const response = await fetch(`${baseUrl}${pathname}`, {
@@ -179,6 +180,20 @@ for (const [pathname, marker] of [
     assert.match(await response.text(), new RegExp(marker));
   });
 }
+
+test("keeps OAuth providers explicit until runtime credentials are configured", async () => {
+  const signin = await fetch(`${baseUrl}/signin?return_to=%2Fwallet`, { headers: { accept: "text/html" } });
+  assert.equal(signin.status, 200);
+  const html = await signin.text();
+  assert.match(html, /使用 Google 登录/);
+  assert.match(html, /使用 GitHub 登录/);
+  assert.match(html, /待配置/);
+  for (const provider of ["google", "github"]) {
+    const response = await fetch(`${baseUrl}/api/auth/${provider}/start?return_to=%2Fwallet`, { redirect: "manual" });
+    assert.equal(response.status, 307);
+    assert.match(response.headers.get("location") ?? "", /\/signin\?error=not_configured&provider=/);
+  }
+});
 
 test("uses the galaxy palette only for official product pages", async () => {
   const [officialResponse, communityResponse] = await Promise.all([
