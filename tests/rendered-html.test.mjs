@@ -195,6 +195,15 @@ test("keeps OAuth providers explicit until runtime credentials are configured", 
   }
 });
 
+test("keeps sign-in outside the community shell", async () => {
+  const response = await fetch(`${baseUrl}/signin`, { headers: { accept: "text/html" } });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /class="auth-page"/);
+  assert.match(html, /class="auth-brand"/);
+  assert.doesNotMatch(html, /deep-topbar|deep-sidebar|deep-mobile-nav|deep-account/);
+});
+
 test("uses the galaxy palette only for official product pages", async () => {
   const [officialResponse, communityResponse] = await Promise.all([
     fetch(`${baseUrl}/product/typewave`, { headers: { accept: "text/html" } }),

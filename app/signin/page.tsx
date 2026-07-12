@@ -25,6 +25,11 @@ export default async function SignInPage({ searchParams }: PageProps) {
 
   return (
     <main className="auth-page">
+      <Link className="auth-brand" href="/" aria-label="返回造场首页">
+        <span className="auth-brand-mark"><i /><i /><i /></span>
+        <strong>造场</strong>
+        <small>ZAOCHANG / ACCOUNT</small>
+      </Link>
       <section className="auth-panel">
         <Link className="auth-back" href={returnTo}><ArrowLeft size={15} /> 返回</Link>
         <div className="auth-mark"><BadgeCheck size={18} /> 造场账号</div>
@@ -39,6 +44,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
         <a className="auth-chatgpt" href={`/signin-with-chatgpt?return_to=${encodeURIComponent(returnTo)}`}>使用 ChatGPT 登录</a>
         <small className="auth-note">Google 和 GitHub 登录只会用于识别你的造场账号，不会公开你的第三方密码。</small>
       </section>
+      <span className="auth-context">AUTH GATEWAY / PRIVATE ACCESS</span>
     </main>
   );
 }

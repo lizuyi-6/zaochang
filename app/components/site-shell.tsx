@@ -91,6 +91,15 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
       .slice(0, 6);
   }, [query]);
 
+  // Authentication screens are intentionally outside the community chrome.
+  // Keeping them unwrapped prevents account actions, side navigation, and the
+  // mobile rail from appearing while a user is signing in.
+  if (
+    pathname.startsWith("/signin") ||
+    pathname.startsWith("/signout") ||
+    pathname === "/callback"
+  ) return <>{children}</>;
+
   if (pathname.startsWith("/galaxy")) return <>{children}</>;
 
   const productSlug = pathname.startsWith("/product/") ? pathname.slice("/product/".length).split("/")[0] : null;
