@@ -180,3 +180,6 @@
 - 数据模型：新增 `oauth_accounts` 与 `auth_sessions` 表；第三方账号登录后映射到现有 `members`、钱包和作品数据。
 - 安全边界：OAuth state 使用 HttpOnly、SameSite=Lax 短期 Cookie 校验；会话 Cookie 只保存随机 token，数据库保存 SHA-256 哈希；Client Secret 仅从 Sites 运行时环境读取。
 - 配置缺口：尚未填入 Google/GitHub Client ID、Client Secret，也未在 Sites 运行时环境中执行迁移；完成真实第三方登录前必须配置凭据并应用 `drizzle/0001_oauth_accounts.sql`。
+- 自动验证：`npm test` 为 `25 passed / 0 failed / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；目标 ESLint 为 0 errors / 1 个既有 `<img>` 性能警告。
+- 线上证据：新站点第 2 版部署状态为 `succeeded`；线上 `/signin` 返回 `200` 且包含 Google/GitHub 入口；未配置凭据时 `/api/auth/google/start` 返回 `307` 并重定向到 `signin?error=not_configured&provider=google`。
+- 未覆盖范围：尚未使用真实 Google/GitHub 凭据执行完整授权回调；尚未在真实低端 Android、Safari iOS、4K 或高刷新率屏幕验证；OAuth migration 是否已应用需在填写凭据前由 Sites/D1 运行时确认。
