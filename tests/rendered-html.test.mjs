@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { GALAXIES, PLANETS, PLANETS_BY_GALAXY } from "../app/galaxy/cosmic-atlas.ts";
+import { GALAXY_BUSINESS, GALAXY_PRODUCTS, PRODUCT_BY_PLANET } from "../app/galaxy/product-galaxy.ts";
 
 const port = 4179;
 const baseUrl = `http://127.0.0.1:${port}`;
@@ -135,7 +136,7 @@ test("server-renders the creator community", async () => {
   assert.match(html, /发布作品/);
   assert.match(html, /果子钱包/);
   assert.match(html, /href="\/galaxy"/);
-  assert.match(html, /去看星光/);
+  assert.match(html, /产品银河/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
 
@@ -165,7 +166,10 @@ for (const [pathname, marker] of [
   ["/collections", "想再回来玩的作品"],
   ["/profile", "发布的作品"],
   ["/product/mori", "开始体验"],
-  ["/galaxy", "界外纪包含 4 个星系与 12 颗可观测行星"],
+  ["/galaxy", "探索造场产品宇宙"],
+  ["/galaxy/products", "用真实业务分类和明确状态快速找到产品"],
+  ["/galaxy/apply", "发射产品信号"],
+  ["/galaxy/incubator", "阶段轨道"],
 ]) {
   test(`renders distinct route ${pathname}`, async () => {
     const response = await fetch(`${baseUrl}${pathname}`, {
@@ -201,6 +205,14 @@ test("cosmic atlas keeps four galaxies with three unique stories each", () => {
   assert.equal(new Set(PLANETS.map((planet) => planet.title)).size, 12);
   assert.equal(new Set(PLANETS.map((planet) => planet.archiveTitle)).size, 12);
   assert.equal(PLANETS.every((planet) => planet.archive.length === 2 && planet.archive.every((paragraph) => paragraph.length >= 45)), true);
+});
+
+test("product galaxy maps every planet to a real product and business sector", () => {
+  assert.equal(Object.keys(GALAXY_BUSINESS).length, 4);
+  assert.equal(GALAXY_PRODUCTS.length, 12);
+  assert.equal(new Set(GALAXY_PRODUCTS.map((product) => product.name)).size, 12);
+  assert.equal(GALAXY_PRODUCTS.every((product) => PRODUCT_BY_PLANET[product.planetId] === product), true);
+  assert.equal(GALAXY_PRODUCTS.every((product) => product.status.length > 0 && product.capabilities.length === 3), true);
 });
 
 test("rejects anonymous product publishing", async () => {

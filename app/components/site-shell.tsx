@@ -75,8 +75,11 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   }, []);
 
   useEffect(() => {
-    setCommandOpen(false);
-    setQuery("");
+    const frame = window.requestAnimationFrame(() => {
+      setCommandOpen(false);
+      setQuery("");
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
 
   const results = useMemo(() => {
@@ -87,7 +90,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
       .slice(0, 6);
   }, [query]);
 
-  if (pathname === "/galaxy") return <>{children}</>;
+  if (pathname.startsWith("/galaxy")) return <>{children}</>;
 
   const routeName = pathname.startsWith("/product/") ? "作品体验" : routeNames[pathname] ?? "造场";
 

@@ -5,12 +5,18 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import {
   ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
   BookOpen,
+  Building2,
   Expand,
+  LayoutList,
   MoonStar,
   Orbit,
   Pause,
   Play,
+  Rocket,
+  Shuffle,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -29,6 +35,12 @@ import {
   type PlanetStory,
   type TargetId,
 } from "./cosmic-atlas";
+import {
+  COMPANY_CORE,
+  GALAXY_BUSINESS,
+  GALAXY_PRODUCTS,
+  PRODUCT_BY_PLANET,
+} from "./product-galaxy";
 import styles from "./galaxy.module.css";
 
 const PLANET_SURFACE_INDEX: Record<PlanetSurface, number> = {
@@ -848,6 +860,12 @@ export function GalaxyExperience() {
     selectTarget(firstPlanet.id);
   }, [selectTarget]);
 
+  const selectRandomPlanet = useCallback(() => {
+    const choices = PLANETS.filter((planet) => planet.id !== targetRef.current);
+    const next = choices[Math.floor(Math.random() * choices.length)] ?? PLANETS[0];
+    if (next) selectTarget(next.id);
+  }, [selectTarget]);
+
   const toggleCruise = useCallback(() => {
     cruiseRef.current = !cruiseRef.current;
   }, []);
@@ -879,6 +897,11 @@ export function GalaxyExperience() {
     setStoryExpanded(false);
     setActiveTarget("singularity");
   }, []);
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("planet") as PlanetId | null;
+    if (requested && requested in PLANET_BY_ID) selectTarget(requested);
+  }, [selectTarget]);
 
   const toggleFullscreen = useCallback(async () => {
     try {
@@ -2170,6 +2193,8 @@ export function GalaxyExperience() {
 
   const activePlanet = activeTarget === "singularity" ? null : PLANET_BY_ID[activeTarget];
   const activeGalaxy = activePlanet ? GALAXIES.find((galaxy) => galaxy.id === activePlanet.galaxyId) ?? null : null;
+  const activeBusiness = activeGalaxy ? GALAXY_BUSINESS[activeGalaxy.id] : null;
+  const activeProduct = activePlanet ? PRODUCT_BY_PLANET[activePlanet.id] : null;
   const activeStory = activePlanet ?? SINGULARITY;
   const siblingPlanets = activeGalaxy ? PLANETS_BY_GALAXY[activeGalaxy.id] : [];
 
@@ -2179,6 +2204,7 @@ export function GalaxyExperience() {
       data-testid="galaxy-page"
       data-mode={activeTarget === "singularity" ? "overview" : "planet"}
       data-story-mode={storyExpanded ? "archive" : "short"}
+      data-product-status={activeProduct?.status ?? "company-core"}
     >
       <div ref={mountRef} className={styles.scene} data-testid="galaxy-scene" />
       <div className={styles.vignette} aria-hidden="true" />
@@ -2205,9 +2231,16 @@ export function GalaxyExperience() {
         </Link>
         <div className={styles.brand}>
           <span className={styles.brandMark}><i /><i /><i /></span>
-          <div><strong>ASTRA · 界外纪</strong><small>杭州视界奇点科技有限公司</small></div>
+          <div><strong>造场产品银河</strong><small>PRODUCT GALAXY · HANGZHOU</small></div>
         </div>
       </header>
+
+      <nav className={styles.ecosystemNav} aria-label="产品银河主要入口">
+        <Link href="/galaxy" aria-current="page">银河探索</Link>
+        <Link href="/galaxy/products">全部产品</Link>
+        <Link href="/galaxy/incubator">孵化控制台</Link>
+        <Link className={styles.navApply} href="/galaxy/apply"><Rocket size={13} /> 申请加入</Link>
+      </nav>
 
       <section
         key={`${activeStory.id}-${storyExpanded ? "archive" : "short"}`}
@@ -2215,14 +2248,45 @@ export function GalaxyExperience() {
         style={{ "--philosophy-accent": activeStory.accent } as CSSProperties}
         aria-live="polite"
       >
-        <span className={styles.kicker}>{activeStory.index} / {activeStory.chapter} · {activeStory.epoch}</span>
-        <h1>{storyExpanded && activePlanet ? activePlanet.archiveTitle : activeStory.title}</h1>
+        {activeProduct ? (
+          <span className={styles.kicker}>{activeProduct.status} · {activeBusiness?.businessName} · {activeProduct.codeName}</span>
+        ) : (
+          <span className={styles.kicker}>ZAOCHANG PRODUCT GALAXY · 04 SECTORS / 12 PRODUCTS</span>
+        )}
+        <h1>{storyExpanded && activePlanet ? activePlanet.archiveTitle : activeProduct ? activeProduct.name : "探索造场产品宇宙"}</h1>
         {storyExpanded && activePlanet ? (
           <div className={styles.archiveBody}>
             {activePlanet.archive.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           </div>
-        ) : <p>{activeStory.body}</p>}
-        <blockquote>{activeStory.coda}</blockquote>
+        ) : activeProduct ? (
+          <>
+            <p>{activeProduct.tagline}</p>
+            <div className={styles.productFacts} aria-label="产品概况">
+              <span><small>VERSION</small><strong>{activeProduct.version}</strong></span>
+              <span><small>FOR</small><strong>{activeProduct.audience}</strong></span>
+              <span><small>NEXT</small><strong>{activeProduct.nextMilestone}</strong></span>
+            </div>
+            <div className={styles.productActions}>
+              <Link className={styles.primaryGalaxyAction} href={activeProduct.actionHref}>{activeProduct.actionLabel} <ArrowUpRight size={14} /></Link>
+              <Link href={`/galaxy/products#${activeProduct.planetId}`}>产品档案 <ArrowRight size={13} /></Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <p>每一个星系代表一条产品赛道，每一颗行星代表一个正在运行、开发或孵化中的产品。</p>
+            <div className={styles.overviewActions}>
+              <button type="button" onClick={() => selectGalaxy("origo")}><Play size={14} fill="currentColor" /> 开始探索</button>
+              <Link href="/galaxy/products"><LayoutList size={14} /> 查看全部产品</Link>
+              <button type="button" onClick={selectRandomPlanet}><Shuffle size={14} /> 随机行星</button>
+              <Link href="/galaxy/apply"><Rocket size={14} /> 申请加入造场</Link>
+            </div>
+            <div className={styles.companySignal}>
+              <span><Building2 size={13} /> {COMPANY_CORE.shortName} · {COMPANY_CORE.phase}</span>
+              <div><strong>{COMPANY_CORE.productCount}</strong><small>产品</small><strong>{COMPANY_CORE.galaxyCount}</strong><small>赛道</small><strong>{COMPANY_CORE.incubatingCount}</strong><small>孵化中</small></div>
+            </div>
+          </>
+        )}
+        {activePlanet && <blockquote>{activePlanet.coda}</blockquote>}
         {activePlanet && (
           <button
             type="button"
@@ -2231,10 +2295,31 @@ export function GalaxyExperience() {
             aria-expanded={storyExpanded}
           >
             {storyExpanded ? <ArrowLeft size={14} /> : <BookOpen size={14} />}
-            <span>{storyExpanded ? "返回短章" : "读取完整记录"}</span>
+            <span>{storyExpanded ? "返回产品概览" : "读取行星故事"}</span>
           </button>
         )}
       </section>
+
+      {activeTarget === "singularity" && (
+        <section className={styles.mobileGalaxyIndex} aria-label="产品星系分类">
+          <div><span>04 PRODUCT SECTORS</span><Link href="/galaxy/products">全部产品 <ArrowRight size={13} /></Link></div>
+          {GALAXIES.map((galaxy) => {
+            const business = GALAXY_BUSINESS[galaxy.id];
+            return (
+              <button type="button" key={galaxy.id} onClick={() => selectGalaxy(galaxy.id)}>
+                <i style={{ background: galaxy.accent }} />
+                <span><strong>{business.worldName}</strong><small>{business.businessName}</small></span>
+                <b>{GALAXY_PRODUCTS.filter((product) => PLANET_BY_ID[product.planetId].galaxyId === galaxy.id).length}</b>
+                <ArrowRight size={14} />
+              </button>
+            );
+          })}
+          <footer>
+            <Link href="/galaxy/apply"><Rocket size={13} /> 发射产品信号</Link>
+            <Link href="/galaxy/incubator">孵化控制台 <ArrowRight size={13} /></Link>
+          </footer>
+        </section>
+      )}
 
       <nav className={styles.atlasNav} aria-label="界外纪宇宙图谱">
         <div className={styles.galaxyNav} aria-label="选择星系">
@@ -2259,7 +2344,7 @@ export function GalaxyExperience() {
               aria-label={`进入${galaxy.name}星系 ${galaxy.latin}`}
             >
               <i style={{ background: galaxy.accent }} />
-              <span><strong>{galaxy.name}</strong><small>{galaxy.latin}</small></span>
+              <span><strong>{galaxy.name}</strong><small>{GALAXY_BUSINESS[galaxy.id].businessName}</small></span>
             </button>
           ))}
         </div>
@@ -2276,7 +2361,7 @@ export function GalaxyExperience() {
                 aria-pressed={activeTarget === item.id}
               >
                 <i style={{ background: item.accent }} />
-                <span><strong>{item.chapter}</strong><small>{item.name}</small></span>
+                <span><strong>{PRODUCT_BY_PLANET[item.id].name}</strong><small>{PRODUCT_BY_PLANET[item.id].status}</small></span>
               </button>
             ))}
           </div>
@@ -2284,9 +2369,9 @@ export function GalaxyExperience() {
       </nav>
 
       <aside className={styles.observation} aria-live="polite">
-        <span>{activeStory.name} · {activeStory.type}</span>
-        <b>{activeStory.lightAge}</b>
-        <small>{activeGalaxy?.thesis ?? "观渊不是中心，而是所有尺度失去傲慢的地方。"}</small>
+        <span>{activeProduct ? `${activeProduct.codeName} · ${activeProduct.status}` : "ZAOCHANG · COMPANY CORE"}</span>
+        <b>{activeProduct?.version ?? `${COMPANY_CORE.productCount} PRODUCTS`}</b>
+        <small>{activeBusiness?.positioning ?? COMPANY_CORE.mission}</small>
       </aside>
 
       <div className={styles.controls} aria-label="星图控制">
@@ -2317,8 +2402,11 @@ export function GalaxyExperience() {
       <p className={styles.temporalEcho}>见界环保存的不是答案，而是文明曾认真问过的问题。</p>
 
       <div className={styles.srOnly}>
+        <h2>{SINGULARITY.title}</h2>
+        <span>{SINGULARITY.epoch}</span>
+        <p>{SINGULARITY.body}</p>
         <p>界外纪包含 4 个星系与 12 颗可观测行星。穿过观渊与见界环，进入每颗行星独有的文明故事。</p>
-        <ul>{PLANETS.map((item) => <li key={item.id}>{item.chapter} {item.name}：{item.title}；完整档案：{item.archiveTitle}</li>)}</ul>
+        <ul>{PLANETS.map((item) => <li key={item.id}>{PRODUCT_BY_PLANET[item.id].name}，{PRODUCT_BY_PLANET[item.id].status}；{item.chapter} {item.name}：{item.title}；完整档案：{item.archiveTitle}</li>)}</ul>
       </div>
     </main>
   );

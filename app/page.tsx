@@ -30,12 +30,12 @@ export default function HomePage() {
             <div className="stage-orbit orbit-one" /><div className="stage-orbit orbit-two" />
             <span className="stage-coordinate coordinate-one">X 31.42 / Y 18.07</span>
             <span className="stage-coordinate coordinate-two">SIGNAL 98%</span>
-            <Link className="galaxy-gateway" href="/galaxy" aria-label="进入 ASTRA 宇宙记忆">
+            <Link className="galaxy-gateway" href="/galaxy" aria-label="进入造场产品银河">
               <span className="galaxy-gateway-sky" aria-hidden="true"><i /><i /><b /></span>
               <span className="galaxy-gateway-copy">
-                <small>COMMUNITY / ELSEWHERE</small>
-                <strong>去看星光</strong>
-                <em>ASTRA <ArrowUpRight size={13} /></em>
+                <small>PRODUCT / ECOSYSTEM</small>
+                <strong>产品银河</strong>
+                <em>EXPLORE <ArrowUpRight size={13} /></em>
               </span>
             </Link>
           </div>

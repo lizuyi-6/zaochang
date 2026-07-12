@@ -113,6 +113,31 @@
 .brand strong { font-size: 12px; font-weight: 760; }
 .brand small { color: rgb(219 220 231 / 36%); font-family: var(--font-geist-mono), monospace; font-size: 8px; }
 
+.ecosystemNav {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  position: absolute;
+  right: 30px;
+  top: 28px;
+  z-index: 7;
+}
+
+.ecosystemNav a {
+  align-items: center;
+  color: rgb(231 231 239 / 50%);
+  display: inline-flex;
+  font-size: 10px;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  transition: background .25s ease, color .25s ease;
+}
+
+.ecosystemNav a:hover,
+.ecosystemNav a[aria-current="page"] { background: rgb(255 255 255 / 5%); color: #f2eee6; }
+.ecosystemNav .navApply { border: 1px solid rgb(184 137 97 / 38%); color: #e3c8aa; margin-left: 5px; }
+
 .hero {
   left: 6vw;
   max-width: 520px;
@@ -166,6 +191,65 @@
   margin: 30px 0 0;
   padding-left: 15px;
 }
+
+.productFacts {
+  border-bottom: 1px solid rgb(227 225 236 / 10%);
+  border-top: 1px solid rgb(227 225 236 / 10%);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: .65fr 1.35fr 1fr;
+  margin-top: 24px;
+  padding: 14px 0;
+}
+
+.productFacts span { display: grid; gap: 4px; min-width: 0; }
+.productFacts small { color: rgb(213 216 232 / 28%); font-family: var(--font-geist-mono), monospace; font-size: 7px; }
+.productFacts strong { color: rgb(240 237 231 / 72%); font-size: 9px; font-weight: 500; line-height: 1.45; }
+
+.productActions,
+.overviewActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 17px;
+}
+
+.productActions a,
+.overviewActions a,
+.overviewActions button {
+  align-items: center;
+  background: rgb(9 8 18 / 48%);
+  border: 1px solid rgb(226 225 236 / 14%);
+  color: rgb(239 235 229 / 72%);
+  display: inline-flex;
+  font-size: 9px;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  transition: background .25s ease, border-color .25s ease, color .25s ease, transform .25s ease;
+}
+
+.productActions a:hover,
+.overviewActions a:hover,
+.overviewActions button:hover { background: rgb(255 255 255 / 7%); border-color: rgb(226 225 236 / 30%); color: #fff; transform: translateY(-2px); }
+.productActions .primaryGalaxyAction,
+.overviewActions > :first-child { background: #e8e2d7; border-color: #e8e2d7; color: #08070e; }
+
+.companySignal {
+  color: rgb(229 226 228 / 38%);
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.companySignal > span { align-items: center; display: flex; font-size: 9px; gap: 7px; }
+.companySignal > div { align-items: baseline; display: flex; gap: 7px; }
+.companySignal strong { color: rgb(243 237 228 / 76%); font-family: var(--font-geist-mono), monospace; font-size: 18px; font-weight: 500; margin-left: 6px; }
+.companySignal strong:first-child { margin-left: 0; }
+.companySignal small { font-size: 8px; }
+
+.mobileGalaxyIndex { display: none; }
 
 .storyExpanded h1 { font-size: 42px; margin-bottom: 19px; }
 .archiveBody {
@@ -255,7 +339,7 @@
   position: absolute;
   right: 34px;
   text-align: right;
-  top: 32px;
+  top: 82px;
   transition: opacity .8s ease;
   z-index: 4;
 }
@@ -411,12 +495,18 @@
   .back { height: 42px; width: 42px; }
   .brand { margin-left: 4px; }
   .brand small { font-size: 7px; }
+  .ecosystemNav { display: none; }
   .hero { bottom: 220px; left: 22px; max-width: calc(100% - 44px); top: auto; transform: none; width: calc(100% - 44px); }
   .kicker { font-size: 8px; }
   .hero h1 { font-size: 32px; line-height: 1.25; margin: 11px 0 13px; }
   .overview .hero h1 { font-size: 29px; }
   .hero p { font-size: 11px; line-height: 1.7; max-width: 340px; }
   .hero blockquote { font-size: 10px; line-height: 1.55; margin-top: 13px; padding-left: 10px; }
+  .productFacts { gap: 10px; grid-template-columns: .55fr 1.45fr; margin-top: 12px; padding: 9px 0; }
+  .productFacts span:nth-child(3) { display: none; }
+  .productActions { margin-top: 9px; }
+  .productActions a { height: 32px; padding: 0 9px; }
+  .hero:not(.storyExpanded) blockquote { display: none; }
   .storyExpanded { max-height: calc(100dvh - 276px); overflow-y: auto; padding-right: 8px; scrollbar-width: none; }
   .storyExpanded::-webkit-scrollbar { display: none; }
   .storyExpanded h1 { font-size: 27px; margin-bottom: 13px; }
@@ -425,6 +515,8 @@
   .storyExpanded blockquote { font-size: 9px; margin-top: 11px; }
   .storyToggle { margin-top: 10px; }
   .atlasNav { bottom: calc(66px + env(safe-area-inset-bottom)); gap: 5px; left: 14px; max-width: none; right: 14px; width: auto; }
+  .overview .atlasNav { display: none; }
+  .overview .controls { display: none; }
   .galaxyNav { gap: 16px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
   .galaxyNav::-webkit-scrollbar { display: none; }
   .atlasNav button { flex: 0 0 auto; min-height: 38px; }
@@ -445,6 +537,50 @@
   .quiet .hero { bottom: auto; left: 50%; max-width: calc(100% - 46px); top: 50%; transform: translate(-50%, -50%); width: calc(100% - 46px); }
   .quiet .hero h1 { font-size: 32px; }
   .quiet .hero blockquote { font-size: 15px; margin-top: 24px; }
+
+  .overview .scene { filter: brightness(.55) saturate(.75); }
+  .overview .hero { bottom: auto; left: 18px; max-width: calc(100% - 36px); top: 88px; width: calc(100% - 36px); }
+  .overview .hero h1 { font-size: 28px; margin: 9px 0 10px; }
+  .overview .hero p { font-size: 10px; line-height: 1.58; max-width: 330px; }
+  .overviewActions,
+  .overview .companySignal { display: none; }
+  .mobileGalaxyIndex {
+    background: linear-gradient(180deg, rgb(4 3 12 / 68%), rgb(3 2 10 / 94%));
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    display: grid;
+    left: 12px;
+    max-height: 48dvh;
+    overflow-y: auto;
+    padding: 10px 12px;
+    position: absolute;
+    right: 12px;
+    scrollbar-width: none;
+    z-index: 7;
+  }
+  .mobileGalaxyIndex::-webkit-scrollbar { display: none; }
+  .mobileGalaxyIndex > div { align-items: center; border-bottom: 1px solid rgb(255 255 255 / 9%); display: flex; height: 32px; justify-content: space-between; }
+  .mobileGalaxyIndex > div span { color: rgb(225 225 237 / 35%); font-family: var(--font-geist-mono), monospace; font-size: 7px; }
+  .mobileGalaxyIndex > div a { align-items: center; color: #e5d1b8; display: flex; font-size: 9px; gap: 5px; }
+  .mobileGalaxyIndex > button {
+    align-items: center;
+    background: transparent;
+    border-bottom: 1px solid rgb(255 255 255 / 8%);
+    color: #ede9e2;
+    display: grid;
+    gap: 9px;
+    grid-template-columns: 5px 1fr 18px 14px;
+    min-height: 54px;
+    padding: 7px 0;
+    text-align: left;
+  }
+  .mobileGalaxyIndex > button i { border-radius: 50%; box-shadow: 0 0 10px currentColor; height: 5px; width: 5px; }
+  .mobileGalaxyIndex > button span { display: grid; gap: 3px; min-width: 0; }
+  .mobileGalaxyIndex > button strong { font-family: "Songti SC", STSong, serif; font-size: 10px; font-weight: 500; }
+  .mobileGalaxyIndex > button small { color: rgb(223 224 234 / 42%); font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobileGalaxyIndex > button b { color: rgb(232 227 218 / 42%); font-family: var(--font-geist-mono), monospace; font-size: 9px; font-weight: 500; }
+  .mobileGalaxyIndex footer { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; padding-top: 9px; }
+  .mobileGalaxyIndex footer a { align-items: center; border: 1px solid rgb(255 255 255 / 12%); color: rgb(239 234 225 / 72%); display: flex; font-size: 9px; gap: 6px; height: 34px; justify-content: center; }
+  .mobileGalaxyIndex footer a:first-child { background: #e6dfd3; color: #09080e; }
 }
 
 @media (max-height: 650px) {
