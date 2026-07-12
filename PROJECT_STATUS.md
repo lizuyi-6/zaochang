@@ -115,3 +115,12 @@
 - 首页边界：返回观渊后仍为 `target=singularity`、`visiblePlanetCount=0`、`sceneDensity=atlas`、`blackHoleVisible=true`，1536x1000 对照截图的首页布局和黑洞构图未改变。
 - 移动构图：390x844 的 AURELIA 抵达态页面滚动尺寸为 `390x844`，状态为 `settled`、`visiblePlanetCount=12`、`sceneDensity=solitude`，没有横向或纵向页面溢出。
 - 当前边界：这是叙事尺度而非物理单位仿真；真实低端 Android、Safari iOS、4K 屏幕、GPU 丢失恢复及高刷新率显示器仍未做设备验证。
+
+## 2026-07-12 四星系主恒星层
+
+- 状态：部分完成
+- 天体层级：源光、忆潮、镜梦、未至各新增一颗真实位于行星轨道中心的主恒星；对应为暖白主序星、琥珀巨星、冷蓝白星与青白高能星，分别拥有独立半径、表面流动、日冕、衍射和点光源参数。
+- 轨道关系：12 颗行星继续以各自星系的主恒星为局部坐标原点运行；浏览器遍历得到目标到主恒星距离 `12.59-35.66`，最大椭圆轨道残差 `4.44e-16`，每个行星态均为 `visibleHostStarCount=4`。
+- 取景变化：EIDORA 与 NOVAIA 的桌面相机改为斜切恒星方向，让冷蓝白星和青白星稳定落在右侧天体区；移动端保留原相机参数，镜梦主星从左上边缘进入且不覆盖正文。
+- 首页边界：主恒星是深空行星层的子节点；返回观渊后为 `visibleHostStarCount=0`、`visiblePlanetCount=0`、`sceneDensity=atlas`、`blackHoleVisible=true`，不改变观渊总览。
+- 浏览器边界：Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝，没有记录 WebGL shader error；真实低端 Android、Safari iOS、4K 与 GPU 丢失恢复仍未覆盖。

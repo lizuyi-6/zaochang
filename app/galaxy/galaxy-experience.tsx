@@ -42,6 +42,20 @@ const PLANET_SURFACE_INDEX: Record<PlanetSurface, number> = {
   crystal: 7,
 };
 
+const STELLAR_PROFILES: Record<GalaxyId, {
+  radius: number;
+  colorA: number;
+  colorB: number;
+  corona: number;
+  intensity: number;
+  seed: number;
+}> = {
+  origo: { radius: 2.55, colorA: 0xfff4cf, colorB: 0xf09b45, corona: 0xffc66d, intensity: 18, seed: 1.3 },
+  mnemora: { radius: 3.05, colorA: 0xffd69a, colorB: 0xa83f22, corona: 0xe88948, intensity: 16, seed: 2.7 },
+  miralume: { radius: 2.35, colorA: 0xf4fbff, colorB: 0x6f9fff, corona: 0x91bcff, intensity: 20, seed: 4.1 },
+  antevera: { radius: 2.15, colorA: 0xeafff4, colorB: 0x67c5ae, corona: 0x8be1c9, intensity: 19, seed: 5.6 },
+};
+
 const starVertexShader = `
   uniform float uTime;
   uniform float uPixelRatio;
@@ -83,6 +97,52 @@ const starFragmentShader = `
     float core = 1.0 - smoothstep(0.0, 0.18, distanceToCenter);
     float halo = 1.0 - smoothstep(0.08, 1.0, distanceToCenter);
     gl_FragColor = vec4(vColor * (0.54 + core * 0.46), (halo * 0.5 + core * 0.32) * vAlpha);
+  }
+`;
+
+const stellarVertexShader = `
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+  varying vec3 vLocalPosition;
+
+  void main() {
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDirection = normalize(-viewPosition.xyz);
+    vLocalPosition = position;
+    gl_Position = projectionMatrix * viewPosition;
+  }
+`;
+
+const stellarFragmentShader = `
+  uniform float uTime;
+  uniform float uSeed;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uCorona;
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+  varying vec3 vLocalPosition;
+
+  float hash(vec3 point) {
+    point = fract(point * 0.1031);
+    point += dot(point, point.yzx + 33.33);
+    return fract((point.x + point.y) * point.z);
+  }
+
+  void main() {
+    vec3 direction = normalize(vLocalPosition);
+    float time = uTime * (0.045 + uSeed * 0.002);
+    float cells = hash(floor((direction + 1.0) * (18.0 + uSeed)) + floor(time));
+    float broad = sin(direction.y * (15.0 + uSeed) + sin(direction.x * 9.0 - time) * 2.1 + time) * 0.5 + 0.5;
+    float filament = sin((direction.x + direction.z) * 27.0 - time * 1.7 + cells * 4.0) * 0.5 + 0.5;
+    float convection = smoothstep(0.2, 0.86, broad * 0.62 + filament * 0.28 + cells * 0.22);
+    float limb = clamp(dot(normalize(vNormal), normalize(vViewDirection)), 0.0, 1.0);
+    float edge = pow(1.0 - limb, 2.4);
+    vec3 color = mix(uColorB * 0.62, uColorA * 1.18, convection);
+    color *= 0.74 + limb * 0.52;
+    color += uCorona * edge * (0.16 + filament * 0.12);
+    gl_FragColor = vec4(color, 1.0);
   }
 `;
 
@@ -736,13 +796,13 @@ function cubicBezier(
     .addScaledVector(end, progress ** 3);
 }
 
-function createOrbitLine(orbit: OrbitConfig) {
+function createOrbitLine(orbit: OrbitConfig, distanceScale = 1) {
   const points = Array.from({ length: 240 }, (_, index) => {
     const angle = (index / 240) * Math.PI * 2;
     return new THREE.Vector3(
-      Math.cos(angle) * orbit.radiusX,
+      Math.cos(angle) * orbit.radiusX * distanceScale,
       Math.sin(angle) * orbit.tilt,
-      Math.sin(angle) * orbit.radiusZ,
+      Math.sin(angle) * orbit.radiusZ * distanceScale,
     );
   });
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -1199,7 +1259,70 @@ export function GalaxyExperience() {
     overviewFocusAnchor.position.set(mobile ? 0 : -5.8, mobile ? -2.6 : -0.7, 0);
     blackHoleRoot.add(overviewCameraAnchor, overviewFocusAnchor);
 
-    const galaxySpaces = new Map<GalaxyId, { space: THREE.Group; visual: THREE.Group; planets: THREE.Group }>();
+    const stellarRuntimes: Array<{
+      group: THREE.Group;
+      surface: THREE.Mesh;
+      corona: THREE.Sprite | null;
+      baseCoronaOpacity: number;
+      phase: number;
+    }> = [];
+
+    function createHostStar(galaxyId: GalaxyId, index: number) {
+      const profile = STELLAR_PROFILES[galaxyId];
+      const group = new THREE.Group();
+      group.userData.hostStar = galaxyId;
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uSeed: { value: profile.seed },
+          uColorA: { value: new THREE.Color(profile.colorA) },
+          uColorB: { value: new THREE.Color(profile.colorB) },
+          uCorona: { value: new THREE.Color(profile.corona) },
+        },
+        vertexShader: stellarVertexShader,
+        fragmentShader: stellarFragmentShader,
+      });
+      animatedMaterials.push(material);
+      const surface = new THREE.Mesh(
+        new THREE.SphereGeometry(profile.radius, mobile ? 40 : 64, mobile ? 28 : 44),
+        material,
+      );
+      group.add(surface);
+      addAtmosphere(group, profile.radius * 1.1, profile.corona, galaxyId === "mnemora" ? 0.34 : 0.42);
+
+      let corona: THREE.Sprite | null = null;
+      const baseCoronaOpacity = galaxyId === "miralume" ? 0.46 : galaxyId === "mnemora" ? 0.34 : 0.4;
+      if (glowTexture) {
+        corona = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture,
+          color: profile.corona,
+          transparent: true,
+          opacity: baseCoronaOpacity,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }));
+        corona.scale.setScalar(profile.radius * (galaxyId === "mnemora" ? 4.8 : 4.2));
+        group.add(corona);
+      }
+      if (diffractionTexture && (galaxyId === "miralume" || galaxyId === "antevera")) {
+        const diffraction = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: diffractionTexture,
+          color: profile.colorA,
+          transparent: true,
+          opacity: galaxyId === "miralume" ? 0.16 : 0.1,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }));
+        diffraction.scale.setScalar(profile.radius * (galaxyId === "miralume" ? 7.8 : 6.6));
+        diffraction.material.rotation = index * 0.38;
+        group.add(diffraction);
+      }
+      group.add(new THREE.PointLight(profile.colorA, profile.intensity, 58, 2));
+      stellarRuntimes.push({ group, surface, corona, baseCoronaOpacity, phase: index * 1.7 + profile.seed });
+      return group;
+    }
+
+    const galaxySpaces = new Map<GalaxyId, { space: THREE.Group; visual: THREE.Group; planets: THREE.Group; star: THREE.Group }>();
     const galaxyPickables: Array<{ mesh: THREE.Mesh; id: PlanetId }> = [];
     GALAXIES.forEach((definition, galaxyIndex) => {
       const space = new THREE.Group();
@@ -1208,9 +1331,11 @@ export function GalaxyExperience() {
       visual.rotation.set((galaxyIndex - 1.5) * 0.13, galaxyIndex * 0.42, galaxyIndex % 2 ? -0.28 : 0.24);
       const planets = new THREE.Group();
       planets.position.copy(new THREE.Vector3(...definition.position).normalize().multiplyScalar(PLANET_GALAXY_OFFSET));
+      const star = createHostStar(definition.id, galaxyIndex);
+      planets.add(star);
       space.add(visual, planets);
       system.add(space);
-      galaxySpaces.set(definition.id, { space, visual, planets });
+      galaxySpaces.set(definition.id, { space, visual, planets, star });
 
       const count = mobile ? 420 : 1200;
       const positions = new Float32Array(count * 3);
@@ -1268,7 +1393,7 @@ export function GalaxyExperience() {
     PLANETS.forEach((planetDefinition) => {
       const parent = galaxySpaces.get(planetDefinition.galaxyId)?.planets;
       if (parent) {
-        const orbitLine = createOrbitLine(planetDefinition.orbit);
+        const orbitLine = createOrbitLine(planetDefinition.orbit, PLANET_ORBIT_DISTANCE_SCALE);
         planetaryOrbitLines.push(orbitLine);
         parent.add(orbitLine);
       }
@@ -1573,10 +1698,13 @@ export function GalaxyExperience() {
     const targetLook = new THREE.Vector3();
     const projectedTarget = new THREE.Vector3();
     const projectedBlackHole = new THREE.Vector3();
+    const projectedHostStar = new THREE.Vector3();
+    const projectedHostStarEdge = new THREE.Vector3();
     const projectedEdge = new THREE.Vector3();
     const worldCenter = new THREE.Vector3();
     const blackHoleWorld = new THREE.Vector3();
     const planetWorldPositions = PLANETS.map(() => new THREE.Vector3());
+    const starWorldPositions = new Map<GalaxyId, THREE.Vector3>(GALAXIES.map((definition) => [definition.id, new THREE.Vector3()]));
     const cameraAxis = new THREE.Vector3();
     let activeBody = bodies.get(targetRef.current) ?? bodies.get("singularity")!;
     type CameraFlight = {
@@ -1847,6 +1975,13 @@ export function GalaxyExperience() {
         caelumPlanet.rotation.y = -elapsed * 0.024 * quietMotion;
         caelumHalo.rotation.y = -elapsed * 0.031 * quietMotion;
         caelumHalo.rotation.z = Math.sin(elapsed * 0.021) * 0.06;
+        stellarRuntimes.forEach((runtime, index) => {
+          runtime.surface.rotation.y = elapsed * (0.012 + index * 0.0035) * quietMotion;
+          runtime.surface.rotation.z = Math.sin(elapsed * 0.009 + runtime.phase) * 0.035;
+          if (runtime.corona) {
+            (runtime.corona.material as THREE.SpriteMaterial).opacity = runtime.baseCoronaOpacity * (0.9 + Math.sin(elapsed * 0.21 + runtime.phase) * 0.1);
+          }
+        });
         system.rotation.y = Math.sin(elapsed * 0.034) * 0.012 * quietMotion;
         diffractionStars.forEach((sprite) => {
           const pulse = 0.88 + Math.sin(elapsed * 0.38 + sprite.userData.phase) * 0.12;
@@ -1950,7 +2085,10 @@ export function GalaxyExperience() {
       renderer.domElement.dataset.galaxyCount = String(GALAXIES.length);
       renderer.domElement.dataset.planetCount = String(PLANETS.length);
       renderer.domElement.dataset.visiblePlanetCount = String(PLANETS.filter((definition) => bodies.get(definition.id)?.group.visible).length);
+      renderer.domElement.dataset.hostStarCount = String(stellarRuntimes.length);
+      renderer.domElement.dataset.visibleHostStarCount = String(Array.from(galaxySpaces.values()).filter((runtime) => runtime.planets.visible && runtime.star.visible).length);
       PLANETS.forEach((definition, index) => bodies.get(definition.id)?.group.getWorldPosition(planetWorldPositions[index]));
+      galaxySpaces.forEach((runtime, galaxyId) => runtime.star.getWorldPosition(starWorldPositions.get(galaxyId)!));
       let minimumPlanetSeparation = Number.POSITIVE_INFINITY;
       for (let first = 0; first < planetWorldPositions.length; first += 1) {
         for (let second = first + 1; second < planetWorldPositions.length; second += 1) {
@@ -1959,8 +2097,22 @@ export function GalaxyExperience() {
       }
       blackHoleRoot.getWorldPosition(blackHoleWorld);
       const activePlanetIndex = appliedTarget === "singularity" ? -1 : PLANETS.findIndex((definition) => definition.id === appliedTarget);
+      const activeHostStar = appliedTarget === "singularity" ? null : starWorldPositions.get(PLANET_BY_ID[appliedTarget].galaxyId);
+      let hostStarRadiusPx = 0;
+      if (activeHostStar && appliedTarget !== "singularity") {
+        projectedHostStar.copy(activeHostStar).project(camera);
+        cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(STELLAR_PROFILES[PLANET_BY_ID[appliedTarget].galaxyId].radius);
+        projectedHostStarEdge.copy(activeHostStar).add(cameraAxis).project(camera);
+        hostStarRadiusPx = Math.abs(projectedHostStarEdge.x - projectedHostStar.x) * renderedWidth * 0.5;
+      } else {
+        projectedHostStar.set(2, 2, 2);
+      }
       renderer.domElement.dataset.minimumPlanetSeparation = minimumPlanetSeparation.toFixed(2);
       renderer.domElement.dataset.targetBlackHoleDistance = activePlanetIndex < 0 ? "0.00" : planetWorldPositions[activePlanetIndex].distanceTo(blackHoleWorld).toFixed(2);
+      renderer.domElement.dataset.targetHostStarDistance = activePlanetIndex < 0 || !activeHostStar ? "0.00" : planetWorldPositions[activePlanetIndex].distanceTo(activeHostStar).toFixed(2);
+      renderer.domElement.dataset.hostStarNdcX = projectedHostStar.x.toFixed(4);
+      renderer.domElement.dataset.hostStarNdcY = projectedHostStar.y.toFixed(4);
+      renderer.domElement.dataset.hostStarRadiusPx = hostStarRadiusPx.toFixed(2);
       renderer.domElement.dataset.targetNdcX = projectedTarget.x.toFixed(4);
       renderer.domElement.dataset.targetNdcY = projectedTarget.y.toFixed(4);
       renderer.domElement.dataset.targetRadiusPx = targetRadiusPx.toFixed(2);
