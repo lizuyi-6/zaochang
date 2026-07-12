@@ -95,3 +95,13 @@
 - 浏览器证据：AURELIA、NYX、EIDORA 均报告 `visiblePlanetCount=1`、`blackHoleVisible=false`、`sceneDensity=solitude`，未记录 pageerror 或 WebGL shader error；观渊总览仍报告 `sceneDensity=atlas`。
 - 移动构图：390x844 的 AURELIA 短章故事区为 `y=448.81-624px`，图谱导航从 `692px` 开始，页面尺寸保持 `390x844`，没有横向或纵向页面溢出。
 - 当前边界：孤寂聚焦态仍保留目标行星自身的星环与卫星，作为该世界的身份特征；真实设备与低端 GPU 性能范围沿用上一节未覆盖项。
+
+## 2026-07-12 行星间电影化镜头航行
+
+- 状态：部分完成
+- 镜头变化：目标切换由逐帧线性追随改为三次贝塞尔航线；航程按世界坐标距离映射到 `2.0-3.4s`，中段加入最高 `7deg` 的视野扩张，并使用真实动画时间推进。
+- 空间连续性：航行期间同时保留出发行星与目的行星，跨星系时同时开放两侧行星父级；从奇点出发或返回奇点时保留观渊层，抵达后再收束为目标单星或奇点总览。
+- 改道行为：航行途中再次选择目标时，以当下相机位置和注视点作为新航线起点，不回跳至上一颗行星；浏览器实测 `CAELUM -> EIDORA` 改道时状态为 `from=caelum, to=eidora, visiblePlanetCount=2`。
+- 浏览器证据：`AURELIA -> NYX`、`NYX -> CAELUM` 与跨星系 `EIDORA -> SOLENNE` 航行中均为 `cameraTransition=flying`、`visiblePlanetCount=2`；抵达后均为 `settled`、`visiblePlanetCount=1`、`sceneDensity=solitude`。`SOLENNE -> singularity` 航行中 `blackHoleLayerVisible=true`，抵达后奇点总览为 `visiblePlanetCount=0`。
+- 移动构图：390x844 抵达 AURELIA 后页面滚动尺寸为 `390x844`，状态为 `settled`、`visiblePlanetCount=1`、`sceneDensity=solitude`。
+- 当前边界：Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝；未在真实低端 Android、Safari iOS、4K 屏幕、GPU 丢失恢复或高刷新率显示器上做设备验证。

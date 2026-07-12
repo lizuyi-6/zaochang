@@ -714,6 +714,23 @@ function getOrbitResidual(target: THREE.Object3D, orbit: OrbitConfig) {
   return Math.max(Math.abs(ellipse - 1), Math.abs(target.position.y - expectedY));
 }
 
+function cubicBezier(
+  target: THREE.Vector3,
+  start: THREE.Vector3,
+  controlA: THREE.Vector3,
+  controlB: THREE.Vector3,
+  end: THREE.Vector3,
+  progress: number,
+) {
+  const inverse = 1 - progress;
+  return target
+    .copy(start)
+    .multiplyScalar(inverse ** 3)
+    .addScaledVector(controlA, 3 * inverse * inverse * progress)
+    .addScaledVector(controlB, 3 * inverse * progress * progress)
+    .addScaledVector(end, progress ** 3);
+}
+
 function createOrbitLine(orbit: OrbitConfig) {
   const points = Array.from({ length: 240 }, (_, index) => {
     const angle = (index / 240) * Math.PI * 2;
@@ -1554,34 +1571,90 @@ export function GalaxyExperience() {
     const worldCenter = new THREE.Vector3();
     const cameraAxis = new THREE.Vector3();
     let activeBody = bodies.get(targetRef.current) ?? bodies.get("singularity")!;
+    type CameraFlight = {
+      fromId: TargetId;
+      toId: TargetId;
+      startedAt: number;
+      duration: number;
+      startCamera: THREE.Vector3;
+      startLook: THREE.Vector3;
+      controlA: THREE.Vector3;
+      controlB: THREE.Vector3;
+    };
+    let cameraFlight: CameraFlight | null = null;
+    const flightCamera = new THREE.Vector3();
+    const flightDirection = new THREE.Vector3();
+    const flightSide = new THREE.Vector3();
+    const flightUp = new THREE.Vector3(0, 1, 0);
     let zoom = 1;
     let elapsed = 0;
     let passage = 0;
     let frame = 0;
     let hidden = false;
 
-    function applyTarget(id: TargetId) {
-      const target = id === "singularity" ? SINGULARITY : PLANET_BY_ID[id];
-      activeBody = bodies.get(id) ?? bodies.get("singularity")!;
+    function setFocusVisibility(id: TargetId, previousId: TargetId | null = null, flying = false) {
+      const visiblePlanets = new Set<TargetId>();
+      if (id !== "singularity") visiblePlanets.add(id);
+      if (flying && previousId && previousId !== "singularity") visiblePlanets.add(previousId);
+      const visibleGalaxies = new Set<GalaxyId>();
+      visiblePlanets.forEach((planetId) => {
+        if (planetId !== "singularity") visibleGalaxies.add(PLANET_BY_ID[planetId].galaxyId);
+      });
+      const singularityVisible = id === "singularity" || (flying && previousId === "singularity");
       const activeGalaxyId = id === "singularity" ? null : PLANET_BY_ID[id].galaxyId;
-      const singularityActive = id === "singularity";
+
       galaxySpaces.forEach((runtime, galaxyId) => {
-        runtime.planets.visible = activeGalaxyId === galaxyId;
-        runtime.visual.visible = singularityActive;
-        runtime.visual.scale.setScalar(activeGalaxyId === null ? 1.65 : activeGalaxyId === galaxyId ? 0.72 : 0.9);
+        runtime.planets.visible = visibleGalaxies.has(galaxyId);
+        runtime.visual.visible = singularityVisible;
+        runtime.visual.scale.setScalar(singularityVisible ? 1.65 : activeGalaxyId === galaxyId ? 0.72 : 0.9);
       });
       PLANETS.forEach((definition) => {
         const runtime = bodies.get(definition.id);
-        if (runtime) runtime.group.visible = !singularityActive && definition.id === id;
+        if (runtime) runtime.group.visible = visiblePlanets.has(definition.id);
       });
-      eventHorizon.visible = singularityActive;
-      accretionDisk.visible = singularityActive;
-      eventMaskPlane.visible = singularityActive;
-      lensedArcPlane.visible = singularityActive;
-      horizonCrown.visible = singularityActive;
-      galaxy.visible = singularityActive;
-      foregroundDust.visible = singularityActive;
+      eventHorizon.visible = singularityVisible;
+      accretionDisk.visible = singularityVisible;
+      eventMaskPlane.visible = singularityVisible;
+      lensedArcPlane.visible = singularityVisible;
+      horizonCrown.visible = singularityVisible;
+      galaxy.visible = singularityVisible;
+      foregroundDust.visible = singularityVisible;
       planetaryOrbitLines.forEach((line) => { line.visible = false; });
+    }
+
+    function applyTarget(id: TargetId, startedAt?: number) {
+      const previousId = appliedTarget;
+      const target = id === "singularity" ? SINGULARITY : PLANET_BY_ID[id];
+      activeBody = bodies.get(id) ?? bodies.get("singularity")!;
+      const shouldFly = startedAt !== undefined && previousId !== id && frame > 0 && !prefersReducedMotion;
+      if (shouldFly) {
+        universe.updateMatrixWorld(true);
+        activeBody.cameraAnchor.getWorldPosition(targetCamera);
+        activeBody.focusAnchor.getWorldPosition(targetLook);
+        const isolationDistance = id === "singularity" ? 1 : mobile ? 1.1 : 1.16;
+        targetCamera.sub(targetLook).multiplyScalar(zoom * isolationDistance).add(targetLook);
+        flightDirection.copy(targetCamera).sub(camera.position);
+        const distance = flightDirection.length();
+        flightSide.copy(flightDirection).cross(flightUp);
+        if (flightSide.lengthSq() < 0.0001) flightSide.set(1, 0, 0);
+        else flightSide.normalize();
+        const lift = THREE.MathUtils.clamp(distance * 0.12, 3.2, 11);
+        const bend = THREE.MathUtils.clamp(distance * 0.055, 1.5, 6.5) * (previousId < id ? 1 : -1);
+        cameraFlight = {
+          fromId: previousId,
+          toId: id,
+          startedAt,
+          duration: THREE.MathUtils.clamp(1800 + distance * 42, 2000, 3400),
+          startCamera: camera.position.clone(),
+          startLook: currentLook.clone(),
+          controlA: camera.position.clone().addScaledVector(flightDirection, 0.28).addScaledVector(flightUp, lift).addScaledVector(flightSide, bend),
+          controlB: camera.position.clone().addScaledVector(flightDirection, 0.72).addScaledVector(flightUp, lift * 0.62).addScaledVector(flightSide, -bend * 0.3),
+        };
+        setFocusVisibility(id, previousId, true);
+      } else {
+        cameraFlight = null;
+        setFocusVisibility(id);
+      }
       targetAccent.set(target.accent);
       targetFog.set(0x04030b).lerp(targetAccent, 0.045);
       appliedTarget = id;
@@ -1725,12 +1798,12 @@ export function GalaxyExperience() {
       previousFrameTime = timestamp;
       if (!pausedRef.current) elapsed += delta;
 
-      if (targetRef.current !== appliedTarget) applyTarget(targetRef.current);
+      if (targetRef.current !== appliedTarget) applyTarget(targetRef.current, timestamp);
       if (resetRef.current !== appliedReset) {
         appliedReset = resetRef.current;
         dragRotation.set(0, 0);
         zoom = 1;
-        applyTarget("singularity");
+        applyTarget("singularity", timestamp);
       }
 
       const warp = warpRef.current;
@@ -1794,7 +1867,7 @@ export function GalaxyExperience() {
       universe.updateMatrixWorld(true);
       activeBody.cameraAnchor.getWorldPosition(targetCamera);
       activeBody.focusAnchor.getWorldPosition(targetLook);
-      if (cruiseRef.current && !prefersReducedMotion) {
+      if (!cameraFlight && cruiseRef.current && !prefersReducedMotion) {
         const radius = quietRef.current ? 0.05 : 0.12;
         targetCamera.x += Math.sin(elapsed * 0.07) * radius;
         targetCamera.y += Math.cos(elapsed * 0.052) * radius * 0.55;
@@ -1802,17 +1875,44 @@ export function GalaxyExperience() {
       }
       const isolationDistance = appliedTarget === "singularity" ? 1 : mobile ? 1.1 : 1.16;
       targetCamera.sub(targetLook).multiplyScalar(zoom * isolationDistance).add(targetLook);
-      targetCamera.x += pointer.x * 0.22 * quietMotion;
-      targetCamera.y += pointer.y * 0.13 * quietMotion;
-      camera.position.lerp(targetCamera, prefersReducedMotion ? 0.16 : 0.045);
-      currentLook.lerp(targetLook, prefersReducedMotion ? 0.16 : 0.052);
+      if (!cameraFlight) {
+        targetCamera.x += pointer.x * 0.22 * quietMotion;
+        targetCamera.y += pointer.y * 0.13 * quietMotion;
+      }
+      let transitionProgress = 1;
+      let flightFov = 0;
+      if (cameraFlight) {
+        const rawProgress = THREE.MathUtils.clamp((timestamp - cameraFlight.startedAt) / cameraFlight.duration, 0, 1);
+        transitionProgress = rawProgress;
+        const easedProgress = rawProgress * rawProgress * (3 - 2 * rawProgress);
+        cubicBezier(
+          flightCamera,
+          cameraFlight.startCamera,
+          cameraFlight.controlA,
+          cameraFlight.controlB,
+          targetCamera,
+          easedProgress,
+        );
+        camera.position.copy(flightCamera);
+        currentLook.lerpVectors(cameraFlight.startLook, targetLook, easedProgress);
+        flightFov = Math.sin(Math.PI * rawProgress) * 7;
+        if (rawProgress >= 1) {
+          camera.position.copy(targetCamera);
+          currentLook.copy(targetLook);
+          setFocusVisibility(cameraFlight.toId);
+          cameraFlight = null;
+        }
+      } else {
+        camera.position.lerp(targetCamera, prefersReducedMotion ? 0.16 : 0.045);
+        currentLook.lerp(targetLook, prefersReducedMotion ? 0.16 : 0.052);
+      }
       camera.lookAt(currentLook);
       blackHoleRoot.getWorldPosition(lensedArcPlane.position);
       lensedArcPlane.quaternion.copy(camera.quaternion);
       eventMaskPlane.position.copy(lensedArcPlane.position);
       eventMaskPlane.quaternion.copy(camera.quaternion);
       const baseFov = appliedTarget === "singularity" ? (compactScene ? 58 : 54) : 48;
-      camera.fov = THREE.MathUtils.lerp(camera.fov, baseFov + warp * 6 + passage * 9, 0.06);
+      camera.fov = THREE.MathUtils.lerp(camera.fov, baseFov + warp * 6 + passage * 9 + flightFov, cameraFlight ? 0.14 : 0.06);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
       activeBody.group.getWorldPosition(projectedTarget).project(camera);
@@ -1836,6 +1936,13 @@ export function GalaxyExperience() {
       renderer.domElement.dataset.focusKind = appliedTarget === "singularity" ? "singularity" : "planet";
       renderer.domElement.dataset.lensingMode = "lensed-arcs";
       renderer.domElement.dataset.sceneDensity = appliedTarget === "singularity" ? "atlas" : "solitude";
+      renderer.domElement.dataset.cameraTransition = cameraFlight ? "flying" : "settled";
+      renderer.domElement.dataset.transitionProgress = transitionProgress.toFixed(4);
+      renderer.domElement.dataset.transitionFrom = cameraFlight?.fromId ?? appliedTarget;
+      renderer.domElement.dataset.transitionTo = cameraFlight?.toId ?? appliedTarget;
+      renderer.domElement.dataset.cameraX = camera.position.x.toFixed(4);
+      renderer.domElement.dataset.cameraY = camera.position.y.toFixed(4);
+      renderer.domElement.dataset.cameraZ = camera.position.z.toFixed(4);
       renderer.domElement.dataset.surfaceFamily = appliedTarget === "singularity" ? "singularity" : PLANET_BY_ID[appliedTarget].visual.surface;
       renderer.domElement.dataset.parentGalaxy = appliedTarget === "singularity" ? "none" : PLANET_BY_ID[appliedTarget].galaxyId;
       renderer.domElement.dataset.galaxyCount = String(GALAXIES.length);
@@ -1852,6 +1959,7 @@ export function GalaxyExperience() {
       renderer.domElement.dataset.crownInnerRadiusPx = crownInnerRadiusPx.toFixed(2);
       renderer.domElement.dataset.crownOuterRadiusPx = crownOuterRadiusPx.toFixed(2);
       renderer.domElement.dataset.blackHoleVisible = String(appliedTarget === "singularity" && Math.abs(projectedBlackHole.x) < 1.15 && Math.abs(projectedBlackHole.y) < 1.15 && projectedBlackHole.z > -1 && projectedBlackHole.z < 1);
+      renderer.domElement.dataset.blackHoleLayerVisible = String(eventHorizon.visible);
       renderer.domElement.dataset.orbitResidual = Math.max(...PLANETS.map((definition) => {
         const runtime = bodies.get(definition.id);
         return runtime ? getOrbitResidual(runtime.group, definition.orbit) : Number.POSITIVE_INFINITY;
