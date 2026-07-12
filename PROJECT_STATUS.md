@@ -183,3 +183,17 @@
 - 自动验证：`npm test` 为 `25 passed / 0 failed / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；目标 ESLint 为 0 errors / 1 个既有 `<img>` 性能警告。
 - 线上证据：新站点第 2 版部署状态为 `succeeded`；线上 `/signin` 返回 `200` 且包含 Google/GitHub 入口；未配置凭据时 `/api/auth/google/start` 返回 `307` 并重定向到 `signin?error=not_configured&provider=google`。
 - 未覆盖范围：尚未使用真实 Google/GitHub 凭据执行完整授权回调；尚未在真实低端 Android、Safari iOS、4K 或高刷新率屏幕验证；OAuth migration 是否已应用需在填写凭据前由 Sites/D1 运行时确认。
+
+## 2026-07-12 社区页面与交互收口
+
+- 状态：部分完成
+- 页面与账号数据：新增通知中心、社区指南、资料编辑页；创作台、个人主页、顶部余额与通知红点改为读取当前账号的作品、钱包、互动和已读状态；匿名状态不再显示伪造个人数据。
+- 社区交互：探索筛选、收藏夹创建与空态、圈子搜索/排序/加入/话题讨论、动态图片与关联作品/类型/评论/分享/讨论房、产品收藏/喜欢/关注/讨论、钱包 CSV、作品排序、本机草稿恢复、封面上传与预览均有明确行为。
+- 孵化流程：项目申请写入 D1，资料写入 R2，材料与项目按账号关联；资料提交后项目从“资料审核”转为“项目评估”，阶段详情、资料中心、反馈记录和等待原因可展开；未提交账号显示真实空态并直接进入申请页。
+- 上传权限：产品封面显式为 `public`，孵化资料显式为 `private`；私有对象读取要求当前账号邮箱等于 R2 `owner` 元数据，缺失可见性按私有处理；孵化项目只接受当前用户真实拥有的私有对象。
+- 自动验证：`npm test` 退出码 0，`33 passed / 0 failed / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；`npm run lint` 退出码 0，`0 errors / 9 warnings`；`git diff --check` 退出码 0。
+- 浏览器验证：账号通知由真实喜欢与发布流水生成，“全部已读”点击后禁用；创作台显示测试账号的 1 件作品、1 个喜欢和 140 果；圈子话题、动态讨论房与孵化阶段详情均能进入下一层内容。390x844 下 `/studio`、`/notifications`、`/feed`、`/circles`、`/collections`、`/galaxy/incubator` 均满足 `documentElement.scrollWidth == innerWidth == 390`。
+- 按钮扫描：TypeScript JSX 扫描只剩收藏夹表单提交按钮和银河长按控件；前者由 `form onSubmit` 处理，后者由 `onPointerDown/onPointerUp/onPointerLeave/onPointerCancel` 处理。`href="#"`、`javascript:`、空 `onClick`、TODO、待开放与待上线控件检索无命中。
+- Google 登录：按本轮要求暂停，未修改 Google OAuth 配置或回调逻辑。
+- 本轮改动可能引入的新风险：通知由现有业务表实时聚合，数据量增长后需要分页或事件表；创作台排序是当前设备偏好，不会跨设备同步；R2 私有资料依赖对象元数据，历史上缺少 `visibility` 的对象会按私有处理。
+- 未覆盖范围：未在真实低端 Android、Safari iOS、4K、高刷新率或弱网环境验证；未验证 Google 完整授权回调；未建设运营审核后台、内容举报处置和多人孵化协作席位；Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝，另有 9 条 `<img>`/生成声明性能警告，未发现本轮业务脚本控制台错误。

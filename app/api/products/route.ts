@@ -11,6 +11,7 @@ export async function POST(request: Request) {
     const description = String(input.description ?? "").trim().slice(0, 180);
     const category = String(input.category ?? "");
     const demoUrl = String(input.demoUrl ?? "").trim().slice(0, 500) || null;
+    const imageUrl = String(input.imageUrl ?? "").trim().slice(0, 500) || null;
     const price = Math.max(0, Math.min(99, Math.floor(Number(input.price) || 0)));
     const coverTheme = themes.includes(String(input.coverTheme))
       ? String(input.coverTheme)
@@ -22,16 +23,19 @@ export async function POST(request: Request) {
     if (demoUrl && !/^https?:\/\//i.test(demoUrl)) {
       return Response.json({ error: "invalid_demo_url" }, { status: 400 });
     }
+    if (imageUrl && !(/^https?:\/\//i.test(imageUrl) || /^\/api\/uploads\/[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(imageUrl))) {
+      return Response.json({ error: "invalid_image_url" }, { status: 400 });
+    }
 
     const db = database();
     const created = await db
       .prepare(
         `INSERT INTO products
          (owner_email, owner_name, title, description, category, demo_type,
-          demo_url, cover_theme, price)
-         VALUES (?, ?, ?, ?, ?, 'prototype', ?, ?, ?)
+          demo_url, image_url, cover_theme, price)
+         VALUES (?, ?, ?, ?, ?, 'prototype', ?, ?, ?, ?)
          RETURNING id, owner_name AS ownerName, title, description, category,
-                   demo_type AS demoType, demo_url AS demoUrl,
+                   demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
                    cover_theme AS coverTheme, price, likes_count AS likes,
                    plays_count AS plays, created_at AS createdAt`,
       )
@@ -42,6 +46,7 @@ export async function POST(request: Request) {
         description,
         category,
         demoUrl,
+        imageUrl,
         coverTheme,
         price,
       )

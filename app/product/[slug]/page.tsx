@@ -15,7 +15,7 @@ async function loadProduct(slug: string): Promise<Product | null> {
   try {
     const row = await database().prepare(
       `SELECT id, owner_name AS ownerName, title, description, category,
-              demo_type AS demoType, demo_url AS demoUrl,
+              demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
               cover_theme AS coverTheme, price, likes_count AS likes,
               plays_count AS plays, created_at AS createdAt
        FROM products WHERE id = ? AND status = 'published'`,
@@ -36,7 +36,7 @@ async function loadProduct(slug: string): Promise<Product | null> {
       price: Number(row.price),
       likes: Number(row.likes),
       plays: Number(row.plays),
-      image: "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1600&q=88",
+      image: row.imageUrl ? String(row.imageUrl) : "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1600&q=88",
       accent: theme === "coral" ? "#ff5c3d" : theme === "mint" ? "#b9ecc8" : theme === "blue" ? "#92c6ef" : theme === "yellow" ? "#f1ca51" : "#171816",
       release: "社区新作",
       tags: [String(row.category), "独立创作"],

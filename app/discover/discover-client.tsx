@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutGroup, motion } from "framer-motion";
-import { ArrowDownUp, Grid2X2, List, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowDownUp, Check, Grid2X2, List, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ProductCard } from "../components/product-card";
 import { products as seedProducts, type Product } from "../lib/community-data";
@@ -24,7 +24,7 @@ function hydrateRemote(product: Record<string, unknown>): Product {
     price: Number(product.price ?? 0),
     likes: Number(product.likes ?? 0),
     plays: Number(product.plays ?? 0),
-    image: "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1200&q=85",
+    image: product.imageUrl ? String(product.imageUrl) : "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1200&q=85",
     accent: theme === "coral" ? "#ff5c3d" : theme === "mint" ? "#b9ecc8" : theme === "blue" ? "#92c6ef" : theme === "yellow" ? "#f1ca51" : "#171816",
     release: "刚刚发布",
     tags: [String(product.category), "社区新作"],
@@ -36,6 +36,9 @@ export function DiscoverClient() {
   const [sort, setSort] = useState("趋势");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [priceFilter, setPriceFilter] = useState<"all" | "free" | "paid">("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "official" | "community">("all");
   const [remote, setRemote] = useState<Product[]>([]);
 
   useEffect(() => {
@@ -53,10 +56,12 @@ export function DiscoverClient() {
     const filtered = [...remote, ...seedProducts].filter((product) => {
       const categoryMatch = category === "全部" || product.category === category;
       const queryMatch = !normalized || `${product.title} ${product.ownerName} ${product.description}`.toLowerCase().includes(normalized);
-      return categoryMatch && queryMatch;
+      const priceMatch = priceFilter === "all" || (priceFilter === "free" ? product.price === 0 : product.price > 0);
+      const sourceMatch = sourceFilter === "all" || (sourceFilter === "official" ? Boolean(product.official) : !product.official);
+      return categoryMatch && queryMatch && priceMatch && sourceMatch;
     });
     return filtered.sort((a, b) => sort === "最新" ? String(b.release).localeCompare(String(a.release)) : sort === "最多体验" ? b.plays - a.plays : b.likes + b.plays / 20 - (a.likes + a.plays / 20));
-  }, [category, query, remote, sort]);
+  }, [category, priceFilter, query, remote, sort, sourceFilter]);
 
   return (
     <div className="discover-page">
@@ -74,16 +79,17 @@ export function DiscoverClient() {
         </LayoutGroup>
         <div className="discover-actions">
           <button onClick={() => setSort((value) => value === "趋势" ? "最新" : value === "最新" ? "最多体验" : "趋势")}><ArrowDownUp size={15} /> {sort}</button>
-          <button aria-label="筛选" title="筛选"><SlidersHorizontal size={16} /></button>
+          <button className={filtersOpen || priceFilter !== "all" || sourceFilter !== "all" ? "active" : ""} onClick={() => setFiltersOpen((value) => !value)} aria-label="筛选" title="筛选" aria-expanded={filtersOpen}><SlidersHorizontal size={16} /></button>
           <div className="view-toggle"><button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")} aria-label="网格视图"><Grid2X2 size={16} /></button><button className={view === "list" ? "active" : ""} onClick={() => setView("list")} aria-label="列表视图"><List size={17} /></button></div>
         </div>
       </section>
+      {filtersOpen && <section className="discover-filter-panel"><div><span>价格</span>{[["all", "全部"], ["free", "免费"], ["paid", "付费"]].map(([value, label]) => <button key={value} className={priceFilter === value ? "active" : ""} onClick={() => setPriceFilter(value as typeof priceFilter)}>{priceFilter === value && <Check size={13} />}{label}</button>)}</div><div><span>来源</span>{[["all", "全部"], ["official", "造场官方"], ["community", "社区作品"]].map(([value, label]) => <button key={value} className={sourceFilter === value ? "active" : ""} onClick={() => setSourceFilter(value as typeof sourceFilter)}>{sourceFilter === value && <Check size={13} />}{label}</button>)}</div><button onClick={() => { setPriceFilter("all"); setSourceFilter("all"); }}>重置筛选</button></section>}
 
       <div className="result-count"><span>找到 <strong>{visible.length}</strong> 件作品</span><small>内容会随社区发布实时更新</small></div>
       <motion.section className={view === "grid" ? "discover-grid" : "discover-grid list"} layout>
         {visible.map((product, index) => <ProductCard key={product.id} product={product} index={index} />)}
       </motion.section>
-      {visible.length === 0 && <div className="route-empty"><Search size={30} /><strong>没有找到相关作品</strong><button onClick={() => { setQuery(""); setCategory("全部"); }}>清除筛选</button></div>}
+      {visible.length === 0 && <div className="route-empty"><Search size={30} /><strong>没有找到相关作品</strong><button onClick={() => { setQuery(""); setCategory("全部"); setPriceFilter("all"); setSourceFilter("all"); }}>清除筛选</button></div>}
     </div>
   );
 }

@@ -28,20 +28,22 @@ function authHeaders(name, email) {
 }
 
 before(async () => {
-  const migrationCommand =
-    `npx wrangler d1 execute site-creator-d1 --local --config dist/server/wrangler.json --file drizzle/0000_silky_karen_page.sql --persist-to ${stateDir}`;
-  const migration =
-    process.platform === "win32"
-      ? spawnSync(process.env.ComSpec, ["/d", "/s", "/c", migrationCommand], {
-          cwd: projectRoot,
-          encoding: "utf8",
-          windowsHide: true,
-        })
-      : spawnSync("npx", migrationCommand.slice(4).split(" "), {
-          cwd: projectRoot,
-          encoding: "utf8",
-        });
-  assert.equal(migration.status, 0, migration.stderr || migration.stdout);
+  for (const migrationFile of ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql"]) {
+    const migrationCommand =
+      `npx wrangler d1 execute site-creator-d1 --local --config dist/server/wrangler.json --file drizzle/${migrationFile} --persist-to ${stateDir}`;
+    const migration =
+      process.platform === "win32"
+        ? spawnSync(process.env.ComSpec, ["/d", "/s", "/c", migrationCommand], {
+            cwd: projectRoot,
+            encoding: "utf8",
+            windowsHide: true,
+          })
+        : spawnSync("npx", migrationCommand.slice(4).split(" "), {
+            cwd: projectRoot,
+            encoding: "utf8",
+          });
+    assert.equal(migration.status, 0, `${migrationFile}\n${migration.stderr || migration.stdout}`);
+  }
 
   const executable = process.platform === "win32" ? process.env.ComSpec : "npx";
   const args =
@@ -164,7 +166,9 @@ for (const [pathname, marker] of [
   ["/circles", "围绕做东西，形成关系"],
   ["/challenges", "给创作一个共同起点"],
   ["/collections", "想再回来玩的作品"],
-  ["/profile", "发布的作品"],
+  ["/profile", "登录后查看你的创作者主页"],
+  ["/notifications", "与你有关的信号"],
+  ["/guide", "让作品被认真对待"],
   ["/product/mori", "开始体验"],
   ["/galaxy", "探索造场产品宇宙"],
   ["/galaxy/products", "用真实业务分类和明确状态快速找到产品"],
@@ -180,6 +184,23 @@ for (const [pathname, marker] of [
     assert.match(await response.text(), new RegExp(marker));
   });
 }
+
+test("renders the signed-in profile editor", async () => {
+  const response = await fetch(`${baseUrl}/profile/edit`, { headers: authHeaders("资料编辑用户", `profile-${runId}@example.com`) });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /编辑个人资料/);
+  assert.match(html, /资料编辑用户/);
+});
+
+test("renders the signed-in profile from account data", async () => {
+  const response = await fetch(`${baseUrl}/profile`, { headers: authHeaders("真实主页用户", `profile-page-${runId}@example.com`) });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /真实主页用户/);
+  assert.match(html, /发布的作品/);
+  assert.doesNotMatch(html, /登录后查看你的创作者主页/);
+});
 
 test("keeps OAuth providers explicit until runtime credentials are configured", async () => {
   const signin = await fetch(`${baseUrl}/signin?return_to=%2Fwallet`, { headers: { accept: "text/html" } });
@@ -348,5 +369,160 @@ test("wallet balance constraint rejects a tip that would make balance negative",
   const after = await fetch(`${baseUrl}/api/community`, { headers: supporterHeaders });
   assert.equal(after.status, 200);
   assert.equal((await after.json()).wallet.balance, 20);
+});
+
+test("persists profile, collections, comments, and incubation state", async () => {
+  const email = `member-features-${runId}@example.com`;
+  const headers = authHeaders("功能验收用户", email);
+
+  const profile = await fetch(`${baseUrl}/api/actions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ action: "update_profile", bio: "持续发布小而明确的产品实验。", location: "杭州", website: "https://example.com" }),
+  });
+  assert.equal(profile.status, 200);
+  assert.equal((await profile.json()).profile.bio, "持续发布小而明确的产品实验。");
+
+  const createdCollection = await fetch(`${baseUrl}/api/actions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ action: "create_collection", name: "反复体验", color: "blue" }),
+  });
+  assert.equal(createdCollection.status, 201);
+  const collectionId = (await createdCollection.json()).collection.id;
+  assert.equal(Number.isInteger(collectionId), true);
+
+  const saved = await fetch(`${baseUrl}/api/actions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ action: "add_to_collection", collectionId, productRef: "mori" }),
+  });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(await saved.json(), { saved: true, added: true, collectionId });
+
+  const comment = await fetch(`${baseUrl}/api/comments`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ targetType: "product", targetRef: "mori", content: "希望下一版开放环境声分轨控制。" }),
+  });
+  assert.equal(comment.status, 201);
+  assert.equal((await comment.json()).comment.content, "希望下一版开放环境声分轨控制。");
+
+  const comments = await fetch(`${baseUrl}/api/comments?targetType=product&targetRef=mori`, { headers });
+  assert.equal(comments.status, 200);
+  assert.equal((await comments.json()).comments.some((item) => item.content === "希望下一版开放环境声分轨控制。"), true);
+
+  const incubation = await fetch(`${baseUrl}/api/incubation`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ name: "星桥协作台", projectType: "AI 产品", oneLiner: "让小团队不增加会议也能形成可追踪的产品共识。", problem: "产品决策散落在聊天与会议里，后续很难找到依据。", progress: "已有可演示原型", team: "2-5 人团队", need: "产品定位与用户验证", contact: "hello@example.com" }),
+  });
+  assert.equal(incubation.status, 201);
+  const incubationBody = await incubation.json();
+  assert.equal(incubationBody.project.name, "星桥协作台");
+  assert.equal(incubationBody.project.status, "资料审核");
+
+  const uploadHeaders = { ...headers };
+  delete uploadHeaders["content-type"];
+  const materialForm = new FormData();
+  materialForm.set("file", new File(["target users"], "personas.txt", { type: "text/plain" }));
+  materialForm.set("visibility", "private");
+  const materialUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: uploadHeaders, body: materialForm });
+  assert.equal(materialUpload.status, 201);
+  const materialUrl = (await materialUpload.json()).url;
+  const material = await fetch(`${baseUrl}/api/incubation`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ action: "add_material", projectId: incubationBody.project.id, name: "目标用户画像.txt", url: materialUrl, kind: "FILE" }),
+  });
+  assert.equal(material.status, 201);
+  const incubationState = await fetch(`${baseUrl}/api/incubation`, { headers });
+  assert.equal(incubationState.status, 200);
+  const refreshedProject = (await incubationState.json()).project;
+  assert.equal(refreshedProject.status, "项目评估");
+  assert.equal(refreshedProject.currentTask, "等待产品评估意见");
+
+  const state = await fetch(`${baseUrl}/api/community`, { headers });
+  assert.equal(state.status, 200);
+  const body = await state.json();
+  assert.equal(body.profile.location, "杭州");
+  assert.equal(body.collections.some((item) => item.id === collectionId && item.itemCount === 1), true);
+  assert.equal(body.collectionItems.some((item) => item.collectionId === collectionId && item.productRef === "mori"), true);
+});
+
+test("enforces upload visibility and ownership", async () => {
+  const ownerEmail = `upload-owner-${runId}@example.com`;
+  const ownerHeaders = authHeaders("上传所有者", ownerEmail);
+  delete ownerHeaders["content-type"];
+
+  const privateForm = new FormData();
+  privateForm.set("file", new File(["private project material"], "evidence.txt", { type: "text/plain" }));
+  privateForm.set("visibility", "private");
+  const privateUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: privateForm });
+  assert.equal(privateUpload.status, 201);
+  const privateBody = await privateUpload.json();
+  assert.equal(privateBody.visibility, "private");
+
+  const ownerDownload = await fetch(`${baseUrl}${privateBody.url}`, { headers: ownerHeaders });
+  assert.equal(ownerDownload.status, 200);
+  assert.equal(await ownerDownload.text(), "private project material");
+
+  const anonymousDownload = await fetch(`${baseUrl}${privateBody.url}`);
+  assert.equal(anonymousDownload.status, 403);
+
+  const otherHeaders = authHeaders("其他用户", `upload-other-${runId}@example.com`);
+  const otherDownload = await fetch(`${baseUrl}${privateBody.url}`, { headers: otherHeaders });
+  assert.equal(otherDownload.status, 403);
+
+  const otherProjectResponse = await fetch(`${baseUrl}/api/incubation`, { method: "POST", headers: otherHeaders, body: JSON.stringify({ name: "越权资料项目", projectType: "开发者项目", oneLiner: "验证其他用户不能把不属于自己的私有文件挂进项目。", problem: "对象链接可能被复制，但所有权不能随链接转移。", progress: "安全验证", team: "个人项目", need: "技术架构与开发", contact: "security@example.com" }) });
+  assert.equal(otherProjectResponse.status, 201);
+  const otherProjectId = (await otherProjectResponse.json()).project.id;
+  const stolenMaterial = await fetch(`${baseUrl}/api/incubation`, { method: "POST", headers: otherHeaders, body: JSON.stringify({ action: "add_material", projectId: otherProjectId, name: "不属于我的资料.txt", url: privateBody.url, kind: "FILE" }) });
+  assert.equal(stolenMaterial.status, 403);
+  assert.deepEqual(await stolenMaterial.json(), { error: "material_not_owned" });
+
+  const publicForm = new FormData();
+  publicForm.set("file", new File(["public cover image"], "cover.txt", { type: "text/plain" }));
+  publicForm.set("visibility", "public");
+  const publicUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: publicForm });
+  assert.equal(publicUpload.status, 201);
+  const publicBody = await publicUpload.json();
+  assert.equal(publicBody.visibility, "public");
+  const publicDownload = await fetch(`${baseUrl}${publicBody.url}`);
+  assert.equal(publicDownload.status, 200);
+  assert.equal(await publicDownload.text(), "public cover image");
+
+  const missingVisibilityForm = new FormData();
+  missingVisibilityForm.set("file", new File(["missing visibility"], "unknown.txt", { type: "text/plain" }));
+  const missingVisibility = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: missingVisibilityForm });
+  assert.equal(missingVisibility.status, 400);
+  assert.deepEqual(await missingVisibility.json(), { error: "invalid_visibility" });
+
+  const publishWithCover = await fetch(`${baseUrl}/api/products`, {
+    method: "POST",
+    headers: { ...ownerHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ title: `公开封面作品 ${runId}`, description: "验证上传后的站内封面地址可以直接进入真实发布流程。", category: "互动体验", coverTheme: "blue", imageUrl: publicBody.url, price: 0 }),
+  });
+  assert.equal(publishWithCover.status, 201);
+  assert.equal((await publishWithCover.json()).product.imageUrl, publicBody.url);
+});
+
+test("generates account notifications and persists read state", async () => {
+  const ownerHeaders = authHeaders("通知作品主人", `notify-owner-${runId}@example.com`);
+  const publish = await fetch(`${baseUrl}/api/products`, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ title: `通知测试作品 ${runId}`, description: "用于验证真实互动可以进入账号通知中心并保存已读状态。", category: "开发工具", coverTheme: "ink", price: 0 }) });
+  assert.equal(publish.status, 201);
+  const productId = (await publish.json()).product.id;
+  const visitorHeaders = authHeaders("通知体验者", `notify-visitor-${runId}@example.com`);
+  const like = await fetch(`${baseUrl}/api/actions`, { method: "POST", headers: visitorHeaders, body: JSON.stringify({ action: "like", productId }) });
+  assert.equal(like.status, 200);
+  const ownerState = await fetch(`${baseUrl}/api/community`, { headers: ownerHeaders });
+  assert.equal(ownerState.status, 200);
+  const notification = (await ownerState.json()).notifications.find((item) => item.id === `like:${productId}:notify-visitor-${runId}@example.com`);
+  assert.equal(notification.type, "互动");
+  const mark = await fetch(`${baseUrl}/api/actions`, { method: "POST", headers: ownerHeaders, body: JSON.stringify({ action: "mark_notifications_read", targetRefs: [notification.id] }) });
+  assert.equal(mark.status, 200);
+  assert.deepEqual((await mark.json()).read, [notification.id]);
+  const refreshed = await fetch(`${baseUrl}/api/community`, { headers: ownerHeaders });
+  assert.equal((await refreshed.json()).actions.some((item) => item.kind === "read_notification" && item.targetRef === notification.id), true);
 });
 });

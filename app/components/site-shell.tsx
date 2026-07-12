@@ -12,11 +12,13 @@ import {
   Flame,
   Home,
   Layers3,
+  LogOut,
   Plus,
   Radio,
   Search,
   Sparkles,
   Trophy,
+  UserRound,
   Users,
   WalletCards,
   X,
@@ -49,6 +51,9 @@ const routeNames: Record<string, string> = {
   "/studio/new": "发布新作品",
   "/wallet": "果子钱包",
   "/profile": "创作者主页",
+  "/profile/edit": "编辑个人资料",
+  "/notifications": "通知中心",
+  "/guide": "社区指南",
 };
 
 function routeIsActive(pathname: string, href: string) {
@@ -61,7 +66,10 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   const router = useRouter();
   const reduced = useReducedMotion();
   const [commandOpen, setCommandOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [hasUnread, setHasUnread] = useState(false);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -78,10 +86,24 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       setCommandOpen(false);
+      setAccountOpen(false);
       setQuery("");
     });
     return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!member.signedIn) return;
+    let active = true;
+    fetch("/api/community", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
+      if (!active || !data) return;
+      const payload = data as { wallet?: { balance: number } | null; notifications?: { id: string }[]; actions?: { kind: string; targetRef: string }[] };
+      setWalletBalance(payload.wallet?.balance ?? 0);
+      const read = new Set((payload.actions ?? []).filter((item) => item.kind === "read_notification").map((item) => item.targetRef));
+      setHasUnread((payload.notifications ?? []).some((item) => !read.has(item.id)));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [member.signedIn, pathname]);
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -146,22 +168,32 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         </button>
 
         <div className="deep-top-actions">
-          <Link className="deep-icon-button" href="/feed" aria-label="通知" title="通知">
+          <Link className="deep-icon-button" href="/notifications" aria-label="通知" title="通知">
             <Bell size={19} />
-            <span className="deep-notification-dot" />
+            {hasUnread && <span className="deep-notification-dot" />}
           </Link>
           <Link className="deep-balance" href="/wallet">
-            <Coins size={17} /> <strong>120</strong><span>果</span>
+            <Coins size={17} /> <strong>{member.signedIn ? walletBalance ?? "--" : "--"}</strong><span>果</span>
           </Link>
           <Link className="deep-create" href="/studio/new"><Plus size={17} /> 发布作品</Link>
           {member.signedIn ? (
-            <Link className="deep-account" href="/profile" title="个人主页">
+            <button className="deep-account" onClick={() => setAccountOpen((value) => !value)} title="账户菜单" aria-label="打开账户菜单" aria-expanded={accountOpen}>
               <span className="deep-avatar ink">{member.initial}</span><ChevronDown size={14} />
-            </Link>
+            </button>
           ) : (
             <a className="deep-signin" href="/signin?return_to=%2F">登录</a>
           )}
         </div>
+        <AnimatePresence>
+          {member.signedIn && accountOpen && (
+            <motion.div className="account-menu" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+              <div><span className="deep-avatar ink">{member.initial}</span><span><strong>{member.displayName}</strong><small>造场成员</small></span></div>
+              <Link href="/profile"><UserRound size={15} /> 个人主页</Link>
+              <Link href="/profile/edit"><Layers3 size={15} /> 编辑资料</Link>
+              <a href="/api/auth/logout?return_to=%2F"><LogOut size={15} /> 退出登录</a>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       <aside className="deep-sidebar">
@@ -204,7 +236,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
           <i><b /></i>
         </Link>
 
-        <div className="deep-side-footer"><span>社区公约</span><span>创作者指南</span><small>© 2026 造场</small></div>
+        <div className="deep-side-footer"><Link href="/guide#covenant">社区公约</Link><Link href="/guide#creator">创作者指南</Link><small>© 2026 造场</small></div>
       </aside>
 
       <div className="deep-route-frame">

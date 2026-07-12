@@ -24,6 +24,8 @@ export function IncubationApplication() {
   const [team, setTeam] = useState("1 人独立项目");
   const [need, setNeed] = useState("产品定位与用户验证");
   const [contact, setContact] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const canContinue = useMemo(() => {
     if (step === 0) return Boolean(projectType);
@@ -32,10 +34,16 @@ export function IncubationApplication() {
     return true;
   }, [contact, name, need, oneLiner, problem, progress, projectType, step, team]);
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!canContinue) return;
-    localStorage.setItem("zaochang-incubation-project", JSON.stringify({ name, projectType, oneLiner, problem, progress, team, need, contact, submittedAt: new Date().toISOString() }));
+    setSubmitting(true);
+    setSubmitError("");
+    const payload = { name, projectType, oneLiner, problem, progress, team, need, contact };
+    const response = await fetch("/api/incubation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    if (response.status === 401) { router.push("/signin?return_to=%2Fgalaxy%2Fapply"); return; }
+    if (!response.ok) { setSubmitError("产品信号没有发射成功，请检查联系方式后重试。"); setSubmitting(false); return; }
+    localStorage.setItem("zaochang-incubation-project", JSON.stringify({ ...payload, submittedAt: new Date().toISOString() }));
     router.push("/galaxy/incubator?submitted=1");
   };
 
@@ -56,10 +64,10 @@ export function IncubationApplication() {
             {step === 0 && <><header><small>01 / SIGNAL TYPE</small><h2>这是一颗怎样的新生星体？</h2><p>项目类型帮助信号进入正确的评估轨道，不决定项目的价值。</p></header><div className={styles.typeChoices}>{projectTypes.map((item) => <button type="button" key={item} className={projectType === item ? styles.selected : ""} onClick={() => setProjectType(item)}><span>{item === "创新想法" ? <Lightbulb size={18} /> : item.includes("团队") ? <Users size={18} /> : <FileText size={18} />}</span><strong>{item}</strong>{projectType === item && <Check size={14} />}</button>)}</div></>}
             {step === 1 && <><header><small>02 / PRODUCT SIGNAL</small><h2>让我们看见项目为什么存在</h2><p>准确的问题比完整的功能清单更重要。</p></header><label><span>项目名称 <b>{name.length}/32</b></span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="例如：面向小团队的知识协作助手" /></label><label><span>一句话介绍 <b>{oneLiner.length}/100</b></span><textarea value={oneLiner} onChange={(event) => setOneLiner(event.target.value)} maxLength={100} placeholder="它为谁带来什么具体改变？" /></label><label><span>正在解决的问题 <b>{problem.length}/240</b></span><textarea value={problem} onChange={(event) => setProblem(event.target.value)} maxLength={240} placeholder="这个问题现在如何被处理，为什么仍值得重新解决？" /></label></>}
             {step === 2 && <><header><small>03 / COOPERATION</small><h2>你希望共同推进哪一段路？</h2><p>我们会据此安排产品、技术或生态负责人参与初步沟通。</p></header><div className={styles.formTwoColumns}><label><span>项目当前进度</span><select value={progress} onChange={(event) => setProgress(event.target.value)}><option>只有想法与初步研究</option><option>已有产品方案</option><option>已有可演示原型</option><option>已有早期用户</option><option>已经上线运营</option></select></label><label><span>团队情况</span><select value={team} onChange={(event) => setTeam(event.target.value)}><option>1 人独立项目</option><option>2-5 人团队</option><option>6 人以上团队</option><option>企业内部创新项目</option><option>正在寻找联合创始人</option></select></label></div><label><span>最需要的支持</span><select value={need} onChange={(event) => setNeed(event.target.value)}><option>产品定位与用户验证</option><option>UX/UI 与原型设计</option><option>技术架构与开发</option><option>测试与首批用户</option><option>商业合作与市场连接</option><option>长期联合孵化</option></select></label><label><span>联系方式</span><input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="邮箱、微信或其他可以联系到你的方式" /></label></>}
-            {step === 3 && <><header><small>04 / CONFIRM SIGNAL</small><h2>确认发射这束产品信号</h2><p>提交后，项目进入资料审核。控制台会持续解释当前状态、等待原因和下一步。</p></header><div className={styles.applicationReview}><div><small>项目</small><strong>{name}</strong><span>{projectType} · {progress}</span></div><div><small>产品信号</small><p>{oneLiner}</p></div><div><small>希望获得</small><strong>{need}</strong><span>{team}</span></div><div className={styles.reviewPromise}><Rocket size={18} /><p>提交并不意味着项目已经被正式接纳；它意味着造场开始认真回应这束信号。</p></div></div></>}
+            {step === 3 && <><header><small>04 / CONFIRM SIGNAL</small><h2>确认发射这束产品信号</h2><p>提交后，项目进入资料审核。控制台会持续解释当前状态、等待原因和下一步。</p></header><div className={styles.applicationReview}><div><small>项目</small><strong>{name}</strong><span>{projectType} · {progress}</span></div><div><small>产品信号</small><p>{oneLiner}</p></div><div><small>希望获得</small><strong>{need}</strong><span>{team}</span></div><div className={styles.reviewPromise}><Rocket size={18} /><p>提交并不意味着项目已经被正式接纳；它意味着造场开始认真回应这束信号。</p></div></div>{submitError && <p role="alert">{submitError}</p>}</>}
           </motion.section>
         </AnimatePresence>
-        <footer className={styles.formActions}><button type="button" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={step === 0}><ArrowLeft size={15} /> 上一步</button>{step < 3 ? <button key="next-step" type="button" className={styles.formPrimary} disabled={!canContinue} onClick={() => canContinue && setStep((value) => value + 1)}>继续 <ArrowRight size={15} /></button> : <button key="submit-application" type="submit" className={styles.formPrimary} disabled={!canContinue}>发射产品信号 <Send size={14} /></button>}</footer>
+        <footer className={styles.formActions}><button type="button" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={step === 0 || submitting}><ArrowLeft size={15} /> 上一步</button>{step < 3 ? <button key="next-step" type="button" className={styles.formPrimary} disabled={!canContinue} onClick={() => canContinue && setStep((value) => value + 1)}>继续 <ArrowRight size={15} /></button> : <button key="submit-application" type="submit" className={styles.formPrimary} disabled={!canContinue || submitting}>{submitting ? "正在发射" : "发射产品信号"} <Send size={14} /></button>}</footer>
       </form>
     </div>
   );

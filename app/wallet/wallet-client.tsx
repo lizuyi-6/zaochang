@@ -3,12 +3,14 @@
 import { motion } from "framer-motion";
 import { ArrowDownLeft, ArrowUpRight, Coins, Gift, History, Sparkles, TrendingUp, WalletCards, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatedNumber } from "../components/animated-number";
 
 type Transaction = { id: number; delta: number; type: string; description: string; createdAt: string };
 type Wallet = { balance: number; lifetimeEarned: number; lifetimeSpent: number };
 
 export function WalletClient() {
+  const router = useRouter();
   const [wallet, setWallet] = useState<Wallet>({ balance: 120, lifetimeEarned: 120, lifetimeSpent: 0 });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [claiming, setClaiming] = useState(false);
@@ -22,13 +24,34 @@ export function WalletClient() {
     setTransactions(data.transactions ?? []);
   };
 
-  useEffect(() => { load().catch(() => undefined); }, []);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/community", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
+      if (!active || !data) return;
+      const payload = data as { wallet?: Wallet | null; transactions?: Transaction[] };
+      if (payload.wallet) setWallet(payload.wallet);
+      setTransactions(payload.transactions ?? []);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const exportTransactions = () => {
+    const rows = transactions.length ? transactions : [{ id: 0, delta: 120, type: "welcome", description: "新成员起步金", createdAt: "加入社区时" }];
+    const csv = ["时间,类型,说明,变动", ...rows.map((item) => [item.createdAt, item.type, item.description, item.delta].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `zaochang-wallet-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setNotice("流水 CSV 已导出");
+  };
 
   const claim = async () => {
     setClaiming(true);
     const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "check_in" }) });
     if (response.status === 401) {
-      window.location.href = "/signin?return_to=%2Fwallet";
+      router.push("/signin?return_to=%2Fwallet");
       return;
     }
     setNotice(response.ok ? "今日灵感补给 +8 果" : "今天已经领取过了");
@@ -56,7 +79,7 @@ export function WalletClient() {
 
       <div className="wallet-lower-grid">
         <section className="transaction-panel">
-          <div className="panel-heading"><span><History size={17} /> 最近流水</span><button>导出</button></div>
+          <div className="panel-heading"><span><History size={17} /> 最近流水</span><button onClick={exportTransactions}>导出</button></div>
           {transactions.length ? transactions.map((item, index) => <motion.div className="wallet-transaction" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}><span className={item.delta > 0 ? "positive" : "negative"}>{item.delta > 0 ? "+" : ""}{item.delta}</span><span><strong>{item.description}</strong><small>{item.createdAt}</small></span><em>{item.type}</em></motion.div>) : [{ delta: 120, description: "新成员起步金", type: "welcome", createdAt: "加入社区时" }].map((item) => <div className="wallet-transaction" key={item.type}><span className="positive">+{item.delta}</span><span><strong>{item.description}</strong><small>{item.createdAt}</small></span><em>{item.type}</em></div>)}
         </section>
         <aside className="wallet-principles"><span className="deep-eyebrow"><Coins size={14} /> PRINCIPLES</span><h3>果子不购买排名</h3><p>所有推荐仍由真实体验、回访和讨论质量决定。果子只让支持行为更明确。</p><ul><li>不可提现或兑换法币</li><li>不出售社区曝光位置</li><li>异常交易会进入审核</li></ul></aside>

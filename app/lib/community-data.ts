@@ -32,6 +32,7 @@ export type CommunityPost = {
   color: "coral" | "mint" | "blue" | "yellow" | "ink";
   image?: string;
   productSlug?: string;
+  postType?: "记录" | "版本发布" | "共创招募";
 };
 
 export const products: Product[] = [

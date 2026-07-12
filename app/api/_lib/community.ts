@@ -48,6 +48,13 @@ export async function ensureMember(user: MemberIdentity) {
          VALUES (?, 120, 'welcome', '新成员起步金', 'welcome')`,
       )
       .bind(user.email),
+    db
+      .prepare(
+        `INSERT INTO collections (user_email, name, color)
+         SELECT ?, '稍后体验', 'coral'
+         WHERE NOT EXISTS (SELECT 1 FROM collections WHERE user_email = ?)`,
+      )
+      .bind(user.email, user.email),
   ]);
 }
 
