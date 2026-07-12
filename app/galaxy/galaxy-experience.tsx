@@ -699,18 +699,23 @@ function seededRandom(seed: number) {
   };
 }
 
-function setOrbitalPosition(target: THREE.Object3D, orbit: OrbitConfig, elapsed: number) {
+const PLANET_ORBIT_DISTANCE_SCALE = 3.4;
+const PLANET_GALAXY_OFFSET = 80;
+
+function setOrbitalPosition(target: THREE.Object3D, orbit: OrbitConfig, elapsed: number, distanceScale = 1) {
   const angle = orbit.phase + elapsed * orbit.speed;
   target.position.set(
-    Math.cos(angle) * orbit.radiusX,
+    Math.cos(angle) * orbit.radiusX * distanceScale,
     Math.sin(angle) * orbit.tilt,
-    Math.sin(angle) * orbit.radiusZ,
+    Math.sin(angle) * orbit.radiusZ * distanceScale,
   );
 }
 
-function getOrbitResidual(target: THREE.Object3D, orbit: OrbitConfig) {
-  const ellipse = (target.position.x ** 2) / (orbit.radiusX ** 2) + (target.position.z ** 2) / (orbit.radiusZ ** 2);
-  const expectedY = (target.position.z / orbit.radiusZ) * orbit.tilt;
+function getOrbitResidual(target: THREE.Object3D, orbit: OrbitConfig, distanceScale = 1) {
+  const radiusX = orbit.radiusX * distanceScale;
+  const radiusZ = orbit.radiusZ * distanceScale;
+  const ellipse = (target.position.x ** 2) / (radiusX ** 2) + (target.position.z ** 2) / (radiusZ ** 2);
+  const expectedY = (target.position.z / radiusZ) * orbit.tilt;
   return Math.max(Math.abs(ellipse - 1), Math.abs(target.position.y - expectedY));
 }
 
@@ -862,7 +867,7 @@ export function GalaxyExperience() {
     renderer.domElement.setAttribute("aria-hidden", "true");
     mount.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 260);
+    const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 360);
     camera.position.set(0, mobile ? 15 : 10.5, mobile ? 62 : 43);
     const currentLook = new THREE.Vector3();
     camera.lookAt(currentLook);
@@ -1202,6 +1207,7 @@ export function GalaxyExperience() {
       const visual = new THREE.Group();
       visual.rotation.set((galaxyIndex - 1.5) * 0.13, galaxyIndex * 0.42, galaxyIndex % 2 ? -0.28 : 0.24);
       const planets = new THREE.Group();
+      planets.position.copy(new THREE.Vector3(...definition.position).normalize().multiplyScalar(PLANET_GALAXY_OFFSET));
       space.add(visual, planets);
       system.add(space);
       galaxySpaces.set(definition.id, { space, visual, planets });
@@ -1279,7 +1285,7 @@ export function GalaxyExperience() {
     }
 
     const aurelia = new THREE.Group();
-    setOrbitalPosition(aurelia, PLANET_BY_ID.aurelia.orbit, 0);
+    setOrbitalPosition(aurelia, PLANET_BY_ID.aurelia.orbit, 0, PLANET_ORBIT_DISTANCE_SCALE);
     galaxySpaces.get("origo")?.planets.add(aurelia);
     const aureliaView = createViewAnchors(aurelia, PLANET_BY_ID.aurelia);
     const aureliaVisual = new THREE.Group();
@@ -1371,7 +1377,7 @@ export function GalaxyExperience() {
     }
 
     const nyx = new THREE.Group();
-    setOrbitalPosition(nyx, PLANET_BY_ID.nyx.orbit, 0);
+    setOrbitalPosition(nyx, PLANET_BY_ID.nyx.orbit, 0, PLANET_ORBIT_DISTANCE_SCALE);
     const nyxView = createViewAnchors(nyx, PLANET_BY_ID.nyx);
     const nyxMaterial = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 } },
@@ -1408,7 +1414,7 @@ export function GalaxyExperience() {
     galaxySpaces.get("origo")?.planets.add(nyx);
 
     const caelum = new THREE.Group();
-    setOrbitalPosition(caelum, PLANET_BY_ID.caelum.orbit, 0);
+    setOrbitalPosition(caelum, PLANET_BY_ID.caelum.orbit, 0, PLANET_ORBIT_DISTANCE_SCALE);
     const caelumView = createViewAnchors(caelum, PLANET_BY_ID.caelum);
     const caelumMaterial = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 } },
@@ -1459,7 +1465,7 @@ export function GalaxyExperience() {
     }> = [];
     PLANETS.slice(3).forEach((definition) => {
       const group = new THREE.Group();
-      setOrbitalPosition(group, definition.orbit, 0);
+      setOrbitalPosition(group, definition.orbit, 0, PLANET_ORBIT_DISTANCE_SCALE);
       const parent = galaxySpaces.get(definition.galaxyId)?.planets;
       if (parent) parent.add(group);
       const anchors = createViewAnchors(group, definition);
@@ -1569,6 +1575,8 @@ export function GalaxyExperience() {
     const projectedBlackHole = new THREE.Vector3();
     const projectedEdge = new THREE.Vector3();
     const worldCenter = new THREE.Vector3();
+    const blackHoleWorld = new THREE.Vector3();
+    const planetWorldPositions = PLANETS.map(() => new THREE.Vector3());
     const cameraAxis = new THREE.Vector3();
     let activeBody = bodies.get(targetRef.current) ?? bodies.get("singularity")!;
     type CameraFlight = {
@@ -1593,32 +1601,26 @@ export function GalaxyExperience() {
     let hidden = false;
 
     function setFocusVisibility(id: TargetId, previousId: TargetId | null = null, flying = false) {
-      const visiblePlanets = new Set<TargetId>();
-      if (id !== "singularity") visiblePlanets.add(id);
-      if (flying && previousId && previousId !== "singularity") visiblePlanets.add(previousId);
-      const visibleGalaxies = new Set<GalaxyId>();
-      visiblePlanets.forEach((planetId) => {
-        if (planetId !== "singularity") visibleGalaxies.add(PLANET_BY_ID[planetId].galaxyId);
-      });
-      const singularityVisible = id === "singularity" || (flying && previousId === "singularity");
+      const expandedUniverseVisible = id !== "singularity" || flying;
+      const atlasVisible = id === "singularity" || (flying && previousId === "singularity");
       const activeGalaxyId = id === "singularity" ? null : PLANET_BY_ID[id].galaxyId;
 
       galaxySpaces.forEach((runtime, galaxyId) => {
-        runtime.planets.visible = visibleGalaxies.has(galaxyId);
-        runtime.visual.visible = singularityVisible;
-        runtime.visual.scale.setScalar(singularityVisible ? 1.65 : activeGalaxyId === galaxyId ? 0.72 : 0.9);
+        runtime.planets.visible = expandedUniverseVisible;
+        runtime.visual.visible = atlasVisible;
+        runtime.visual.scale.setScalar(atlasVisible ? 1.65 : activeGalaxyId === galaxyId ? 0.72 : 0.9);
       });
       PLANETS.forEach((definition) => {
         const runtime = bodies.get(definition.id);
-        if (runtime) runtime.group.visible = visiblePlanets.has(definition.id);
+        if (runtime) runtime.group.visible = expandedUniverseVisible;
       });
-      eventHorizon.visible = singularityVisible;
-      accretionDisk.visible = singularityVisible;
-      eventMaskPlane.visible = singularityVisible;
-      lensedArcPlane.visible = singularityVisible;
-      horizonCrown.visible = singularityVisible;
-      galaxy.visible = singularityVisible;
-      foregroundDust.visible = singularityVisible;
+      eventHorizon.visible = true;
+      accretionDisk.visible = true;
+      eventMaskPlane.visible = true;
+      lensedArcPlane.visible = true;
+      horizonCrown.visible = true;
+      galaxy.visible = atlasVisible;
+      foregroundDust.visible = atlasVisible;
       planetaryOrbitLines.forEach((line) => { line.visible = false; });
     }
 
@@ -1638,13 +1640,13 @@ export function GalaxyExperience() {
         flightSide.copy(flightDirection).cross(flightUp);
         if (flightSide.lengthSq() < 0.0001) flightSide.set(1, 0, 0);
         else flightSide.normalize();
-        const lift = THREE.MathUtils.clamp(distance * 0.12, 3.2, 11);
-        const bend = THREE.MathUtils.clamp(distance * 0.055, 1.5, 6.5) * (previousId < id ? 1 : -1);
+        const lift = THREE.MathUtils.clamp(distance * 0.1, 4.5, 20);
+        const bend = THREE.MathUtils.clamp(distance * 0.045, 2.5, 12) * (previousId < id ? 1 : -1);
         cameraFlight = {
           fromId: previousId,
           toId: id,
           startedAt,
-          duration: THREE.MathUtils.clamp(1800 + distance * 42, 2000, 3400),
+          duration: THREE.MathUtils.clamp(2500 + distance * 18, 2800, 5200),
           startCamera: camera.position.clone(),
           startLook: currentLook.clone(),
           controlA: camera.position.clone().addScaledVector(flightDirection, 0.28).addScaledVector(flightUp, lift).addScaledVector(flightSide, bend),
@@ -1818,11 +1820,11 @@ export function GalaxyExperience() {
 
       const quietMotion = quietRef.current ? 0.34 : 1;
       if (!pausedRef.current && !prefersReducedMotion) {
-        setOrbitalPosition(aurelia, PLANET_BY_ID.aurelia.orbit, elapsed);
-        setOrbitalPosition(nyx, PLANET_BY_ID.nyx.orbit, elapsed);
-        setOrbitalPosition(caelum, PLANET_BY_ID.caelum.orbit, elapsed);
+        setOrbitalPosition(aurelia, PLANET_BY_ID.aurelia.orbit, elapsed, PLANET_ORBIT_DISTANCE_SCALE);
+        setOrbitalPosition(nyx, PLANET_BY_ID.nyx.orbit, elapsed, PLANET_ORBIT_DISTANCE_SCALE);
+        setOrbitalPosition(caelum, PLANET_BY_ID.caelum.orbit, elapsed, PLANET_ORBIT_DISTANCE_SCALE);
         genericPlanetRuntimes.forEach((runtime, index) => {
-          setOrbitalPosition(runtime.group, runtime.definition.orbit, elapsed);
+          setOrbitalPosition(runtime.group, runtime.definition.orbit, elapsed, PLANET_ORBIT_DISTANCE_SCALE);
           runtime.visual.rotation.y = (index % 2 ? -1 : 1) * elapsed * (0.018 + (runtime.definition.visual.seed % 1) * 0.02) * quietMotion;
           runtime.moonOrbit.rotation.y = elapsed * (0.055 + index * 0.002) * quietMotion;
         });
@@ -1948,6 +1950,17 @@ export function GalaxyExperience() {
       renderer.domElement.dataset.galaxyCount = String(GALAXIES.length);
       renderer.domElement.dataset.planetCount = String(PLANETS.length);
       renderer.domElement.dataset.visiblePlanetCount = String(PLANETS.filter((definition) => bodies.get(definition.id)?.group.visible).length);
+      PLANETS.forEach((definition, index) => bodies.get(definition.id)?.group.getWorldPosition(planetWorldPositions[index]));
+      let minimumPlanetSeparation = Number.POSITIVE_INFINITY;
+      for (let first = 0; first < planetWorldPositions.length; first += 1) {
+        for (let second = first + 1; second < planetWorldPositions.length; second += 1) {
+          minimumPlanetSeparation = Math.min(minimumPlanetSeparation, planetWorldPositions[first].distanceTo(planetWorldPositions[second]));
+        }
+      }
+      blackHoleRoot.getWorldPosition(blackHoleWorld);
+      const activePlanetIndex = appliedTarget === "singularity" ? -1 : PLANETS.findIndex((definition) => definition.id === appliedTarget);
+      renderer.domElement.dataset.minimumPlanetSeparation = minimumPlanetSeparation.toFixed(2);
+      renderer.domElement.dataset.targetBlackHoleDistance = activePlanetIndex < 0 ? "0.00" : planetWorldPositions[activePlanetIndex].distanceTo(blackHoleWorld).toFixed(2);
       renderer.domElement.dataset.targetNdcX = projectedTarget.x.toFixed(4);
       renderer.domElement.dataset.targetNdcY = projectedTarget.y.toFixed(4);
       renderer.domElement.dataset.targetRadiusPx = targetRadiusPx.toFixed(2);
@@ -1962,7 +1975,7 @@ export function GalaxyExperience() {
       renderer.domElement.dataset.blackHoleLayerVisible = String(eventHorizon.visible);
       renderer.domElement.dataset.orbitResidual = Math.max(...PLANETS.map((definition) => {
         const runtime = bodies.get(definition.id);
-        return runtime ? getOrbitResidual(runtime.group, definition.orbit) : Number.POSITIVE_INFINITY;
+        return runtime ? getOrbitResidual(runtime.group, definition.orbit, PLANET_ORBIT_DISTANCE_SCALE) : Number.POSITIVE_INFINITY;
       })).toExponential(2);
       bloom.strength = bloomBaseStrength - (quietRef.current ? 0.045 : 0) + warp * 0.18 + passage * 0.14;
       composer.render();

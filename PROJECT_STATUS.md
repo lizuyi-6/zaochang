@@ -105,3 +105,13 @@
 - 浏览器证据：`AURELIA -> NYX`、`NYX -> CAELUM` 与跨星系 `EIDORA -> SOLENNE` 航行中均为 `cameraTransition=flying`、`visiblePlanetCount=2`；抵达后均为 `settled`、`visiblePlanetCount=1`、`sceneDensity=solitude`。`SOLENNE -> singularity` 航行中 `blackHoleLayerVisible=true`，抵达后奇点总览为 `visiblePlanetCount=0`。
 - 移动构图：390x844 抵达 AURELIA 后页面滚动尺寸为 `390x844`，状态为 `settled`、`visiblePlanetCount=1`、`sceneDensity=solitude`。
 - 当前边界：Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝；未在真实低端 Android、Safari iOS、4K 屏幕、GPU 丢失恢复或高刷新率显示器上做设备验证。
+
+## 2026-07-12 持续存在的深空行星层
+
+- 状态：部分完成
+- 空间变化：不修改观渊总览的相机、星环、黑洞和粒子构图；仅把总览中原本隐藏的行星层沿四个星系方向外移 `80` 个世界单位，并把行星轨道位置扩大为原来的 `3.4` 倍。
+- 存在规则：进入行星层后 12 颗行星持续保留，不再在镜头抵达目标时隐藏出发行星；奇点实体层也持续存在，仅总览粒子带在离开观渊后退出视野密度。
+- 距离证据：浏览器遍历 12 颗行星时，目标到观渊距离范围为 `71.17-128.64`，行星间最小距离约为 `28.76-30.22`；每次航行和抵达均保持 `visiblePlanetCount=12`。
+- 首页边界：返回观渊后仍为 `target=singularity`、`visiblePlanetCount=0`、`sceneDensity=atlas`、`blackHoleVisible=true`，1536x1000 对照截图的首页布局和黑洞构图未改变。
+- 移动构图：390x844 的 AURELIA 抵达态页面滚动尺寸为 `390x844`，状态为 `settled`、`visiblePlanetCount=12`、`sceneDensity=solitude`，没有横向或纵向页面溢出。
+- 当前边界：这是叙事尺度而非物理单位仿真；真实低端 Android、Safari iOS、4K 屏幕、GPU 丢失恢复及高刷新率显示器仍未做设备验证。
