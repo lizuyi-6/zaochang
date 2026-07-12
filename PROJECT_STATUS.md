@@ -159,3 +159,15 @@
 - 自动验证：`npm test` 为 `23 passed / 0 failed / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；目标 ESLint 为 0 errors / 1 个既有 `<img>` 性能警告。
 - 当前边界：官方身份仍来自种子产品数据，尚未进入 D1 产品表、管理端认证流程或可审计的官方发布权限。
 - 未覆盖范围：未在真实低端 Android、Safari iOS、4K 或高刷新率屏幕验证；Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝，本轮没有修改框架字体链。
+
+## 2026-07-12 官方项目轻量入场过渡
+
+- 状态：部分完成
+- 过渡逻辑：进入任一 `official` 产品时，在内容区域叠加不可交互的近黑暗幕，并用一条 1px 琥珀金扫描线提示从社区进入产品银河；暗幕透明度在 `460ms` 内退场，扫描线在 `520ms` 内展开。
+- 性能边界：过渡只动画 `opacity` 与 `transform: scaleX`，不加载图片、视频、字体或额外接口；覆盖层设置 `pointer-events: none` 与 `contain: strict`，不阻塞页面内容渲染和点击。
+- 无障碍：`prefers-reduced-motion: reduce` 时隐藏过渡层并关闭外层壳配色动画。
+- 自动断言：官方产品 HTML 包含 `official-entry-transition`，普通社区作品 HTML 不包含该过渡层。
+- 浏览器证据：1536x1000 下暗幕透明度从起始 `0.72` 降至 120ms 的 `0.233755`，扫描线同期由 `scaleX(0)` 展开至 `0.622223`，620ms 时暗幕透明度为 `0`；三个采样点的 `pointerEvents` 均为 `none`。390x844 下覆盖范围为 `x=0-390px / y=60-779px`，底部导航从 `y=779px` 开始，页面 `scrollWidth === innerWidth === 390`。
+- 减少动态效果：浏览器模拟 `prefers-reduced-motion: reduce` 后，过渡层计算样式为 `display: none`。
+- 自动验证：`npm test` 为 `23 passed / 0 failed / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；目标 ESLint 为 0 errors / 1 个既有 `<img>` 性能警告。
+- 当前边界：未在真实低端 Android、Safari iOS、4K 或高刷新率屏幕验证；Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝，本轮没有修改框架字体链。

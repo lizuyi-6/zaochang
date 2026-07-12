@@ -106,6 +106,22 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         animate={reduced ? undefined : { scaleX: [0, 0.7, 1] }}
         transition={{ duration: 0.62, times: [0, 0.72, 1] }}
       />
+      {officialProduct && (
+        <motion.div
+          key={`official-entry-${pathname}`}
+          className="official-entry-transition"
+          aria-hidden="true"
+          initial={{ opacity: 0.72 }}
+          animate={{ opacity: 0 }}
+          transition={{ duration: 0.46, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <motion.span
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
+          />
+        </motion.div>
+      )}
       <header className="deep-topbar">
         <Link className="deep-brand" href="/" aria-label="造场首页">
           <span className="deep-brand-mark"><i /><i /><i /></span>

@@ -79,6 +79,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .deep-route-label { align-items: center; border-bottom: 1px solid var(--line); color: #9a9c95; display: flex; font-family: var(--font-geist-mono), monospace; font-size: 9px; height: 34px; justify-content: space-between; padding: 0 28px; }
 .deep-route-content { min-height: calc(100vh - 104px); padding: 26px 28px 70px; }
 .deep-mobile-nav { display: none; }
+.deep-topbar, .deep-sidebar, .deep-route-label, .deep-route-content, .deep-mobile-nav { transition: background-color 260ms ease, border-color 260ms ease, color 260ms ease; }
 
 .command-backdrop { align-items: flex-start; background: rgb(23 24 22 / 62%); display: flex; inset: 0; justify-content: center; padding: 92px 18px 18px; position: fixed; z-index: 100; }
 .command-palette { background: var(--surface); border: 1px solid #555750; border-radius: 7px; box-shadow: var(--shadow); max-width: 680px; overflow: hidden; width: 100%; }
@@ -196,6 +197,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .product-support { align-items: center; background: var(--yellow); border-radius: 6px; display: flex; justify-content: space-between; margin-top: 22px; padding: 24px 28px; }.product-support h2 { font-size: 22px; margin: 8px 0; }.product-support p { font-size: 9px; }.product-support > div:last-child { display: flex; gap: 8px; }.product-support > div:last-child button { align-items: center; background: var(--surface); border: 1px solid var(--ink); border-radius: 5px; display: grid; gap: 3px; grid-template-columns: 18px auto; min-width: 72px; padding: 10px; }.product-support button svg { grid-row: 1 / 3; }.product-support button strong { font-family: var(--font-geist-mono), monospace; font-size: 14px; }.product-support button small { font-size: 7px; }.product-notice { align-items: center; background: var(--ink); border-radius: 4px; bottom: 20px; color: white; display: flex; font-size: 9px; gap: 6px; left: 50%; padding: 9px 11px; position: fixed; transform: translateX(-50%); z-index: 70; }.related-works { padding-top: 32px; }
 
 /* Official products inherit the Product Galaxy palette without changing the detail layout. */
+.official-entry-transition { background: #080a0c; bottom: 0; contain: strict; left: 232px; pointer-events: none; position: fixed; right: 0; top: 70px; will-change: opacity; z-index: 42; }
+.official-entry-transition > span { background: #d8b46a; display: block; height: 1px; position: absolute; top: 33px; transform-origin: left center; width: 100%; will-change: transform; }
 .official-product-shell { background: #080a0c; color: #f2eee2; }
 .official-product-shell .route-progress { background: #d8b46a; }
 .official-product-shell .deep-topbar { background: rgb(8 10 12 / 97%); border-color: rgb(216 180 106 / 18%); }
@@ -282,6 +285,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (max-width: 1180px) {
   .deep-topbar { grid-template-columns: 190px minmax(230px, 1fr) auto; }
   .deep-sidebar { width: 210px; }.deep-route-frame { margin-left: 210px; }
+  .official-entry-transition { left: 210px; }
   .home-layout { grid-template-columns: 1fr; }.home-aside { display: none; }
   .discover-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feed-page-layout { grid-template-columns: minmax(0, 1fr) 250px; }
@@ -292,6 +296,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .deep-topbar { grid-template-columns: auto minmax(190px, 1fr) auto; padding: 0 16px; }.deep-brand small, .deep-top-actions .deep-icon-button, .deep-balance, .deep-create, .deep-account svg { display: none; }.deep-account { width: 38px; }
   .deep-sidebar { display: none; }.deep-route-frame { margin-left: 0; }.deep-route-content { padding: 24px 18px 88px; }.deep-route-label { padding: 0 18px; }
   .deep-mobile-nav { align-items: center; background: rgb(251 250 247 / 97%); border-top: 1px solid var(--line); bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr); height: 65px; left: 0; padding: 4px 10px max(4px, env(safe-area-inset-bottom)); position: fixed; right: 0; z-index: 60; }.deep-mobile-nav a { align-items: center; color: var(--muted); display: flex; flex-direction: column; font-size: 8px; gap: 3px; justify-content: center; }.deep-mobile-nav a.active { color: var(--ink); }.deep-mobile-nav .deep-mobile-create { background: var(--coral); border-radius: 50%; color: white; height: 45px; justify-self: center; margin-top: -17px; width: 45px; }
+  .official-entry-transition { bottom: 65px; left: 0; }
   .home-stage { grid-template-columns: 1fr; }.home-stage-copy { min-height: 350px; }.home-stage-visual { min-height: 360px; }.home-product-grid .deep-product-card.large { display: block; }.home-community-band { grid-template-columns: 1fr; }
   .feed-page-layout { grid-template-columns: 1fr; }.feed-context { display: none; }.studio-metrics { grid-template-columns: 1fr 1fr; }.studio-grid { grid-template-columns: 1fr; }.wallet-overview, .wallet-lower-grid { grid-template-columns: 1fr; }.circle-featured-grid { grid-template-columns: 1fr; }.challenge-card { grid-template-columns: 74px 1fr; }.challenge-progress { grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; }.collection-shelves { grid-template-columns: 1fr 1fr; }.profile-content-grid { grid-template-columns: 1fr; }.profile-badges { display: none; }
   .discover-controls { grid-template-columns: 1fr; }.discover-actions { justify-content: flex-end; }.category-tabs { grid-row: 2; }.product-about { grid-template-columns: 1fr; }.product-about aside { max-width: 320px; }.experience-console { width: min(500px, calc(100% - 34px)); }
@@ -300,6 +305,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (max-width: 640px) {
   .deep-topbar { gap: 8px; grid-template-columns: auto 40px 35px; height: 60px; padding: 0 11px; }.deep-brand strong { font-size: 17px; }.deep-brand-mark { height: 27px; width: 27px; }.deep-official-context { font-size: 8px; gap: 3px; margin-left: 1px; padding-left: 7px; }.deep-search-trigger { height: 35px; }.deep-search-trigger span, .deep-search-trigger kbd, .deep-signin { display: none; }.deep-search-trigger { justify-content: center; width: 40px; }.deep-top-actions { width: 35px; }.deep-top-actions::after { align-items: center; background: var(--ink); border-radius: 50%; color: white; content: "我"; display: flex; font-size: 9px; height: 30px; justify-content: center; width: 30px; }.official-product-shell .deep-top-actions::after { background: #d8b46a; color: #101416; }
   .deep-route-frame { padding-top: 60px; }.deep-route-label { height: 30px; padding: 0 12px; }.deep-route-label small { display: none; }.deep-route-content { padding: 18px 12px 82px; }
+  .official-entry-transition { top: 60px; }.official-entry-transition > span { top: 29px; }
   .route-hero { min-height: 185px; }.route-hero h1 { font-size: 28px; }.route-hero p { font-size: 11px; }.route-hero > .primary-action, .discover-orbit, .wallet-coin-stack, .challenge-total { display: none; }
   .home-stage { min-height: auto; }.home-stage-copy { min-height: 330px; padding: 29px 22px; }.home-stage h1 { font-size: 37px; }.home-stage-visual { min-height: 330px; }.work-focus { left: 5%; width: 210px; }.work-type { left: 12%; width: 155px; }.work-loop { right: 3%; width: 170px; }.galaxy-gateway { bottom: 12px; min-height: 64px; right: 12px; width: 172px; }.galaxy-gateway-sky { height: 38px; width: 38px; }.galaxy-gateway-copy strong { font-size: 14px; }.home-signal-strip { grid-template-columns: 1fr 1fr; }.home-signal-strip > div:nth-child(2) { border-right: 0; }.home-product-grid, .discover-grid, .profile-content-grid .discover-grid { grid-template-columns: 1fr; }.home-community-band { padding: 23px 18px; }
   .deep-product-cover { min-height: 225px; }.discover-grid.list .deep-product-card { display: block; }.discover-grid.list .deep-product-cover { min-height: 210px; }
@@ -312,5 +318,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .official-entry-transition { display: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
