@@ -136,3 +136,15 @@
 - 自动验证：`npm test` 为 `22 passed / 0 failed / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；目标 ESLint 为 `0 errors / 2 个既有 img 性能警告`；`git diff --check` 退出码 0。
 - 当前边界：申请数据只保存在当前浏览器 `localStorage`，不构成账号级持久化、多人协作或跨设备同步；资料上传按钮为交互演示，不会上传真实文件；产品名称、版本、状态与负责人为产品规划示例，需接入公司真实产品主数据后才能作为对外承诺。自定义社交分享图的生成服务返回 404，本轮未使用通用占位图替代。
 - 未覆盖范围：未验证真实低端 Android、Safari iOS、4K、高刷新率、GPU 丢失恢复、账号权限、D1 孵化数据模型、文件存储、通知、审批流与多人并发；Windows vinext 开发模式仍有 11 条 Geist `file://` 字体加载拒绝，未发现 WebGL shader error。
+
+## 2026-07-12 官方产品深空主题
+
+- 状态：部分完成
+- 身份规则：产品数据增加 `official` 标记；当前由产品银河直接访问的 `typewave` 标记为造场官方产品，数据库中的社区投稿和其余示例作品默认仍为普通社区作品。
+- 视觉边界：不改变产品详情页组件、布局或交互，只由页面根类切换近黑背景、暖白正文、琥珀金强调、深色表面与低透明边框；普通作品继续使用原浅色主题。
+- 响应式约束：修正移动端体验台动画覆盖居中位移后向右溢出的既有问题，组件结构与尺寸不变，体验台在 390px 视口内完整显示。
+- 自动断言：服务端 HTML 必须满足 `/product/typewave` 含 `official-product-page`，同时 `/product/mori` 不含该类名。
+- 浏览器证据：1536x1000 官方页显示近黑整页背景、深色体验台与琥珀金交互；390x844 下官方页根背景为 `rgb(8, 10, 12)`，体验台横向范围为 `30-360px`，`documentElement.scrollWidth === innerWidth === 390`。普通作品 `/product/mori` 根类仍为 `product-detail-page`，未进入官方主题。
+- 自动验证：`npm test` 为 `23 passed / 0 failed / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；目标 ESLint 为 0 errors。
+- 当前边界：官方身份目前来自种子产品数据，尚未进入 D1 产品表、管理端发布流程或可审计的品牌认证机制；后续官方产品需要由真实产品主数据明确标记。
+- 未覆盖范围：未在真实低端 Android、Safari iOS、4K 或高刷新率屏幕验证；Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝，本轮没有修改框架字体链。

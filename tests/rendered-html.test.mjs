@@ -180,6 +180,19 @@ for (const [pathname, marker] of [
   });
 }
 
+test("uses the galaxy palette only for official product pages", async () => {
+  const [officialResponse, communityResponse] = await Promise.all([
+    fetch(`${baseUrl}/product/typewave`, { headers: { accept: "text/html" } }),
+    fetch(`${baseUrl}/product/mori`, { headers: { accept: "text/html" } }),
+  ]);
+  assert.equal(officialResponse.status, 200);
+  assert.equal(communityResponse.status, 200);
+  const officialHtml = await officialResponse.text();
+  const communityHtml = await communityResponse.text();
+  assert.match(officialHtml, /class="product-detail-page official-product-page"/);
+  assert.doesNotMatch(communityHtml, /official-product-page/);
+});
+
 test("renders the singularity atlas and its original planetary archive", async () => {
   const response = await fetch(`${baseUrl}/galaxy`, {
     headers: { accept: "text/html" },

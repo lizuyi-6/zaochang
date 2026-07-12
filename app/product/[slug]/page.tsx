@@ -57,5 +57,5 @@ export default async function ProductPage({ params }: PageProps) {
   const product = await loadProduct(slug);
   if (!product) notFound();
   const related = products.filter((item) => item.id !== product.id && (item.category === product.category || item.demoType === product.demoType)).slice(0, 3);
-  return <div className="product-detail-page"><ProductExperience product={product} /><section className="related-works"><div className="deep-section-heading"><div><span className="deep-eyebrow">KEEP EXPLORING</span><h2>沿着这个方向继续</h2></div></div><div className="discover-grid">{related.map((item, index) => <ProductCard key={item.id} product={item} index={index} />)}</div></section></div>;
+  return <div className={`product-detail-page${product.official ? " official-product-page" : ""}`}><ProductExperience product={product} /><section className="related-works"><div className="deep-section-heading"><div><span className="deep-eyebrow">KEEP EXPLORING</span><h2>沿着这个方向继续</h2></div></div><div className="discover-grid">{related.map((item, index) => <ProductCard key={item.id} product={item} index={index} />)}</div></section></div>;
 }

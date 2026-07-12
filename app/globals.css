@@ -194,6 +194,47 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .product-discussion { margin: 0 auto; max-width: 800px; min-height: 480px; padding: 25px 0; }.discussion-composer { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; display: grid; gap: 9px; grid-template-columns: 34px 1fr auto; padding: 10px; }.discussion-composer input { background: transparent; border: 0; font-size: 10px; outline: 0; }.discussion-composer button { align-items: center; background: var(--ink); border-radius: 4px; color: white; display: flex; font-size: 9px; gap: 4px; padding: 8px 9px; }.product-discussion > article { border-bottom: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 34px 1fr; padding: 18px 3px; }.product-discussion article strong { font-size: 10px; }.product-discussion article small { color: var(--muted); font-size: 8px; margin-left: 7px; }.product-discussion article p { font-size: 11px; line-height: 1.65; }.product-discussion article button { align-items: center; background: transparent; color: var(--muted); display: flex; font-size: 8px; gap: 4px; }
 .product-support { align-items: center; background: var(--yellow); border-radius: 6px; display: flex; justify-content: space-between; margin-top: 22px; padding: 24px 28px; }.product-support h2 { font-size: 22px; margin: 8px 0; }.product-support p { font-size: 9px; }.product-support > div:last-child { display: flex; gap: 8px; }.product-support > div:last-child button { align-items: center; background: var(--surface); border: 1px solid var(--ink); border-radius: 5px; display: grid; gap: 3px; grid-template-columns: 18px auto; min-width: 72px; padding: 10px; }.product-support button svg { grid-row: 1 / 3; }.product-support button strong { font-family: var(--font-geist-mono), monospace; font-size: 14px; }.product-support button small { font-size: 7px; }.product-notice { align-items: center; background: var(--ink); border-radius: 4px; bottom: 20px; color: white; display: flex; font-size: 9px; gap: 6px; left: 50%; padding: 9px 11px; position: fixed; transform: translateX(-50%); z-index: 70; }.related-works { padding-top: 32px; }
 
+/* Official products inherit the Product Galaxy palette without changing the detail layout. */
+.official-product-page {
+  --surface: #101416;
+  --surface-2: #181e20;
+  --ink: #f2eee2;
+  --muted: #9ca6a3;
+  --line: rgb(217 190 128 / 17%);
+  --line-strong: rgb(217 190 128 / 34%);
+  --coral: #d8b46a;
+  --yellow: #d8b46a;
+  background: #080a0c;
+  box-shadow: 0 0 0 100vmax #080a0c;
+  color: var(--ink);
+  min-height: calc(100vh - 156px);
+}
+.official-product-page .product-detail-head { border-color: var(--line); }
+.official-product-page .product-identity .deep-avatar { background: #d8b46a; border-color: rgb(242 238 226 / 42%); color: #111416; }
+.official-product-page .product-identity > span:last-child > div span { background: rgb(216 180 106 / 12%); border: 1px solid rgb(216 180 106 / 22%); color: #d8b46a; }
+.official-product-page .product-head-stats button,
+.official-product-page .discussion-composer button,
+.official-product-page .product-about aside button { background: #d8b46a; color: #111416; }
+.official-product-page .product-head-stats button.liked { background: #f0d59c; color: #111416; }
+.official-product-page .product-tabs button.active { border-color: #d8b46a; color: #f2eee2; }
+.official-product-page .immersive-experience { background: #090c0e; border: 1px solid var(--line); }
+.official-product-page .immersive-experience > img { filter: saturate(.52) contrast(1.08); opacity: .24; }
+.official-product-page .experience-shade { background: rgb(4 7 9 / 48%); }
+.official-product-page .experience-console { background: rgb(13 17 19 / 94%); box-shadow: 0 24px 80px rgb(0 0 0 / 42%); }
+.official-product-page .console-play { border-color: #f2eee2; color: #111416; }
+.official-product-page .console-colors button.active { border-color: #f2eee2; }
+.official-product-page .product-about > div > p { color: #b8c0bc; }
+.official-product-page .product-about blockquote { border-color: #d8b46a; color: #e5dcc8; }
+.official-product-page .version-timeline em { background: rgb(216 180 106 / 15%); color: #e7c985; }
+.official-product-page .discussion-composer input { color: #f2eee2; }
+.official-product-page .discussion-composer input::placeholder { color: #77817e; }
+.official-product-page .product-support { background: #101416; border: 1px solid rgb(216 180 106 / 30%); }
+.official-product-page .product-support > div:last-child button { border-color: #d8b46a; color: #f2eee2; }
+.official-product-page .deep-product-card { background: #101416; }
+.official-product-page .deep-product-cover:hover .deep-cover-play { background: #d8b46a; color: #111416; }
+.official-product-page .deep-category { color: #d8b46a; }
+.official-product-page .deep-product-meta strong { color: #c5cbc7; }
+
 @keyframes floatingWork { 0%,100% { transform: translate3d(0,0,0) rotate(-1deg); } 50% { transform: translate3d(0,-10px,0) rotate(1deg); } }
 @keyframes orbitSpin { to { transform: rotate(360deg); } }
 @keyframes livePulse { 0% { opacity: 1; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.7); } }
@@ -230,7 +271,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .create-flow-header { grid-template-columns: 1fr; text-align: center; }.create-flow-header > a, .create-flow-header > small { display: none; }.create-stepper strong { display: none; }.create-stepper i { left: 38px; }.create-step-panel { min-height: 540px; padding: 20px 15px; }.choice-grid { grid-template-columns: 1fr 1fr; }.price-control { grid-template-columns: 38px 80px 38px 1fr; }
   .flow-diagram { grid-template-columns: 1fr; }.flow-diagram > div > i { display: none; }.circle-list > a { grid-template-columns: 40px 1fr 18px; }.circle-list > a > span:nth-child(3), .circle-list > a > span:nth-child(4) { display: none; }.challenge-card { grid-template-columns: 1fr; padding: 18px; }.challenge-card-index { font-size: 25px; }.challenge-progress { justify-content: space-between; }.challenge-progress > span { height: 80px; width: 80px; }.challenge-leaderboard > div:not(.deep-section-heading) { grid-template-columns: 28px 1fr 50px; }.challenge-leaderboard em, .leader-progress { display: none; }.collection-shelves { grid-template-columns: 1fr; }
   .profile-cover { height: 160px; }.profile-identity { grid-template-columns: 70px 1fr; padding-left: 5px; padding-right: 5px; }.profile-large-avatar { height: 70px; margin-top: -32px; width: 70px; }.profile-identity > button { grid-column: 1 / -1; justify-self: start; }.profile-stats { grid-template-columns: 1fr 1fr; row-gap: 20px; }.profile-stats > div:nth-child(2) { border-right: 0; }
-  .product-detail-head { align-items: start; flex-direction: column; gap: 20px; }.product-identity h1 { font-size: 26px; }.product-head-stats { width: 100%; }.product-tabs { gap: 16px; overflow-x: auto; }.product-tabs button { white-space: nowrap; }.immersive-experience { height: 560px; }.experience-console { min-height: 410px; padding: 23px; }.console-footer { bottom: 20px; left: 23px; right: 23px; }.product-support { align-items: start; flex-direction: column; gap: 15px; }.product-support > div:last-child { width: 100%; }.product-support > div:last-child button { flex: 1; }.product-about { padding: 30px 2%; }.product-about blockquote { font-size: 14px; }
+  .product-detail-head { align-items: start; flex-direction: column; gap: 20px; }.product-identity h1 { font-size: 26px; }.product-head-stats { width: 100%; }.product-tabs { gap: 16px; overflow-x: auto; }.product-tabs button { white-space: nowrap; }.immersive-experience { height: 560px; }.experience-console { left: 17px; min-height: 410px; padding: 23px; }.console-footer { bottom: 20px; left: 23px; right: 23px; }.product-support { align-items: start; flex-direction: column; gap: 15px; }.product-support > div:last-child { width: 100%; }.product-support > div:last-child button { flex: 1; }.product-about { padding: 30px 2%; }.product-about blockquote { font-size: 14px; }
   .command-backdrop { padding-top: 68px; }.command-palette { max-height: calc(100vh - 90px); overflow: auto; }
 }
 

@@ -1,6 +1,7 @@
 export type Product = {
   id: string | number;
   slug?: string;
+  official?: boolean;
   ownerName: string;
   ownerInitial: string;
   title: string;
@@ -79,6 +80,7 @@ export const products: Product[] = [
   {
     id: "typewave",
     slug: "typewave",
+    official: true,
     ownerName: "Niko",
     ownerInitial: "N",
     title: "字浪排版实验室",
@@ -93,7 +95,7 @@ export const products: Product[] = [
     plays: 7914,
     image:
       "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=88",
-    accent: "#ff5c3d",
+    accent: "#d8b46a",
     release: "v2.2 · 昨天",
     tags: ["排版", "动效", "创作工具"],
   },
