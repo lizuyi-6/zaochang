@@ -197,3 +197,12 @@
 - Google 登录：按本轮要求暂停，未修改 Google OAuth 配置或回调逻辑。
 - 本轮改动可能引入的新风险：通知由现有业务表实时聚合，数据量增长后需要分页或事件表；创作台排序是当前设备偏好，不会跨设备同步；R2 私有资料依赖对象元数据，历史上缺少 `visibility` 的对象会按私有处理。
 - 未覆盖范围：未在真实低端 Android、Safari iOS、4K、高刷新率或弱网环境验证；未验证 Google 完整授权回调；未建设运营审核后台、内容举报处置和多人孵化协作席位；Windows vinext 开发模式仍记录 11 条 Geist 本地字体 `file://` 加载拒绝，另有 9 条 `<img>`/生成声明性能警告，未发现本轮业务脚本控制台错误。
+## 2026-07-12 六个既有社区 Mock 应用嵌入
+
+- 状态：部分完成
+- 产品边界：`MORI / WANDER / TYPEWAVE / LOOPS / SPROUT / MINUTE` 继续使用网站原有产品卡片、slug、作者和社区互动，不新增产品条目，也不修改产品银河首页。
+- 体验入口：六个原详情页的“体验”标签改为加载各自位于 `/product-apps/<slug>/index.html?embed=1&lang=zh-CN` 的独立应用；只有既有官方产品 `TYPEWAVE` 额外传入 `official=1`。
+- 加载边界：iframe 使用 `allow-scripts allow-same-origin allow-downloads`，只开放音频自动播放；页面提供 12 秒无响应提示、重新载入和独立打开入口。
+- 自动验证：`npx tsc --noEmit` 退出码 0；`npm test` 退出码 0，`46 passed / 0 failed / 0 skipped / 0 todo`。其中 6 条断言核对原 slug 与应用地址一一对应，6 条断言核对每个静态入口、JS 和 CSS 均返回 200 且 MIME 类型正确，另有断言保证官方身份没有污染普通社区产品。
+- 当前缺口：六套应用均能发送 `ready`，但只有 `TYPEWAVE` 在真实交互时发送 `start`；其余五套应用尚未统一体验统计事件，本轮没有使用 iframe `load` 冒充用户体验。未在真实低端 Android、Safari iOS、弱网、浏览器禁用第三方存储或音频自动播放限制环境验证。
+- 本轮改动可能引入的新风险：静态应用产物复制进主站后，六套应用升级需要重新构建并同步复制，否则网站会继续提供旧 bundle；iframe 的本地数据仍各自保存在浏览器 localStorage，不会同步到造场账号。

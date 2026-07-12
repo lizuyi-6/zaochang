@@ -169,7 +169,7 @@ for (const [pathname, marker] of [
   ["/profile", "登录后查看你的创作者主页"],
   ["/notifications", "与你有关的信号"],
   ["/guide", "让作品被认真对待"],
-  ["/product/mori", "开始体验"],
+  ["/product/mori", "MORI 专注森林"],
   ["/galaxy", "探索造场产品宇宙"],
   ["/galaxy/products", "用真实业务分类和明确状态快速找到产品"],
   ["/galaxy/apply", "发射产品信号"],
@@ -184,6 +184,45 @@ for (const [pathname, marker] of [
     assert.match(await response.text(), new RegExp(marker));
   });
 }
+
+for (const slug of ["mori", "wander", "typewave", "loops", "sprout", "minute"]) {
+  test(`embeds the completed ${slug} app in its existing product route`, async () => {
+    const response = await fetch(`${baseUrl}/product/${slug}`, { headers: { accept: "text/html" } });
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, new RegExp(`data-product-app="${slug}"`));
+    assert.match(html, new RegExp(`/product-apps/${slug}/index\\.html\\?embed=1(?:&amp;|&)lang=zh-CN`));
+  });
+
+  test(`serves the complete static bundle for ${slug}`, async () => {
+    const entryResponse = await fetch(`${baseUrl}/product-apps/${slug}/index.html`);
+    assert.equal(entryResponse.status, 200);
+    const entryHtml = await entryResponse.text();
+    const scriptPath = entryHtml.match(/<script[^>]+src="([^"]+\.js)"/)?.[1];
+    const stylePath = entryHtml.match(/<link[^>]+href="([^"]+\.css)"/)?.[1];
+    assert.equal(typeof scriptPath, "string");
+    assert.equal(typeof stylePath, "string");
+    const [scriptResponse, styleResponse] = await Promise.all([
+      fetch(new URL(scriptPath, `${baseUrl}/product-apps/${slug}/index.html`)),
+      fetch(new URL(stylePath, `${baseUrl}/product-apps/${slug}/index.html`)),
+    ]);
+    assert.equal(scriptResponse.status, 200);
+    assert.equal(styleResponse.status, 200);
+    assert.match(scriptResponse.headers.get("content-type") ?? "", /javascript/);
+    assert.match(styleResponse.headers.get("content-type") ?? "", /text\/css/);
+  });
+}
+
+test("keeps official identity scoped to the existing official product", async () => {
+  const [officialResponse, communityResponse] = await Promise.all([
+    fetch(`${baseUrl}/product/typewave`, { headers: { accept: "text/html" } }),
+    fetch(`${baseUrl}/product/mori`, { headers: { accept: "text/html" } }),
+  ]);
+  const officialHtml = await officialResponse.text();
+  const communityHtml = await communityResponse.text();
+  assert.match(officialHtml, /product-apps\/typewave\/index\.html\?embed=1(?:&amp;|&)lang=zh-CN(?:&amp;|&)official=1/);
+  assert.doesNotMatch(communityHtml, /product-apps\/mori\/index\.html[^"']*official=1/);
+});
 
 test("renders the signed-in profile editor", async () => {
   const response = await fetch(`${baseUrl}/profile/edit`, { headers: authHeaders("资料编辑用户", `profile-${runId}@example.com`) });

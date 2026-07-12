@@ -5,6 +5,7 @@ import { ArrowUpRight, Bookmark, Check, Coins, Eye, Heart, Pause, Play, RotateCc
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { compactNumber, type Product } from "../../lib/community-data";
+import { EmbeddedProduct, hasEmbeddedProduct } from "./embedded-product";
 
 export function ProductExperience({ product }: { product: Product }) {
   const router = useRouter();
@@ -21,6 +22,7 @@ export function ProductExperience({ product }: { product: Product }) {
   const [discussion, setDiscussion] = useState("");
   const [comments, setComments] = useState<{ id: number; ownerName: string; content: string; createdAt: string }[]>([]);
   const productRef = String(product.slug ?? product.id);
+  const embedded = hasEmbeddedProduct(productRef);
 
   useEffect(() => {
     if (!tab.startsWith("讨论")) return;
@@ -91,7 +93,11 @@ export function ProductExperience({ product }: { product: Product }) {
       <div className="product-tabs">{["体验", "关于", "版本记录", "讨论 28"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</div>
 
       <AnimatePresence mode="wait">
-        {tab === "体验" ? (
+        {tab === "体验" && embedded ? (
+          <motion.div key="embedded-experience" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <EmbeddedProduct productRef={productRef} title={product.title} official={Boolean(product.official)} />
+          </motion.div>
+        ) : tab === "体验" ? (
           <motion.section key="experience" className="immersive-experience" style={{ "--product-accent": accent } as React.CSSProperties} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <img src={product.image} alt="" />
             <span className="experience-shade" />
