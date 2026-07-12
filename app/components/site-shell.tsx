@@ -3,6 +3,7 @@
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import {
   Bell,
+  BadgeCheck,
   Bookmark,
   ChevronDown,
   CircleUserRound,
@@ -92,10 +93,12 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
 
   if (pathname.startsWith("/galaxy")) return <>{children}</>;
 
-  const routeName = pathname.startsWith("/product/") ? "作品体验" : routeNames[pathname] ?? "造场";
+  const productSlug = pathname.startsWith("/product/") ? pathname.slice("/product/".length).split("/")[0] : null;
+  const officialProduct = productSlug ? products.find((product) => product.slug === productSlug && product.official) : undefined;
+  const routeName = officialProduct ? "造场官方产品" : pathname.startsWith("/product/") ? "作品体验" : routeNames[pathname] ?? "造场";
 
   return (
-    <div className="deep-shell">
+    <div className={`deep-shell${officialProduct ? " official-product-shell" : ""}`}>
       <motion.div
         key={`progress-${pathname}`}
         className="route-progress"
@@ -108,6 +111,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
           <span className="deep-brand-mark"><i /><i /><i /></span>
           <strong>造场</strong>
           <small>ZAOCHANG</small>
+          {officialProduct && <span className="deep-official-context"><BadgeCheck size={14} /> 造场官方项目</span>}
         </Link>
 
         <button className="deep-search-trigger" onClick={() => setCommandOpen(true)}>
@@ -179,7 +183,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
       </aside>
 
       <div className="deep-route-frame">
-        <div className="deep-route-label"><span>{routeName}</span><small>LIVE COMMUNITY / 2026</small></div>
+        <div className="deep-route-label"><span>{routeName}</span><small>{officialProduct ? "PRODUCT GALAXY / OFFICIAL" : "LIVE COMMUNITY / 2026"}</small></div>
         <AnimatePresence mode="wait" initial={false}>
           <motion.main
             key={pathname}

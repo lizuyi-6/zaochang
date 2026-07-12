@@ -190,7 +190,11 @@ test("uses the galaxy palette only for official product pages", async () => {
   const officialHtml = await officialResponse.text();
   const communityHtml = await communityResponse.text();
   assert.match(officialHtml, /class="product-detail-page official-product-page"/);
+  assert.match(officialHtml, /class="deep-shell official-product-shell"/);
+  assert.match(officialHtml, /造场官方项目/);
+  assert.match(officialHtml, /PRODUCT GALAXY \/ OFFICIAL/);
   assert.doesNotMatch(communityHtml, /official-product-page/);
+  assert.doesNotMatch(communityHtml, /official-product-shell|造场官方项目|PRODUCT GALAXY \/ OFFICIAL/);
 });
 
 test("renders the singularity atlas and its original planetary archive", async () => {

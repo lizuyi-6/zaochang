@@ -31,6 +31,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .deep-brand { align-items: center; display: flex; gap: 9px; width: max-content; }
 .deep-brand strong { font-size: 21px; font-weight: 900; }
 .deep-brand small { color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 8px; font-weight: 700; line-height: 1; margin-left: -3px; writing-mode: vertical-rl; }
+.deep-official-context { align-items: center; border-left: 1px solid rgb(216 180 106 / 32%); color: #d8b46a; display: flex; font-family: var(--font-geist-mono), monospace; font-size: 9px; font-weight: 800; gap: 5px; margin-left: 4px; padding-left: 12px; white-space: nowrap; }
 .deep-brand-mark { align-items: center; background: var(--ink); display: flex; gap: 2px; height: 30px; justify-content: center; overflow: hidden; width: 30px; }
 .deep-brand-mark i { background: white; display: block; height: 15px; transform: skew(-16deg); width: 3px; }
 .deep-brand-mark i:nth-child(2) { background: var(--coral); height: 22px; }
@@ -195,6 +196,41 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .product-support { align-items: center; background: var(--yellow); border-radius: 6px; display: flex; justify-content: space-between; margin-top: 22px; padding: 24px 28px; }.product-support h2 { font-size: 22px; margin: 8px 0; }.product-support p { font-size: 9px; }.product-support > div:last-child { display: flex; gap: 8px; }.product-support > div:last-child button { align-items: center; background: var(--surface); border: 1px solid var(--ink); border-radius: 5px; display: grid; gap: 3px; grid-template-columns: 18px auto; min-width: 72px; padding: 10px; }.product-support button svg { grid-row: 1 / 3; }.product-support button strong { font-family: var(--font-geist-mono), monospace; font-size: 14px; }.product-support button small { font-size: 7px; }.product-notice { align-items: center; background: var(--ink); border-radius: 4px; bottom: 20px; color: white; display: flex; font-size: 9px; gap: 6px; left: 50%; padding: 9px 11px; position: fixed; transform: translateX(-50%); z-index: 70; }.related-works { padding-top: 32px; }
 
 /* Official products inherit the Product Galaxy palette without changing the detail layout. */
+.official-product-shell { background: #080a0c; color: #f2eee2; }
+.official-product-shell .route-progress { background: #d8b46a; }
+.official-product-shell .deep-topbar { background: rgb(8 10 12 / 97%); border-color: rgb(216 180 106 / 18%); }
+.official-product-shell .deep-brand small { color: #78817e; }
+.official-product-shell .deep-search-trigger { background: #111618; border-color: rgb(216 180 106 / 12%); color: #8e9894; }
+.official-product-shell .deep-search-trigger:hover { background: #171d1f; border-color: rgb(216 180 106 / 34%); }
+.official-product-shell .deep-search-trigger kbd { background: #080b0c; border-color: rgb(216 180 106 / 22%); color: #b5bdb9; }
+.official-product-shell .deep-icon-button:hover,
+.official-product-shell .deep-account:hover { background: #171d1f; }
+.official-product-shell .deep-notification-dot { background: #d8b46a; border-color: #080a0c; }
+.official-product-shell .deep-balance { background: rgb(216 180 106 / 12%); color: #e5c47e; }
+.official-product-shell .deep-balance svg,
+.official-product-shell .deep-balance span { color: #d8b46a; }
+.official-product-shell .deep-create,
+.official-product-shell .deep-signin { background: #d8b46a; color: #101416; }
+.official-product-shell .deep-account .deep-avatar { background: #d8b46a; border-color: rgb(242 238 226 / 30%); color: #101416; }
+.official-product-shell .deep-sidebar { background: #0b0f11; border-color: rgb(216 180 106 / 16%); }
+.official-product-shell .deep-nav a { color: #9ca6a3; }
+.official-product-shell .deep-nav a:hover { background: #151b1d; color: #f2eee2; }
+.official-product-shell .deep-nav a.active { color: #f2eee2; }
+.official-product-shell .deep-nav-active { background: rgb(216 180 106 / 10%); border-color: rgb(216 180 106 / 24%); box-shadow: none; }
+.official-product-shell .deep-nav a b { background: #d8b46a; color: #101416; }
+.official-product-shell .deep-side-section { border-color: rgb(216 180 106 / 14%); }
+.official-product-shell .deep-circle-link:hover { background: #151b1d; }
+.official-product-shell .deep-side-challenge { background: #13181a; border: 1px solid rgb(216 180 106 / 18%); }
+.official-product-shell .deep-side-challenge::after { border-color: #d8b46a; }
+.official-product-shell .deep-side-challenge > span { color: #e4c57f; }
+.official-product-shell .deep-side-footer { color: #66706c; }
+.official-product-shell .deep-route-label { background: #090c0e; border-color: rgb(216 180 106 / 15%); color: #7f8985; }
+.official-product-shell .deep-route-label > span { color: #d8b46a; }
+.official-product-shell .deep-route-content { background: #080a0c; }
+.official-product-shell .deep-mobile-nav { background: rgb(8 10 12 / 97%); border-color: rgb(216 180 106 / 18%); }
+.official-product-shell .deep-mobile-nav a { color: #7f8985; }
+.official-product-shell .deep-mobile-nav a.active { color: #f2eee2; }
+.official-product-shell .deep-mobile-nav .deep-mobile-create { background: #d8b46a; color: #101416; }
 .official-product-page {
   --surface: #101416;
   --surface-2: #181e20;
@@ -262,7 +298,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 @media (max-width: 640px) {
-  .deep-topbar { gap: 8px; height: 60px; padding: 0 11px; }.deep-brand strong { font-size: 17px; }.deep-brand-mark { height: 27px; width: 27px; }.deep-search-trigger { height: 35px; }.deep-search-trigger span, .deep-search-trigger kbd, .deep-signin { display: none; }.deep-search-trigger { justify-content: center; width: 40px; }.deep-top-actions { width: 35px; }.deep-top-actions::after { align-items: center; background: var(--ink); border-radius: 50%; color: white; content: "我"; display: flex; font-size: 9px; height: 30px; justify-content: center; width: 30px; }
+  .deep-topbar { gap: 8px; grid-template-columns: auto 40px 35px; height: 60px; padding: 0 11px; }.deep-brand strong { font-size: 17px; }.deep-brand-mark { height: 27px; width: 27px; }.deep-official-context { font-size: 8px; gap: 3px; margin-left: 1px; padding-left: 7px; }.deep-search-trigger { height: 35px; }.deep-search-trigger span, .deep-search-trigger kbd, .deep-signin { display: none; }.deep-search-trigger { justify-content: center; width: 40px; }.deep-top-actions { width: 35px; }.deep-top-actions::after { align-items: center; background: var(--ink); border-radius: 50%; color: white; content: "我"; display: flex; font-size: 9px; height: 30px; justify-content: center; width: 30px; }.official-product-shell .deep-top-actions::after { background: #d8b46a; color: #101416; }
   .deep-route-frame { padding-top: 60px; }.deep-route-label { height: 30px; padding: 0 12px; }.deep-route-label small { display: none; }.deep-route-content { padding: 18px 12px 82px; }
   .route-hero { min-height: 185px; }.route-hero h1 { font-size: 28px; }.route-hero p { font-size: 11px; }.route-hero > .primary-action, .discover-orbit, .wallet-coin-stack, .challenge-total { display: none; }
   .home-stage { min-height: auto; }.home-stage-copy { min-height: 330px; padding: 29px 22px; }.home-stage h1 { font-size: 37px; }.home-stage-visual { min-height: 330px; }.work-focus { left: 5%; width: 210px; }.work-type { left: 12%; width: 155px; }.work-loop { right: 3%; width: 170px; }.galaxy-gateway { bottom: 12px; min-height: 64px; right: 12px; width: 172px; }.galaxy-gateway-sky { height: 38px; width: 38px; }.galaxy-gateway-copy strong { font-size: 14px; }.home-signal-strip { grid-template-columns: 1fr 1fr; }.home-signal-strip > div:nth-child(2) { border-right: 0; }.home-product-grid, .discover-grid, .profile-content-grid .discover-grid { grid-template-columns: 1fr; }.home-community-band { padding: 23px 18px; }
