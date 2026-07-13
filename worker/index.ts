@@ -29,6 +29,26 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname === "/.well-known/openid-configuration") {
+      const origin = url.origin;
+      return Response.json({
+        issuer: origin,
+        authorization_endpoint: `${origin}/oauth/authorize`,
+        token_endpoint: `${origin}/api/oauth/token`,
+        userinfo_endpoint: `${origin}/api/oauth/userinfo`,
+        jwks_uri: `${origin}/api/oauth/jwks`,
+        revocation_endpoint: `${origin}/api/oauth/revoke`,
+        response_types_supported: ["code"],
+        grant_types_supported: ["authorization_code", "refresh_token"],
+        subject_types_supported: ["pairwise"],
+        id_token_signing_alg_values_supported: ["ES256"],
+        token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"],
+        code_challenge_methods_supported: ["S256"],
+        scopes_supported: ["openid", "profile", "email", "fruit:balance", "fruit:pay", "fruit:refund"],
+        claims_supported: ["sub", "name", "email", "email_verified"],
+      }, { headers: { "cache-control": "public, max-age=300" } });
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {

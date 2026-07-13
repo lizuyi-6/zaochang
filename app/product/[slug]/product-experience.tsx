@@ -3,9 +3,10 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Bookmark, Check, Coins, Eye, Heart, Pause, Play, RotateCcw, Send, SlidersHorizontal, Sparkles, UserPlus, Volume2, VolumeX } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { compactNumber, type Product } from "../../lib/community-data";
 import { EmbeddedProduct, hasEmbeddedProduct } from "./embedded-product";
+import { FruitAccessGate } from "./fruit-access-gate";
 
 export function ProductExperience({ product }: { product: Product }) {
   const router = useRouter();
@@ -21,6 +22,7 @@ export function ProductExperience({ product }: { product: Product }) {
   const [saved, setSaved] = useState(false);
   const [discussion, setDiscussion] = useState("");
   const [comments, setComments] = useState<{ id: number; ownerName: string; content: string; createdAt: string }[]>([]);
+  const tipKeyRef = useRef<string | null>(null);
   const productRef = String(product.slug ?? product.id);
   const embedded = hasEmbeddedProduct(productRef);
 
@@ -49,12 +51,14 @@ export function ProductExperience({ product }: { product: Product }) {
       setNotice("展示作品暂不接收果子，但你的喜欢会被记录");
       return;
     }
-    const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "tip", productId: product.id, amount }) });
+    tipKeyRef.current ??= `tip_${crypto.randomUUID()}`;
+    const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "tip", productId: product.id, amount, idempotencyKey: tipKeyRef.current }) });
     if (response.status === 401) {
       router.push(`/signin?return_to=${encodeURIComponent(`/product/${product.id}`)}`);
       return;
     }
     const data = await response.json() as { error?: string };
+    if (response.ok) tipKeyRef.current = null;
     setNotice(response.ok ? `已用 ${amount} 果支持创作者` : data.error === "insufficient_balance" ? "果子余额不足" : "暂时无法完成支持");
   };
 
@@ -94,11 +98,11 @@ export function ProductExperience({ product }: { product: Product }) {
 
       <AnimatePresence mode="wait">
         {tab === "体验" && embedded ? (
-          <motion.div key="embedded-experience" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <FruitAccessGate product={product}><motion.div key="embedded-experience" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <EmbeddedProduct productRef={productRef} title={product.title} official={Boolean(product.official)} />
-          </motion.div>
+          </motion.div></FruitAccessGate>
         ) : tab === "体验" ? (
-          <motion.section key="experience" className="immersive-experience" style={{ "--product-accent": accent } as React.CSSProperties} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <FruitAccessGate product={product}><motion.section key="experience" className="immersive-experience" style={{ "--product-accent": accent } as React.CSSProperties} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <img src={product.image} alt="" />
             <span className="experience-shade" />
             <div className="experience-grid-lines" />
@@ -113,7 +117,7 @@ export function ProductExperience({ product }: { product: Product }) {
               <div className="console-footer"><button className={soundOn ? "active" : ""} onClick={() => setSoundOn((value) => !value)}>{soundOn ? <Volume2 size={15} /> : <VolumeX size={15} />} {soundOn ? "环境声开" : "环境声关"}</button><button onClick={() => { setIntensity(64); setAccent(product.accent); setRunning(false); setSoundOn(true); }}><RotateCcw size={15} /> 重置</button>{product.demoUrl && <a href={product.demoUrl} target="_blank" rel="noreferrer">完整版本 <ArrowUpRight size={15} /></a>}</div>
             </motion.div>
             <div className="experience-wave">{Array.from({ length: 42 }).map((_, index) => <motion.i key={index} animate={running && !reduced ? { height: [`${10 + ((index * 13) % 35)}%`, `${20 + ((index * intensity) % 78)}%`, `${10 + ((index * 17) % 42)}%`] } : { height: `${12 + ((index * 11) % 38)}%` }} transition={{ duration: 0.9 + (index % 5) * 0.13, repeat: running ? Infinity : 0, repeatType: "mirror" }} />)}</div>
-          </motion.section>
+          </motion.section></FruitAccessGate>
         ) : tab === "关于" ? (
           <motion.section key="about" className="product-about" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}><div><span className="deep-eyebrow">ABOUT THIS WORK</span><h2>这件作品为什么存在</h2><p>{product.longDescription}</p><blockquote>“我不想再做一个催促人完成更多事情的工具。它应该让时间本身变得值得感受。”</blockquote></div><aside><span className={`deep-avatar ${product.coverTheme}`}>{product.ownerInitial}</span><h3>{product.ownerName}</h3><p>独立创作者 · 已发布 4 件作品</p><button className={followed ? "followed" : ""} onClick={toggleFollow}>{followed ? <Check size={14} /> : <UserPlus size={14} />}{followed ? "已关注" : "关注创作者"}</button></aside></motion.section>
         ) : tab === "版本记录" ? (

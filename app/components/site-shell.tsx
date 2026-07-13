@@ -4,6 +4,7 @@ import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-m
 import {
   Bell,
   BadgeCheck,
+  Blocks,
   Bookmark,
   ChevronDown,
   CircleUserRound,
@@ -38,6 +39,7 @@ const navItems = [
   { href: "/challenges", label: "挑战", icon: Trophy },
   { href: "/collections", label: "收藏", icon: Bookmark },
   { href: "/studio", label: "创作台", icon: Layers3 },
+  { href: "/developers", label: "开发者", icon: Blocks },
 ];
 
 const routeNames: Record<string, string> = {
@@ -54,6 +56,8 @@ const routeNames: Record<string, string> = {
   "/profile/edit": "编辑个人资料",
   "/notifications": "通知中心",
   "/guide": "社区指南",
+  "/developers": "开发者接入",
+  "/developers/docs": "身份与果子 API",
 };
 
 function routeIsActive(pathname: string, href: string) {
@@ -119,7 +123,8 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   if (
     pathname.startsWith("/signin") ||
     pathname.startsWith("/signout") ||
-    pathname === "/callback"
+    pathname === "/callback" ||
+    pathname.startsWith("/oauth")
   ) return <>{children}</>;
 
   if (pathname.startsWith("/galaxy")) return <>{children}</>;
@@ -190,6 +195,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
               <div><span className="deep-avatar ink">{member.initial}</span><span><strong>{member.displayName}</strong><small>造场成员</small></span></div>
               <Link href="/profile"><UserRound size={15} /> 个人主页</Link>
               <Link href="/profile/edit"><Layers3 size={15} /> 编辑资料</Link>
+              <Link href="/developers"><Blocks size={15} /> 开发者接入</Link>
               <a href="/api/auth/logout?return_to=%2F"><LogOut size={15} /> 退出登录</a>
             </motion.div>
           )}

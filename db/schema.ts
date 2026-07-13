@@ -25,12 +25,18 @@ export const wallets = sqliteTable(
     userEmail: text("user_email")
       .primaryKey()
       .references(() => members.email),
-    balance: integer("balance").notNull().default(120),
-    lifetimeEarned: integer("lifetime_earned").notNull().default(120),
+    balance: integer("balance").notNull().default(20),
+    pendingBalance: integer("pending_balance").notNull().default(0),
+    lifetimeEarned: integer("lifetime_earned").notNull().default(20),
     lifetimeSpent: integer("lifetime_spent").notNull().default(0),
+    status: text("status").notNull().default("active"),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [check("wallet_balance_nonnegative", sql`${table.balance} >= 0`)],
+  (table) => [
+    check("wallet_balance_nonnegative", sql`${table.balance} >= 0`),
+    check("wallet_pending_nonnegative", sql`${table.pendingBalance} >= 0`),
+    check("wallet_status_valid", sql`${table.status} in ('active', 'review', 'frozen')`),
+  ],
 );
 
 export const products = sqliteTable(
@@ -49,6 +55,7 @@ export const products = sqliteTable(
     imageUrl: text("image_url"),
     coverTheme: text("cover_theme").notNull().default("coral"),
     price: integer("price").notNull().default(0),
+    pricingModel: text("pricing_model").notNull().default("free"),
     likesCount: integer("likes_count").notNull().default(0),
     playsCount: integer("plays_count").notNull().default(0),
     status: text("status").notNull().default("published"),
@@ -58,6 +65,370 @@ export const products = sqliteTable(
     index("products_created_at_idx").on(table.createdAt),
     index("products_owner_idx").on(table.ownerEmail),
     check("products_price_nonnegative", sql`${table.price} >= 0`),
+    check("products_pricing_model_valid", sql`${table.pricingModel} in ('free', 'one_time', 'per_use')`),
+  ],
+);
+
+export const fruitOperations = sqliteTable(
+  "fruit_operations",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("posted"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    actorEmail: text("actor_email").references(() => members.email),
+    targetEmail: text("target_email").references(() => members.email),
+    amount: integer("amount").notNull(),
+    referenceType: text("reference_type").notNull(),
+    referenceId: text("reference_id").notNull(),
+    relatedOperationId: text("related_operation_id"),
+    description: text("description").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("fruit_operations_idempotency_idx").on(table.idempotencyKey),
+    uniqueIndex("fruit_operations_refund_once_idx")
+      .on(table.relatedOperationId)
+      .where(sql`${table.kind} = 'refund'`),
+    uniqueIndex("fruit_operations_external_refund_once_idx")
+      .on(table.relatedOperationId)
+      .where(sql`${table.kind} = 'external_refund'`),
+    index("fruit_operations_actor_idx").on(table.actorEmail, table.createdAt),
+    index("fruit_operations_target_idx").on(table.targetEmail, table.createdAt),
+    check("fruit_operations_amount_positive", sql`${table.amount} > 0`),
+    check("fruit_operations_status_valid", sql`${table.status} in ('posted', 'reversed')`),
+  ],
+);
+
+export const fruitEntries = sqliteTable(
+  "fruit_entries",
+  {
+    operationId: text("operation_id")
+      .notNull()
+      .references(() => fruitOperations.id),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => members.email),
+    bucket: text("bucket").notNull(),
+    delta: integer("delta").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.operationId, table.userEmail, table.bucket] }),
+    index("fruit_entries_user_idx").on(table.userEmail, table.createdAt),
+    check("fruit_entries_bucket_valid", sql`${table.bucket} in ('available', 'pending')`),
+    check("fruit_entries_delta_nonzero", sql`${table.delta} <> 0`),
+  ],
+);
+
+export const productOrders = sqliteTable(
+  "product_orders",
+  {
+    id: text("id").primaryKey(),
+    buyerEmail: text("buyer_email")
+      .notNull()
+      .references(() => members.email),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id),
+    sellerEmail: text("seller_email")
+      .notNull()
+      .references(() => members.email),
+    pricingModel: text("pricing_model").notNull(),
+    amount: integer("amount").notNull(),
+    status: text("status").notNull().default("paid"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    purchaseOperationId: text("purchase_operation_id")
+      .notNull()
+      .references(() => fruitOperations.id),
+    refundOperationId: text("refund_operation_id").references(() => fruitOperations.id),
+    purchasedAt: text("purchased_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    refundableUntil: text("refundable_until"),
+    availableAt: text("available_at").notNull(),
+    settledAt: text("settled_at"),
+    refundedAt: text("refunded_at"),
+  },
+  (table) => [
+    uniqueIndex("product_orders_idempotency_idx").on(table.buyerEmail, table.idempotencyKey),
+    index("product_orders_buyer_idx").on(table.buyerEmail, table.purchasedAt),
+    index("product_orders_seller_idx").on(table.sellerEmail, table.status, table.availableAt),
+    check("product_orders_amount_positive", sql`${table.amount} > 0`),
+    check("product_orders_pricing_valid", sql`${table.pricingModel} in ('one_time', 'per_use')`),
+    check("product_orders_status_valid", sql`${table.status} in ('paid', 'settled', 'refunded')`),
+  ],
+);
+
+export const productEntitlements = sqliteTable(
+  "product_entitlements",
+  {
+    buyerEmail: text("buyer_email")
+      .notNull()
+      .references(() => members.email),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => productOrders.id),
+    status: text("status").notNull().default("active"),
+    grantedAt: text("granted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.buyerEmail, table.productId] }),
+    check("product_entitlements_status_valid", sql`${table.status} in ('active', 'revoked')`),
+  ],
+);
+
+export const fruitRewardEvents = sqliteTable(
+  "fruit_reward_events",
+  {
+    id: text("id").primaryKey(),
+    recipientEmail: text("recipient_email")
+      .notNull()
+      .references(() => members.email),
+    actorEmail: text("actor_email")
+      .notNull()
+      .references(() => members.email),
+    kind: text("kind").notNull(),
+    targetType: text("target_type").notNull(),
+    targetRef: text("target_ref").notNull(),
+    amount: integer("amount").notNull(),
+    status: text("status").notNull(),
+    reason: text("reason").notNull(),
+    operationId: text("operation_id").references(() => fruitOperations.id),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("fruit_reward_once_idx").on(table.actorEmail, table.kind, table.targetType, table.targetRef),
+    index("fruit_reward_actor_day_idx").on(table.actorEmail, table.createdAt),
+    index("fruit_reward_recipient_day_idx").on(table.recipientEmail, table.createdAt),
+    check("fruit_reward_amount_nonnegative", sql`${table.amount} >= 0`),
+    check("fruit_reward_status_valid", sql`${table.status} in ('granted', 'suppressed')`),
+  ],
+);
+
+export const fruitRiskEvents = sqliteTable(
+  "fruit_risk_events",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => members.email),
+    kind: text("kind").notNull(),
+    severity: text("severity").notNull(),
+    evidence: text("evidence").notNull(),
+    status: text("status").notNull().default("open"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    resolvedAt: text("resolved_at"),
+  },
+  (table) => [
+    index("fruit_risk_user_idx").on(table.userEmail, table.status, table.createdAt),
+    check("fruit_risk_severity_valid", sql`${table.severity} in ('low', 'medium', 'high')`),
+    check("fruit_risk_status_valid", sql`${table.status} in ('open', 'resolved', 'dismissed')`),
+  ],
+);
+
+export const oauthProviderClients = sqliteTable(
+  "oauth_provider_clients",
+  {
+    clientId: text("client_id").primaryKey(),
+    ownerEmail: text("owner_email").notNull().references(() => members.email),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    websiteUrl: text("website_url").notNull(),
+    clientType: text("client_type").notNull(),
+    clientSecretHash: text("client_secret_hash"),
+    allowedScopes: text("allowed_scopes").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("oauth_provider_clients_owner_idx").on(table.ownerEmail, table.createdAt),
+    check("oauth_provider_clients_type_valid", sql`${table.clientType} in ('public', 'confidential')`),
+    check("oauth_provider_clients_status_valid", sql`${table.status} in ('active', 'revoked')`),
+  ],
+);
+
+export const oauthProviderRedirectUris = sqliteTable(
+  "oauth_provider_redirect_uris",
+  {
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    redirectUri: text("redirect_uri").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [primaryKey({ columns: [table.clientId, table.redirectUri] })],
+);
+
+export const oauthProviderAuthorizationRequests = sqliteTable(
+  "oauth_provider_authorization_requests",
+  {
+    requestHash: text("request_hash").primaryKey(),
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    redirectUri: text("redirect_uri").notNull(),
+    scope: text("scope").notNull(),
+    state: text("state").notNull(),
+    nonce: text("nonce"),
+    codeChallenge: text("code_challenge").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("oauth_provider_requests_expiry_idx").on(table.expiresAt)],
+);
+
+export const oauthProviderAuthorizationCodes = sqliteTable(
+  "oauth_provider_authorization_codes",
+  {
+    codeHash: text("code_hash").primaryKey(),
+    requestHash: text("request_hash").notNull().references(() => oauthProviderAuthorizationRequests.requestHash),
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    redirectUri: text("redirect_uri").notNull(),
+    scope: text("scope").notNull(),
+    nonce: text("nonce"),
+    codeChallenge: text("code_challenge").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("oauth_provider_codes_request_idx").on(table.requestHash),
+    index("oauth_provider_codes_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const oauthProviderAccessTokens = sqliteTable(
+  "oauth_provider_access_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    scope: text("scope").notNull(),
+    authorizationCodeHash: text("authorization_code_hash").references(() => oauthProviderAuthorizationCodes.codeHash),
+    refreshParentHash: text("refresh_parent_hash"),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("oauth_provider_access_code_once_idx").on(table.authorizationCodeHash),
+    uniqueIndex("oauth_provider_access_refresh_once_idx").on(table.refreshParentHash),
+    index("oauth_provider_access_lookup_idx").on(table.clientId, table.userEmail, table.expiresAt),
+  ],
+);
+
+export const oauthProviderRefreshTokens = sqliteTable(
+  "oauth_provider_refresh_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    scope: text("scope").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    replacedByHash: text("replaced_by_hash"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("oauth_provider_refresh_lookup_idx").on(table.clientId, table.userEmail, table.expiresAt)],
+);
+
+export const oauthProviderConsents = sqliteTable(
+  "oauth_provider_consents",
+  {
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    scope: text("scope").notNull(),
+    grantedAt: text("granted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [primaryKey({ columns: [table.clientId, table.userEmail] })],
+);
+
+export const oauthProviderSubjects = sqliteTable(
+  "oauth_provider_subjects",
+  {
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    subject: text("subject").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.clientId, table.userEmail] }),
+    uniqueIndex("oauth_provider_subject_unique_idx").on(table.subject),
+  ],
+);
+
+export const oauthProviderSigningKeys = sqliteTable(
+  "oauth_provider_signing_keys",
+  {
+    kid: text("kid").primaryKey(),
+    algorithm: text("algorithm").notNull().default("ES256"),
+    privateJwk: text("private_jwk").notNull(),
+    publicJwk: text("public_jwk").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("oauth_provider_one_active_key_idx")
+      .on(table.status)
+      .where(sql`${table.status} = 'active'`),
+    check("oauth_provider_key_status_valid", sql`${table.status} in ('active', 'retired')`),
+  ],
+);
+
+export const externalFruitPayments = sqliteTable(
+  "external_fruit_payments",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    payerEmail: text("payer_email").notNull().references(() => members.email),
+    merchantEmail: text("merchant_email").notNull().references(() => members.email),
+    externalReference: text("external_reference").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    pricingModel: text("pricing_model").notNull(),
+    amount: integer("amount").notNull(),
+    status: text("status").notNull().default("pending"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    returnUri: text("return_uri").notNull(),
+    purchaseOperationId: text("purchase_operation_id").references(() => fruitOperations.id),
+    refundOperationId: text("refund_operation_id").references(() => fruitOperations.id),
+    approvalChallengeHash: text("approval_challenge_hash"),
+    expiresAt: text("expires_at").notNull(),
+    refundableUntil: text("refundable_until"),
+    availableAt: text("available_at"),
+    paidAt: text("paid_at"),
+    settledAt: text("settled_at"),
+    refundedAt: text("refunded_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("external_fruit_payments_idempotency_idx").on(table.clientId, table.payerEmail, table.idempotencyKey),
+    index("external_fruit_payments_client_idx").on(table.clientId, table.createdAt),
+    index("external_fruit_payments_merchant_idx").on(table.merchantEmail, table.status, table.availableAt),
+    check("external_fruit_payments_amount_valid", sql`${table.amount} between 1 and 99`),
+    check("external_fruit_payments_pricing_valid", sql`${table.pricingModel} in ('one_time', 'per_use')`),
+    check("external_fruit_payments_status_valid", sql`${table.status} in ('pending', 'paid', 'settled', 'refunded', 'cancelled', 'expired')`),
+  ],
+);
+
+export const externalFruitEntitlements = sqliteTable(
+  "external_fruit_entitlements",
+  {
+    clientId: text("client_id").notNull().references(() => oauthProviderClients.clientId),
+    payerEmail: text("payer_email").notNull().references(() => members.email),
+    externalReference: text("external_reference").notNull(),
+    paymentId: text("payment_id").notNull().references(() => externalFruitPayments.id),
+    status: text("status").notNull().default("active"),
+    grantedAt: text("granted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.clientId, table.payerEmail, table.externalReference] }),
+    check("external_fruit_entitlements_status_valid", sql`${table.status} in ('active', 'revoked')`),
   ],
 );
 

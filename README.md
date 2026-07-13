@@ -89,6 +89,16 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 Google/GitHub OAuth 配置步骤见 [OAUTH_SETUP.md](./OAUTH_SETUP.md)。
 
+第三方平台可在站内 `/developers` 注册应用，并在 `/developers/docs` 查看接入文档。造场作为 OAuth 2.1 / OIDC 身份提供方时使用：
+
+- `/.well-known/openid-configuration`：OIDC 服务发现
+- `/oauth/authorize`：授权码 + PKCE S256 授权入口
+- `/api/oauth/token`：授权码交换与刷新令牌轮换
+- `/api/oauth/userinfo`：按授权范围返回用户资料
+- `/api/v1/fruit/*`：余额与逐笔确认的果子支付 API
+
+外部 API 不提供充值、铸果、提现或法币兑换能力。果子支付创建意图后不会立即扣款，必须由同一用户回到造场确认页批准。
+
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
 - `npm test`: build the starter and verify its rendered loading skeleton

@@ -12,6 +12,7 @@ export type Product = {
   demoUrl?: string | null;
   coverTheme: "coral" | "mint" | "blue" | "yellow" | "ink";
   price: number;
+  pricingModel: "free" | "one_time" | "per_use";
   likes: number;
   plays: number;
   image: string;
@@ -49,6 +50,7 @@ export const products: Product[] = [
     demoType: "focus",
     coverTheme: "mint",
     price: 0,
+    pricingModel: "free",
     likes: 842,
     plays: 12842,
     image:
@@ -69,7 +71,8 @@ export const products: Product[] = [
     category: "生活方式",
     demoType: "route",
     coverTheme: "blue",
-    price: 6,
+    price: 0,
+    pricingModel: "free",
     likes: 319,
     plays: 4630,
     image:
@@ -91,7 +94,8 @@ export const products: Product[] = [
     category: "互动体验",
     demoType: "type",
     coverTheme: "coral",
-    price: 9,
+    price: 0,
+    pricingModel: "free",
     likes: 577,
     plays: 7914,
     image:
@@ -112,7 +116,8 @@ export const products: Product[] = [
     category: "声音影像",
     demoType: "mix",
     coverTheme: "yellow",
-    price: 12,
+    price: 0,
+    pricingModel: "free",
     likes: 264,
     plays: 3810,
     image:
@@ -133,7 +138,8 @@ export const products: Product[] = [
     category: "效率工具",
     demoType: "tracker",
     coverTheme: "ink",
-    price: 4,
+    price: 0,
+    pricingModel: "free",
     likes: 186,
     plays: 2140,
     image:
@@ -154,7 +160,8 @@ export const products: Product[] = [
     category: "互动体验",
     demoType: "stage",
     coverTheme: "coral",
-    price: 8,
+    price: 0,
+    pricingModel: "free",
     likes: 431,
     plays: 5260,
     image:

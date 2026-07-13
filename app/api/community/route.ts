@@ -1,4 +1,6 @@
 import { database, ensureMember, jsonError, optionalMember } from "../_lib/community";
+import { settleDueExternalFruit } from "../_lib/external-fruit";
+import { settleDueFruit } from "../_lib/fruit";
 
 export const dynamic = "force-dynamic";
 
@@ -6,14 +8,18 @@ export async function GET() {
   try {
     const db = database();
     const member = await optionalMember();
-    if (member) await ensureMember(member);
+    if (member) {
+      await ensureMember(member);
+      await Promise.all([settleDueFruit(member.email), settleDueExternalFruit(member.email)]);
+    }
 
     const queries = [
       db
         .prepare(
           `SELECT id, owner_name AS ownerName, title, description, category,
                   demo_type AS demoType, demo_url AS demoUrl,
-                  image_url AS imageUrl, cover_theme AS coverTheme, price, likes_count AS likes,
+                  image_url AS imageUrl, cover_theme AS coverTheme, price,
+                  pricing_model AS pricingModel, likes_count AS likes,
                   plays_count AS plays, created_at AS createdAt
            FROM products WHERE status = 'published'
            ORDER BY created_at DESC LIMIT 24`,
@@ -40,12 +46,18 @@ export async function GET() {
     let collectionItems: unknown[] = [];
     let ownedProducts: unknown[] = [];
     let notifications: unknown[] = [];
+    let orders: unknown[] = [];
 
     if (member) {
       wallet = await db
         .prepare(
-          `SELECT balance, lifetime_earned AS lifetimeEarned,
-                  lifetime_spent AS lifetimeSpent
+          `SELECT balance, pending_balance AS pendingBalance,
+                  lifetime_earned AS lifetimeEarned, lifetime_spent AS lifetimeSpent,
+                  status,
+                  COALESCE((SELECT SUM(delta) FROM fruit_entries
+                            WHERE user_email = wallets.user_email AND bucket = 'available'), 0) AS ledgerBalance,
+                  COALESCE((SELECT SUM(delta) FROM fruit_entries
+                            WHERE user_email = wallets.user_email AND bucket = 'pending'), 0) AS ledgerPendingBalance
            FROM wallets WHERE user_email = ?`,
         )
         .bind(member.email)
@@ -102,7 +114,7 @@ export async function GET() {
           .prepare(
             `SELECT id, owner_name AS ownerName, title, description, category,
                     demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
-                    cover_theme AS coverTheme, price, likes_count AS likes,
+                    cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
                     plays_count AS plays, status, created_at AS createdAt
              FROM products WHERE owner_email = ?
              ORDER BY created_at DESC, id DESC`,
@@ -110,6 +122,39 @@ export async function GET() {
           .bind(member.email)
           .all()
       ).results;
+      const internalOrders = (
+        await db
+          .prepare(
+            `SELECT o.id, o.product_id AS productId, p.title AS productTitle,
+                    o.pricing_model AS pricingModel, o.amount, o.status,
+                    o.purchased_at AS purchasedAt, o.refundable_until AS refundableUntil,
+                    CASE WHEN o.status = 'paid' AND o.pricing_model = 'one_time'
+                              AND o.refundable_until > CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS refundable,
+                    'internal' AS source, NULL AS clientName
+             FROM product_orders o JOIN products p ON p.id = o.product_id
+             WHERE o.buyer_email = ? ORDER BY o.purchased_at DESC LIMIT 20`,
+          )
+          .bind(member.email)
+          .all()
+      ).results;
+      const externalOrders = (
+        await db
+          .prepare(
+            `SELECT e.id, NULL AS productId, e.title AS productTitle,
+                    e.pricing_model AS pricingModel, e.amount, e.status,
+                    e.created_at AS purchasedAt, e.refundable_until AS refundableUntil,
+                    CASE WHEN e.status = 'paid' AND e.pricing_model = 'one_time'
+                              AND e.refundable_until > CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS refundable,
+                    'external' AS source, c.name AS clientName
+             FROM external_fruit_payments e JOIN oauth_provider_clients c ON c.client_id = e.client_id
+             WHERE e.payer_email = ? ORDER BY e.created_at DESC LIMIT 20`,
+          )
+          .bind(member.email)
+          .all()
+      ).results;
+      orders = [...internalOrders, ...externalOrders]
+        .sort((left, right) => String((right as { purchasedAt?: string }).purchasedAt ?? "").localeCompare(String((left as { purchasedAt?: string }).purchasedAt ?? "")))
+        .slice(0, 20);
       notifications = (
         await db
           .prepare(
@@ -163,6 +208,7 @@ export async function GET() {
       collectionItems,
       ownedProducts,
       notifications,
+      orders,
       signedIn: Boolean(member),
     });
   } catch (error) {

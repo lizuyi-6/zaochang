@@ -22,6 +22,7 @@ function hydrateRemote(product: Record<string, unknown>): Product {
     demoUrl: product.demoUrl ? String(product.demoUrl) : null,
     coverTheme: theme,
     price: Number(product.price ?? 0),
+    pricingModel: (["free", "one_time", "per_use"].includes(String(product.pricingModel)) ? String(product.pricingModel) : "free") as Product["pricingModel"],
     likes: Number(product.likes ?? 0),
     plays: Number(product.plays ?? 0),
     image: product.imageUrl ? String(product.imageUrl) : "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1200&q=85",

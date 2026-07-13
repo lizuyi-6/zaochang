@@ -2,6 +2,7 @@ import { database, jsonError, requireMember } from "../_lib/community";
 
 const themes = ["coral", "mint", "blue", "yellow", "ink"];
 const categories = ["效率工具", "互动体验", "声音影像", "生活方式", "开发工具"];
+const pricingModels = ["free", "one_time", "per_use"];
 
 export async function POST(request: Request) {
   try {
@@ -12,7 +13,9 @@ export async function POST(request: Request) {
     const category = String(input.category ?? "");
     const demoUrl = String(input.demoUrl ?? "").trim().slice(0, 500) || null;
     const imageUrl = String(input.imageUrl ?? "").trim().slice(0, 500) || null;
-    const price = Math.max(0, Math.min(99, Math.floor(Number(input.price) || 0)));
+    const pricingModel = pricingModels.includes(String(input.pricingModel)) ? String(input.pricingModel) : "free";
+    const requestedPrice = Math.max(0, Math.min(99, Math.floor(Number(input.price) || 0)));
+    const price = pricingModel === "free" ? 0 : Math.max(1, requestedPrice);
     const coverTheme = themes.includes(String(input.coverTheme))
       ? String(input.coverTheme)
       : "coral";
@@ -32,11 +35,11 @@ export async function POST(request: Request) {
       .prepare(
         `INSERT INTO products
          (owner_email, owner_name, title, description, category, demo_type,
-          demo_url, image_url, cover_theme, price)
-         VALUES (?, ?, ?, ?, ?, 'prototype', ?, ?, ?, ?)
+          demo_url, image_url, cover_theme, price, pricing_model)
+         VALUES (?, ?, ?, ?, ?, 'prototype', ?, ?, ?, ?, ?)
          RETURNING id, owner_name AS ownerName, title, description, category,
                    demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
-                   cover_theme AS coverTheme, price, likes_count AS likes,
+                   cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
                    plays_count AS plays, created_at AS createdAt`,
       )
       .bind(
@@ -49,27 +52,10 @@ export async function POST(request: Request) {
         imageUrl,
         coverTheme,
         price,
+        pricingModel,
       )
       .first();
-
-    await db.batch([
-      db
-        .prepare(
-          `UPDATE wallets SET balance = balance + 20,
-             lifetime_earned = lifetime_earned + 20,
-             updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
-        )
-        .bind(member.email),
-      db
-        .prepare(
-          `INSERT INTO transactions
-           (user_email, delta, type, description, reference_id)
-           VALUES (?, 20, 'publish_reward', '发布作品奖励', ?)`,
-        )
-        .bind(member.email, `product:${String(created?.id ?? "new")}`),
-    ]);
-
-    return Response.json({ product: created, reward: 20 }, { status: 201 });
+    return Response.json({ product: created, reward: 0 }, { status: 201 });
   } catch (error) {
     return jsonError(error);
   }

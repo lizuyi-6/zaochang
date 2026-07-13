@@ -123,12 +123,24 @@ export async function ensureOAuthUser(user: SessionUser, provider: OAuthProvider
     ).bind(user.email, user.displayName),
     db.prepare(
       `INSERT OR IGNORE INTO wallets (user_email, balance, lifetime_earned, lifetime_spent)
-       VALUES (?, 120, 120, 0)`,
+       VALUES (?, 20, 20, 0)`,
     ).bind(user.email),
     db.prepare(
       `INSERT OR IGNORE INTO transactions (user_email, delta, type, description, reference_id)
-       VALUES (?, 120, 'welcome', '新成员起步金', 'welcome')`,
+       VALUES (?, 20, 'welcome', '新成员探索金', 'welcome')`,
     ).bind(user.email),
+    db.prepare(
+      `INSERT OR IGNORE INTO fruit_operations
+       (id, kind, idempotency_key, target_email, amount, reference_type, reference_id, description)
+       SELECT ?, 'onboarding', ?, ?, 20, 'member', ?, '新成员探索金'
+       WHERE NOT EXISTS (SELECT 1 FROM fruit_entries WHERE user_email = ?)`,
+    ).bind(`onboarding:${user.email}`, `onboarding:${user.email}`, user.email, user.email, user.email),
+    db.prepare(
+      `INSERT OR IGNORE INTO fruit_entries (operation_id, user_email, bucket, delta)
+       SELECT ?, ?, 'available', 20
+       WHERE EXISTS (SELECT 1 FROM fruit_operations WHERE id = ?)
+         AND NOT EXISTS (SELECT 1 FROM fruit_entries WHERE user_email = ?)`,
+    ).bind(`onboarding:${user.email}`, user.email, `onboarding:${user.email}`, user.email),
     db.prepare(
       `INSERT INTO oauth_accounts
        (provider, provider_account_id, email, display_name, avatar_url, updated_at)

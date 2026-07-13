@@ -16,7 +16,7 @@ async function loadProduct(slug: string): Promise<Product | null> {
     const row = await database().prepare(
       `SELECT id, owner_name AS ownerName, title, description, category,
               demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
-              cover_theme AS coverTheme, price, likes_count AS likes,
+              cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
               plays_count AS plays, created_at AS createdAt
        FROM products WHERE id = ? AND status = 'published'`,
     ).bind(id).first<Record<string, unknown>>();
@@ -34,6 +34,7 @@ async function loadProduct(slug: string): Promise<Product | null> {
       demoUrl: row.demoUrl ? String(row.demoUrl) : null,
       coverTheme: theme,
       price: Number(row.price),
+      pricingModel: (["free", "one_time", "per_use"].includes(String(row.pricingModel)) ? String(row.pricingModel) : "free") as Product["pricingModel"],
       likes: Number(row.likes),
       plays: Number(row.plays),
       image: row.imageUrl ? String(row.imageUrl) : "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1600&q=88",
