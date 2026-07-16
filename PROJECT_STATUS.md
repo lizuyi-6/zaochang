@@ -370,4 +370,5 @@
 - 审计反例与结果：升级前 `npm audit` 退出码 `1`，统计 `6 high / 7 moderate / 1 low / 0 critical`；升级后从 `X:\zaochang` 执行审计退出码 `0`，统计 `0 high / 0 moderate / 0 low / 0 critical`。`npm ls --all --json` 退出码 `0`，目标包实际解析版本与清单逐项相等。
 - 升级后行为门禁：`npm test` 退出码 `0`，Vite `8.1.4` 生产构建成功，统计 `67 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 `0`；Lint 退出码 `0`，统计 `0 errors / 9 warnings`；Drizzle 输出 `37 tables / No schema changes`。
 - X 盘依赖边界：X 盘增量 npm reify 两次长时间无退出后停止，锁文件在 NTFS 验证副本生成；`X:\zaochang\node_modules` 当前是指向该已审计依赖树的本地目录联接。半安装恢复目录 `node_modules.xdrive-partial-20260716-230708` 的删除被主机策略拒绝，未删除，仅由 Git、TypeScript 与 ESLint 排除，不进入提交。
+- CI 兼容修复：GitHub Actions run `29511188405` 在 Node `22.13.0` 构建成功后，因测试直接导入 `.ts` 而返回 `ERR_UNKNOWN_FILE_EXTENSION`；test 脚本显式增加 `--experimental-strip-types`。本地使用 `npx node@22.13.0` 执行同一测试入口退出码 `0`，统计 `67 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`。
 - 仍阻断公开发布：本节依赖升级未部署；生产数据仍使用本机 Wrangler/Workerd 持久化层；Basic Auth 仍是共享预览凭据；Google 登录、跨机备份、恶意上传扫描、生产告警接收链与容量压测未验收。

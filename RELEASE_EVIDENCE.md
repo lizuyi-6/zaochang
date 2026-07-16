@@ -110,6 +110,7 @@
 ## 2026-07-16 依赖安全增量
 
 - `package.json`：升级 Next/React、Cloudflare Vite plugin、Vite 与 Wrangler，并对 PostCSS/esbuild 增加最小传递依赖覆盖；`npm ls --all --json` 退出码 `0`，升级后的 `npm test` 为 `67/67`，Drizzle 为 `37 tables / No schema changes`。
+- `package.json` CI 增量：test 命令显式启用 Node 22 的 `--experimental-strip-types`。GitHub Actions run `29511188405` 的反例为 Node `22.13.0` 抛出 `ERR_UNKNOWN_FILE_EXTENSION`；修复后用 `npx node@22.13.0 --experimental-strip-types --test tests/rendered-html.test.mjs` 运行同一入口，退出码 `0`，统计 `67/67`。
 - `package-lock.json`：锁定 Cloudflare plugin `1.45.0`、Vite `8.1.4`、Wrangler `4.111.0`、Next `16.2.10`、React `19.2.7`、`ws 8.21.0`、PostCSS `8.5.10` 与修复后的传递依赖；`npm audit` 退出码 `0`，统计 `0 critical / 0 high / 0 moderate / 0 low`。
 - `tsconfig.json`：排除本地 X 盘依赖恢复目录；排除生效后 `npx tsc --noEmit` 退出码 `0`。第一次未排除时命中备份内损坏的第三方声明文件并退出 `2`，不作为源码结论。
 - `eslint.config.mjs`：排除本地 X 盘依赖恢复目录；排除生效后 lint 退出码 `0`，统计 `0 errors / 9 warnings`。第一次误扫备份的运行被终止，不作为 lint 证据。
