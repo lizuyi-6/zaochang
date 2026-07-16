@@ -1,0 +1,42 @@
+name: release-gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - name: Reject disabled tests
+        shell: bash
+        run: |
+          if git grep -nE '(^|[^[:alnum:]_])(test|it|describe)\.(skip|todo)|(^|[^[:alnum:]_])(xit|xtest|xdescribe)[[:space:]]*\(|[[:space:]]skip[[:space:]]*:' -- tests; then
+            echo "Disabled test mechanism found."
+            exit 1
+          fi
+      - run: npm test
+      - run: git diff --check
+      - name: Check migration metadata drift
+        run: |
+          npm run db:generate
+          git diff --exit-code -- db/schema.ts drizzle
+      - name: Block high and critical production dependency findings
+        run: npm audit --omit=dev --audit-level=high

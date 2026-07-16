@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getOAuthSessionUser } from "./oauth-session";
@@ -20,6 +21,7 @@ const CALLBACK_PATH = "/callback";
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const oauthUser = await getOAuthSessionUser();
   if (oauthUser) return oauthUser;
+  if (!oaiIdentityHeadersEnabled()) return null;
   const requestHeaders = await headers();
   const email = requestHeaders.get(USER_EMAIL_HEADER);
   if (!email) return null;
@@ -36,6 +38,12 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
     email,
     fullName,
   };
+}
+
+export function oaiIdentityHeadersEnabled() {
+  const values = env as unknown as Record<string, string | undefined>;
+  if (values.TRUST_OAI_IDENTITY_HEADERS === "true") return true;
+  return values.APP_ENV === "development" || values.APP_ENV === "test";
 }
 
 export async function requireChatGPTUser(

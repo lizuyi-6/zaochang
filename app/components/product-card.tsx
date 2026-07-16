@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Coins, Eye, Heart, Play } from "lucide-react";
 import Link from "next/link";
 import { compactNumber, type Product } from "../lib/community-data";
+import { ReportButton } from "./report-button";
 
 export function ProductCard({ product, index = 0, large = false }: { product: Product; index?: number; large?: boolean }) {
   const reduced = useReducedMotion();
@@ -34,6 +35,7 @@ export function ProductCard({ product, index = 0, large = false }: { product: Pr
           <strong>{product.ownerName}</strong>
           <span><Eye size={14} /> {compactNumber(product.plays)}</span>
           <span><Heart size={14} /> {compactNumber(product.likes)}</span>
+          {typeof product.id === "number" && <ReportButton targetType="product" targetRef={String(product.id)} />}
         </div>
       </div>
     </motion.article>

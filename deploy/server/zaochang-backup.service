@@ -1,0 +1,11 @@
+[Unit]
+Description=Create a consistent Zaochang state backup
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/zaochang-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

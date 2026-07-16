@@ -1,8 +1,9 @@
 import { database } from "./community";
 
 export const FRUIT_POLICY = {
-  onboardingGrant: 20,
+  onboardingGrant: 0,
   likeReward: 1,
+  likeSettlementHours: 24,
   likeActorDailyLimit: 10,
   likeRecipientDailyLimit: 20,
   likeVelocityLimit: 6,
@@ -22,6 +23,8 @@ export class FruitError extends Error {
 type WalletRow = {
   balance: number;
   pendingBalance: number;
+  ledgerBalance: number;
+  ledgerPendingBalance: number;
   lifetimeEarned: number;
   lifetimeSpent: number;
   status: string;
@@ -95,16 +98,43 @@ async function wallet(email: string) {
   return database().prepare(
     `SELECT balance, pending_balance AS pendingBalance,
             lifetime_earned AS lifetimeEarned, lifetime_spent AS lifetimeSpent,
-            status
+            status,
+            COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'available'), 0) AS ledgerBalance,
+            COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0) AS ledgerPendingBalance
      FROM wallets WHERE user_email = ?`,
-  ).bind(email).first<WalletRow>();
+  ).bind(email, email, email).first<WalletRow>();
+}
+
+async function assertWalletIntegrity(email: string, row: WalletRow | null | undefined) {
+  if (!row) throw new FruitError("wallet_not_found", 404);
+  if (row.balance === row.ledgerBalance && row.pendingBalance === row.ledgerPendingBalance) return row;
+  const db = database();
+  await db.batch([
+    db.prepare(`UPDATE wallets SET status = 'review', updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`).bind(email),
+    db.prepare(
+      `INSERT INTO fruit_risk_events (id, user_email, kind, severity, evidence)
+       VALUES (?, ?, 'wallet_ledger_mismatch', 'high', ?)`,
+    ).bind(`risk:${crypto.randomUUID()}`, email, JSON.stringify({ balance: row.balance, ledgerBalance: row.ledgerBalance, pendingBalance: row.pendingBalance, ledgerPendingBalance: row.ledgerPendingBalance })),
+  ]);
+  throw new FruitError("wallet_ledger_mismatch", 423);
+}
+
+async function reconcileWalletFromLedger(email: string) {
+  await database().prepare(
+    `UPDATE wallets SET
+       balance = COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'available'), 0),
+       pending_balance = COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0),
+       updated_at = CURRENT_TIMESTAMP
+     WHERE user_email = ?`,
+  ).bind(email, email, email).run();
 }
 
 async function product(productId: number) {
   return database().prepare(
     `SELECT id, title, owner_email AS ownerEmail, price,
             pricing_model AS pricingModel
-     FROM products WHERE id = ? AND status = 'published'`,
+     FROM products WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
+       AND review_status = 'approved' AND approved_version = review_version`,
   ).bind(productId).first<ProductRow>();
 }
 
@@ -124,13 +154,17 @@ async function assertTransferEligible(userEmail: string) {
 
 async function orderByIdempotency(buyerEmail: string, key: string) {
   return database().prepare(
-    `SELECT id, buyer_email AS buyerEmail, seller_email AS sellerEmail,
-            product_id AS productId, pricing_model AS pricingModel, amount,
-            status, idempotency_key AS idempotencyKey,
-            purchase_operation_id AS purchaseOperationId,
-            refundable_until AS refundableUntil, available_at AS availableAt,
-            purchased_at AS purchasedAt
-     FROM product_orders WHERE buyer_email = ? AND idempotency_key = ?`,
+    `SELECT o.id, o.buyer_email AS buyerEmail, o.seller_email AS sellerEmail,
+            o.product_id AS productId, o.pricing_model AS pricingModel, o.amount,
+            o.status, o.idempotency_key AS idempotencyKey,
+            o.purchase_operation_id AS purchaseOperationId,
+            o.refundable_until AS refundableUntil, o.available_at AS availableAt,
+            o.purchased_at AS purchasedAt
+     FROM product_orders o
+     JOIN products p ON p.id = o.product_id
+     WHERE o.buyer_email = ? AND o.idempotency_key = ?
+       AND p.status = 'published' AND p.moderation_status = 'visible'
+       AND p.review_status = 'approved' AND p.approved_version = p.review_version`,
   ).bind(buyerEmail, key).first<OrderRow>();
 }
 
@@ -144,6 +178,17 @@ async function orderById(buyerEmail: string, orderId: string) {
             purchased_at AS purchasedAt
      FROM product_orders WHERE buyer_email = ? AND id = ?`,
   ).bind(buyerEmail, orderId).first<OrderRow>();
+}
+
+async function activeEntitlement(buyerEmail: string, productId: number) {
+  return database().prepare(
+    `SELECT e.order_id AS orderId
+     FROM product_entitlements e
+     JOIN products p ON p.id = e.product_id
+     WHERE e.buyer_email = ? AND e.product_id = ? AND e.status = 'active'
+       AND p.status = 'published' AND p.moderation_status = 'visible'
+       AND p.review_status = 'approved' AND p.approved_version = p.review_version`,
+  ).bind(buyerEmail, productId).first<{ orderId: string }>();
 }
 
 async function operationByIdempotency(key: string) {
@@ -170,6 +215,36 @@ export async function settleDueFruit(sellerEmail: string) {
   const db = database();
   const sellerWallet = await wallet(sellerEmail);
   if (!sellerWallet || sellerWallet.status !== "active") return;
+  try {
+    await assertWalletIntegrity(sellerEmail, sellerWallet);
+  } catch {
+    return;
+  }
+  const rewardDue = await db.prepare(
+    `SELECT r.id, r.amount FROM fruit_reward_events r
+     WHERE r.recipient_email = ? AND r.status = 'granted'
+       AND r.created_at <= datetime('now', '-${FRUIT_POLICY.likeSettlementHours} hours')
+       AND NOT EXISTS (SELECT 1 FROM fruit_operations o WHERE o.reference_type = 'reward_event' AND o.reference_id = r.id)
+     ORDER BY r.created_at ASC LIMIT 50`,
+  ).bind(sellerEmail).all<{ id: string; amount: number }>();
+  for (const reward of rewardDue.results) {
+    const operationId = `like-settlement:${reward.id}`;
+    try {
+      await db.batch([
+        db.prepare(
+          `INSERT INTO fruit_operations
+           (id, kind, idempotency_key, target_email, amount, reference_type, reference_id, description)
+           VALUES (?, 'like_reward_settlement', ?, ?, ?, 'reward_event', ?, '有效点赞奖励结算')`,
+        ).bind(operationId, operationId, sellerEmail, reward.amount, reward.id),
+        db.prepare(`UPDATE wallets SET pending_balance = pending_balance - ?, balance = balance + ?, lifetime_earned = lifetime_earned + ?, updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`).bind(reward.amount, reward.amount, reward.amount, sellerEmail),
+        db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, sellerEmail, -reward.amount),
+        db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'available', ?)`).bind(operationId, sellerEmail, reward.amount),
+        db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'like_reward', '有效点赞奖励已结算', ?)`).bind(sellerEmail, reward.amount, reward.id),
+      ]);
+    } catch (error) {
+      if (!isUniqueError(error) && !errorIncludes(error, "like_reward_not_settleable")) throw error;
+    }
+  }
   const due = await db.prepare(
     `SELECT id, amount, product_id AS productId
      FROM product_orders
@@ -214,14 +289,10 @@ export async function settleDueFruit(sellerEmail: string) {
 
 export async function getFruitPaymentState(userEmail: string, productId: number) {
   await settleDueFruit(userEmail);
-  const db = database();
   const [item, balance, entitlement] = await Promise.all([
     product(productId),
     wallet(userEmail),
-    db.prepare(
-      `SELECT order_id AS orderId FROM product_entitlements
-       WHERE buyer_email = ? AND product_id = ? AND status = 'active'`,
-    ).bind(userEmail, productId).first<{ orderId: string }>(),
+    activeEntitlement(userEmail, productId),
   ]);
   if (!item) throw new FruitError("product_not_found", 404);
   const owner = item.ownerEmail === userEmail;
@@ -239,28 +310,27 @@ export async function checkoutProduct(userEmail: string, productId: number, idem
   if (!Number.isInteger(productId) || !validIdempotencyKey(idempotencyKey)) {
     throw new FruitError("invalid_checkout", 400);
   }
+  const db = database();
+  const item = await product(productId);
+  if (!item) throw new FruitError("product_not_found", 404);
   const replay = await orderByIdempotency(userEmail, idempotencyKey);
   if (replay) {
     if (replay.productId !== productId) throw new FruitError("idempotency_conflict", 409);
     return { access: replay.status !== "refunded", charged: false, replayed: true, order: publicOrder(replay), wallet: await wallet(userEmail) };
   }
 
-  const db = database();
-  const item = await product(productId);
-  if (!item) throw new FruitError("product_not_found", 404);
   if (item.ownerEmail === userEmail) return { access: true, charged: false, reason: "owner", wallet: await wallet(userEmail) };
   if (item.pricingModel === "free" || item.price === 0) return { access: true, charged: false, reason: "free", wallet: await wallet(userEmail) };
   await assertTransferEligible(userEmail);
 
   if (item.pricingModel === "one_time") {
-    const entitlement = await db.prepare(
-      `SELECT order_id AS orderId FROM product_entitlements
-       WHERE buyer_email = ? AND product_id = ? AND status = 'active'`,
-    ).bind(userEmail, productId).first<{ orderId: string }>();
+    const entitlement = await activeEntitlement(userEmail, productId);
     if (entitlement) return { access: true, charged: false, reason: "already_owned", wallet: await wallet(userEmail) };
   }
 
   const [buyerWallet, sellerWallet] = await Promise.all([wallet(userEmail), wallet(item.ownerEmail)]);
+  await assertWalletIntegrity(userEmail, buyerWallet);
+  await assertWalletIntegrity(item.ownerEmail, sellerWallet);
   if (!buyerWallet || !sellerWallet) throw new FruitError("wallet_not_found", 404);
   if (buyerWallet.status !== "active" || sellerWallet.status !== "active") throw new FruitError("wallet_restricted", 423);
 
@@ -323,19 +393,19 @@ export async function checkoutProduct(userEmail: string, productId: number, idem
   } catch (error) {
     if (isBalanceError(error)) throw new FruitError("insufficient_balance", 409);
     if (errorIncludes(error, "paid_transfer_actor_not_eligible")) throw new FruitError("wallet_restricted", 423);
+    if (errorIncludes(error, "product_order_product_not_approved")) throw new FruitError("product_not_found", 404);
     if (isUniqueError(error)) {
       const duplicate = await orderByIdempotency(userEmail, idempotencyKey);
       if (duplicate) {
         if (duplicate.productId !== productId) throw new FruitError("idempotency_conflict", 409);
         return { access: duplicate.status !== "refunded", charged: false, replayed: true, order: publicOrder(duplicate), wallet: await wallet(userEmail) };
       }
+      if (!(await product(productId))) throw new FruitError("product_not_found", 404);
     }
     if (errorIncludes(error, "entitlement_already_active")) {
-      const entitlement = await db.prepare(
-        `SELECT order_id AS orderId FROM product_entitlements
-         WHERE buyer_email = ? AND product_id = ? AND status = 'active'`,
-      ).bind(userEmail, productId).first<{ orderId: string }>();
+      const entitlement = await activeEntitlement(userEmail, productId);
       if (entitlement) return { access: true, charged: false, replayed: false, reason: "already_owned", wallet: await wallet(userEmail) };
+      if (!(await product(productId))) throw new FruitError("product_not_found", 404);
     }
     throw error;
   }
@@ -366,6 +436,8 @@ export async function refundProductOrder(userEmail: string, orderId: string, ide
   const refundable = current.refundableUntil && Date.parse(`${current.refundableUntil}Z`) > Date.now();
   if (!refundable) throw new FruitError("refund_window_closed", 409);
 
+  await Promise.all([reconcileWalletFromLedger(userEmail), reconcileWalletFromLedger(current.sellerEmail)]);
+
   const operationId = `refund:${crypto.randomUUID()}`;
   try {
     await db.batch([
@@ -376,13 +448,13 @@ export async function refundProductOrder(userEmail: string, orderId: string, ide
       ).bind(operationId, replayKey, current.sellerEmail, userEmail, current.amount, orderId, current.purchaseOperationId),
       db.prepare(
         `UPDATE wallets SET
-           balance = CASE WHEN status = 'active' THEN balance + ? ELSE -1 END,
+           balance = balance + ?,
            lifetime_spent = MAX(0, lifetime_spent - ?), updated_at = CURRENT_TIMESTAMP
          WHERE user_email = ?`,
       ).bind(current.amount, current.amount, userEmail),
       db.prepare(
         `UPDATE wallets SET
-           pending_balance = CASE WHEN status = 'active' THEN pending_balance - ? ELSE -1 END,
+           pending_balance = pending_balance - ?,
            updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
       ).bind(current.amount, current.sellerEmail),
       db.prepare(
@@ -428,6 +500,8 @@ export async function tipProduct(userEmail: string, productId: number, amount: n
     throw new FruitError("invalid_tip", 400);
   }
   const db = database();
+  const item = await product(productId);
+  if (!item) throw new FruitError("product_not_found", 404);
   const replayKey = `tip:${userEmail}:${idempotencyKey}`;
   const replay = await db.prepare(
     `SELECT amount, reference_id AS referenceId
@@ -437,10 +511,11 @@ export async function tipProduct(userEmail: string, productId: number, amount: n
     if (replay.amount !== amount || replay.referenceId !== String(productId)) throw new FruitError("idempotency_conflict", 409);
     return { tipped: replay.amount, replayed: true, wallet: await wallet(userEmail) };
   }
-  const item = await product(productId);
-  if (!item || item.ownerEmail === userEmail) throw new FruitError("tip_not_allowed", 409);
+  if (item.ownerEmail === userEmail) throw new FruitError("tip_not_allowed", 409);
   await assertTransferEligible(userEmail);
   const [sender, recipient] = await Promise.all([wallet(userEmail), wallet(item.ownerEmail)]);
+  await assertWalletIntegrity(userEmail, sender);
+  await assertWalletIntegrity(item.ownerEmail, recipient);
   if (sender?.status !== "active" || recipient?.status !== "active") throw new FruitError("wallet_restricted", 423);
   const operationId = `tip:${crypto.randomUUID()}`;
   const reference = `tip:${productId}:${operationId}`;
@@ -471,9 +546,10 @@ export async function tipProduct(userEmail: string, productId: number, amount: n
   } catch (error) {
     if (isBalanceError(error)) throw new FruitError("insufficient_balance", 409);
     if (errorIncludes(error, "paid_transfer_actor_not_eligible")) throw new FruitError("wallet_restricted", 423);
+    if (errorIncludes(error, "product_tip_product_not_approved")) throw new FruitError("product_not_found", 404);
     if (isUniqueError(error)) {
       const duplicate = await operationByIdempotency(replayKey);
-      if (duplicate?.kind === "tip" && duplicate.amount === amount && duplicate.referenceId === String(productId)) {
+      if (duplicate?.kind === "tip" && duplicate.amount === amount && duplicate.referenceId === String(productId) && await product(productId)) {
         return { tipped: duplicate.amount, replayed: true, wallet: await wallet(userEmail) };
       }
       throw new FruitError("idempotency_conflict", 409);
@@ -530,6 +606,11 @@ export async function awardProductLike(recipientEmail: string, actorEmail: strin
   if (!actor || !recipient || actor.status !== "active" || recipient.status !== "active") {
     return suppressLikeReward(recipientEmail, actorEmail, targetRef, "wallet_restricted", false);
   }
+  try {
+    await assertWalletIntegrity(recipientEmail, recipient);
+  } catch {
+    return suppressLikeReward(recipientEmail, actorEmail, targetRef, "wallet_ledger_mismatch", true);
+  }
   const ageHours = (Date.now() - Date.parse(`${actor.joinedAt}Z`)) / 3_600_000;
   if (!Number.isFinite(ageHours) || ageHours < FRUIT_POLICY.accountMinimumAgeHours) {
     return suppressLikeReward(recipientEmail, actorEmail, targetRef, "account_too_new", false);
@@ -551,23 +632,26 @@ export async function awardProductLike(recipientEmail: string, actorEmail: strin
       db.prepare(
         `INSERT INTO fruit_operations
          (id, kind, idempotency_key, target_email, amount, reference_type, reference_id, description)
-         VALUES (?, 'like_reward', ?, ?, ?, 'product_like', ?, '作品收到有效喜欢')`,
+         VALUES (?, 'like_reward_pending', ?, ?, ?, 'product_like', ?, '有效点赞奖励待结算')`,
       ).bind(operationId, `like-reward:${actorEmail}:${targetRef}`, recipientEmail, FRUIT_POLICY.likeReward, targetRef),
       db.prepare(
         `UPDATE wallets SET
-           balance = CASE WHEN status = 'active' THEN balance + ? ELSE -1 END,
-           lifetime_earned = lifetime_earned + ?, updated_at = CURRENT_TIMESTAMP
+           pending_balance = CASE WHEN status = 'active' THEN pending_balance + ? ELSE -1 END,
+           updated_at = CURRENT_TIMESTAMP
          WHERE user_email = ?`,
-      ).bind(FRUIT_POLICY.likeReward, FRUIT_POLICY.likeReward, recipientEmail),
-      db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'available', ?)`).bind(operationId, recipientEmail, FRUIT_POLICY.likeReward),
+      ).bind(FRUIT_POLICY.likeReward, recipientEmail),
+      db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, recipientEmail, FRUIT_POLICY.likeReward),
       db.prepare(
         `INSERT INTO fruit_reward_events
          (id, recipient_email, actor_email, kind, target_type, target_ref, amount, status, reason, operation_id)
          VALUES (?, ?, ?, 'product_like', 'product', ?, ?, 'granted', 'qualified_unique_like', ?)`,
       ).bind(rewardId, recipientEmail, actorEmail, targetRef, FRUIT_POLICY.likeReward, operationId),
-      db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'like_reward', '作品收到有效喜欢', ?)`).bind(recipientEmail, FRUIT_POLICY.likeReward, `like:${actorEmail}:${targetRef}`),
+      db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, 0, 'like_reward_pending', '有效点赞奖励将在 24 小时后结算', ?)`).bind(recipientEmail, `like:${actorEmail}:${targetRef}`),
     ]);
   } catch (error) {
+    if (errorIncludes(error, "product_like_reward_product_not_approved")) {
+      return { granted: false, amount: 0, reason: "product_not_approved" };
+    }
     const guardReason = rewardGuardReason(error);
     if (guardReason) {
       return suppressLikeReward(recipientEmail, actorEmail, targetRef, guardReason, guardReason.endsWith("limit"));
@@ -576,4 +660,42 @@ export async function awardProductLike(recipientEmail: string, actorEmail: strin
     throw error;
   }
   return { granted: true, amount: FRUIT_POLICY.likeReward, reason: "qualified_unique_like" };
+}
+
+export async function removeProductLike(recipientEmail: string, actorEmail: string, productId: number) {
+  const db = database();
+  const targetRef = String(productId);
+  const reward = await db.prepare(
+    `SELECT id, amount, operation_id AS operationId FROM fruit_reward_events
+     WHERE actor_email = ? AND recipient_email = ? AND kind = 'product_like'
+       AND target_ref = ? AND status = 'granted'`,
+  ).bind(actorEmail, recipientEmail, targetRef).first<{ id: string; amount: number; operationId: string }>();
+  const settled = reward ? await db.prepare(
+    `SELECT 1 AS found FROM fruit_operations WHERE reference_type = 'reward_event' AND reference_id = ?`,
+  ).bind(reward.id).first<{ found: number }>() : null;
+  const operationId = reward ? `like-reversal:${reward.id}` : "";
+  const statements = [];
+  if (reward && !settled) {
+    statements.push(
+      db.prepare(
+        `INSERT INTO fruit_operations
+         (id, kind, idempotency_key, actor_email, target_email, amount, reference_type, reference_id, related_operation_id, description)
+         VALUES (?, 'like_reward_reversal', ?, ?, ?, ?, 'reward_event', ?, ?, '点赞取消，待结算奖励撤销')`,
+      ).bind(operationId, operationId, actorEmail, recipientEmail, reward.amount, reward.id, reward.operationId),
+      db.prepare(`UPDATE wallets SET pending_balance = pending_balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`).bind(reward.amount, recipientEmail),
+      db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, recipientEmail, -reward.amount),
+      db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, 0, 'like_reward_reversed', '点赞取消，待结算奖励已撤销', ?)`).bind(recipientEmail, reward.id),
+    );
+  }
+  statements.push(db.prepare("DELETE FROM product_likes WHERE product_id = ? AND user_email = ?").bind(productId, actorEmail));
+  try {
+    const results = await db.batch(statements);
+    const removed = Number(results.at(-1)?.meta?.changes ?? 0) > 0;
+    return { removed, reward: reward && !settled ? { reversed: true } : { reversed: false, reason: reward ? "already_settled" : "no_pending_reward" } };
+  } catch (error) {
+    if (isUniqueError(error) || errorIncludes(error, "like_reward_not_reversible")) {
+      return { removed: false, reward: { reversed: false, reason: "already_finalized" } };
+    }
+    throw error;
+  }
 }

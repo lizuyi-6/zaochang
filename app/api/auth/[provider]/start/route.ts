@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import {
   callbackUrl,
+  absoluteAppUrl,
   isOAuthProvider,
   oauthProviderStatus,
   providerConfig,
   randomToken,
+  requestSecure,
   safeReturnPath,
   setOAuthState,
 } from "../../../../oauth-session";
@@ -18,14 +20,14 @@ export async function GET(request: Request, { params }: Params) {
   const config = providerConfig(provider);
   const returnTo = safeReturnPath(new URL(request.url).searchParams.get("return_to"));
   if (!config) {
-    const url = new URL("/signin", request.url);
+    const url = absoluteAppUrl(request, "/signin");
     url.searchParams.set("error", "not_configured");
     url.searchParams.set("provider", provider);
     return NextResponse.redirect(url);
   }
 
   const state = `${provider}.${randomToken(24)}`;
-  const secure = new URL(request.url).protocol === "https:";
+  const secure = await requestSecure(request);
   await setOAuthState(state, returnTo, secure);
   const redirectUri = callbackUrl(request, provider);
   const authorizeUrl = new URL(provider === "google" ? "https://accounts.google.com/o/oauth2/v2/auth" : "https://github.com/login/oauth/authorize");

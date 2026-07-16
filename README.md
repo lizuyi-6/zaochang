@@ -1,110 +1,81 @@
-# vinext-starter
+# 造场
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+造场是一个面向创作者的产品社区与开放产品生态。用户可以发布和体验产品、参与讨论与收藏；公司产品通过“造场产品银河”展示；外部团队可以提交项目并在孵化控制台查看真实阶段、任务、负责人和反馈。
 
-## Prerequisites
+## 产品范围
 
-- Node.js `>=22.13.0`
+- 社区：发现、动态、圈子、挑战预览、收藏、创作台、通知、个人资料与内容举报。
+- 产品：免费、一次解锁、按次体验三种模式，以及六个嵌入式产品应用。
+- 果子：不可购买、提现或兑换法币的站内记账单位。
+- 产品银河：公司中心、业务星系、产品目录、项目申请与孵化控制台。
+- 开发者生态：造场 OAuth 2.1 / OIDC 登录，以及需要用户逐笔确认的外部果子支付 API。
+- 运营后台：OAuth 客户端审核、内容举报处置、果子风险事件和孵化阶段管理。
 
-## Quick Start
+## 产品预审
+
+- 所有用户或卖家提交的产品都进入平台预审，免费、一次解锁和按次体验没有例外。
+- 审核前产品只对作者和审核队列可见，不进入公开列表、详情、体验、点赞、评论、打赏或果子支付。
+- 管理员的批准/驳回决定按产品版本留痕；没有当前版本审核决定时，数据库拒绝把产品改成公开终态。
+- 已批准产品修改所有权、名称、说明、分类、体验地址、封面、主题或定价后，自动生成下一审核版本并重新隐藏。
+- 造场官方内置展示应用不是卖家上传记录，继续按受信任的一方静态代码发布；若未来开放其运营编辑入口，也应接入同一版本审核模型。
+
+## 果子规则
+
+- 新账户余额为 `0`，没有签到、注册或发布作品赠送。
+- 符合账号年龄、唯一性、频率和每日上限规则的作品点赞，可为创作者产生 `1` 果待结算奖励。
+- 点赞奖励在 `24h` 后进入可用余额；结算前取消点赞会撤销待结算奖励。
+- 付费转移要求账号注册满 `24h`。
+- 买家扣款与卖家待结算收入使用不可更新、不可删除的双边账本分录。
+- 一次解锁可在 `10min` 内退款；按次体验确认后不可退款；创作者收入在 `24h` 后结算。
+- 钱包物化余额与不可变账本不一致时，交易返回 `wallet_ledger_mismatch`，钱包进入人工复核状态。
+
+## 本地运行
+
+要求 Node.js `>=22.13.0`。
 
 ```bash
-npm install
+npm ci
 npm run dev
-npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+本地默认地址由开发服务器输出。D1 与 R2 的逻辑绑定分别为 `DB` 和 `UPLOADS`，声明在 `.openai/hosting.json`。
 
-## Included Shape
+## 质量命令
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+npx tsc --noEmit
+npm run lint
+npm test
+npm run db:generate
+git diff --check
+npm audit --omit=dev --audit-level=high
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+`npm test` 会先构建站点，再在全新本地 D1 上依次执行全部迁移并运行集成测试。`npm run db:generate` 后不应产生新的迁移；若产生，说明 `db/schema.ts`、迁移 SQL 与 Drizzle 快照尚未同步。
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+## 生产配置
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+生产运行至少需要以下 Sites 运行时配置：
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+```text
+APP_ENV=production
+PUBLIC_APP_ORIGIN=https://<造场正式域名>
+GITHUB_OAUTH_CLIENT_ID
+GITHUB_OAUTH_CLIENT_SECRET
+OIDC_SIGNING_PRIVATE_JWK
+ZAOCHANG_ADMIN_EMAILS
+```
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+`PUBLIC_APP_ORIGIN` 必须是没有路径、查询参数或凭据的 HTTPS origin；生产缺失或使用 HTTP 时 OAuth/OIDC 请求会失败闭锁。`GITHUB_OAUTH_CLIENT_SECRET` 与 `OIDC_SIGNING_PRIVATE_JWK` 必须作为 secret 保存。Google 登录当前暂停，可不配置。生产环境默认不信任 `oai-authenticated-user-*` 请求头；只有部署平台能够可信地剥离外部同名头并重新注入身份时，才允许设置 `TRUST_OAI_IDENTITY_HEADERS=true`。
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+详细配置见 [OAUTH_SETUP.md](./OAUTH_SETUP.md)，发布顺序与回滚条件见 [RELEASE_RUNBOOK.md](./RELEASE_RUNBOOK.md)，历次范围与缺口见 [PROJECT_STATUS.md](./PROJECT_STATUS.md)。
 
-## Useful Commands
+## 外部接入
 
-Google/GitHub OAuth 配置步骤见 [OAUTH_SETUP.md](./OAUTH_SETUP.md)。
+- `/.well-known/openid-configuration`：OIDC 服务发现。
+- `/oauth/authorize`：Authorization Code + PKCE S256。
+- `/api/oauth/token`：授权码交换与刷新令牌轮换。
+- `/api/oauth/userinfo`：按范围返回用户资料。
+- `/api/v1/fruit/*`：余额、支付意图、查询与退款。
 
-第三方平台可在站内 `/developers` 注册应用，并在 `/developers/docs` 查看接入文档。造场作为 OAuth 2.1 / OIDC 身份提供方时使用：
-
-- `/.well-known/openid-configuration`：OIDC 服务发现
-- `/oauth/authorize`：授权码 + PKCE S256 授权入口
-- `/api/oauth/token`：授权码交换与刷新令牌轮换
-- `/api/oauth/userinfo`：按授权范围返回用户资料
-- `/api/v1/fruit/*`：余额与逐笔确认的果子支付 API
-
-外部 API 不提供充值、铸果、提现或法币兑换能力。果子支付创建意图后不会立即扣款，必须由同一用户回到造场确认页批准。
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+第三方应用先在 `/developers` 注册。`fruit:pay` 与 `fruit:refund` 只有在应用验证和人工审核均通过后才能授权；支付意图本身不扣果，用户必须回到造场批准每一笔金额。

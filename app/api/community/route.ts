@@ -1,6 +1,7 @@
 import { database, ensureMember, jsonError, optionalMember } from "../_lib/community";
 import { settleDueExternalFruit } from "../_lib/external-fruit";
 import { settleDueFruit } from "../_lib/fruit";
+import { loadPublicCommunityState } from "../_lib/public-community";
 
 export const dynamic = "force-dynamic";
 
@@ -13,31 +14,7 @@ export async function GET() {
       await Promise.all([settleDueFruit(member.email), settleDueExternalFruit(member.email)]);
     }
 
-    const queries = [
-      db
-        .prepare(
-          `SELECT id, owner_name AS ownerName, title, description, category,
-                  demo_type AS demoType, demo_url AS demoUrl,
-                  image_url AS imageUrl, cover_theme AS coverTheme, price,
-                  pricing_model AS pricingModel, likes_count AS likes,
-                  plays_count AS plays, created_at AS createdAt
-           FROM products WHERE status = 'published'
-           ORDER BY created_at DESC LIMIT 24`,
-        )
-        .all(),
-      db
-        .prepare(
-          `SELECT id, owner_name AS ownerName, content, product_id AS productId,
-                  linked_product_ref AS linkedProductRef, image_url AS imageUrl,
-                  post_type AS postType,
-                  likes_count AS likes, comments_count AS comments,
-                  created_at AS createdAt
-           FROM posts ORDER BY created_at DESC LIMIT 20`,
-        )
-        .all(),
-    ] as const;
-
-    const [productsResult, postsResult] = await Promise.all(queries);
+    const publicState = await loadPublicCommunityState();
     let wallet = null;
     let transactions: unknown[] = [];
     let profile = null;
@@ -47,6 +24,7 @@ export async function GET() {
     let ownedProducts: unknown[] = [];
     let notifications: unknown[] = [];
     let orders: unknown[] = [];
+    let productLikes: unknown[] = [];
 
     if (member) {
       wallet = await db
@@ -80,6 +58,12 @@ export async function GET() {
         )
         .bind(member.email)
         .first();
+      productLikes = (
+        await db
+          .prepare("SELECT product_id AS productId FROM product_likes WHERE user_email = ?")
+          .bind(member.email)
+          .all()
+      ).results;
       actions = (
         await db
           .prepare(
@@ -115,7 +99,10 @@ export async function GET() {
             `SELECT id, owner_name AS ownerName, title, description, category,
                     demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
                     cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
-                    plays_count AS plays, status, created_at AS createdAt
+                    plays_count AS plays, status, review_status AS reviewStatus,
+                    review_version AS reviewVersion, approved_version AS approvedVersion,
+                    reviewed_at AS reviewedAt, review_note AS reviewNote,
+                    submitted_at AS submittedAt, created_at AS createdAt
              FROM products WHERE owner_email = ?
              ORDER BY created_at DESC, id DESC`,
           )
@@ -164,7 +151,7 @@ export async function GET() {
                     c.created_at AS createdAt, '/product/' || p.id AS href
              FROM comments c
              JOIN products p ON c.target_type = 'product' AND c.target_ref = CAST(p.id AS TEXT)
-             WHERE p.owner_email = ? AND c.user_email <> ?
+             WHERE p.owner_email = ? AND c.user_email <> ? AND c.moderation_status = 'visible'
              UNION ALL
              SELECT 'like:' || pl.product_id || ':' || pl.user_email AS id, '互动' AS type,
                     m.display_name || ' 喜欢了你的作品' AS title,
@@ -198,8 +185,9 @@ export async function GET() {
     }
 
     return Response.json({
-      products: productsResult.results,
-      posts: postsResult.results,
+      products: publicState.products,
+      posts: publicState.posts,
+      platformStats: publicState.platformStats,
       wallet,
       transactions,
       profile,
@@ -209,6 +197,9 @@ export async function GET() {
       ownedProducts,
       notifications,
       orders,
+      productLikes,
+      circleStats: publicState.circleStats,
+      liveRoomStats: publicState.liveRoomStats,
       signedIn: Boolean(member),
     });
   } catch (error) {

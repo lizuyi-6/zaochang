@@ -9,6 +9,9 @@ type PaymentRow = {
   id: string;
   clientId: string;
   clientName: string;
+  clientStatus: "active" | "revoked";
+  clientReviewStatus: "unverified" | "verified" | "rejected";
+  clientWriteAccessApproved: number;
   payerEmail: string;
   merchantEmail: string;
   externalReference: string;
@@ -30,6 +33,8 @@ type PaymentRow = {
 type WalletRow = {
   balance: number;
   pendingBalance: number;
+  ledgerBalance: number;
+  ledgerPendingBalance: number;
   status: string;
 };
 
@@ -65,13 +70,40 @@ function isPendingError(error: unknown) {
 
 async function wallet(email: string) {
   return database().prepare(
-    `SELECT balance, pending_balance AS pendingBalance, status FROM wallets WHERE user_email = ?`,
-  ).bind(email).first<WalletRow>();
+    `SELECT balance, pending_balance AS pendingBalance, status,
+            COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'available'), 0) AS ledgerBalance,
+            COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0) AS ledgerPendingBalance
+     FROM wallets WHERE user_email = ?`,
+  ).bind(email, email, email).first<WalletRow>();
+}
+
+async function assertWalletIntegrity(email: string, row: WalletRow | null | undefined) {
+  if (!row) throw new ExternalFruitError("wallet_not_found", 404);
+  if (row.balance === row.ledgerBalance && row.pendingBalance === row.ledgerPendingBalance) return;
+  await database().batch([
+    database().prepare(`UPDATE wallets SET status = 'review', updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`).bind(email),
+    database().prepare(
+      `INSERT INTO fruit_risk_events (id, user_email, kind, severity, evidence)
+       VALUES (?, ?, 'wallet_ledger_mismatch', 'high', ?)`,
+    ).bind(`risk:${randomToken(20)}`, email, JSON.stringify({ balance: row.balance, ledgerBalance: row.ledgerBalance, pendingBalance: row.pendingBalance, ledgerPendingBalance: row.ledgerPendingBalance })),
+  ]);
+  throw new ExternalFruitError("wallet_ledger_mismatch", 423);
+}
+
+async function reconcileWalletFromLedger(email: string) {
+  await database().prepare(
+    `UPDATE wallets SET
+       balance = COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'available'), 0),
+       pending_balance = COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0),
+       updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
+  ).bind(email, email, email).run();
 }
 
 async function paymentById(id: string) {
   return database().prepare(
     `SELECT p.id, p.client_id AS clientId, c.name AS clientName,
+            c.status AS clientStatus, c.review_status AS clientReviewStatus,
+            c.write_access_approved AS clientWriteAccessApproved,
             p.payer_email AS payerEmail, p.merchant_email AS merchantEmail,
             p.external_reference AS externalReference, p.title, p.description,
             p.pricing_model AS pricingModel, p.amount, p.status,
@@ -82,6 +114,10 @@ async function paymentById(id: string) {
      FROM external_fruit_payments p JOIN oauth_provider_clients c ON c.client_id = p.client_id
      WHERE p.id = ?`,
   ).bind(id).first<PaymentRow>();
+}
+
+function paymentClientCanCharge(row: PaymentRow) {
+  return row.clientStatus === "active" && row.clientReviewStatus === "verified" && row.clientWriteAccessApproved === 1;
 }
 
 function publicPayment(row: PaymentRow, origin?: string) {
@@ -146,6 +182,8 @@ export async function createExternalPayment(identity: ExternalIdentity, input: R
     if (entitlement) return { owned: true, paymentId: entitlement.paymentId, replayed: false };
   }
   const [payerWallet, merchantWallet] = await Promise.all([wallet(identity.userEmail), wallet(identity.clientOwnerEmail)]);
+  await assertWalletIntegrity(identity.userEmail, payerWallet);
+  await assertWalletIntegrity(identity.clientOwnerEmail, merchantWallet);
   if (!payerWallet || !merchantWallet) throw new ExternalFruitError("wallet_not_found", 404);
   if (payerWallet.status !== "active" || merchantWallet.status !== "active") throw new ExternalFruitError("wallet_restricted", 423);
   if (payerWallet.balance < amount) throw new ExternalFruitError("insufficient_balance", 409);
@@ -181,6 +219,10 @@ export async function prepareExternalPaymentApproval(paymentId: string, userEmai
   const db = database();
   let row = await paymentById(paymentId);
   if (!row || row.payerEmail !== userEmail) throw new ExternalFruitError("payment_not_found", 404);
+  if (row.status === "pending" && !paymentClientCanCharge(row)) {
+    await db.prepare(`UPDATE external_fruit_payments SET status = 'cancelled', approval_challenge_hash = NULL WHERE id = ? AND status = 'pending'`).bind(paymentId).run();
+    throw new ExternalFruitError("client_not_authorized", 403);
+  }
   if (row.status === "pending" && Date.parse(`${row.expiresAt}Z`) <= Date.now()) {
     await db.prepare(`UPDATE external_fruit_payments SET status = 'expired' WHERE id = ? AND status = 'pending'`).bind(paymentId).run();
     row = { ...row, status: "expired" };
@@ -200,6 +242,10 @@ export async function decideExternalPayment(userEmail: string, paymentId: string
   const db = database();
   const row = await paymentById(paymentId);
   if (!row || row.payerEmail !== userEmail) throw new ExternalFruitError("payment_not_found", 404);
+  if (row.status === "pending" && !paymentClientCanCharge(row)) {
+    await db.prepare(`UPDATE external_fruit_payments SET status = 'cancelled', approval_challenge_hash = NULL WHERE id = ? AND status = 'pending'`).bind(paymentId).run();
+    throw new ExternalFruitError("client_not_authorized", 403);
+  }
   if (row.status !== "pending") return { payment: publicPayment(row), replayed: true, returnUri: row.returnUri };
   if (Date.parse(`${row.expiresAt}Z`) <= Date.now()) {
     await db.prepare(`UPDATE external_fruit_payments SET status = 'expired' WHERE id = ? AND status = 'pending'`).bind(paymentId).run();
@@ -220,6 +266,10 @@ export async function decideExternalPayment(userEmail: string, paymentId: string
     if (!cancelled) throw new ExternalFruitError("payment_not_found", 404);
     return { payment: publicPayment(cancelled), replayed: false, returnUri: cancelled.returnUri };
   }
+
+  const [payerWallet, merchantWallet] = await Promise.all([wallet(row.payerEmail), wallet(row.merchantEmail)]);
+  await assertWalletIntegrity(row.payerEmail, payerWallet);
+  await assertWalletIntegrity(row.merchantEmail, merchantWallet);
 
   const operationId = `external-purchase:${paymentId}`;
   const refundable = row.pricingModel === "one_time";
@@ -298,6 +348,7 @@ export async function refundExternalPayment(identity: Pick<ExternalIdentity, "cl
   if (row.status !== "paid" || !row.purchaseOperationId || !row.refundableUntil || Date.parse(`${row.refundableUntil}Z`) <= Date.now()) {
     throw new ExternalFruitError("refund_window_closed", 409);
   }
+  await Promise.all([reconcileWalletFromLedger(row.payerEmail), reconcileWalletFromLedger(row.merchantEmail)]);
   const replayKey = `external-refund:${identity.clientId}:${identity.userEmail}:${idempotencyKey}`;
   const prior = await db.prepare(
     `SELECT reference_id AS referenceId FROM fruit_operations WHERE idempotency_key = ?`,
@@ -313,11 +364,11 @@ export async function refundExternalPayment(identity: Pick<ExternalIdentity, "cl
          VALUES (?, 'external_refund', ?, ?, ?, ?, 'external_payment', ?, ?, '外部应用一次解锁退款')`,
       ).bind(operationId, replayKey, row.merchantEmail, row.payerEmail, row.amount, paymentId, row.purchaseOperationId),
       db.prepare(
-        `UPDATE wallets SET balance = CASE WHEN status = 'active' THEN balance + ? ELSE -1 END,
+        `UPDATE wallets SET balance = balance + ?,
            lifetime_spent = MAX(0, lifetime_spent - ?), updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
       ).bind(row.amount, row.amount, row.payerEmail),
       db.prepare(
-        `UPDATE wallets SET pending_balance = CASE WHEN status = 'active' THEN pending_balance - ? ELSE -1 END,
+        `UPDATE wallets SET pending_balance = pending_balance - ?,
            updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
       ).bind(row.amount, row.merchantEmail),
       db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'available', ?)`).bind(operationId, row.payerEmail, row.amount),
@@ -355,6 +406,11 @@ export async function settleDueExternalFruit(merchantEmail: string) {
   const db = database();
   const merchantWallet = await wallet(merchantEmail);
   if (!merchantWallet || merchantWallet.status !== "active") return;
+  try {
+    await assertWalletIntegrity(merchantEmail, merchantWallet);
+  } catch {
+    return;
+  }
   const due = await db.prepare(
     `SELECT id, amount FROM external_fruit_payments
      WHERE merchant_email = ? AND status = 'paid' AND available_at <= CURRENT_TIMESTAMP

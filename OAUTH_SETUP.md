@@ -1,142 +1,131 @@
-# Google / GitHub 登录配置
+# 登录与 OAuth 配置
 
-代码已经提供统一登录页和 OAuth 回调。没有配置凭据时，登录页会显示“待配置”，不会把用户误导到第三方授权页。
+造场同时包含两类 OAuth 能力：
 
-## 1. 回调地址
+1. GitHub 登录造场：造场是 OAuth 客户端。
+2. 第三方平台“使用造场登录”：造场是 OAuth 2.1 / OIDC 身份提供方。
 
-线上站点：
+两者的 Client ID、密钥和回调地址不可混用。
+
+## GitHub 登录造场
+
+在 GitHub Settings > Developer settings > OAuth Apps 创建应用：
 
 ```text
-https://zaochang-product-galaxy-20260712.shijieqid-8361.chatgpt.site
+Application name: 造场
+Homepage URL: https://<造场正式域名>
+Authorization callback URL: https://<造场正式域名>/api/auth/github/callback
 ```
 
-Google 回调地址：
+本地独立 OAuth 应用可使用：
 
 ```text
-https://zaochang-product-galaxy-20260712.shijieqid-8361.chatgpt.site/api/auth/google/callback
-```
-
-GitHub 回调地址：
-
-```text
-https://zaochang-product-galaxy-20260712.shijieqid-8361.chatgpt.site/api/auth/github/callback
-```
-
-本地开发回调地址：
-
-```text
-http://localhost:3001/api/auth/google/callback
 http://localhost:3001/api/auth/github/callback
 ```
 
-建议线上和本地使用不同的 OAuth 应用，避免回调地址和密钥混用。
-
-## 2. 创建 Google OAuth 应用
-
-1. 打开 Google Cloud Console。
-2. 创建或选择一个项目。
-3. 在“API 和服务”中配置 OAuth consent screen。
-4. 用户类型选择 External；开发阶段可以先加入你的测试账号。
-5. 创建 OAuth Client ID，应用类型选择 Web application。
-6. 在 Authorized redirect URIs 中加入线上 Google 回调地址。
-7. 复制 Client ID 和 Client Secret。
-
-需要配置的环境变量：
+Sites 运行时变量：
 
 ```text
-GOOGLE_OAUTH_CLIENT_ID=你的 Google Client ID
-GOOGLE_OAUTH_CLIENT_SECRET=你的 Google Client Secret
+PUBLIC_APP_ORIGIN=https://<造场正式域名>
+GITHUB_OAUTH_CLIENT_ID=<GitHub Client ID>
+GITHUB_OAUTH_CLIENT_SECRET=<secret>
 ```
 
-Google 只需要 `openid email profile` 权限，不需要 Gmail、Drive 或其他 API 权限。
+`PUBLIC_APP_ORIGIN` 是 OAuth 回调、OIDC issuer、支付确认与退出重定向的唯一生产 origin。它必须是没有路径、查询参数或凭据的 HTTPS origin；生产缺失时返回 `public_app_origin_required`，配置 HTTP 或畸形值时返回 `invalid_public_app_origin`。不要使用客户端提供的 `Host` 或 `X-Forwarded-*` 推导生产 issuer。
 
-## 3. 创建 GitHub OAuth App
+回调会同时读取 `/user` 与 `/user/emails`，只接受 verified email。账号绑定键为 `github + GitHub user id`；GitHub 邮箱后续变化不会把同一个 GitHub 身份迁移到另一造场账户。
 
-1. 打开 GitHub Settings > Developer settings > OAuth Apps。
-2. 点击 New OAuth App。
-3. Application name 填写“造场”。
-4. Homepage URL 填写线上站点地址。
-5. Authorization callback URL 填写 GitHub 回调地址。
-6. 创建后复制 Client ID。
-7. 点击 Generate a new client secret，并只保存一次显示的 Secret。
-
-需要配置的环境变量：
+当前受保护预发布使用以下公开配置：
 
 ```text
-GITHUB_OAUTH_CLIENT_ID=你的 GitHub Client ID
-GITHUB_OAUTH_CLIENT_SECRET=你的 GitHub Client Secret
+PUBLIC_APP_ORIGIN=https://aetherstudio.top
+GITHUB_OAUTH_CLIENT_ID=Ov23livgjlLc01RdgmuN
+Authorization callback URL=https://aetherstudio.top/api/auth/github/callback
 ```
 
-代码申请 `read:user user:email`，只读取 GitHub 用户身份和邮箱，不读取仓库内容。
+Client Secret 不写入本文件、仓库或发布包，只能存在于服务器受限环境文件或正式 Secrets 管理器。GitHub 应用页面必须只保留当前验证过的 Secret；任何曾暴露的旧 Secret 要在新 Secret 完成真实 token exchange 后立即删除。
 
-## 4. 写入 Sites 运行时环境
+## Google 登录
 
-不要把 Client Secret 写进 GitHub、`.openai/hosting.json` 或 `.env` 后提交。
-
-在 Sites 环境变量中写入以下四项：
+Google 登录当前暂停。代码入口仍保留，但没有配置时登录页只显示“待配置”，不会跳转到伪造授权流程。恢复时需配置：
 
 ```text
 GOOGLE_OAUTH_CLIENT_ID
 GOOGLE_OAUTH_CLIENT_SECRET
-GITHUB_OAUTH_CLIENT_ID
-GITHUB_OAUTH_CLIENT_SECRET
 ```
 
-其中两个 `CLIENT_SECRET` 必须标记为 secret。设置环境变量后，需要重新部署一个已保存版本，运行时才会读取新配置。
+回调地址为 `https://<造场正式域名>/api/auth/google/callback`，且只接受 Google verified email。
 
-## 5. 数据库迁移
+## 造场作为 OIDC 身份提供方
 
-新增迁移文件：
+发现文档：
 
 ```text
-drizzle/0001_oauth_accounts.sql
+https://<造场正式域名>/.well-known/openid-configuration
 ```
 
-它会创建：
-
-- `oauth_accounts`：第三方账号与造场邮箱的绑定。
-- `auth_sessions`：只保存 SHA-256 后的会话 token，不保存明文 token。
-
-部署新版本时需要让 Sites 应用这份 D1 migration。若平台提示迁移未应用，先执行该 migration，再重新部署版本。
-
-## 6. 用户登录流程
+生产必须提供固定 ES256 P-256 私钥，不能依赖运行时临时生成：
 
 ```text
-登录页
-  -> Google / GitHub 授权
-  -> OAuth callback
-  -> 读取第三方 verified email
-  -> 创建或更新 members
-  -> 初始化钱包和欢迎交易
-  -> 创建 30 天 HttpOnly 会话
-  -> 回到原页面
+APP_ENV=production
+PUBLIC_APP_ORIGIN=https://<造场正式域名>
+OIDC_SIGNING_PRIVATE_JWK=<包含 kty/crv/x/y/d/kid 的私有 JWK secret>
 ```
 
-现有 ChatGPT 登录仍然保留。三种登录方式最终都通过统一的 `getChatGPTUser()` / `optionalMember()` 进入现有作品、评论和钱包逻辑。
+轮换密钥时，先把旧公钥放入 `OIDC_PREVIOUS_PUBLIC_JWKS`，再替换 `OIDC_SIGNING_PRIVATE_JWK`。等待已签发 ID Token 的最长有效期结束后，才能移除旧公钥。
 
-## 7. 本地验证
-
-没有配置凭据时可以验证骨架：
+第三方应用在 `/developers` 注册后默认为：
 
 ```text
-http://localhost:3001/signin
+review_status=unverified
+write_access_approved=0
 ```
 
-预期结果：
+只读 `openid/profile/email/fruit:balance` 可按登记范围授权；`fruit:pay` 与 `fruit:refund` 必须由管理员在 `/admin` 审核通过。公开客户端禁止申请果子写权限。所有授权请求强制 PKCE S256 与精确回调地址匹配。
 
-- Google 显示“待配置”。
-- GitHub 显示“待配置”。
-- ChatGPT 登录仍然可用。
-- 访问 `/api/auth/google/start` 会回到登录页并提示未配置。
+刷新令牌每次使用都会轮换。已轮换令牌再次出现时，服务端会把同一令牌族和由其产生的访问令牌一并撤销，客户端必须要求用户重新授权。
 
-配置真实凭据后，再使用一个真实 Google 或 GitHub 测试账号完整走一遍授权回调。
+## 管理员与身份头
 
-## 8. 安全注意事项
+管理员采用显式邮箱白名单，空配置等同于无人有权限：
 
-- 不要把 Client Secret 发到聊天、提交信息或 GitHub issue。
-- 不要使用 `*` 作为 OAuth 回调允许来源。
-- 生产环境必须使用 HTTPS。
-- 只接受 Google verified email 和 GitHub verified email。
-- 不要根据 GitHub 昵称或 Google display name 判断账号唯一性。
-- 账号唯一绑定使用 `provider + provider_account_id`。
-- 如需解绑账号，需要后续增加已登录用户的账号管理页面。
+```text
+ZAOCHANG_ADMIN_EMAILS=admin1@example.com,admin2@example.com
+```
+
+生产环境默认拒绝客户端自行发送的 `oai-authenticated-user-email` 与相关姓名头。仅当部署平台保证剥离外部同名头并可信注入身份时，才设置：
+
+```text
+TRUST_OAI_IDENTITY_HEADERS=true
+```
+
+无法证明上述前置条件时必须保持未设置。
+
+## 会话与退出
+
+- 会话 Cookie 为 HttpOnly、SameSite=Lax，数据库只保存 SHA-256 哈希。
+- 会话期限为 30 天。
+- `/api/auth/logout` 会删除服务端会话并清除 Cookie；旧 Cookie 重放不再恢复登录。
+- OAuth state 使用独立的 10 分钟 HttpOnly Cookie，并与具体 provider 绑定。
+
+## 迁移
+
+发布版本必须按顺序应用 `drizzle/0000` 至 `drizzle/0009_moderation_remediation.sql`。`0009` 阻止可变外部 Demo 获得批准，并约束违规下架退款/补偿分录只能引用真实的一次解锁订单。
+
+发布前运行：
+
+```bash
+npm run db:generate
+```
+
+预期输出是 `No schema changes, nothing to migrate`。任何新生成的迁移都必须先审查，不能与正式部署一起盲目应用。
+
+## 真实回调验收
+
+本地集成测试覆盖会话、授权码、PKCE、签名、令牌轮换和支付行为，但不能代替第三方真实网络回调。正式发布前需使用专用测试账号分别验证：
+
+- GitHub 授权后读取 verified email 并回到原路径。
+- 退出后旧 Cookie 不能重放。
+- 未审核应用无法请求果子写权限。
+- 已审核应用可完成授权，但每笔支付仍要求造场页面二次确认。
+- OAuth 凭据、JWK 私钥和访问令牌未出现在仓库、日志、URL 或错误页中。

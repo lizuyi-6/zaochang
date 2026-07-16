@@ -51,12 +51,12 @@ export const products: Product[] = [
     coverTheme: "mint",
     price: 0,
     pricingModel: "free",
-    likes: 842,
-    plays: 12842,
+    likes: 0,
+    plays: 0,
     image:
       "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1600&q=88",
     accent: "#b9ecc8",
-    release: "v1.7 · 2 天前",
+    release: "可直接体验",
     tags: ["专注", "声音", "生成景观"],
   },
   {
@@ -73,12 +73,12 @@ export const products: Product[] = [
     coverTheme: "blue",
     price: 0,
     pricingModel: "free",
-    likes: 319,
-    plays: 4630,
+    likes: 0,
+    plays: 0,
     image:
       "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1200&q=88",
     accent: "#92c6ef",
-    release: "v0.9 · 5 小时前",
+    release: "可直接体验",
     tags: ["城市", "路线", "随机性"],
   },
   {
@@ -96,12 +96,12 @@ export const products: Product[] = [
     coverTheme: "coral",
     price: 0,
     pricingModel: "free",
-    likes: 577,
-    plays: 7914,
+    likes: 0,
+    plays: 0,
     image:
       "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=88",
     accent: "#d8b46a",
-    release: "v2.2 · 昨天",
+    release: "造场官方 · 可直接体验",
     tags: ["排版", "动效", "创作工具"],
   },
   {
@@ -118,12 +118,12 @@ export const products: Product[] = [
     coverTheme: "yellow",
     price: 0,
     pricingModel: "free",
-    likes: 264,
-    plays: 3810,
+    likes: 0,
+    plays: 0,
     image:
       "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=1200&q=88",
     accent: "#f1ca51",
-    release: "v1.1 · 3 天前",
+    release: "可直接体验",
     tags: ["采样", "节拍", "声音明信片"],
   },
   {
@@ -140,12 +140,12 @@ export const products: Product[] = [
     coverTheme: "ink",
     price: 0,
     pricingModel: "free",
-    likes: 186,
-    plays: 2140,
+    likes: 0,
+    plays: 0,
     image:
       "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1200&q=88",
     accent: "#171816",
-    release: "v0.6 · 6 天前",
+    release: "可直接体验",
     tags: ["植物", "记录", "时间线"],
   },
   {
@@ -162,69 +162,29 @@ export const products: Product[] = [
     coverTheme: "coral",
     price: 0,
     pricingModel: "free",
-    likes: 431,
-    plays: 5260,
+    likes: 0,
+    plays: 0,
     image:
       "https://images.unsplash.com/photo-1507924538820-ede94a04019d?auto=format&fit=crop&w=1200&q=88",
     accent: "#ff5c3d",
-    release: "v1.4 · 今天",
+    release: "可直接体验",
     tags: ["戏剧", "文字", "共创"],
   },
 ];
 
-export const posts: CommunityPost[] = [
-  {
-    id: "post-1",
-    ownerName: "贺千",
-    ownerInitial: "贺",
-    role: "独立开发者",
-    content: "把产品里最漂亮但没人用的页面删掉以后，核心体验反而更清楚了。今晚发第 7 个版本。",
-    createdAt: "18 分钟前",
-    likes: 96,
-    comments: 18,
-    color: "coral",
-    productSlug: "typewave",
-  },
-  {
-    id: "post-2",
-    ownerName: "听筒",
-    ownerInitial: "听",
-    role: "声音采集者",
-    content: "正在收集城市里不被注意的声音：卷帘门、早班公交、雨棚。已经有 43 段，准备做成一张可玩的地图。",
-    createdAt: "1 小时前",
-    likes: 141,
-    comments: 27,
-    color: "blue",
-    image:
-      "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=1400&q=85",
-  },
-  {
-    id: "post-3",
-    ownerName: "王不慢",
-    ownerInitial: "王",
-    role: "工具作者",
-    content: "新版本不再替用户安排所有事情，只在真正卡住的时候出现。克制比聪明难得多。",
-    createdAt: "3 小时前",
-    likes: 74,
-    comments: 11,
-    color: "yellow",
-    productSlug: "sprout",
-  },
-];
-
 export const circles = [
-  { slug: "indie", name: "独立开发", members: 8420, online: 312, color: "coral", topic: "本周大家删掉了什么功能？" },
-  { slug: "sound", name: "声音实验", members: 3180, online: 86, color: "blue", topic: "一分钟环境采样接龙" },
-  { slug: "tiny-games", name: "小型游戏", members: 6840, online: 229, color: "yellow", topic: "只有一个按钮的游戏" },
-  { slug: "life", name: "生活发明", members: 4210, online: 143, color: "mint", topic: "让等待变得没那么像浪费" },
-  { slug: "type", name: "字与界面", members: 2570, online: 64, color: "ink", topic: "中文界面的呼吸感" },
-  { slug: "open-source", name: "开源小队", members: 1920, online: 51, color: "blue", topic: "这个周末一起补文档" },
+  { slug: "indie", name: "独立开发", color: "coral", topic: "本周大家删掉了什么功能？" },
+  { slug: "sound", name: "声音实验", color: "blue", topic: "一分钟环境采样接龙" },
+  { slug: "tiny-games", name: "小型游戏", color: "yellow", topic: "只有一个按钮的游戏" },
+  { slug: "life", name: "生活发明", color: "mint", topic: "让等待变得没那么像浪费" },
+  { slug: "type", name: "字与界面", color: "ink", topic: "中文界面的呼吸感" },
+  { slug: "open-source", name: "开源小队", color: "blue", topic: "这个周末一起补文档" },
 ];
 
 export const challenges = [
-  { id: "waiting", title: "为“等候”做一件东西", brief: "把等车、加载、排队或等待回复，变成一种值得经历的时间。", participants: 286, prize: 18600, daysLeft: 4, color: "blue" },
-  { id: "one-button", title: "只有一个按钮", brief: "不允许菜单，不允许说明书，用一次按下和一次松开讲清整个作品。", participants: 174, prize: 8200, daysLeft: 11, color: "yellow" },
-  { id: "night", title: "凌晨两点的工具", brief: "为那些清醒但没有力气的人，做一个足够温柔的小工具。", participants: 93, prize: 6400, daysLeft: 18, color: "coral" },
+  { id: "waiting", title: "为“等候”做一件东西", brief: "把等车、加载、排队或等待回复，变成一种值得经历的时间。", color: "blue" },
+  { id: "one-button", title: "只有一个按钮", brief: "不允许菜单，不允许说明书，用一次按下和一次松开讲清整个作品。", color: "yellow" },
+  { id: "night", title: "凌晨两点的工具", brief: "为那些清醒但没有力气的人，做一个足够温柔的小工具。", color: "coral" },
 ];
 
 export function findProduct(slug: string) {

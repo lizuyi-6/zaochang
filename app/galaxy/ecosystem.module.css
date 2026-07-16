@@ -228,7 +228,7 @@
 .consoleSection h2,
 .taskPanel h2 { font-family: "Songti SC", STSong, serif; font-size: 21px; font-weight: 500; margin: 6px 0 0; }
 .consoleSection header > small { color: var(--faint); font-size: 7px; }
-.timeline { display: grid; grid-template-columns: repeat(8, minmax(82px, 1fr)); max-width: 100%; overflow-x: auto; padding: 22px 18px; scrollbar-width: thin; }
+.timeline { display: grid; grid-template-columns: repeat(10, minmax(82px, 1fr)); max-width: 100%; overflow-x: auto; padding: 22px 18px; scrollbar-width: thin; }
 .timeline article { border-top: 1px solid var(--line); display: grid; gap: 7px; min-height: 126px; padding: 16px 8px 0; position: relative; }
 .timeline article > span { align-items: center; background: #0b0d10; border: 1px solid var(--line); border-radius: 50%; color: var(--faint); display: flex; font-size: 8px; height: 25px; justify-content: center; left: 8px; position: absolute; top: -13px; width: 25px; }
 .timeline article[data-state="完成"] > span { background: var(--paper); color: #08090b; }
@@ -369,7 +369,7 @@
   .consoleLayout { padding-top: 22px; }
   .consoleSection > header,
   .taskPanel > header { align-items: start; flex-direction: column; gap: 8px; }
-  .timeline { grid-template-columns: repeat(8, 112px); }
+  .timeline { grid-template-columns: repeat(10, 112px); }
   .taskSpec { grid-template-columns: 1fr; }
   .taskSpec > div { border-right: 0; }
   .taskPanel > footer { align-items: stretch; flex-direction: column; gap: 12px; padding: 15px; }

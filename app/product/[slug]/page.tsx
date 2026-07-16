@@ -18,7 +18,8 @@ async function loadProduct(slug: string): Promise<Product | null> {
               demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
               cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
               plays_count AS plays, created_at AS createdAt
-       FROM products WHERE id = ? AND status = 'published'`,
+       FROM products WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
+         AND review_status = 'approved' AND approved_version = review_version`,
     ).bind(id).first<Record<string, unknown>>();
     if (!row) return null;
     const theme = ["coral", "mint", "blue", "yellow", "ink"].includes(String(row.coverTheme)) ? String(row.coverTheme) as Product["coverTheme"] : "coral";

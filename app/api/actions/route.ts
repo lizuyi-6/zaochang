@@ -1,5 +1,7 @@
 import { database, jsonError, requireMember } from "../_lib/community";
-import { awardProductLike, tipProduct } from "../_lib/fruit";
+import { awardProductLike, removeProductLike, tipProduct } from "../_lib/fruit";
+import { enforceRateLimit, rateLimitKey, requestActorKey } from "../_lib/rate-limit";
+import { findProduct } from "../../lib/community-data";
 
 export async function POST(request: Request) {
   try {
@@ -8,48 +10,71 @@ export async function POST(request: Request) {
     const db = database();
 
     if (action === "experience") {
+      await enforceRateLimit(await requestActorKey(request, "experience"), 120, 60 * 60);
       const productId = Number(input.productId);
       if (Number.isInteger(productId)) {
-        await db
-          .prepare("UPDATE products SET plays_count = plays_count + 1 WHERE id = ?")
+        const update = await db
+          .prepare(`UPDATE products SET plays_count = plays_count + 1
+                    WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
+                      AND review_status = 'approved' AND approved_version = review_version`)
           .bind(productId)
           .run();
+        if ((update.meta?.changes ?? 0) === 0) {
+          return Response.json({ error: "product_not_found" }, { status: 404 });
+        }
+      } else if (!findProduct(String(input.productId ?? ""))) {
+        return Response.json({ error: "product_not_found" }, { status: 404 });
       }
       return Response.json({ recorded: true });
     }
 
     const member = await requireMember();
+    await enforceRateLimit(await rateLimitKey("member-action", member.email), 180, 60 * 60);
 
     if (action === "like") {
       const productId = Number(input.productId);
       if (!Number.isInteger(productId)) {
-        return Response.json({ liked: true, localOnly: true });
+        const productRef = String(input.productId ?? "").trim().slice(0, 80);
+        if (!findProduct(productRef)) return Response.json({ error: "product_not_found" }, { status: 404 });
+        const existing = await db
+          .prepare("SELECT 1 AS found FROM community_actions WHERE user_email = ? AND kind = 'like_showcase' AND target_ref = ?")
+          .bind(member.email, productRef)
+          .first();
+        if (existing) {
+          await db.prepare("DELETE FROM community_actions WHERE user_email = ? AND kind = 'like_showcase' AND target_ref = ?")
+            .bind(member.email, productRef).run();
+          return Response.json({ liked: false, added: false, reward: { granted: false, amount: 0, reason: "showcase_product" } });
+        }
+        await db.prepare("INSERT INTO community_actions (user_email, kind, target_ref) VALUES (?, 'like_showcase', ?)")
+          .bind(member.email, productRef).run();
+        return Response.json({ liked: true, added: true, reward: { granted: false, amount: 0, reason: "showcase_product" } });
       }
       const existing = await db
         .prepare("SELECT 1 AS found FROM product_likes WHERE product_id = ? AND user_email = ?")
         .bind(productId, member.email)
         .first();
-      if (existing) {
-        await db.batch([
-          db.prepare("DELETE FROM product_likes WHERE product_id = ? AND user_email = ?").bind(productId, member.email),
-          db.prepare("UPDATE products SET likes_count = MAX(0, likes_count - 1) WHERE id = ?").bind(productId),
-        ]);
-        return Response.json({ liked: false, added: false });
-      }
       const product = await db
-        .prepare("SELECT owner_email AS ownerEmail FROM products WHERE id = ? AND status = 'published'")
+        .prepare(`SELECT owner_email AS ownerEmail FROM products
+                  WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
+                    AND review_status = 'approved' AND approved_version = review_version`)
         .bind(productId)
         .first<{ ownerEmail: string }>();
       if (!product) return Response.json({ error: "product_not_found" }, { status: 404 });
-      const insert = await db
-        .prepare("INSERT INTO product_likes (product_id, user_email) VALUES (?, ?)")
-        .bind(productId, member.email)
-        .run();
-      if ((insert.meta?.changes ?? 0) > 0) {
-        await db
-          .prepare("UPDATE products SET likes_count = likes_count + 1 WHERE id = ?")
-          .bind(productId)
+      if (existing) {
+        const removed = await removeProductLike(product.ownerEmail, member.email, productId);
+        return Response.json({ liked: false, added: false, reward: removed.reward });
+      }
+      let insert;
+      try {
+        insert = await db
+          .prepare("INSERT INTO product_likes (product_id, user_email) VALUES (?, ?)")
+          .bind(productId, member.email)
           .run();
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("product_like_product_not_approved")) {
+          return Response.json({ error: "product_not_found" }, { status: 404 });
+        }
+        throw error;
       }
       const reward = (insert.meta?.changes ?? 0) > 0
         ? await awardProductLike(product.ownerEmail, member.email, productId)
@@ -69,6 +94,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "post") {
+      await enforceRateLimit(await rateLimitKey("post", member.email), 20, 60 * 60);
       const content = String(input.content ?? "").trim().slice(0, 280);
       const imageUrl = String(input.imageUrl ?? "").trim().slice(0, 500) || null;
       const linkedProductRef = String(input.linkedProductRef ?? "").trim().slice(0, 80) || null;

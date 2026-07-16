@@ -67,7 +67,7 @@ export function DiscoverClient() {
   return (
     <div className="discover-page">
       <header className="route-hero compact">
-        <div><span className="deep-eyebrow"><Sparkles size={14} /> EXPLORE / 1842 WORKS</span><h1>从一个能玩的版本开始</h1><p>按感觉、用途或创作方式，找到此刻值得进入的作品。</p></div>
+        <div><span className="deep-eyebrow"><Sparkles size={14} /> EXPLORE / {visible.length} WORKS</span><h1>从一个能玩的版本开始</h1><p>按感觉、用途或创作方式，找到此刻值得进入的作品。</p></div>
         <div className="discover-orbit"><i /><i /><i /><span>DISCOVER</span></div>
       </header>
 
@@ -86,7 +86,7 @@ export function DiscoverClient() {
       </section>
       {filtersOpen && <section className="discover-filter-panel"><div><span>价格</span>{[["all", "全部"], ["free", "免费"], ["paid", "付费"]].map(([value, label]) => <button key={value} className={priceFilter === value ? "active" : ""} onClick={() => setPriceFilter(value as typeof priceFilter)}>{priceFilter === value && <Check size={13} />}{label}</button>)}</div><div><span>来源</span>{[["all", "全部"], ["official", "造场官方"], ["community", "社区作品"]].map(([value, label]) => <button key={value} className={sourceFilter === value ? "active" : ""} onClick={() => setSourceFilter(value as typeof sourceFilter)}>{sourceFilter === value && <Check size={13} />}{label}</button>)}</div><button onClick={() => { setPriceFilter("all"); setSourceFilter("all"); }}>重置筛选</button></section>}
 
-      <div className="result-count"><span>找到 <strong>{visible.length}</strong> 件作品</span><small>内容会随社区发布实时更新</small></div>
+      <div className="result-count"><span>找到 <strong>{visible.length}</strong> 件作品</span><small>来自当前公开发布记录</small></div>
       <motion.section className={view === "grid" ? "discover-grid" : "discover-grid list"} layout>
         {visible.map((product, index) => <ProductCard key={product.id} product={product} index={index} />)}
       </motion.section>

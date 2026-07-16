@@ -10,7 +10,7 @@ type Wallet = { balance: number; pendingBalance: number; lifetimeEarned: number;
 type Order = { id: string; productId: number | null; productTitle: string; pricingModel: "one_time" | "per_use"; amount: number; status: "pending" | "paid" | "settled" | "refunded" | "cancelled" | "expired"; purchasedAt: string; refundable: number; source: "internal" | "external"; clientName: string | null };
 
 export function WalletClient() {
-  const [wallet, setWallet] = useState<Wallet>({ balance: 20, pendingBalance: 0, lifetimeEarned: 20, lifetimeSpent: 0, status: "active" });
+  const [wallet, setWallet] = useState<Wallet>({ balance: 0, pendingBalance: 0, lifetimeEarned: 0, lifetimeSpent: 0, status: "active" });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notice, setNotice] = useState("");
@@ -32,8 +32,7 @@ export function WalletClient() {
   }, []);
 
   const exportTransactions = () => {
-    const rows = transactions.length ? transactions : [{ id: 0, delta: 20, type: "welcome", description: "新成员探索金", createdAt: "加入社区时" }];
-    const csv = ["时间,类型,说明,变动", ...rows.map((item) => [item.createdAt, item.type, item.description, item.delta].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))].join("\n");
+    const csv = ["时间,类型,说明,变动", ...transactions.map((item) => [item.createdAt, item.type, item.description, item.delta].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))].join("\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -74,13 +73,13 @@ export function WalletClient() {
 
       <section className="wallet-overview">
         <div className="wallet-main-card"><span>可用余额 · {wallet.status === "active" ? "正常" : "审核中"}</span><strong><AnimatedNumber value={wallet.balance} /><small>果</small></strong><div><span>待结算 <b>{wallet.pendingBalance}</b></span><span>累计获得 <b>{wallet.lifetimeEarned}</b></span><span>累计支出 <b>{wallet.lifetimeSpent}</b></span></div><motion.i className="wallet-orbit-ring" animate={{ rotate: 360 }} transition={{ duration: 18, repeat: Infinity, ease: "linear" }} /></div>
-        <div className="wallet-rule-card"><span><ShieldCheck size={22} /><small>ISSUANCE RULES</small></span><h2>没有充值入口</h2><p>新成员只有一次 20 果探索金。此后，创作者通过不同真实用户的首次有效点赞获得果子。</p><ul><li>账号满 24 小时才产生点赞奖励和付费转移</li><li>自赞、重复赞、快速连赞不发行</li><li>单人每日 10 次、创作者每日 20 果上限</li></ul></div>
+        <div className="wallet-rule-card"><span><ShieldCheck size={22} /><small>ISSUANCE RULES</small></span><h2>没有充值入口</h2><p>新成员余额从 0 开始。创作者只通过不同真实用户的首次有效点赞获得新发行的果子。</p><ul><li>账号满 24 小时才产生点赞奖励和付费转移</li><li>自赞、重复赞、快速连赞不发行</li><li>单人每日 10 次、创作者每日 20 果上限</li></ul></div>
       </section>
 
       {notice && <motion.div className="wallet-notice" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}><Sparkles size={16} /> {notice}</motion.div>}
 
       <section className="currency-flow">
-        <div className="deep-section-heading"><div><span className="deep-eyebrow"><TrendingUp size={14} /> HOW IT FLOWS</span><h2>果子的四条真实路径</h2></div></div>
+        <div className="deep-section-heading"><div><span className="deep-eyebrow"><TrendingUp size={14} /> HOW IT FLOWS</span><h2>果子的三条真实路径</h2></div></div>
         <div className="flow-diagram">
           {[{ icon: Heart, title: "有效喜欢", value: "+1", text: "唯一真实用户首次点赞" }, { icon: ArrowDownLeft, title: "收到支持", value: "+5~25", text: "其他用户直接支持" }, { icon: LockKeyhole, title: "解锁作品", value: "−1~99", text: "一次解锁或按次体验" }].map((item, index) => { const Icon = item.icon; return <motion.div key={item.title} initial={{ opacity: 0, x: -18 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.12 }}><span><Icon size={20} /></span><strong>{item.title}</strong><b>{item.value}</b><small>{item.text}</small>{index < 2 && <i><em /></i>}</motion.div>; })}
         </div>

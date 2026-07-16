@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  absoluteAppUrl,
   callbackUrl,
   createOAuthSession,
   ensureOAuthUser,
@@ -36,10 +37,10 @@ export async function GET(request: Request, { params }: Params) {
       ? await fetchGoogleProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider))
       : await fetchGitHubProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider));
     const user = { displayName: profile.displayName, email: profile.email, fullName: profile.displayName };
-    await ensureOAuthUser(user, provider, profile.providerId, profile.avatarUrl);
-    const session = await createOAuthSession(user, provider);
+    const canonicalUser = await ensureOAuthUser(user, provider, profile.providerId, profile.avatarUrl);
+    const session = await createOAuthSession(canonicalUser, provider);
     const destination = await setAuthCookies(session.token, returnTo, await requestSecure(request));
-    return NextResponse.redirect(new URL(destination, request.url));
+    return NextResponse.redirect(absoluteAppUrl(request, destination));
   } catch (error) {
     console.error("OAuth callback failed", error);
     return redirectError(request, "provider_error");
@@ -67,20 +68,16 @@ async function fetchGitHubProfile(code: string, clientId: string, clientSecret: 
   const profileResponse = await fetch("https://api.github.com/user", { headers });
   if (!profileResponse.ok) throw new Error("GitHub profile request failed");
   const profile = await profileResponse.json() as { id?: number; login?: string; name?: string; email?: string | null; avatar_url?: string };
-  let email = profile.email;
-  if (!email) {
-    const emailResponse = await fetch("https://api.github.com/user/emails", { headers });
-    if (emailResponse.ok) {
-      const emails = await emailResponse.json() as Array<{ email: string; primary?: boolean; verified?: boolean }>;
-      email = emails.find((item) => item.primary && item.verified)?.email || emails.find((item) => item.verified)?.email;
-    }
-  }
+  const emailResponse = await fetch("https://api.github.com/user/emails", { headers });
+  if (!emailResponse.ok) throw new Error("GitHub verified email request failed");
+  const emails = await emailResponse.json() as Array<{ email: string; primary?: boolean; verified?: boolean }>;
+  const email = emails.find((item) => item.primary && item.verified)?.email || emails.find((item) => item.verified)?.email;
   if (!profile.id || !email) throw new Error("GitHub account has no verified email");
   return { providerId: String(profile.id), email: email.toLowerCase(), displayName: profile.name || profile.login || email, avatarUrl: profile.avatar_url || null };
 }
 
 function redirectError(request: Request, error: string) {
-  const url = new URL("/signin", request.url);
+  const url = absoluteAppUrl(request, "/signin");
   url.searchParams.set("error", error);
   return NextResponse.redirect(url);
 }

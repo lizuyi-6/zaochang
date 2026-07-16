@@ -9,6 +9,7 @@ import styles from "./ecosystem.module.css";
 const routes = [
   { href: "/galaxy", label: "银河探索" },
   { href: "/galaxy/products", label: "全部产品" },
+  { href: "/galaxy/company", label: "公司中心" },
   { href: "/galaxy/incubator", label: "孵化控制台" },
 ];
 

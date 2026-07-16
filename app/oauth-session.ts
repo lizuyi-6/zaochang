@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { cookies, headers } from "next/headers";
+import { resolvePublicAppOrigin } from "./lib/public-origin";
 
 export type OAuthProvider = "google" | "github";
 
@@ -43,8 +44,21 @@ export function oauthProviderStatus() {
 }
 
 export function callbackUrl(request: Request, provider: OAuthProvider) {
-  const url = new URL(request.url);
-  return `${url.origin}/api/auth/${provider}/callback`;
+  return `${publicAppOrigin(request)}/api/auth/${provider}/callback`;
+}
+
+export function publicAppOrigin(request: Request) {
+  const values = env as unknown as Record<string, string | undefined>;
+  try {
+    return resolvePublicAppOrigin(request.url, values.APP_ENV, values.PUBLIC_APP_ORIGIN);
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "invalid_public_app_origin";
+    throw Object.assign(new Error(code), { code, status: code === "public_app_origin_required" ? 503 : 500 });
+  }
+}
+
+export function absoluteAppUrl(request: Request, path: string) {
+  return new URL(path, `${publicAppOrigin(request)}/`);
 }
 
 export function safeReturnPath(value: string | null | undefined) {
@@ -63,6 +77,10 @@ export function randomToken(bytes = 32) {
   const data = new Uint8Array(bytes);
   crypto.getRandomValues(data);
   return toBase64Url(data);
+}
+
+function sqliteTimestamp(date: Date) {
+  return date.toISOString().slice(0, 19).replace("T", " ");
 }
 
 export async function hashToken(value: string) {
@@ -105,7 +123,7 @@ export async function getOAuthSessionUser(): Promise<SessionUser | null> {
 
 export async function createOAuthSession(user: SessionUser, provider: OAuthProvider) {
   const token = randomToken(32);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  const expiresAt = sqliteTimestamp(new Date(Date.now() + 1000 * 60 * 60 * 24 * 30));
   await database().prepare(
     `INSERT INTO auth_sessions (token_hash, user_email, provider, expires_at)
      VALUES (?, ?, ?, ?)`,
@@ -113,43 +131,45 @@ export async function createOAuthSession(user: SessionUser, provider: OAuthProvi
   return { token, expiresAt };
 }
 
-export async function ensureOAuthUser(user: SessionUser, provider: OAuthProvider, providerAccountId: string, avatarUrl: string | null) {
+export async function ensureOAuthUser(user: SessionUser, provider: OAuthProvider, providerAccountId: string, avatarUrl: string | null): Promise<SessionUser> {
   const db = database();
-  await db.batch([
+  const existing = await db.prepare(
+    `SELECT email FROM oauth_accounts WHERE provider = ? AND provider_account_id = ?`,
+  ).bind(provider, providerAccountId).first<{ email: string }>();
+  const canonicalUser = existing
+    ? { ...user, email: existing.email }
+    : user;
+
+  try {
+    await db.batch([
     db.prepare(
       `INSERT INTO members (email, display_name)
        VALUES (?, ?)
        ON CONFLICT(email) DO UPDATE SET display_name = excluded.display_name`,
-    ).bind(user.email, user.displayName),
+    ).bind(canonicalUser.email, canonicalUser.displayName),
     db.prepare(
       `INSERT OR IGNORE INTO wallets (user_email, balance, lifetime_earned, lifetime_spent)
-       VALUES (?, 20, 20, 0)`,
-    ).bind(user.email),
-    db.prepare(
-      `INSERT OR IGNORE INTO transactions (user_email, delta, type, description, reference_id)
-       VALUES (?, 20, 'welcome', '新成员探索金', 'welcome')`,
-    ).bind(user.email),
-    db.prepare(
-      `INSERT OR IGNORE INTO fruit_operations
-       (id, kind, idempotency_key, target_email, amount, reference_type, reference_id, description)
-       SELECT ?, 'onboarding', ?, ?, 20, 'member', ?, '新成员探索金'
-       WHERE NOT EXISTS (SELECT 1 FROM fruit_entries WHERE user_email = ?)`,
-    ).bind(`onboarding:${user.email}`, `onboarding:${user.email}`, user.email, user.email, user.email),
-    db.prepare(
-      `INSERT OR IGNORE INTO fruit_entries (operation_id, user_email, bucket, delta)
-       SELECT ?, ?, 'available', 20
-       WHERE EXISTS (SELECT 1 FROM fruit_operations WHERE id = ?)
-         AND NOT EXISTS (SELECT 1 FROM fruit_entries WHERE user_email = ?)`,
-    ).bind(`onboarding:${user.email}`, user.email, `onboarding:${user.email}`, user.email),
+       VALUES (?, 0, 0, 0)`,
+    ).bind(canonicalUser.email),
     db.prepare(
       `INSERT INTO oauth_accounts
        (provider, provider_account_id, email, display_name, avatar_url, updated_at)
        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(provider, provider_account_id) DO UPDATE SET
-       email = excluded.email, display_name = excluded.display_name,
+       display_name = excluded.display_name,
        avatar_url = excluded.avatar_url, updated_at = CURRENT_TIMESTAMP`,
-    ).bind(provider, providerAccountId, user.email, user.displayName, avatarUrl),
-  ]);
+    ).bind(provider, providerAccountId, canonicalUser.email, canonicalUser.displayName, avatarUrl),
+    ]);
+  } catch (error) {
+    const winner = await db.prepare(
+      `SELECT email FROM oauth_accounts WHERE provider = ? AND provider_account_id = ?`,
+    ).bind(provider, providerAccountId).first<{ email: string }>();
+    if (!winner) throw error;
+    const stable = { ...user, email: winner.email };
+    await db.prepare(`UPDATE members SET display_name = ? WHERE email = ?`).bind(stable.displayName, stable.email).run();
+    return stable;
+  }
+  return canonicalUser;
 }
 
 export async function setAuthCookies(token: string, returnTo: string, secure: boolean) {
@@ -169,6 +189,10 @@ export async function setOAuthState(state: string, returnTo: string, secure: boo
 
 export async function clearAuthCookie(secure: boolean) {
   const cookieStore = await cookies();
+  const raw = cookieStore.get(SESSION_COOKIE)?.value;
+  if (raw) {
+    await database().prepare(`DELETE FROM auth_sessions WHERE token_hash = ?`).bind(await hashToken(raw)).run();
+  }
   cookieStore.set(SESSION_COOKIE, "", { httpOnly: true, secure, sameSite: "lax", path: "/", maxAge: 0 });
 }
 

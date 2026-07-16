@@ -1,6 +1,7 @@
 import { ArrowLeft, BadgeCheck, Chrome, Github } from "lucide-react";
 import Link from "next/link";
 import { oauthProviderStatus, safeReturnPath } from "../oauth-session";
+import { oaiIdentityHeadersEnabled } from "../chatgpt-auth";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -11,6 +12,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
   const returnToValue = Array.isArray(query.return_to) ? query.return_to[0] : query.return_to;
   const returnTo = safeReturnPath(returnToValue);
   const status = oauthProviderStatus();
+  const chatgptEnabled = oaiIdentityHeadersEnabled();
   const error = Array.isArray(query.error) ? query.error[0] : query.error;
   const provider = Array.isArray(query.provider) ? query.provider[0] : query.provider;
   const errorText = error === "not_configured"
@@ -40,8 +42,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
           <ProviderButton href={`/api/auth/google/start?return_to=${encodeURIComponent(returnTo)}`} enabled={status.google} className="google" icon={<Chrome size={18} />} label="使用 Google 登录" />
           <ProviderButton href={`/api/auth/github/start?return_to=${encodeURIComponent(returnTo)}`} enabled={status.github} className="github" icon={<Github size={18} />} label="使用 GitHub 登录" />
         </div>
-        <div className="auth-divider"><span>或者</span></div>
-        <a className="auth-chatgpt" href={`/signin-with-chatgpt?return_to=${encodeURIComponent(returnTo)}`}>使用 ChatGPT 登录</a>
+        {chatgptEnabled && <><div className="auth-divider"><span>或者</span></div><a className="auth-chatgpt" href={`/signin-with-chatgpt?return_to=${encodeURIComponent(returnTo)}`}>使用 ChatGPT 登录</a></>}
         <small className="auth-note">Google 和 GitHub 登录只会用于识别你的造场账号，不会公开你的第三方密码。</small>
       </section>
       <span className="auth-context">AUTH GATEWAY / PRIVATE ACCESS</span>

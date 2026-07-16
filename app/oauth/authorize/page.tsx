@@ -1,4 +1,4 @@
-import { ArrowRight, BadgeCheck, LockKeyhole, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, BadgeCheck, LockKeyhole, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { ensureMember, optionalMember } from "../../api/_lib/community";
 import { createAuthorizationRequest, OAUTH_SCOPES, OAuthProviderError } from "../../api/_lib/oauth-provider";
@@ -38,7 +38,8 @@ export default async function OAuthAuthorizePage({ searchParams }: PageProps) {
     <main className="oauth-gateway">
       <section className="oauth-consent-card">
         <span className="oauth-gateway-mark"><BadgeCheck size={17} /> 使用造场登录</span>
-        <div className="oauth-app-identity"><span>{prepared.client.name.slice(0, 1).toUpperCase()}</span><div><small>第三方应用</small><h1>{prepared.client.name}</h1><a href={prepared.client.websiteUrl} target="_blank" rel="noreferrer">{new URL(prepared.client.websiteUrl).hostname}</a></div></div>
+        <div className="oauth-app-identity"><span>{prepared.client.name.slice(0, 1).toUpperCase()}</span><div><small>{prepared.client.reviewStatus === "verified" ? "已验证第三方应用" : "未验证第三方应用"}</small><h1>{prepared.client.name}</h1><a href={prepared.client.websiteUrl} target="_blank" rel="noreferrer">{new URL(prepared.client.websiteUrl).hostname}</a></div></div>
+        {prepared.client.reviewStatus !== "verified" && <p className="oauth-payment-warning"><AlertTriangle size={16} /> 此应用尚未通过造场验证。授权完成后将返回 <strong>{new URL(prepared.redirectUri).hostname}</strong>，请确认这是你信任的域名。</p>}
         <p className="oauth-consent-lead">此应用希望连接你的造场账号。请逐项确认它能够访问的范围。</p>
         <div className="oauth-scope-list">
           {prepared.scopes.map((scope) => <div key={scope}><span>{scope.startsWith("fruit:") ? <LockKeyhole size={17} /> : <ShieldCheck size={17} />}</span><div><strong>{OAUTH_SCOPES[scope].label}</strong><small>{OAUTH_SCOPES[scope].description}</small></div><code>{scope}</code></div>)}
@@ -49,7 +50,7 @@ export default async function OAuthAuthorizePage({ searchParams }: PageProps) {
           <button type="submit" name="decision" value="deny" className="oauth-secondary">拒绝</button>
           <button type="submit" name="decision" value="allow" className="oauth-primary">允许并继续 <ArrowRight size={17} /></button>
         </form>
-        <small className="oauth-gateway-note">你可以随时在开发者与授权设置中撤销访问。造场不会把果子兑换成法币。</small>
+        <small className="oauth-gateway-note">回调域名：{new URL(prepared.redirectUri).hostname}。你可以随时在开发者与授权设置中撤销访问。</small>
       </section>
     </main>
   );

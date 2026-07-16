@@ -1,5 +1,6 @@
 import { jsonError, requireMember } from "../../_lib/community";
 import { createDeveloperClient, listDeveloperClients, updateDeveloperClient } from "../../_lib/oauth-provider";
+import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
+    await enforceRateLimit(await rateLimitKey("developer-client", member.email), 10, 24 * 60 * 60);
     const input = await request.json() as Record<string, unknown>;
     return Response.json({ client: await createDeveloperClient(member.email, input) }, { status: 201 });
   } catch (error) {

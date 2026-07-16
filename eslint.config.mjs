@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
     ".wrangler/**",
     ".playwright-cli/**",
     "output/**",
+    "node_modules.xdrive-partial-*/**",
     "next-env.d.ts",
   ]),
 ]);

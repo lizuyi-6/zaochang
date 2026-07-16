@@ -27,12 +27,27 @@ export function ProductExperience({ product }: { product: Product }) {
   const embedded = hasEmbeddedProduct(productRef);
 
   useEffect(() => {
-    if (!tab.startsWith("讨论")) return;
     fetch(`/api/comments?targetType=product&targetRef=${encodeURIComponent(productRef)}`, { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
       .then((data) => setComments((data as { comments?: typeof comments } | null)?.comments ?? []))
       .catch(() => undefined);
-  }, [productRef, tab]);
+    fetch("/api/community", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        const payload = data as {
+          actions?: { kind: string; targetRef: string }[];
+          collectionItems?: { productRef: string }[];
+          productLikes?: { productId: number }[];
+        } | null;
+        const actions = payload?.actions ?? [];
+        setFollowed(actions.some((item) => item.kind === "follow_creator" && item.targetRef === product.ownerName));
+        setSaved((payload?.collectionItems ?? []).some((item) => item.productRef === productRef));
+        setLiked(typeof product.id === "number"
+          ? (payload?.productLikes ?? []).some((item) => item.productId === product.id)
+          : actions.some((item) => item.kind === "like_showcase" && item.targetRef === productRef));
+      })
+      .catch(() => undefined);
+  }, [product.id, product.ownerName, productRef]);
 
   const like = async () => {
     const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "like", productId: product.id }) });
@@ -41,8 +56,9 @@ export function ProductExperience({ product }: { product: Product }) {
       return;
     }
     if (response.ok) {
-      const data = await response.json() as { liked?: boolean };
+      const data = await response.json() as { liked?: boolean; reward?: { reason?: string } };
       setLiked(Boolean(data.liked));
+      if (data.reward?.reason === "showcase_product") setNotice(data.liked ? "喜欢已记录；预置作品不发行果子" : "已取消喜欢");
     }
   };
 
@@ -94,7 +110,7 @@ export function ProductExperience({ product }: { product: Product }) {
         <div className="product-head-stats"><span><Eye size={16} /><strong>{compactNumber(product.plays)}</strong><small>体验</small></span><span><Heart size={16} /><strong>{compactNumber(product.likes + (liked ? 1 : 0))}</strong><small>喜欢</small></span><button className={saved ? "liked" : ""} onClick={saveProduct} disabled={saved}><Bookmark size={18} fill={saved ? "currentColor" : "none"} /> {saved ? "已收藏" : "收藏"}</button><button className={liked ? "liked" : ""} onClick={like}><Heart size={18} fill={liked ? "currentColor" : "none"} /> {liked ? "已喜欢" : "喜欢"}</button></div>
       </header>
 
-      <div className="product-tabs">{["体验", "关于", "版本记录", "讨论 28"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</div>
+      <div className="product-tabs">{["体验", "关于", "版本记录", "讨论"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "讨论" ? `讨论 ${comments.length}` : item}</button>)}</div>
 
       <AnimatePresence mode="wait">
         {tab === "体验" && embedded ? (
@@ -119,15 +135,15 @@ export function ProductExperience({ product }: { product: Product }) {
             <div className="experience-wave">{Array.from({ length: 42 }).map((_, index) => <motion.i key={index} animate={running && !reduced ? { height: [`${10 + ((index * 13) % 35)}%`, `${20 + ((index * intensity) % 78)}%`, `${10 + ((index * 17) % 42)}%`] } : { height: `${12 + ((index * 11) % 38)}%` }} transition={{ duration: 0.9 + (index % 5) * 0.13, repeat: running ? Infinity : 0, repeatType: "mirror" }} />)}</div>
           </motion.section></FruitAccessGate>
         ) : tab === "关于" ? (
-          <motion.section key="about" className="product-about" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}><div><span className="deep-eyebrow">ABOUT THIS WORK</span><h2>这件作品为什么存在</h2><p>{product.longDescription}</p><blockquote>“我不想再做一个催促人完成更多事情的工具。它应该让时间本身变得值得感受。”</blockquote></div><aside><span className={`deep-avatar ${product.coverTheme}`}>{product.ownerInitial}</span><h3>{product.ownerName}</h3><p>独立创作者 · 已发布 4 件作品</p><button className={followed ? "followed" : ""} onClick={toggleFollow}>{followed ? <Check size={14} /> : <UserPlus size={14} />}{followed ? "已关注" : "关注创作者"}</button></aside></motion.section>
+          <motion.section key="about" className="product-about" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}><div><span className="deep-eyebrow">ABOUT THIS WORK</span><h2>这件作品为什么存在</h2><p>{product.longDescription}</p></div><aside><span className={`deep-avatar ${product.coverTheme}`}>{product.ownerInitial}</span><h3>{product.ownerName}</h3><p>{product.official ? "造场官方产品" : "社区作品作者"}</p><button className={followed ? "followed" : ""} onClick={toggleFollow}>{followed ? <Check size={14} /> : <UserPlus size={14} />}{followed ? "已关注" : "关注创作者"}</button></aside></motion.section>
         ) : tab === "版本记录" ? (
-          <motion.section key="versions" className="version-timeline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>{[{ version: "v1.7", title: "让声音随天气变化", detail: "加入实时天气参数，雨天会出现更密的低频环境声。", time: "2 天前" }, { version: "v1.6", title: "重做专注结束页", detail: "不再展示效率分数，改为回放这段时间里森林发生的变化。", time: "8 天前" }, { version: "v1.5", title: "第一次公开测试", detail: "邀请 86 位社区成员体验，收到 132 条具体反馈。", time: "18 天前" }].map((item, index) => <article key={item.version}><span><Check size={15} /></span><div><small>{item.version} · {item.time}</small><h3>{item.title}</h3><p>{item.detail}</p></div>{index === 0 && <em>当前版本</em>}</article>)}</motion.section>
+          <motion.section key="versions" className="version-timeline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}><article><span><Sparkles size={15} /></span><div><small>CURRENT STATUS</small><h3>{product.release}</h3><p>创作者尚未提交可核验的版本历史；这里不会自动生成版本号、发布日期或体验人数。</p></div><em>待补充</em></article></motion.section>
         ) : (
-          <motion.section key="discussion" className="product-discussion" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}><div className="discussion-composer"><span className="deep-avatar ink">我</span><input value={discussion} onChange={(event) => setDiscussion(event.target.value)} placeholder="留下体验反馈或具体建议" /><button onClick={sendDiscussion} disabled={discussion.trim().length < 2}><Send size={16} /> 发送</button></div>{[...comments, ...["雨天的声音变化特别好，但希望可以单独关掉鸟声。", "结束页不再显示效率分数以后，反而更愿意连续使用。", "可以开放自定义采样包吗？想做一片属于自己的森林。"].map((content, index) => ({ id: -(index + 1), ownerName: ["听筒", "贺千", "Niko"][index], content, createdAt: `${index + 1} 小时前` }))].map((item, index) => <article key={item.id}><span className={`deep-avatar ${["blue", "yellow", "mint"][index % 3]}`}>{item.ownerName[0]}</span><div><strong>{item.ownerName}</strong><small>{item.createdAt}</small><p>{item.content}</p><button onClick={(event) => event.currentTarget.classList.toggle("liked")}><Heart size={14} /> {Math.max(1, 12 - index * 3)}</button></div></article>)}</motion.section>
+          <motion.section key="discussion" className="product-discussion" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}><div className="discussion-composer"><span className="deep-avatar ink">我</span><input value={discussion} onChange={(event) => setDiscussion(event.target.value)} placeholder="留下体验反馈或具体建议" /><button onClick={sendDiscussion} disabled={discussion.trim().length < 2}><Send size={16} /> 发送</button></div>{comments.map((item, index) => <article key={item.id}><span className={`deep-avatar ${["blue", "yellow", "mint"][index % 3]}`}>{item.ownerName[0]}</span><div><strong>{item.ownerName}</strong><small>{item.createdAt}</small><p>{item.content}</p></div></article>)}{comments.length === 0 && <div className="route-empty"><Heart size={24} /><strong>还没有公开讨论</strong><span>留下第一条真实体验反馈。</span></div>}</motion.section>
         )}
       </AnimatePresence>
 
-      <section className="product-support"><div><span className="deep-eyebrow"><Sparkles size={14} /> SUPPORT THE MAKER</span><h2>让创作者知道，这件作品值得继续</h2><p>果子直接进入创作者账户，不影响推荐排名。</p></div><div>{[5, 10, 25].map((amount) => <motion.button key={amount} onClick={() => tip(amount)} whileHover={{ y: -4 }}><Coins size={17} /><strong>{amount}</strong><small>果</small></motion.button>)}</div></section>
+      <section className="product-support"><div><span className="deep-eyebrow"><Sparkles size={14} /> SUPPORT THE MAKER</span><h2>让创作者知道，这件作品值得继续</h2><p>支持收入先进入待结算余额，24 小时后转为可用；它不影响推荐排名。</p></div><div>{[5, 10, 25].map((amount) => <motion.button key={amount} onClick={() => tip(amount)} whileHover={{ y: -4 }}><Coins size={17} /><strong>{amount}</strong><small>果</small></motion.button>)}</div></section>
       {notice && <motion.div className="product-notice" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}><Check size={16} /> {notice}</motion.div>}
     </>
   );

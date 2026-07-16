@@ -1,4 +1,6 @@
+import { env } from "cloudflare:workers";
 import { database, jsonError, requireMember } from "../_lib/community";
+import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 
 const themes = ["coral", "mint", "blue", "yellow", "ink"];
 const categories = ["效率工具", "互动体验", "声音影像", "生活方式", "开发工具"];
@@ -7,6 +9,7 @@ const pricingModels = ["free", "one_time", "per_use"];
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
+    await enforceRateLimit(await rateLimitKey("publish-product", member.email), 10, 24 * 60 * 60);
     const input = (await request.json()) as Record<string, unknown>;
     const title = String(input.title ?? "").trim().slice(0, 36);
     const description = String(input.description ?? "").trim().slice(0, 180);
@@ -29,18 +32,33 @@ export async function POST(request: Request) {
     if (imageUrl && !(/^https?:\/\//i.test(imageUrl) || /^\/api\/uploads\/[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(imageUrl))) {
       return Response.json({ error: "invalid_image_url" }, { status: 400 });
     }
+    if (imageUrl?.startsWith("/api/uploads/")) {
+      const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
+      const key = decodeURIComponent(imageUrl.slice("/api/uploads/".length));
+      const object = bucket ? await bucket.head(key) : null;
+      if (!object || object.customMetadata?.owner !== member.email) {
+        return Response.json({ error: "product_cover_not_owned" }, { status: 403 });
+      }
+      if (object.customMetadata?.visibility !== "private" || object.customMetadata?.purpose !== "product_cover") {
+        return Response.json({ error: "invalid_product_cover" }, { status: 400 });
+      }
+    }
 
     const db = database();
     const created = await db
       .prepare(
         `INSERT INTO products
          (owner_email, owner_name, title, description, category, demo_type,
-          demo_url, image_url, cover_theme, price, pricing_model)
-         VALUES (?, ?, ?, ?, ?, 'prototype', ?, ?, ?, ?, ?)
+          demo_url, image_url, cover_theme, price, pricing_model, status,
+          moderation_status, review_status, review_version, approved_version)
+         VALUES (?, ?, ?, ?, ?, 'prototype', ?, ?, ?, ?, ?,
+                 'pending_review', 'visible', 'pending_review', 1, 0)
          RETURNING id, owner_name AS ownerName, title, description, category,
                    demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
                    cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
-                   plays_count AS plays, created_at AS createdAt`,
+                   plays_count AS plays, status, review_status AS reviewStatus,
+                   review_version AS reviewVersion, submitted_at AS submittedAt,
+                   created_at AS createdAt`,
       )
       .bind(
         member.email,

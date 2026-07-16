@@ -43,6 +43,34 @@
       "when": 1783948967900,
       "tag": "0005_flimsy_magus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1783986320164,
+      "tag": "0006_release_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1783995364807,
+      "tag": "0007_product_like_counters",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784026109126,
+      "tag": "0008_noisy_jazinda",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1784124000000,
+      "tag": "0009_moderation_remediation",
+      "breakpoints": true
     }
   ]
 }
