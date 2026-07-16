@@ -372,3 +372,17 @@
 - X 盘依赖边界：X 盘增量 npm reify 两次长时间无退出后停止，锁文件在 NTFS 验证副本生成；`X:\zaochang\node_modules` 当前是指向该已审计依赖树的本地目录联接。半安装恢复目录 `node_modules.xdrive-partial-20260716-230708` 的删除被主机策略拒绝，未删除，仅由 Git、TypeScript 与 ESLint 排除，不进入提交。
 - CI 兼容修复：GitHub Actions run `29511188405` 在 Node `22.13.0` 构建成功后，因测试直接导入 `.ts` 而返回 `ERR_UNKNOWN_FILE_EXTENSION`；test 脚本显式增加 `--experimental-strip-types`。本地使用 `npx node@22.13.0` 执行同一测试入口退出码 `0`，统计 `67 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`。
 - 仍阻断公开发布：本节依赖升级未部署；生产数据仍使用本机 Wrangler/Workerd 持久化层；Basic Auth 仍是共享预览凭据；Google 登录、跨机备份、恶意上传扫描、生产告警接收链与容量压测未验收。
+
+## 2026-07-17 r4 合并部署与预览凭据事件
+
+- 状态：部分完成；`https://aetherstudio.top` 仍是 Nginx Basic Auth 保护的远程验收环境，不是公开生产站，Basic Auth 不得移除。
+- GitHub 合并：PR `#1` 已合并，merge commit 为 `90b10b4f84755a5423f223f027ecf996058ed4e4`。主分支 Actions run `29514985327` 的 `verify` job 为 `success`，其中 checkout、Node 22、`npm ci`、TypeScript、Lint、禁用测试扫描、`npm test`、`git diff --check`、迁移漂移检查和生产依赖高危门禁共 11 个步骤全部成功。
+- 发布包：本地归档为 `output/deploy/zaochang-90b10b4f8475.tar.gz`，SHA-256 为 `32e7f332a5e83723546f3ae1fd99bb791e7d6eb7daeb2df1b84eb4734490cc2f`；服务器 release 为 `/opt/zaochang/releases/20260716-162918-90b10b4f8475-main-r4`。服务器 `npm ci`、Vite `8.1.4` 构建和 `npm audit` 均退出 0，审计结果为 0 vulnerabilities，Wrangler 为 `4.111.0`。
+- 迁移与数据：服务器比较 `0000..0009` 后得到 `semantic_changes=0`，差异仅为 CRLF/LF，因此没有重放迁移。生产数据库 `integrity=ok`，包含 37 张业务表、1 张 Wrangler `_cf_METADATA` 表、6 个审核字段和 11 个审核/支付关键触发器。
+- 原子切换与恢复点：`/opt/zaochang/current` 和 `zaochang.service` 进程 cwd 均解析到 r4。切换前备份为 `/var/backups/zaochang/state-20260716T163859Z.tar.gz`，校验和一致，恢复探针为 `restore_check=ok sqlite=4 files=4`。
+- 服务与日志：`zaochang.service`、Nginx 均为 `active/running`，应用 `NRestarts=0`，`nginx -t` 成功。自 `2026-07-16 16:38 UTC` 起应用 journal 没有 warning/alert，最近 1000 条 Nginx access log 没有 `5xx`；Nginx error log 只有轮换校验时旧预览密码被拒绝的 `password mismatch`。
+- 线上行为：受保护生产域名的银河页 46 个页面/API/RSC/静态请求均为 `200`，控制台 `0 errors / 0 warnings`，Canvas 为 `1440x900`；AURELIA 镜头终态为 `cameraTransition=settled`，可见 12 颗行星和 4 颗宿主恒星。SSH 回环隧道验证独立 `/signin` 为 `path=/signin / navCount=0 / hasLoggedInAccount=false`，GitHub 控件指向 `/api/auth/github/start?return_to=%2F`，控制台 `0 errors / 0 warnings`。同一隧道下 MORI 为 `iframeReadyState=complete / bodyChildCount=1 / loadingOverlay=false`；其 3 条 warning 来自隧道 origin 与固定生产 origin 不一致，只证明回环加载，不构成生产控制台证据。
+- 凭据事件：浏览器自动化曾把旧 Basic Auth 密码放入 URL，且 URL 出现在工具输出中，因此旧值按已暴露处理并立即轮换。服务器反例为 `unauthenticated=401 / old=401 / new=200`，htpasswd 权限仍为 `root:www-data 640`；新值只保留为 `C:\Users\Abraham\.ssh\zaochang-preview-password.dpapi` 的 DPAPI 密文，指纹前缀为 `d5f10051b929`，没有写入仓库、URL 或发布包。Runbook 已新增禁止 URL 凭据及暴露后强制轮换门禁。
+- 清理：`release-r4-tunnel` 浏览器会话已关闭，旧 `release-r4-rotated` 会话确认未打开，SSH 本地隧道进程已停止且端口 `39001` 不再监听；本地明文认证配置不存在。服务器 `/tmp/zaochang-90b10b4f8475.tar.gz` 与 6 个本次发布脚本均已删除并断言不存在。
+- 仍阻断公开发布：数据仍运行在服务器本地 Wrangler/Workerd 持久化层，而非受支持的 Cloudflare D1/R2；Basic Auth 是共享预览账号；Google 登录未配置；跨机备份、恶意上传扫描、告警投递链和容量/128 静态并发压力尚未验收。因此本节只证明受保护预览 r4 的部署和冒烟，不证明公开生产发布。
+- 未覆盖范围：非管理员 GitHub 账号的后台拒绝、真实 Google 回调、线上 logout 后旧 Cookie 重放、撤权与支付确认竞态、128 静态并发、低端 Android、iOS Safari、4K、高刷新率、GPU context loss、弱网、Webhook、邮件、跨机灾备和公开生产数据迁移仍未验证。
