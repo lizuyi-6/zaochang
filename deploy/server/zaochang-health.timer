@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Zaochang health checks every five minutes
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+AccuracySec=30s
+Persistent=true
+Unit=zaochang-health.service
+
+[Install]
+WantedBy=timers.target

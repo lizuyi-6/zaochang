@@ -1,0 +1,30 @@
+# Cache content-hashed assets immutably.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Product apps are intentionally framed only by the same Zaochang origin.
+/product-apps/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), payment=()
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:
+
+# WANDER alone can request a user-approved location from its same-origin frame.
+/product-apps/wander/*
+  Permissions-Policy: geolocation=(self)
+
+/product-apps/loops/*
+  Permissions-Policy: geolocation=()
+
+/product-apps/minute/*
+  Permissions-Policy: geolocation=()
+
+/product-apps/mori/*
+  Permissions-Policy: geolocation=()
+
+/product-apps/sprout/*
+  Permissions-Policy: geolocation=()
+
+/product-apps/typewave/*
+  Permissions-Policy: geolocation=()

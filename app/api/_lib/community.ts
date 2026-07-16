@@ -38,14 +38,7 @@ export async function ensureMember(user: MemberIdentity) {
       .prepare(
         `INSERT OR IGNORE INTO wallets
          (user_email, balance, lifetime_earned, lifetime_spent)
-         VALUES (?, 120, 120, 0)`,
-      )
-      .bind(user.email),
-    db
-      .prepare(
-        `INSERT OR IGNORE INTO transactions
-         (user_email, delta, type, description, reference_id)
-         VALUES (?, 120, 'welcome', '新成员起步金', 'welcome')`,
+         VALUES (?, 0, 0, 0)`,
       )
       .bind(user.email),
     db
@@ -61,6 +54,12 @@ export async function ensureMember(user: MemberIdentity) {
 export function jsonError(error: unknown) {
   if (error instanceof AuthRequiredError) {
     return Response.json({ error: "auth_required" }, { status: 401 });
+  }
+
+  if (error && typeof error === "object" && "code" in error && "status" in error) {
+    const code = String((error as { code: unknown }).code);
+    const status = Number((error as { status: unknown }).status);
+    return Response.json({ error: code }, { status: Number.isInteger(status) ? status : 500 });
   }
 
   const message = error instanceof Error ? error.message : "Unexpected error";

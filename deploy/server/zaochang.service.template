@@ -1,0 +1,30 @@
+[Unit]
+Description=Zaochang protected preview (Wrangler local runtime)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zaochang
+Group=zaochang
+WorkingDirectory=/opt/zaochang/current
+Environment=NODE_ENV=production
+Environment=HOME=/var/lib/zaochang
+Environment=XDG_CONFIG_HOME=/var/lib/zaochang/.config
+Environment=NODE_OPTIONS=--max-old-space-size=768
+ExecStart=/opt/zaochang/current/node_modules/.bin/wrangler dev --config dist/server/wrangler.json --ip 127.0.0.1 --port 3001 --persist-to /var/lib/zaochang/state --env-file /etc/zaochang/zaochang.env
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=90
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadOnlyPaths=/etc/zaochang/zaochang.env
+ReadWritePaths=/var/lib/zaochang
+ReadWritePaths=/opt/zaochang/releases
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

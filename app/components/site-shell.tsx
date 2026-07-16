@@ -4,6 +4,7 @@ import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-m
 import {
   Bell,
   BadgeCheck,
+  Blocks,
   Bookmark,
   ChevronDown,
   CircleUserRound,
@@ -29,6 +30,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { circles, products } from "../lib/community-data";
 
 type Member = { signedIn: boolean; displayName: string; initial: string };
+type CircleStat = { slug: string; members: number; recentDiscussions: number };
 
 const navItems = [
   { href: "/", label: "首页", icon: Home },
@@ -38,6 +40,7 @@ const navItems = [
   { href: "/challenges", label: "挑战", icon: Trophy },
   { href: "/collections", label: "收藏", icon: Bookmark },
   { href: "/studio", label: "创作台", icon: Layers3 },
+  { href: "/developers", label: "开发者", icon: Blocks },
 ];
 
 const routeNames: Record<string, string> = {
@@ -54,6 +57,8 @@ const routeNames: Record<string, string> = {
   "/profile/edit": "编辑个人资料",
   "/notifications": "通知中心",
   "/guide": "社区指南",
+  "/developers": "开发者接入",
+  "/developers/docs": "身份与果子 API",
 };
 
 function routeIsActive(pathname: string, href: string) {
@@ -70,6 +75,8 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   const [query, setQuery] = useState("");
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
+  const [feedCount, setFeedCount] = useState(0);
+  const [circleStats, setCircleStats] = useState<Record<string, CircleStat>>({});
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -93,11 +100,23 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   }, [pathname]);
 
   useEffect(() => {
-    if (!member.signedIn) return;
     let active = true;
     fetch("/api/community", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
       if (!active || !data) return;
-      const payload = data as { wallet?: { balance: number } | null; notifications?: { id: string }[]; actions?: { kind: string; targetRef: string }[] };
+      const payload = data as {
+        wallet?: { balance: number } | null;
+        notifications?: { id: string }[];
+        actions?: { kind: string; targetRef: string }[];
+        platformStats?: { posts: number };
+        circleStats?: CircleStat[];
+      };
+      setFeedCount(Number(payload.platformStats?.posts ?? 0));
+      setCircleStats(Object.fromEntries((payload.circleStats ?? []).map((item) => [item.slug, item])));
+      if (!member.signedIn) {
+        setWalletBalance(null);
+        setHasUnread(false);
+        return;
+      }
       setWalletBalance(payload.wallet?.balance ?? 0);
       const read = new Set((payload.actions ?? []).filter((item) => item.kind === "read_notification").map((item) => item.targetRef));
       setHasUnread((payload.notifications ?? []).some((item) => !read.has(item.id)));
@@ -119,7 +138,8 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   if (
     pathname.startsWith("/signin") ||
     pathname.startsWith("/signout") ||
-    pathname === "/callback"
+    pathname === "/callback" ||
+    pathname.startsWith("/oauth")
   ) return <>{children}</>;
 
   if (pathname.startsWith("/galaxy")) return <>{children}</>;
@@ -190,6 +210,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
               <div><span className="deep-avatar ink">{member.initial}</span><span><strong>{member.displayName}</strong><small>造场成员</small></span></div>
               <Link href="/profile"><UserRound size={15} /> 个人主页</Link>
               <Link href="/profile/edit"><Layers3 size={15} /> 编辑资料</Link>
+              <Link href="/developers"><Blocks size={15} /> 开发者接入</Link>
               <a href="/api/auth/logout?return_to=%2F"><LogOut size={15} /> 退出登录</a>
             </motion.div>
           )}
@@ -207,7 +228,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
                   {active && <motion.span className="deep-nav-active" layoutId="deep-nav-active" transition={{ type: "spring", stiffness: 430, damping: 35 }} />}
                   <Icon size={19} />
                   <span>{item.label}</span>
-                  {item.href === "/feed" && <b>6</b>}
+                  {item.href === "/feed" && feedCount > 0 && <b>{Math.min(feedCount, 99)}</b>}
                 </Link>
               );
             })}
@@ -224,7 +245,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
             <Link className="deep-circle-link" href={`/circles#${circle.slug}`} key={circle.slug}>
               <span className={`deep-circle-dot ${circle.color}`} />
               <span>{circle.name}</span>
-              <small>{circle.online}</small>
+              <small>{circleStats[circle.slug]?.members ?? 0}</small>
             </Link>
           ))}
         </div>
@@ -232,7 +253,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         <Link className="deep-side-challenge" href="/challenges">
           <span><Sparkles size={16} /> 七月造物挑战</span>
           <strong>为“等候”<br />做一件东西</strong>
-          <small>4 天后截止</small>
+          <small>开放命题 · 无截止日期</small>
           <i><b /></i>
         </Link>
 

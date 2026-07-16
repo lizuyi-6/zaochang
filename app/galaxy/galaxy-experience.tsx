@@ -2238,6 +2238,7 @@ export function GalaxyExperience() {
       <nav className={styles.ecosystemNav} aria-label="产品银河主要入口">
         <Link href="/galaxy" aria-current="page">银河探索</Link>
         <Link href="/galaxy/products">全部产品</Link>
+        <Link href="/galaxy/company">公司中心</Link>
         <Link href="/galaxy/incubator">孵化控制台</Link>
         <Link className={styles.navApply} href="/galaxy/apply"><Rocket size={13} /> 申请加入</Link>
       </nav>

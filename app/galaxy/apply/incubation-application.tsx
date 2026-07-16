@@ -7,16 +7,17 @@ import { FormEvent, useMemo, useState } from "react";
 import { PRODUCT_BY_PLANET } from "../product-galaxy";
 import styles from "../ecosystem.module.css";
 
-const projectTypes = ["AI 产品", "软件产品", "硬件项目", "开源项目", "创业团队", "开发者项目", "创新想法"];
+const projectTypes = ["AI 产品", "软件产品", "硬件项目", "开源项目", "创业团队", "开发者项目", "创新想法", "商务合作"];
 const stages = ["提交申请", "资料审核", "初步沟通", "项目评估", "确认合作", "产品定位", "原型设计", "开发测试", "上线准备", "进入银河"];
 
 export function IncubationApplication() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedProduct = searchParams.get("product");
+  const requestedType = searchParams.get("type");
   const productContext = requestedProduct && requestedProduct in PRODUCT_BY_PLANET ? PRODUCT_BY_PLANET[requestedProduct as keyof typeof PRODUCT_BY_PLANET] : null;
   const [step, setStep] = useState(0);
-  const [projectType, setProjectType] = useState("AI 产品");
+  const [projectType, setProjectType] = useState(requestedType === "business" ? "商务合作" : "AI 产品");
   const [name, setName] = useState("");
   const [oneLiner, setOneLiner] = useState("");
   const [problem, setProblem] = useState("");

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { database, jsonError, requireMember } from "../_lib/community";
+import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,9 @@ export async function GET() {
     const project = await database().prepare(
       `SELECT id, name, project_type AS projectType, one_liner AS oneLiner,
               problem, progress, team, need, contact, status,
-              current_task AS currentTask, created_at AS createdAt,
+              current_task AS currentTask, assigned_owner AS assignedOwner,
+              next_action AS nextAction, waiting_reason AS waitingReason,
+              progress_percent AS progressPercent, created_at AS createdAt,
               updated_at AS updatedAt
        FROM incubation_projects WHERE user_email = ?
        ORDER BY updated_at DESC, id DESC LIMIT 1`,
@@ -19,7 +22,11 @@ export async function GET() {
        FROM project_materials WHERE project_id = ? AND user_email = ?
        ORDER BY created_at DESC, id DESC`,
     ).bind(project.id, member.email).all()).results : [];
-    return Response.json({ project, materials });
+    const feedback = project && typeof project.id === "number" ? (await database().prepare(
+      `SELECT id, kind, content, created_at AS createdAt FROM incubation_feedback
+       WHERE project_id = ? ORDER BY created_at DESC, id DESC LIMIT 50`,
+    ).bind(project.id).all()).results : [];
+    return Response.json({ project, materials, feedback });
   } catch (error) {
     return jsonError(error);
   }
@@ -28,6 +35,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
+    await enforceRateLimit(await rateLimitKey("incubation-write", member.email), 30, 24 * 60 * 60);
     const input = await request.json() as Record<string, unknown>;
     if (input.action === "add_material") {
       const projectId = Number(input.projectId);
@@ -52,7 +60,10 @@ export async function POST(request: Request) {
       ).bind(projectId, member.email, name, url, kind).first();
       await database().prepare(
         `UPDATE incubation_projects
-         SET status = '项目评估', current_task = '等待产品评估意见', updated_at = CURRENT_TIMESTAMP
+         SET current_task = '等待造场核对新增资料',
+             next_action = '造场确认资料是否满足当前阶段要求',
+             waiting_reason = '新增资料已进入资料审核队列',
+             updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND user_email = ?`,
       ).bind(projectId, member.email).run();
       return Response.json({ material }, { status: 201 });
@@ -72,8 +83,10 @@ export async function POST(request: Request) {
     }
     const project = await database().prepare(
       `INSERT INTO incubation_projects
-       (user_email, name, project_type, one_liner, problem, progress, team, need, contact)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (user_email, name, project_type, one_liner, problem, progress, team, need, contact,
+        status, current_task, next_action, waiting_reason, progress_percent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '资料审核', '等待造场完成资料审核',
+               '造场确认申请资料并说明下一步', '申请已进入资料审核队列', 12)
        RETURNING id, name, project_type AS projectType, status,
                  current_task AS currentTask, created_at AS createdAt`,
     ).bind(member.email, fields.name, fields.projectType, fields.oneLiner, fields.problem, fields.progress, fields.team, fields.need, fields.contact).first();

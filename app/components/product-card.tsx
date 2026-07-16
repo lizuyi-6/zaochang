@@ -4,9 +4,13 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Coins, Eye, Heart, Play } from "lucide-react";
 import Link from "next/link";
 import { compactNumber, type Product } from "../lib/community-data";
+import { ReportButton } from "./report-button";
 
 export function ProductCard({ product, index = 0, large = false }: { product: Product; index?: number; large?: boolean }) {
   const reduced = useReducedMotion();
+  const priceLabel = product.pricingModel === "free" || product.price === 0
+    ? "免费"
+    : <><Coins size={13} /> {product.price}{product.pricingModel === "per_use" ? " / 次" : " 解锁"}</>;
   return (
     <motion.article
       className={large ? "deep-product-card large" : "deep-product-card"}
@@ -19,7 +23,7 @@ export function ProductCard({ product, index = 0, large = false }: { product: Pr
         <img src={product.image} alt={`${product.title} 作品预览`} />
         <span className="deep-cover-shade" />
         <motion.span className="deep-cover-play" whileHover={{ scale: 1.08 }}><Play size={18} fill="currentColor" /></motion.span>
-        <span className="deep-price">{product.price === 0 ? "免费" : <><Coins size={13} /> {product.price}</>}</span>
+        <span className="deep-price">{priceLabel}</span>
         <span className="deep-release">{product.release}</span>
       </Link>
       <div className="deep-product-copy">
@@ -31,6 +35,7 @@ export function ProductCard({ product, index = 0, large = false }: { product: Pr
           <strong>{product.ownerName}</strong>
           <span><Eye size={14} /> {compactNumber(product.plays)}</span>
           <span><Heart size={14} /> {compactNumber(product.likes)}</span>
+          {typeof product.id === "number" && <ReportButton targetType="product" targetRef={String(product.id)} />}
         </div>
       </div>
     </motion.article>

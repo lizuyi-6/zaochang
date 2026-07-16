@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { getChatGPTUser } from "./chatgpt-auth";
 import { SiteShell } from "./components/site-shell";
 import "./globals.css";
-
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: { default: "造场 | 创作者的试玩社区", template: "%s | 造场" },
@@ -23,7 +19,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="zh-CN">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body>
         <SiteShell member={member}>{children}</SiteShell>
       </body>
     </html>

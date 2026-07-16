@@ -1,4 +1,7 @@
 import { database, jsonError, requireMember } from "../_lib/community";
+import { awardProductLike, removeProductLike, tipProduct } from "../_lib/fruit";
+import { enforceRateLimit, rateLimitKey, requestActorKey } from "../_lib/rate-limit";
+import { findProduct } from "../../lib/community-data";
 
 export async function POST(request: Request) {
   try {
@@ -7,125 +10,91 @@ export async function POST(request: Request) {
     const db = database();
 
     if (action === "experience") {
+      await enforceRateLimit(await requestActorKey(request, "experience"), 120, 60 * 60);
       const productId = Number(input.productId);
       if (Number.isInteger(productId)) {
-        await db
-          .prepare("UPDATE products SET plays_count = plays_count + 1 WHERE id = ?")
+        const update = await db
+          .prepare(`UPDATE products SET plays_count = plays_count + 1
+                    WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
+                      AND review_status = 'approved' AND approved_version = review_version`)
           .bind(productId)
           .run();
+        if ((update.meta?.changes ?? 0) === 0) {
+          return Response.json({ error: "product_not_found" }, { status: 404 });
+        }
+      } else if (!findProduct(String(input.productId ?? ""))) {
+        return Response.json({ error: "product_not_found" }, { status: 404 });
       }
       return Response.json({ recorded: true });
     }
 
     const member = await requireMember();
+    await enforceRateLimit(await rateLimitKey("member-action", member.email), 180, 60 * 60);
 
     if (action === "like") {
       const productId = Number(input.productId);
       if (!Number.isInteger(productId)) {
-        return Response.json({ liked: true, localOnly: true });
+        const productRef = String(input.productId ?? "").trim().slice(0, 80);
+        if (!findProduct(productRef)) return Response.json({ error: "product_not_found" }, { status: 404 });
+        const existing = await db
+          .prepare("SELECT 1 AS found FROM community_actions WHERE user_email = ? AND kind = 'like_showcase' AND target_ref = ?")
+          .bind(member.email, productRef)
+          .first();
+        if (existing) {
+          await db.prepare("DELETE FROM community_actions WHERE user_email = ? AND kind = 'like_showcase' AND target_ref = ?")
+            .bind(member.email, productRef).run();
+          return Response.json({ liked: false, added: false, reward: { granted: false, amount: 0, reason: "showcase_product" } });
+        }
+        await db.prepare("INSERT INTO community_actions (user_email, kind, target_ref) VALUES (?, 'like_showcase', ?)")
+          .bind(member.email, productRef).run();
+        return Response.json({ liked: true, added: true, reward: { granted: false, amount: 0, reason: "showcase_product" } });
       }
       const existing = await db
         .prepare("SELECT 1 AS found FROM product_likes WHERE product_id = ? AND user_email = ?")
         .bind(productId, member.email)
         .first();
+      const product = await db
+        .prepare(`SELECT owner_email AS ownerEmail FROM products
+                  WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
+                    AND review_status = 'approved' AND approved_version = review_version`)
+        .bind(productId)
+        .first<{ ownerEmail: string }>();
+      if (!product) return Response.json({ error: "product_not_found" }, { status: 404 });
       if (existing) {
-        await db.batch([
-          db.prepare("DELETE FROM product_likes WHERE product_id = ? AND user_email = ?").bind(productId, member.email),
-          db.prepare("UPDATE products SET likes_count = MAX(0, likes_count - 1) WHERE id = ?").bind(productId),
-        ]);
-        return Response.json({ liked: false, added: false });
+        const removed = await removeProductLike(product.ownerEmail, member.email, productId);
+        return Response.json({ liked: false, added: false, reward: removed.reward });
       }
-      const insert = await db
-        .prepare("INSERT INTO product_likes (product_id, user_email) VALUES (?, ?)")
-        .bind(productId, member.email)
-        .run();
-      if ((insert.meta?.changes ?? 0) > 0) {
-        await db
-          .prepare("UPDATE products SET likes_count = likes_count + 1 WHERE id = ?")
-          .bind(productId)
+      let insert;
+      try {
+        insert = await db
+          .prepare("INSERT INTO product_likes (product_id, user_email) VALUES (?, ?)")
+          .bind(productId, member.email)
           .run();
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("product_like_product_not_approved")) {
+          return Response.json({ error: "product_not_found" }, { status: 404 });
+        }
+        throw error;
       }
-      return Response.json({ liked: true, added: (insert.meta?.changes ?? 0) > 0 });
+      const reward = (insert.meta?.changes ?? 0) > 0
+        ? await awardProductLike(product.ownerEmail, member.email, productId)
+        : { granted: false, amount: 0, reason: "already_liked" };
+      return Response.json({ liked: true, added: (insert.meta?.changes ?? 0) > 0, reward });
     }
 
     if (action === "check_in") {
-      const claimDate = new Date().toISOString().slice(0, 10);
-      const claimed = await db
-        .prepare(
-          "INSERT OR IGNORE INTO daily_claims (user_email, claim_date, amount) VALUES (?, ?, 8)",
-        )
-        .bind(member.email, claimDate)
-        .run();
-      if ((claimed.meta?.changes ?? 0) === 0) {
-        return Response.json({ error: "already_claimed" }, { status: 409 });
-      }
-      await db.batch([
-        db
-          .prepare(
-            `UPDATE wallets SET balance = balance + 8,
-             lifetime_earned = lifetime_earned + 8,
-             updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
-          )
-          .bind(member.email),
-        db
-          .prepare(
-            `INSERT INTO transactions
-             (user_email, delta, type, description, reference_id)
-             VALUES (?, 8, 'daily_claim', '每日灵感补给', ?)`,
-          )
-          .bind(member.email, claimDate),
-      ]);
-      return Response.json({ claimed: 8 });
+      return Response.json({ error: "daily_claim_removed", earningPath: "qualified_product_likes" }, { status: 410 });
     }
 
     if (action === "tip") {
       const productId = Number(input.productId);
       const amount = Number(input.amount);
-      if (!Number.isInteger(productId) || ![5, 10, 25].includes(amount)) {
-        return Response.json({ error: "invalid_tip" }, { status: 400 });
-      }
-      const product = await db
-        .prepare("SELECT owner_email AS ownerEmail, title FROM products WHERE id = ?")
-        .bind(productId)
-        .first<{ ownerEmail: string; title: string }>();
-      if (!product || product.ownerEmail === member.email) {
-        return Response.json({ error: "tip_not_allowed" }, { status: 409 });
-      }
-      const reference = `tip:${productId}:${crypto.randomUUID()}`;
-      await db.batch([
-        db
-          .prepare(
-            `UPDATE wallets SET balance = balance - ?,
-             lifetime_spent = lifetime_spent + ?,
-             updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
-          )
-          .bind(amount, amount, member.email),
-        db
-          .prepare(
-            `UPDATE wallets SET balance = balance + ?,
-             lifetime_earned = lifetime_earned + ?,
-             updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
-          )
-          .bind(amount, amount, product.ownerEmail),
-        db
-          .prepare(
-            `INSERT INTO transactions
-             (user_email, delta, type, description, reference_id)
-             VALUES (?, ?, 'tip_sent', ?, ?)`,
-          )
-          .bind(member.email, -amount, `支持《${product.title}》`, reference),
-        db
-          .prepare(
-            `INSERT INTO transactions
-             (user_email, delta, type, description, reference_id)
-             VALUES (?, ?, 'tip_received', ?, ?)`,
-          )
-          .bind(product.ownerEmail, amount, `作品《${product.title}》收到支持`, reference),
-      ]);
-      return Response.json({ tipped: amount });
+      const idempotencyKey = String(input.idempotencyKey ?? "");
+      return Response.json(await tipProduct(member.email, productId, amount, idempotencyKey));
     }
 
     if (action === "post") {
+      await enforceRateLimit(await rateLimitKey("post", member.email), 20, 60 * 60);
       const content = String(input.content ?? "").trim().slice(0, 280);
       const imageUrl = String(input.imageUrl ?? "").trim().slice(0, 500) || null;
       const linkedProductRef = String(input.linkedProductRef ?? "").trim().slice(0, 80) || null;

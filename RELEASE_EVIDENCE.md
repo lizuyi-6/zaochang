@@ -1,0 +1,122 @@
+# 发布前逐文件证据矩阵
+
+> 本文件开头的 78 文件矩阵是 `0008` 阶段快照；`0009`、阿里云预发布、真实 GitHub OAuth 与 Nginx 静态并发修复的增量证据见文末“2026-07-16 线上收口增量”。历史数字不冒充当前工作树统计。
+
+本矩阵锚定 2026-07-15 的 `git diff --stat` 与发布相关未跟踪文件。`git status --porcelain=v1 -uall` 共展开 `617` 个改动路径；只排除 `539` 个 `.playwright-cli/` 与 `output/` 临时证据文件后，剩余 `78` 个发布相关改动文件与下方 `78` 行证据说明机械对账为 `missing=0 / extra=0`。SPROUT 的两个生成 bundle 会进入线上静态资源，故仍逐文件纳入。共同门禁为：`npm test` 退出码 0（65 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo）、`npx tsc --noEmit` 退出码 0、`npm run lint` 退出码 0（0 errors / 9 warnings）、`npm run db:generate` 退出码 0（37 tables / No schema changes）、`npm audit --omit=dev --audit-level=high` 退出码 0（0 high / 0 critical / 2 moderate）、`git diff --check` 退出码 0；测试扫描输出 `NO_SKIP_OR_ONLY_MATCHES` 与 `NO_ADDED_SKIP_MECHANISMS`。下列每行只声明该文件获得的针对性证据；“未单独验证”表示共同门禁不构成对该文件交互语义的证明。
+
+- `.github/workflows/ci.yml`：CI 门禁编排；新增禁用测试语法扫描和 `git diff --check`，本地同模式扫描输出 `NO_DISABLED_TEST_MECHANISM_FOUND` 且格式检查退出码 0；未在 GitHub Actions 真实 runner 单独验证。
+- `OAUTH_SETUP.md`：OAuth/生产密钥配置说明；文档人工核对，未用真实 GitHub/Google 回调单独验证。
+- `PROJECT_STATUS.md`：持续账本与本轮证据；`git diff --check` 负责格式检查，内容由本矩阵与命令输出交叉核对。
+- `README.md`：产品、开发和发布说明；文档人工核对，未单独验证所有示例命令。
+- `RELEASE_RUNBOOK.md`：发布/回滚步骤；已与当前 `0006/0007/0008` 三个前向迁移及产品预审冒烟项对账，未在真实 Sites 环境演练，明确保留生产演练缺口。
+- `RELEASE_EVIDENCE.md`：逐文件证据索引；由最终 `git diff --check` 与文件清单对账，运行时语义不适用。
+- `app/admin/admin-console.tsx`：审核、风控和孵化管理 UI；浏览器实填审核意见并点击“批准上线”后，队列变为“没有待预审商品”；移动 `390x844` 队列含产品名/批准/驳回且 `scrollWidth=375 <= innerWidth=390`。后端落库语义仍由审核集成字段断言证明。
+- `app/admin/page.tsx`：管理员入口与鉴权页面；路由构建通过，未单独执行白名单/非白名单浏览器对照。
+- `app/api/_lib/admin.ts`：管理员白名单、D1 原子审计语句；`reports require an administrator decision...` 与 OAuth 集成用例通过。
+- `app/api/_lib/community.ts`：社区成员、钱包和真实数据读取；`public community aggregates match the persisted records`、发布与钱包集成用例通过。
+- `app/api/_lib/external-fruit.ts`：外部支付、撤销与退款；`OIDC login and delegated fruit API...` 通过，含未确认余额不变、并发确认、撤销与退款字段断言。
+- `app/api/_lib/fruit.ts`：果子账本、结算、退款和付费产品冻结；订单幂等重放与 `activeEntitlement` 均联表检查当前批准版本，冲突恢复查不到当前批准产品时返回 `404`；复审后旧 checkout 键断言 `404`、买家 `balance == ledgerBalance == 5`。故障注入用例让审核在首条 purchase 操作时变化，最终订单/purchase operation 均为 `0` 且双边钱包字段未变；钱包守恒、并发退款、like 奖励和账本不可变用例保持通过，隐藏付费产品的最终买家补偿策略仍未验证。
+- `app/api/_lib/oauth-provider.ts`：OAuth 2.1/OIDC、密钥、token family、客户端审核与用户撤权；OIDC 全流程断言用户撤权后付款为 `cancelled`，买卖双方余额与账本不变。
+- `app/api/_lib/public-community.ts`：公共聚合与匿名内容；`public community aggregates match the persisted records` 断言 `platformStats/products/posts` 实际字段。
+- `app/api/_lib/rate-limit.ts`：D1 固定窗口限流；相关 OAuth/支付路由集成运行通过，未单独做压力与窗口边界基准。
+- `app/api/actions/route.ts`：点赞、取消点赞与奖励原子性；like 奖励、每日上限和并发取消专项断言通过；待审产品 like 路由返回 `404`，数据库直写由 `product_like_product_not_approved` 反例覆盖。
+- `app/api/admin/incubation/route.ts`：管理员推进孵化阶段与审计；`persists profile, collections, comments, and incubation state` 通过，未单独做 D1 审计故障注入。
+- `app/api/admin/moderation/route.ts`：举报隐藏、OAuth 审核、产品版本审核和风险处置；冲突并发决定断言 `[200,409]`，相同决定断言 `[200,200]` 且恰有一个 `replayed == true`；隐藏付费产品补偿策略仍为阻断级缺口。
+- `app/api/auth/[provider]/callback/route.ts`：GitHub/Google OAuth 回调会话；未使用真实提供方凭据单独验证，本地未配置分支由 `keeps OAuth providers explicit...` 覆盖。
+- `app/api/comments/route.ts`：评论持久化与公开计数；社区持久化用例通过，待审产品 GET/POST 均为 `404`，数据库直写命中 `product_comment_product_not_approved`。
+- `app/api/community/route.ts`：社区 hydration 与真实动作状态；公共聚合、认证成员和社区持久化用例通过。
+- `app/api/developer/clients/route.ts`：开发者客户端创建与审核默认值；OIDC 集成用例通过。
+- `app/api/incubation/route.ts`：项目申请与资料阶段；孵化持久化用例通过，自动推进被拒绝的字段行为由集成断言覆盖。
+- `app/api/oauth/token/route.ts`：token 交换与审核复核；OIDC 集成用例通过。
+- `app/api/products/route.ts`：产品发布、定价和私有封面所有权；预审用例断言免费/付费共用 `pending_review/reviewVersion=1/approvedVersion=0` 默认值且发布奖励为 `0`。
+- `app/api/reports/route.ts`：内容举报提交；`reports require an administrator decision and hidden products leave public queries` 通过。
+- `app/api/uploads/route.ts`：上传可见性与所有权；`enforces upload visibility and ownership` 通过；恶意文件扫描未覆盖。
+- `app/api/uploads/[key]/route.ts`：私有对象读取边界；上传用例断言管理员读取普通私有资料为 `403`、孤立产品封面为 `403`、已关联待审封面为 `200`、批准后匿名读取为 `200`。
+- `app/api/v1/fruit/payments/route.ts`：外部支付创建与客户端复核；OIDC/外部支付集成用例通过。
+- `app/challenges/page.tsx`：移除伪排行榜/奖金；路由 SSR 用例通过，未单独做移动交互。
+- `app/chatgpt-auth.ts`：未设置 `APP_ENV` 时身份头 fail-closed；`production rejects forged workspace identity headers unless explicitly trusted` 通过。
+- `app/circles/circles-client.tsx`：真实圈子计数与空态；路由 SSR 通过，旧一轮 390x844 浏览器无横向溢出；本轮未重复圈子交互。
+- `app/components/product-card.tsx`：价格模型和官方标识；发现/首页 SSR 通过，未单独做所有卡片操作。
+- `app/components/report-button.tsx`：举报入口；举报后端集成通过，未单独做按钮浏览器提交。
+- `app/components/site-shell.tsx`：真实 feed/circle 数据和移动导航；首页移动浏览器断言 `scrollWidth == 390`，导航计算背景为不透明 `rgb(251, 250, 247)`。
+- `app/developers/developer-console.tsx`：客户端审核状态、撤权和公开客户端密钥提示；浏览器切到 public 后表单显示“公开客户端不生成密钥”，真实创建后的 alert 只含 Client ID、PKCE 说明与“我已记录 Client ID”；点击撤销授权后页面移除 consent，D1 断言 consent/access/refresh token 均有撤销字段。
+- `app/developers/docs/page.tsx`：OAuth/果子 API 文档；路由 SSR 与构建通过，未对外部消费者执行契约测试。
+- `app/discover/discover-client.tsx`：真实产品筛选；`renders distinct route /discover` 通过，未单独做所有筛选组合。
+- `app/feed/feed-client.tsx`：真实动态、讨论与空态；`renders distinct route /feed`、公共聚合用例与 390x844 浏览器截图通过，未做大数据分页测试。
+- `app/galaxy/apply/incubation-application.tsx`：申请状态/资料提示；`renders distinct route /galaxy/apply` 与孵化持久化用例通过。
+- `app/galaxy/company/page.tsx`：公司中心页面；构建路由通过，未单独做移动浏览器验收。
+- `app/galaxy/ecosystem-shell.tsx`：银河生态外壳；银河桌面/移动 Playwright 验收通过。
+- `app/galaxy/ecosystem.module.css`：银河生态外壳响应式样式；`390x844` 银河截图完整呈现黑洞、四赛道与行动入口，未在移动真机单独验证。
+- `app/galaxy/galaxy-experience.tsx`：Three.js 银河与镜头飞行；浏览器断言 4 星系/12 行星、帧 `47→75`、`flying→settled`、桌面/移动 canvas 离线像素非空。
+- `app/galaxy/incubator/incubation-console.tsx`：孵化任务/阶段真实状态；路由 SSR 与孵化持久化通过，未单独做多角色协作。
+- `app/galaxy/product-galaxy.ts`：真实产品、赛道与状态映射；`product galaxy maps every planet to a real product and business sector` 通过。
+- `app/globals.css`：系统字体、官方配色、移动底栏实体背景和移动嵌入控件避让；移动端不再渲染“独立打开”浮层，LOOPS 抽屉“完成”点击由浮层截获超时变为成功；桌面入口未单独重复点击。
+- `app/layout.tsx`：移除远程字体、元数据；生产构建通过，首页浏览器检测为 0 个生成 `@font-face`。
+- `app/lib/community-data.ts`：种子产品真实零计数和可体验标签；公共聚合、产品路由与六个应用映射用例通过。
+- `next.config.ts`：vinext multipart/Server Action 请求体门限为 `10.1mb`；上传路由仍限制单文件 `10MB`，本地实测 `1,426,368` 字节 PNG 为 `201` 且响应字段 `size=1426368 / visibility=private / purpose=product_cover`，`89,875,456` 字节载荷为 `413`。未做并发大文件压力测试。
+- `app/oauth-session.ts`：会话散列、删除与重放防护；`logout deletes the server session so a copied cookie cannot be replayed` 通过。
+- `app/oauth/authorize/page.tsx`：授权页审核状态；OIDC 集成通过，未单独做浏览器授权确认。
+- `app/page.tsx`：真实公共统计与社区空态；公共聚合字段断言、桌面/移动浏览器截图通过。
+- `app/product/[slug]/embedded-product.tsx`：iframe ready 与失败终态；正常 MORI 为 `ready/overlay=0/iframeReadyState=complete/bodyChildCount=1`；挂起 iframe 请求时 500ms 的 `activeBefore=1`，12 秒失败后 `active100msIntervals=0` 且失败文案/重新载入按钮存在；`onLoad`、轮询命中、timeout 与 effect cleanup 均清除 poll ref。
+- `app/product/[slug]/page.tsx`：隐藏产品公共访问边界与产品数据；举报隐藏集成和六个产品路由 SSR 通过。
+- `app/product/[slug]/product-experience.tsx`：真实 like/follow/save/comment 与 24h 待结算文案；社区动作集成与六个产品浏览器外壳通过，未单独覆盖所有按钮组合。
+- `app/profile/page.tsx`：个人页真实产品查询只返回当前批准版本；认证个人页 SSR 通过，预审产品的公开资料隐藏由产品预审集成用例覆盖。
+- `app/signin/page.tsx`：独立登录页；`keeps sign-in outside the community shell` 与 OAuth 未配置分支通过。
+- `app/studio/new/create-product-flow.tsx`：发布向导统一使用“提交平台预审”并说明批准前不公开/不交易；浏览器从名称/说明/一次解锁 5 果走到“作品已提交平台预审”，同时由产品提交集成断言数据库默认终态。
+- `app/studio/studio-client.tsx`：真实作品指标和审核状态；桌面待审产品无详情链接，批准后显示“已发布”并出现两处 `/product/1` 链接；移动页同时含审核中/已发布，待审链接数 `0`、已发布链接数 `2`、`scrollWidth=375 <= innerWidth=390`。
+- `app/wallet/wallet-client.tsx`：零余额、真实分录与空 CSV；钱包守恒/购买/退款/账本不可变用例通过，未单独做 CSV 内容浏览器下载。
+- `db/schema.ts`：37 表约束、索引和审核版本映射；`db:generate` 输出 `37 tables / No schema changes`，全新 D1 按 `0000..0008` 运行 64 项用例。
+- `drizzle/0006_release_readiness.sql`：审核、限流、风控与安全约束迁移；空 D1 全量集成应用成功。
+- `drizzle/0007_product_like_counters.sql`：like 计数触发器；like/取消/每日上限和并发专项用例通过。
+- `drizzle/0008_noisy_jazinda.sql`：全部用户产品预审、延期外键迁移和数据库写守门；迁移夹具断言历史订单/点赞引用保留，无决定直接批准、审核决定更新/删除、待审订单/点赞/评论/打赏直写均被命名触发器拒绝，所有权变化产生 `reviewVersion == 3 && approvedVersion == 2 && status == pending_review`。
+- `drizzle/meta/0006_snapshot.json`：0006 schema 快照；`db:generate` 输出无漂移。
+- `drizzle/meta/0007_snapshot.json`：0007 schema 快照；`db:generate` 输出无漂移。
+- `drizzle/meta/0008_snapshot.json`：0008 schema 快照；`db:generate` 输出无漂移。
+- `drizzle/meta/_journal.json`：迁移序列至 0008；含历史产品外键引用的本地 D1 全量集成依序应用成功。
+- `public/_headers`：同源产品 iframe 的 CSP/X-Frame-Options；`only product app documents can be embedded by the same origin` 断言响应头字段通过。
+- `public/product-apps/selection-a11y.js`：为四类明确选择器同步 `aria-pressed`；`node --check` 退出码 0，重建后的 MORI/MINUTE/SPROUT Playwright 快照分别出现主题与阶段 `[pressed]`，未在屏幕阅读器真机单独验证。
+- `public/product-apps/mori/index.html`：加载共享选择态脚本；静态 bundle 200/MIME 集成通过，移动抽屉快照出现 `苔绿 [pressed]`。
+- `public/product-apps/minute/index.html`：加载共享选择态脚本；静态 bundle 200/MIME 集成通过，移动快照出现 `晨光 [pressed]`。
+- `public/product-apps/sprout/assets/index-Cag15iAY.css`：SPROUT 当前构建样式资源；`npm test` 的静态 bundle 用例断言该资源返回 `200` 且 MIME 为 `text/css`，未单独做 CSS 规则级视觉断言。
+- `public/product-apps/sprout/assets/index-Zvp-dNoP.js`：SPROUT 当前构建脚本资源；`npm test` 的静态 bundle 用例断言该资源返回 `200` 且 MIME 为 JavaScript，浏览器快照出现可交互的 `种子 [pressed] / 工作纸 [pressed]`。
+- `public/product-apps/sprout/index.html`：加载共享选择态脚本并指向当前 bundle；静态 bundle 200/MIME 集成通过，移动快照出现 `种子 [pressed] / 工作纸 [pressed]`。
+- `tests/rendered-html.test.mjs`：65 项集成与安全断言；`npm test` 统计 65 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo；新增迁移外键保留、无决定批准拒绝、审核决定不可变、待审写守门、复审幂等重放拒绝、审核切换时财务 batch 零部分写入、相同并发审核幂等和私有上传管理员边界字段断言。审核切换故障触发器只在本地测试 D1 动态创建并删除，不进入生产迁移。
+- `worker/index.ts`：安全响应头与 Worker 入口；全量集成通过，未在真实 Sites edge 单独验证。
+
+## 已知不证明事项
+
+- 本矩阵不证明真实 Sites secret、D1/R2 绑定、GitHub/Google 提供方回调、Webhook、邮件、备份恢复、压力容量、低端 Android、iOS Safari、4K/GPU 丢失和弱网行为。
+- 本矩阵不证明同源 `allow-scripts + allow-same-origin` iframe 可隔离恶意代码；当前六个 bundle 必须按受信任的一方代码管理。
+- 本矩阵不证明外部 `demoUrl` 的远端内容在批准后保持不变；当前不存在不可变站内包或内容摘要复核。
+- 隐藏付费产品的买家补偿或受控历史访问没有产品决策，仍是发布阻断。
+- 用户撤权与支付确认同时提交时，当前证据不证明撤权一定优先；D1 提交顺序决定最终线性化结果，尚无并发用例。
+
+## 2026-07-16 线上收口增量
+
+- `deploy/server/zaochang-preview.nginx.conf`：静态资源 `limit_conn` 从动态默认 30 分离为 128，动态页面/API 仍为 30，请求速率仍为 `10 req/s + burst 100`。远端 `nginx -t` 退出码 0，服务 `active/running, NRestarts=0`；改前 9 个银河模块为 `503`，改后 fresh Chrome 的 49 个请求全部 `200`，控制台 `0 errors / 0 warnings`。未单独验证 128 并发压力和内存峰值。
+- `OAUTH_SETUP.md`：补充当前公开 origin、Client ID 与回调，不包含 Secret；真实 GitHub 授权返回 `/profile` 并读取 verified identity，Google 仍未配置。
+- `PROJECT_STATUS.md`：追加当前 release、OAuth/Basic Auth 轮换、静态并发前后反例、服务恢复与剩余阻断；`git diff --check` 退出码 0，运行语义由本节其他证据提供。
+- `RELEASE_RUNBOOK.md`：把“仍需轮换”改为每次发布核对只保留当前 Secret，并补充 Nginx 静态/动态限流验收步骤；远端实际配置与文档值逐字段一致。
+- `RELEASE_EVIDENCE.md`：标明旧矩阵的时间边界并追加本节；`git diff --check` 退出码 0，运行语义不适用。
+- 全量应用门禁：`npm test` 退出码 0，`67 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`；`npx tsc --noEmit` 退出码 0；Lint 为 `0 errors / 9 warnings`；Drizzle 为 `37 tables / No schema changes`；依赖审计为 `0 high / 0 critical / 2 moderate`；禁用测试语法扫描输出 `NO_SKIP_OR_ONLY_MATCHES`。
+- GitHub Secret：真实 token exchange 使用当前 Secret；GitHub 设置页最终只列后缀 `b080520e`，暴露过的旧项后缀 `b62dd389` 已删除并显示 `Client secret removed`。本证据不证明 Google 回调或第三方 GitHub 账号的管理员拒绝路径。
+- Basic Auth：服务器回环断言 `unauth=401 / old=401 / new=200`，htpasswd 为 `root:www-data 640`；新密码只以 Windows DPAPI 密文留存。该证据证明认证结果，不证明共享账号满足公开生产的身份追踪要求。
+- 服务与恢复：current 为 `/opt/zaochang/releases/20260715-221407-0428be85bf77-working-r3`；应用/Nginx 都是 `active/running, NRestarts=0`，4 GiB swap 未使用，备份/健康 timer 为 `enabled/active`，恢复检查为 `restore_check=ok sqlite=4 files=4`。
+
+### 未覆盖范围
+
+- 非管理员 GitHub 账号拒绝、OAuth logout 旧 Cookie 重放的真实线上路径、Google 登录、撤权/支付确认竞态、静态 128 并发压力、GitHub Actions、受支持的生产 D1/R2、跨机备份、恶意上传扫描、Webhook、邮件和移动真机仍未覆盖。
+
+## 2026-07-16 依赖安全增量
+
+- `package.json`：升级 Next/React、Cloudflare Vite plugin、Vite 与 Wrangler，并对 PostCSS/esbuild 增加最小传递依赖覆盖；`npm ls --all --json` 退出码 `0`，升级后的 `npm test` 为 `67/67`，Drizzle 为 `37 tables / No schema changes`。
+- `package.json` CI 增量：test 命令显式启用 Node 22 的 `--experimental-strip-types`。GitHub Actions run `29511188405` 的反例为 Node `22.13.0` 抛出 `ERR_UNKNOWN_FILE_EXTENSION`；修复后用 `npx node@22.13.0 --experimental-strip-types --test tests/rendered-html.test.mjs` 运行同一入口，退出码 `0`，统计 `67/67`。
+- `package-lock.json`：锁定 Cloudflare plugin `1.45.0`、Vite `8.1.4`、Wrangler `4.111.0`、Next `16.2.10`、React `19.2.7`、`ws 8.21.0`、PostCSS `8.5.10` 与修复后的传递依赖；`npm audit` 退出码 `0`，统计 `0 critical / 0 high / 0 moderate / 0 low`。
+- `tsconfig.json`：排除本地 X 盘依赖恢复目录；排除生效后 `npx tsc --noEmit` 退出码 `0`。第一次未排除时命中备份内损坏的第三方声明文件并退出 `2`，不作为源码结论。
+- `eslint.config.mjs`：排除本地 X 盘依赖恢复目录；排除生效后 lint 退出码 `0`，统计 `0 errors / 9 warnings`。第一次误扫备份的运行被终止，不作为 lint 证据。
+- `.gitignore`：排除 `.playwright-cli/`、`output/` 与 `node_modules.xdrive-partial-*/`；暂存前断言临时路径命中数必须为 `0`。
+- 本节证据只证明本地发布分支在 Windows/Node 22/Wrangler 本地 D1 环境的依赖解析、构建和行为结果；服务器 current 仍是 r3，本节依赖版本尚未在线上运行。
+
+### 未覆盖范围
+
+- 未在 Linux 服务器重新安装本节锁文件或执行线上冒烟；未执行真实 GitHub Actions runner；未验证依赖覆盖在未来 npm 重算后的长期兼容性；X 盘半安装依赖备份因主机删除策略拒绝仍留在本机，但不在 Git 索引中。

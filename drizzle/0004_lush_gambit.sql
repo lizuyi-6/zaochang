@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `fruit_operations_refund_once_idx` ON `fruit_operations` (`related_operation_id`) WHERE "fruit_operations"."kind" = 'refund';
