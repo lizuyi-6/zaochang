@@ -120,3 +120,28 @@
 ### 未覆盖范围
 
 - 未在 Linux 服务器重新安装本节锁文件或执行线上冒烟；未执行真实 GitHub Actions runner；未验证依赖覆盖在未来 npm 重算后的长期兼容性；X 盘半安装依赖备份因主机删除策略拒绝仍留在本机，但不在 Git 索引中。
+
+## 2026-07-17 main r4 合并部署证据
+
+- GitHub 命题：PR `#1` 已进入 main。连接器字段为 `merged=true / state=closed / merge_commit_sha=90b10b4f84755a5423f223f027ecf996058ed4e4`；Actions run `29514985327` 的 job `verify` 为 `status=completed / conclusion=success`，11 个发布步骤的 conclusion 均为 `success`。
+- 包与安装命题：服务器运行的依赖来自 merge commit 对应归档。归档 `output/deploy/zaochang-90b10b4f8475.tar.gz` 的本地 SHA-256 为 `32e7f332a5e83723546f3ae1fd99bb791e7d6eb7daeb2df1b84eb4734490cc2f`；服务器在 r4 目录执行 `npm ci`、Vite `8.1.4` build 和 `npm audit` 均退出 0，审计输出 0 vulnerabilities。
+- 迁移命题：本次切换没有把换行差异误判成数据库变更。服务器比较 `drizzle/0000..0009` 输出 `semantic_changes=0`，所有差异均为 CRLF/LF；因此没有重放 migration。生产 SQLite 断言为 `integrity=ok / business_tables=37 / wrangler_metadata_tables=1 / review_columns=6 / critical_guard_triggers=11`。
+- 切换命题：systemd 实际进程与 current 指向同一 release。`readlink -f /opt/zaochang/current` 和 `/proc/<MainPID>/cwd` 均为 `/opt/zaochang/releases/20260716-162918-90b10b4f8475-main-r4`；`zaochang.service` 为 `ActiveState=active / SubState=running / NRestarts=0`，Nginx 同为 active/running，`nginx -t` 成功。
+- 回退命题：切换前状态存在可读取恢复点。备份 `/var/backups/zaochang/state-20260716T163859Z.tar.gz` 校验和通过，恢复探针断言 `restore_check=ok sqlite=4 files=4`。该单机备份不证明跨机灾备。
+- 线上命题：受保护域名的银河首屏不是空帧且资源没有失败。Playwright 会话记录 46 个页面/API/RSC/静态请求全部 `200`、控制台 `0 errors / 0 warnings`、Canvas `1440x900`；像素抽样为 `5760 samples / 665 non-dark / 150 quantized colors`。AURELIA 字段为 `target=aurelia / cameraTransition=settled / sceneDensity=solitude / visiblePlanetCount=12 / hostStarCount=4 / targetBlackHoleDistance=112.43 / targetHostStarDistance=15.49`。
+- 登录页命题：`/signin` 是独立认证页面而非社区壳层。SSH 回环隧道的字段断言为 `path=/signin / mainCount=1 / navCount=0 / hasLoggedInAccount=false / scrollFits=true`，GitHub href 为 `/api/auth/github/start?return_to=%2F`，控制台为 0 errors/0 warnings。该隧道验证证明 UI 与路由行为，不证明公网 Basic Auth 或 GitHub token exchange。
+- 嵌入命题：MORI 发布 bundle 能进入 ready 终态。隧道字段为 `iframeCount=1 / iframeReadyState=complete / iframeBodyChildren=1 / loadingOverlay=false / scrollFits=true`。控制台 0 errors、3 warnings；warnings 明确是隧道 `127.0.0.1` 与固定 `https://zaochang.com`、`https://galaxy.zaochang.com` target origin 不匹配及既有 same-origin iframe sandbox 提示，因此不能用该会话声称生产 0 warnings。
+- 日志命题：发布后没有发现应用 warning/alert 或 Nginx `5xx`。命令 `journalctl -u zaochang.service --since '2026-07-16 16:38:00 UTC' -p warning..alert` 输出 `-- No entries --`；最近 1000 条 Nginx access log 的 `5xx` 检索为空。error log 唯一命中是轮换校验时旧 Basic Auth 密码被拒绝的 `password mismatch`。
+- 凭据事件：旧 Basic Auth 密码曾进入浏览器 URL 并出现在工具输出，因此不能继续使用。轮换后的服务器字段断言为 `unauthenticated=401 / old=401 / new=200`，htpasswd 为 `root:www-data 640`；新密码只以 DPAPI 密文保存在 `C:\Users\Abraham\.ssh\zaochang-preview-password.dpapi`，指纹前缀 `d5f10051b929`。新明文没有写入仓库、URL、对话或发布包；自动化结束后明文配置路径不存在。
+- 清理命题：浏览器和发布临时状态没有继续驻留。`release-r4-tunnel close` 退出 0，`release-r4-rotated` 返回 not open，SSH tunnel PID 退出且 `Port39001Listening=false`；远端 `/tmp` 发布压缩包与 6 个发布/迁移/验证/轮换脚本删除后逐项断言不存在。
+
+### 本轮文档改动验证
+
+- `PROJECT_STATUS.md`：记录 r4 当前态、凭据事件、清理和公开发布阻断；由本节运行证据支撑，文档自身不证明线上行为。
+- `RELEASE_EVIDENCE.md`：记录命题与可证伪字段；`git diff --check` 与关键词/密钥扫描需在提交前执行。
+- `RELEASE_RUNBOOK.md`：新增禁止 URL 凭据、临时 `httpCredentials` 配置和暴露后强制轮换流程；本轮未再次故意暴露凭据验证该流程。
+
+### 未覆盖范围
+
+- 公开生产仍未覆盖：受支持的 Cloudflare D1/R2、非共享身份入口、Google 登录、跨机备份、恶意上传扫描、告警投递、容量与 128 静态并发压力。
+- 行为仍未覆盖：非管理员 GitHub 账号拒绝、线上 logout Cookie 重放、撤权/支付确认竞态、低端 Android、iOS Safari、4K、高刷新率、GPU context loss、弱网、Webhook 和邮件。
