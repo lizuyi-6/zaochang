@@ -191,3 +191,24 @@
 - 修复 commit 已有成功远端 run；记录该 run 的文档 commit 仍须触发并通过自己的新 run。PR `#3` 尚未合并，main 尚未包含补丁。
 - 未在更慢或更高抖动的 Linux runner 上证伪 12 秒恢复窗口；超过窗口时预期明确失败，而非继续重试。
 - 本节没有修改或复验生产服务器、Nginx、Cloudflare D1/R2、OAuth 回调、浏览器像素、移动真机、备份、恶意上传扫描或告警投递。
+
+## 2026-07-17 r6 阿里云受保护部署证据
+
+- 部署命题：远端 main merge commit 为 `efc90d7397317ab65f511b289d7db05554d3a62d`，其 tree 与本地部署源同为 `f3eaf491b0fa942b9374a83d732f8c83a593f5e5`。服务器 `current == /opt/zaochang/releases/20260717-201245-efc90d739731-main-r5`、应用与 Nginx `ActiveState == active && SubState == running && NRestarts == 0 && ExecMainStatus == 0`；这些字段证明受保护 r5 当前运行，不证明公开访问。
+- 回退命题：切换前快照恢复断言为 `checksum == true && restore_check == ok && sqlite == 4 && files == 4`，上一 release r4 保留。首个 CRLF 归档在 current 切换前退出，现场字段仍为 `current == r4 && app active && NRestarts == 0`；规范化归档用四个 Git blob 相等断言证伪损坏后才切换。
+- 数据命题：发布前后 SQLite `integrity == ok`；钱包物化/available+pending 账本漂移、负余额、无当前审核决定的 published/approved 产品、外链批准产品计数均为 0。runtime 目录 diff 为 0，故本节没有执行迁移，也不证明未来 Cloudflare D1 迁移。
+- HTTP/OAuth 命题：受保护凭据仅经 DPAPI 内存和 SSH stdin 使用。首页、银河、独立登录页、匿名社区 API、OIDC、六个产品应用和各自 JS/CSS 入口均为 200；字段断言覆盖 `DENY`、`SAMEORIGIN`、CSP、HSTS、nosniff、Permissions-Policy、匿名私有字段为空、OIDC HTTPS origin 与 GitHub HTTPS callback。Google 待配置 start 的 `Location origin == http://aetherstudio.top`，因此公开规范 origin 命题为 false。
+- 容量命题：静态充分条件为 `statuses.200 == 128 && fullBodyCount == 128 && errors == {} && restartsStable == true`，动态充分条件为 `statuses.200 == 30 && errors == {} && restartsStable == true`；两组均满足，P95 分别为 `16429.7ms` 与 `4434.4ms`，没有延迟 SLO 达标结论。
+- 公开判定：可公开命题要求受支持数据运行时、非共享身份、跨机备份、上传恶意扫描和外部告警字段均为 true；现场对应字段为 `false / BASIC_AUTH_USER_COUNT=1 / false / false / false`，故充分条件不成立。Basic Auth 仍覆盖 4 个 location，匿名首页为 401。
+
+### 本轮逐文件证据
+
+- `PROJECT_STATUS.md`：记录版本、备份、部署失败反例、运行字段、公开阻断和新风险；文档自身不证明服务器状态。
+- `RELEASE_EVIDENCE.md`：记录命题与可证伪字段映射；提交前仍需执行 diff check、凭据扫描与工作树对账。
+
+### 未覆盖范围
+
+- 未取得本轮认证后真实浏览器 Canvas、网络瀑布与控制台证据；Playwright 包装器/运行版本不兼容，应用内浏览器无 Basic 会话。
+- 未执行真实 GitHub 完整回调、logout Cookie 重放、Google 回调、Cloudflare D1/R2、跨机恢复、恶意上传样本、告警投递、Webhook、邮件、移动真机或弱网验收。
+- 本节证明受保护预发布部署，不证明公开生产发布；Basic Auth 没有移除。
+- 终场可达性未覆盖：最后一次成功 health/SSH 之后，本机 DNS 与 GitHub 控制请求同时异常；真实 IP TCP connect 成功，但 SSH/HTTP/TLS 协议终态未返回。不能用先前 200/health 证据外推“此刻仍可达”，也不能据本机异常断言服务器已宕机。
