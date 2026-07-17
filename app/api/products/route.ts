@@ -36,10 +36,18 @@ export async function POST(request: Request) {
       const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
       const key = decodeURIComponent(imageUrl.slice("/api/uploads/".length));
       const object = bucket ? await bucket.head(key) : null;
-      if (!object || object.customMetadata?.owner !== member.email) {
+      const upload = await database().prepare(
+        `SELECT owner_email AS owner, visibility, purpose, scan_status AS scanStatus, sha256
+         FROM uploaded_files WHERE key = ?`,
+      ).bind(key).first<{ owner: string; visibility: string; purpose: string; scanStatus: string; sha256: string }>();
+      if (!object || !upload || upload.owner !== member.email) {
         return Response.json({ error: "product_cover_not_owned" }, { status: 403 });
       }
-      if (object.customMetadata?.visibility !== "private" || object.customMetadata?.purpose !== "product_cover") {
+      if (upload.scanStatus !== "clean"
+        || object.customMetadata?.scanStatus !== "clean"
+        || object.customMetadata?.sha256 !== upload.sha256
+        || upload.visibility !== "private"
+        || upload.purpose !== "product_cover") {
         return Response.json({ error: "invalid_product_cover" }, { status: 400 });
       }
     }

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -19,7 +21,56 @@ const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const stateDir = join(tmpdir(), `zaochang-test-state-${runId}`);
 const logPath = join(tmpdir(), `zaochang-wrangler-${runId}.log`);
 let server;
+let scannerServer;
+let scannerPort;
 let output = "";
+const scannerToken = `test-upload-scanner-${runId}-token`;
+
+const onePixelPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
+
+async function startFakeUploadScanner() {
+  scannerServer = createServer(async (request, response) => {
+    if (request.method !== "POST" || request.url !== "/scan") {
+      response.writeHead(404).end();
+      return;
+    }
+    if (request.headers.authorization !== `Bearer ${scannerToken}`) {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+    const chunks = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const body = Buffer.concat(chunks);
+    const sha256 = createHash("sha256").update(body).digest("hex");
+    if (request.headers["x-content-sha256"] !== sha256) {
+      response.writeHead(400, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "sha256_mismatch" }));
+      return;
+    }
+    if (body.includes(Buffer.from("SCANNER-UNAVAILABLE-TEST"))) {
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "scanner_unavailable" }));
+      return;
+    }
+    const infected = body.includes(Buffer.from("EICAR-STANDARD-ANTIVIRUS-TEST-FILE"));
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      engine: "integration-scanner/1",
+      sha256,
+      signature: infected ? "Eicar-Test-Signature" : null,
+      verdict: infected ? "infected" : "clean",
+    }));
+  });
+  await new Promise((resolve, reject) => {
+    scannerServer.once("error", reject);
+    scannerServer.listen(0, "127.0.0.1", resolve);
+  });
+  scannerPort = scannerServer.address().port;
+}
 
 function authHeaders(name, email) {
   return {
@@ -135,7 +186,8 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 }
 
 before(async () => {
-  for (const migrationFile of ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql"]) {
+  await startFakeUploadScanner();
+  for (const migrationFile of ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql"]) {
     if (migrationFile === "0008_noisy_jazinda.sql") {
       await executeD1Sql(`
         INSERT INTO members (email, display_name) VALUES ('legacy-review-migration@example.com', '迁移前作者');
@@ -303,6 +355,8 @@ before(async () => {
     "--persist-to", stateDir,
     "--var", "APP_ENV:test",
     "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail}`,
+    "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,
+    "--var", `UPLOAD_SCANNER_TOKEN:${scannerToken}`,
   ];
   server = spawn(
     executable,
@@ -401,6 +455,9 @@ after(async () => {
     retryDelay: 120,
   });
   await rm(logPath, { force: true, maxRetries: 4, retryDelay: 80 });
+  if (scannerServer?.listening) {
+    await new Promise((resolve, reject) => scannerServer.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 describe("造场社区集成流程", { concurrency: false }, () => {
@@ -421,6 +478,7 @@ test("keeps static preview traffic off Workerd without weakening product app hea
   assert.match(rateLimit, /zone=zaochang_preview_static_per_ip:10m rate=64r\/s/);
   assert.match(nginx, /map \$uri \$zaochang_product_permissions_policy/);
   assert.match(nginx, /~\^\/product-apps\/wander\/ "camera=\(\), microphone=\(\), payment=\(\), geolocation=\(self\)"/);
+  assert.doesNotMatch(nginx, /auth_basic/);
 
   for (const block of [assets, productApps, favicon]) {
     assert.match(block, /limit_req zone=zaochang_preview_static_per_ip burst=160 nodelay/);
@@ -442,7 +500,21 @@ test("keeps static preview traffic off Workerd without weakening product app hea
     windowsHide: true,
   });
   assert.equal(probe.status, 0, probe.stderr);
-  assert.match(probe.stdout, /credential_base64 \| node zaochang-capacity-probe\.mjs/);
+  assert.match(probe.stdout, /--auth none/);
+  assert.match(probe.stdout, /credential_base64 \| node zaochang-capacity-probe\.mjs --auth basic/);
+
+  const scannerSyntax = spawnSync(process.execPath, ["--check", join(projectRoot, "deploy", "server", "zaochang-upload-scanner.mjs")], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.equal(scannerSyntax.status, 0, scannerSyntax.stderr);
+  const scannerService = readFileSync(join(projectRoot, "deploy", "server", "zaochang-upload-scanner.service"), "utf8");
+  assert.match(scannerService, /NoNewPrivileges=true/);
+  assert.match(scannerService, /ProtectSystem=strict/);
+  assert.match(scannerService, /MemoryMax=1100M/);
+  assert.match(readFileSync(join(projectRoot, "deploy", "server", "zaochang-clamav-update.service"), "utf8"), /flock -w 300 -E 75 \/run\/lock\/zaochang-clamav\.lock/);
+  assert.match(readFileSync(join(projectRoot, "deploy", "server", "zaochang-clamav-update.timer"), "utf8"), /OnCalendar=\*-\*-\* 03:20:00/);
 });
 
 test("server-renders the creator community", async () => {
@@ -582,12 +654,15 @@ test("renders the signed-in profile from account data", async () => {
   assert.doesNotMatch(html, /登录后查看你的创作者主页/);
 });
 
-test("keeps OAuth providers explicit until runtime credentials are configured", async () => {
+test("uses GitHub-only invite registration and keeps unconfigured providers fail-closed", async () => {
   const signin = await fetch(`${baseUrl}/signin?return_to=%2Fwallet`, { headers: { accept: "text/html" } });
   assert.equal(signin.status, 200);
   const html = await signin.text();
-  assert.match(html, /使用 Google 登录/);
   assert.match(html, /使用 GitHub 登录/);
+  assert.match(html, /name="invitation_code"/);
+  assert.match(html, /已有账号可留空/);
+  assert.match(html, /action="\/api\/auth\/github\/start"/);
+  assert.doesNotMatch(html, /使用 Google 登录|使用 ChatGPT 登录/);
   assert.match(html, /待配置/);
   for (const provider of ["google", "github"]) {
     const response = await fetch(`${baseUrl}/api/auth/${provider}/start?return_to=%2Fwallet`, { redirect: "manual" });
@@ -618,6 +693,87 @@ test("keeps sign-in outside the community shell", async () => {
   assert.match(html, /class="auth-page"/);
   assert.match(html, /class="auth-brand"/);
   assert.doesNotMatch(html, /deep-topbar|deep-sidebar|deep-mobile-nav|deep-account/);
+});
+
+test("requires and atomically consumes an invitation for each new OAuth identity", async () => {
+  const adminHeaders = authHeaders("发布审核管理员", adminEmail);
+  const denied = await fetch(`${baseUrl}/api/admin/invitations`, { headers: authHeaders("普通成员", `invite-denied-${runId}@example.com`) });
+  assert.equal(denied.status, 403);
+  assert.deepEqual(await denied.json(), { error: "admin_forbidden" });
+
+  const created = await fetch(`${baseUrl}/api/admin/invitations`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ label: "集成测试邀请", maxUses: 1, expiresDays: 14 }),
+  });
+  assert.equal(created.status, 201);
+  const invitation = (await created.json()).invitation;
+  assert.match(invitation.code, /^ZC-[A-HJ-NP-Z2-9]{16}$/);
+  assert.equal(invitation.maxUses, 1);
+  assert.equal(invitation.usesCount, 0);
+
+  const listedBefore = await (await fetch(`${baseUrl}/api/admin/invitations`, { headers: adminHeaders })).json();
+  const listedInvitation = listedBefore.invitations.find((item) => item.id === invitation.id);
+  assert.equal(listedInvitation.usesCount, 0);
+  assert.equal(Object.hasOwn(listedInvitation, "code"), false);
+  assert.equal(Object.hasOwn(listedInvitation, "codeHash"), false);
+
+  const firstEmail = `invite-first-${runId}@example.com`;
+  const secondEmail = `invite-second-${runId}@example.com`;
+  await fetch(`${baseUrl}/api/community`, { headers: authHeaders("首位受邀者", firstEmail) });
+  await fetch(`${baseUrl}/api/community`, { headers: authHeaders("第二位受邀者", secondEmail) });
+
+  const bypass = await executeLocalD1(
+    `INSERT INTO oauth_accounts (provider, provider_account_id, email, display_name)
+     VALUES ('github', 'invite-first-bypass-${runId}', '${firstEmail}', '绕过邀请码')`,
+    false,
+  );
+  assert.match(bypass, /oauth_registration_invitation_required/);
+
+  const codeHash = createHash("sha256").update(invitation.code).digest("hex");
+  const providerAccountId = `invite-first-${runId}`;
+  const redemptionId = `invite-redemption-${runId}`;
+  await executeLocalD1(`
+    INSERT INTO invitation_redemptions (id, invitation_id, provider, provider_account_id, user_email)
+      SELECT '${redemptionId}', id, 'github', '${providerAccountId}', '${firstEmail}'
+      FROM invitation_codes WHERE code_hash = '${codeHash}';
+    INSERT INTO oauth_accounts (provider, provider_account_id, email, display_name)
+      VALUES ('github', '${providerAccountId}', '${firstEmail}', '首位受邀者');
+    CREATE TABLE invitation_state_assertion (id integer);
+    CREATE TRIGGER invitation_state_assertion_guard BEFORE INSERT ON invitation_state_assertion
+    WHEN NOT EXISTS (
+      SELECT 1 FROM invitation_codes c
+      JOIN invitation_redemptions r ON r.invitation_id = c.id
+      JOIN oauth_accounts a ON a.provider = r.provider AND a.provider_account_id = r.provider_account_id
+      WHERE c.id = '${invitation.id}' AND c.uses_count = 1 AND c.last_used_at IS NOT NULL
+        AND r.id = '${redemptionId}' AND r.user_email = '${firstEmail}'
+        AND a.email = '${firstEmail}'
+    ) BEGIN SELECT RAISE(ABORT, 'invitation_state_invalid'); END;
+    INSERT INTO invitation_state_assertion (id) VALUES (1);
+    DROP TRIGGER invitation_state_assertion_guard;
+    DROP TABLE invitation_state_assertion
+  `);
+
+  const reused = await executeLocalD1(
+    `INSERT INTO invitation_redemptions (id, invitation_id, provider, provider_account_id, user_email)
+       VALUES ('invite-reuse-${runId}', '${invitation.id}', 'github', 'invite-second-${runId}', '${secondEmail}')`,
+    false,
+  );
+  assert.match(reused, /invitation_not_available/);
+  const mutable = await executeLocalD1(`UPDATE invitation_redemptions SET user_email = '${secondEmail}' WHERE id = '${redemptionId}'`, false);
+  assert.match(mutable, /invitation_redemption_immutable/);
+  const deletable = await executeLocalD1(`DELETE FROM invitation_redemptions WHERE id = '${redemptionId}'`, false);
+  assert.match(deletable, /invitation_redemption_immutable/);
+
+  const listedAfter = await (await fetch(`${baseUrl}/api/admin/invitations`, { headers: adminHeaders })).json();
+  assert.equal(listedAfter.invitations.find((item) => item.id === invitation.id).usesCount, 1);
+  const revoked = await fetch(`${baseUrl}/api/admin/invitations`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ action: "revoke", id: invitation.id }),
+  });
+  assert.equal(revoked.status, 200);
+  assert.deepEqual(await revoked.json(), { updated: true, id: invitation.id });
 });
 
 test("logout deletes the server session so a copied cookie cannot be replayed", async () => {
@@ -2016,6 +2172,7 @@ test("persists profile, collections, comments, and incubation state", async () =
   const materialForm = new FormData();
   materialForm.set("file", new File(["target users"], "personas.txt", { type: "text/plain" }));
   materialForm.set("visibility", "private");
+  materialForm.set("purpose", "incubation_material");
   const materialUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: uploadHeaders, body: materialForm });
   assert.equal(materialUpload.status, 201);
   const materialUrl = (await materialUpload.json()).url;
@@ -2083,6 +2240,7 @@ test("enforces upload visibility and ownership", async () => {
   assert.equal(privateUpload.status, 201);
   const privateBody = await privateUpload.json();
   assert.equal(privateBody.visibility, "private");
+  assert.equal(privateBody.scanStatus, "clean");
 
   const ownerDownload = await fetch(`${baseUrl}${privateBody.url}`, { headers: ownerHeaders });
   assert.equal(ownerDownload.status, 200);
@@ -2111,9 +2269,25 @@ test("enforces upload visibility and ownership", async () => {
   assert.equal(publicUpload.status, 201);
   const publicBody = await publicUpload.json();
   assert.equal(publicBody.visibility, "public");
+  assert.equal(publicBody.scanStatus, "clean");
   const publicDownload = await fetch(`${baseUrl}${publicBody.url}`);
   assert.equal(publicDownload.status, 200);
+  assert.match(publicDownload.headers.get("content-disposition") ?? "", /^attachment;/);
+  assert.equal(publicDownload.headers.get("x-content-type-options"), "nosniff");
   assert.equal(await publicDownload.text(), "public cover image");
+  const rewrittenScanState = await executeLocalD1(
+    `UPDATE uploaded_files SET scan_status = 'error' WHERE key = '${publicBody.key}'`,
+    false,
+  );
+  assert.match(rewrittenScanState, /uploaded_file_scan_state_immutable/);
+  const directCleanInsert = await executeLocalD1(
+    `INSERT INTO uploaded_files
+      (key, owner_email, original_name, media_type, byte_size, visibility, purpose, sha256, scan_status)
+     VALUES ('direct-clean-${runId}.txt', '${ownerEmail}', 'direct.txt', 'text/plain', 1, 'private', 'general',
+             'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'clean')`,
+    false,
+  );
+  assert.match(directCleanInsert, /uploaded_file_must_start_pending/);
 
   const missingVisibilityForm = new FormData();
   missingVisibilityForm.set("file", new File(["missing visibility"], "unknown.txt", { type: "text/plain" }));
@@ -2129,8 +2303,46 @@ test("enforces upload visibility and ownership", async () => {
   assert.equal(publishWithCover.status, 400);
   assert.deepEqual(await publishWithCover.json(), { error: "invalid_product_cover" });
 
+  const spoofedImageForm = new FormData();
+  spoofedImageForm.set("file", new File(["not a png"], "spoofed.png", { type: "image/png" }));
+  spoofedImageForm.set("visibility", "private");
+  spoofedImageForm.set("purpose", "product_cover");
+  const spoofedImage = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: spoofedImageForm });
+  assert.equal(spoofedImage.status, 400);
+  assert.deepEqual(await spoofedImage.json(), { error: "upload_content_type_mismatch" });
+
+  const infectedForm = new FormData();
+  infectedForm.set("file", new File(["X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"], `eicar-${runId}.txt`, { type: "text/plain" }));
+  infectedForm.set("visibility", "private");
+  const infectedUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: infectedForm });
+  assert.equal(infectedUpload.status, 422);
+  assert.deepEqual(await infectedUpload.json(), { error: "malware_detected" });
+
+  const unavailableForm = new FormData();
+  unavailableForm.set("file", new File(["SCANNER-UNAVAILABLE-TEST"], `scanner-error-${runId}.txt`, { type: "text/plain" }));
+  unavailableForm.set("visibility", "private");
+  const unavailableUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: unavailableForm });
+  assert.equal(unavailableUpload.status, 503);
+  assert.deepEqual(await unavailableUpload.json(), { error: "upload_scanner_unavailable" });
+  await executeLocalD1(`
+    CREATE TABLE upload_scan_assertion (id integer);
+    CREATE TRIGGER upload_scan_assertion_guard BEFORE INSERT ON upload_scan_assertion
+    WHEN NOT EXISTS (
+      SELECT 1 FROM uploaded_files
+      WHERE owner_email = '${ownerEmail}' AND original_name = 'eicar-${runId}.txt'
+        AND scan_status = 'infected' AND scan_signature = 'Eicar-Test-Signature'
+    ) OR NOT EXISTS (
+      SELECT 1 FROM uploaded_files
+      WHERE owner_email = '${ownerEmail}' AND original_name = 'scanner-error-${runId}.txt'
+        AND scan_status = 'error' AND quarantine_key IS NULL
+    ) BEGIN SELECT RAISE(ABORT, 'upload_scan_state_invalid'); END;
+    INSERT INTO upload_scan_assertion (id) VALUES (1);
+    DROP TRIGGER upload_scan_assertion_guard;
+    DROP TABLE upload_scan_assertion
+  `);
+
   const coverForm = new FormData();
-  coverForm.set("file", new File(["private product cover"], "review-cover.png", { type: "image/png" }));
+  coverForm.set("file", new File([onePixelPng], "review-cover.png", { type: "image/png" }));
   coverForm.set("visibility", "private");
   coverForm.set("purpose", "product_cover");
   const coverUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: coverForm });
@@ -2164,7 +2376,8 @@ test("enforces upload visibility and ownership", async () => {
   const approvedCover = await fetch(`${baseUrl}${coverBody.url}`);
   assert.equal(approvedCover.status, 200);
   assert.equal(approvedCover.headers.get("cache-control"), "no-store");
-  assert.equal(await approvedCover.text(), "private product cover");
+  assert.equal(approvedCover.headers.get("content-type"), "image/png");
+  assert.equal(Buffer.from(await approvedCover.arrayBuffer()).equals(onePixelPng), true);
 });
 
 test("generates account notifications and persists read state", async () => {

@@ -35,7 +35,9 @@ GITHUB_OAUTH_CLIENT_SECRET=<secret>
 
 回调会同时读取 `/user` 与 `/user/emails`，只接受 verified email。账号绑定键为 `github + GitHub user id`；GitHub 邮箱后续变化不会把同一个 GitHub 身份迁移到另一造场账户。
 
-当前受保护预发布使用以下公开配置：
+公开测试采用邀请注册：已有 `oauth_accounts` 身份不需要邀请码；首次创建 GitHub 身份必须在登录表单提供有效邀请码。原始邀请码只经 HTTPS 表单提交，OAuth 跳转前转换成 SHA-256 并放入 10 分钟 HttpOnly、SameSite=Lax Cookie；回调使用数据库 trigger 原子写入 `invitation_redemptions` 并消耗次数。无邀请码、已过期、已撤销或次数耗尽时不得创建 `members`、`wallets` 或 `oauth_accounts` 残留记录。
+
+当前公开测试使用以下公开配置：
 
 ```text
 PUBLIC_APP_ORIGIN=https://aetherstudio.top
@@ -47,14 +49,7 @@ Client Secret 不写入本文件、仓库或发布包，只能存在于服务器
 
 ## Google 登录
 
-Google 登录当前暂停。代码入口仍保留，但没有配置时登录页只显示“待配置”，不会跳转到伪造授权流程。恢复时需配置：
-
-```text
-GOOGLE_OAUTH_CLIENT_ID
-GOOGLE_OAUTH_CLIENT_SECRET
-```
-
-回调地址为 `https://<造场正式域名>/api/auth/google/callback`，且只接受 Google verified email。
+Google 登录当前停用，登录页不显示 Google 控件，运行时即使误注入 Google 变量也不会启用提供方。恢复 Google 需要单独的产品决策、邀请码规则复用、安全测试和代码变更，不能只添加两个环境变量。
 
 ## 造场作为 OIDC 身份提供方
 
@@ -107,10 +102,11 @@ TRUST_OAI_IDENTITY_HEADERS=true
 - 会话期限为 30 天。
 - `/api/auth/logout` 会删除服务端会话并清除 Cookie；旧 Cookie 重放不再恢复登录。
 - OAuth state 使用独立的 10 分钟 HttpOnly Cookie，并与具体 provider 绑定。
+- 首次注册的邀请码 Cookie 只保存 SHA-256，不保存明文，并在登录成功或任何回调错误后清除。
 
 ## 迁移
 
-发布版本必须按顺序应用 `drizzle/0000` 至 `drizzle/0009_moderation_remediation.sql`。`0009` 阻止可变外部 Demo 获得批准，并约束违规下架退款/补偿分录只能引用真实的一次解锁订单。
+发布版本必须按顺序应用 `drizzle/0000` 至 `drizzle/0010_invite_upload_security.sql`。`0009` 阻止可变外部 Demo 获得批准，并约束违规下架退款/补偿分录只能引用真实的一次解锁订单；`0010` 增加邀请码原子消耗、OAuth 建号数据库守门和上传扫描状态机。
 
 发布前运行：
 
@@ -125,6 +121,7 @@ npm run db:generate
 本地集成测试覆盖会话、授权码、PKCE、签名、令牌轮换和支付行为，但不能代替第三方真实网络回调。正式发布前需使用专用测试账号分别验证：
 
 - GitHub 授权后读取 verified email 并回到原路径。
+- 已有 GitHub 身份留空邀请码仍可登录；一个新 GitHub 身份只能消耗一次有效邀请码，耗尽邀请码不能创建第二个身份。
 - 退出后旧 Cookie 不能重放。
 - 未审核应用无法请求果子写权限。
 - 已审核应用可完成授权，但每笔支付仍要求造场页面二次确认。

@@ -1,0 +1,19 @@
+[Unit]
+Description=Zaochang serialized ClamAV signature update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=clamav
+Group=clamav
+ExecStart=/usr/bin/flock -w 300 -E 75 /run/lock/zaochang-clamav.lock /usr/bin/freshclam --stdout
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=full
+MemoryHigh=650M
+MemoryMax=900M
+MemorySwapMax=1400M
+CPUQuota=100%

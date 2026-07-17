@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import https from "node:https";
 
 function usage() {
-  console.log("Usage: credential_base64 | node zaochang-capacity-probe.mjs --path /assets/file.js --concurrency 128 [--expected-bytes 123]");
+  console.log("Usage: node zaochang-capacity-probe.mjs --auth none --path /assets/file.js --concurrency 128 [--expected-bytes 123]");
+  console.log("Protected preview: credential_base64 | node zaochang-capacity-probe.mjs --auth basic --path /assets/file.js --concurrency 128");
 }
 
 function parseArgs(argv) {
@@ -20,6 +21,7 @@ function parseArgs(argv) {
   const expectedBytes = values.has("expected-bytes") ? Number(values.get("expected-bytes")) : null;
   const timeoutMs = Number(values.get("timeout-ms") ?? 30_000);
   const label = values.get("label") ?? "capacity_probe";
+  const auth = values.get("auth") ?? "basic";
   if (!path?.startsWith("/") || !Number.isInteger(concurrency) || concurrency < 1 || concurrency > 512) {
     throw new Error("--path and an integer --concurrency between 1 and 512 are required");
   }
@@ -27,7 +29,8 @@ function parseArgs(argv) {
   if (expectedBytes !== null && (!Number.isInteger(expectedBytes) || expectedBytes < 0)) throw new Error("invalid --expected-bytes");
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 300_000) throw new Error("invalid --timeout-ms");
   if (!/^[a-z0-9_-]+$/i.test(label)) throw new Error("invalid --label");
-  return { path, concurrency, expectedStatus, expectedBytes, timeoutMs, label };
+  if (auth !== "basic" && auth !== "none") throw new Error("--auth must be basic or none");
+  return { path, concurrency, expectedStatus, expectedBytes, timeoutMs, label, auth };
 }
 
 async function readCredential() {
@@ -69,7 +72,7 @@ async function main() {
   }
 
   const options = parseArgs(process.argv.slice(2));
-  const authorization = await readCredential();
+  const authorization = options.auth === "basic" ? await readCredential() : null;
   const agent = new https.Agent({ keepAlive: true, maxSockets: options.concurrency, maxFreeSockets: options.concurrency });
   const sockets = new Set();
   let active = 0;
@@ -102,7 +105,7 @@ async function main() {
       rejectUnauthorized: true,
       headers: {
         host: "aetherstudio.top",
-        authorization: `Basic ${authorization}`,
+        ...(authorization ? { authorization: `Basic ${authorization}` } : {}),
         "cache-control": "no-cache",
         "user-agent": "zaochang-capacity-probe/1.0",
       },

@@ -52,6 +52,48 @@ export const authSessions = sqliteTable(
   ],
 );
 
+export const invitationCodes = sqliteTable(
+  "invitation_codes",
+  {
+    id: text("id").primaryKey(),
+    codeHash: text("code_hash").notNull().unique(),
+    label: text("label").notNull().default(""),
+    maxUses: integer("max_uses").notNull().default(1),
+    usesCount: integer("uses_count").notNull().default(0),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastUsedAt: text("last_used_at"),
+  },
+  (table) => [
+    index("invitation_codes_status_idx").on(table.revokedAt, table.expiresAt),
+    check("invitation_codes_max_uses_valid", sql`${table.maxUses} between 1 and 25`),
+    check("invitation_codes_uses_valid", sql`${table.usesCount} between 0 and ${table.maxUses}`),
+  ],
+);
+
+export const invitationRedemptions = sqliteTable(
+  "invitation_redemptions",
+  {
+    id: text("id").primaryKey(),
+    invitationId: text("invitation_id")
+      .notNull()
+      .references(() => invitationCodes.id),
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => members.email),
+    redeemedAt: text("redeemed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("invitation_redemptions_account_idx").on(table.provider, table.providerAccountId),
+    index("invitation_redemptions_invitation_idx").on(table.invitationId, table.redeemedAt),
+    check("invitation_redemptions_provider_valid", sql`${table.provider} in ('google', 'github')`),
+  ],
+);
+
 export const wallets = sqliteTable(
   "wallets",
   {
@@ -676,6 +718,36 @@ export const projectMaterials = sqliteTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [index("project_materials_project_idx").on(table.projectId, table.createdAt)],
+);
+
+export const uploadedFiles = sqliteTable(
+  "uploaded_files",
+  {
+    key: text("key").primaryKey(),
+    ownerEmail: text("owner_email")
+      .notNull()
+      .references(() => members.email),
+    originalName: text("original_name").notNull(),
+    mediaType: text("media_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    visibility: text("visibility").notNull(),
+    purpose: text("purpose").notNull(),
+    sha256: text("sha256").notNull(),
+    scanStatus: text("scan_status").notNull().default("pending"),
+    scanEngine: text("scan_engine"),
+    scanSignature: text("scan_signature"),
+    quarantineKey: text("quarantine_key"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    scannedAt: text("scanned_at"),
+  },
+  (table) => [
+    index("uploaded_files_owner_idx").on(table.ownerEmail, table.createdAt),
+    index("uploaded_files_scan_status_idx").on(table.scanStatus, table.createdAt),
+    check("uploaded_files_size_valid", sql`${table.byteSize} between 1 and 10485760`),
+    check("uploaded_files_visibility_valid", sql`${table.visibility} in ('public', 'private')`),
+    check("uploaded_files_purpose_valid", sql`${table.purpose} in ('general', 'product_cover', 'incubation_material')`),
+    check("uploaded_files_scan_status_valid", sql`${table.scanStatus} in ('pending', 'clean', 'infected', 'error')`),
+  ],
 );
 
 export const incubationFeedback = sqliteTable(

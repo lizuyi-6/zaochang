@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   callbackUrl,
   absoluteAppUrl,
+  hashInvitationCode,
+  invitationAvailable,
   isOAuthProvider,
   oauthProviderStatus,
   providerConfig,
@@ -14,11 +16,22 @@ import {
 type Params = { params: Promise<{ provider: string }> };
 
 export async function GET(request: Request, { params }: Params) {
-  const { provider: rawProvider } = await params;
+  return startOAuth(request, await params, null, new URL(request.url).searchParams.get("return_to"));
+}
+
+export async function POST(request: Request, { params }: Params) {
+  const form = await request.formData();
+  const invitationCode = String(form.get("invitation_code") ?? "").trim().slice(0, 64) || null;
+  const returnTo = String(form.get("return_to") ?? "");
+  return startOAuth(request, await params, invitationCode, returnTo);
+}
+
+async function startOAuth(request: Request, params: { provider: string }, invitationCode: string | null, requestedReturnTo: string | null) {
+  const { provider: rawProvider } = params;
   if (!isOAuthProvider(rawProvider)) return NextResponse.json({ error: "unsupported_provider" }, { status: 404 });
   const provider = rawProvider;
   const config = providerConfig(provider);
-  const returnTo = safeReturnPath(new URL(request.url).searchParams.get("return_to"));
+  const returnTo = safeReturnPath(requestedReturnTo);
   if (!config) {
     const url = absoluteAppUrl(request, "/signin");
     url.searchParams.set("error", "not_configured");
@@ -26,9 +39,17 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.redirect(url);
   }
 
+  const invitationHash = invitationCode ? await hashInvitationCode(invitationCode) : null;
+  if (invitationCode && (!invitationHash || !await invitationAvailable(invitationHash))) {
+    const url = absoluteAppUrl(request, "/signin");
+    url.searchParams.set("error", "invitation_invalid");
+    url.searchParams.set("return_to", returnTo);
+    return NextResponse.redirect(url);
+  }
+
   const state = `${provider}.${randomToken(24)}`;
   const secure = await requestSecure(request);
-  await setOAuthState(state, returnTo, secure);
+  await setOAuthState(state, returnTo, secure, invitationHash);
   const redirectUri = callbackUrl(request, provider);
   const authorizeUrl = new URL(provider === "google" ? "https://accounts.google.com/o/oauth2/v2/auth" : "https://github.com/login/oauth/authorize");
   authorizeUrl.searchParams.set("client_id", config.clientId);

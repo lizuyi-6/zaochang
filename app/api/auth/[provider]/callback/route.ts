@@ -5,9 +5,11 @@ import {
   createOAuthSession,
   ensureOAuthUser,
   isOAuthProvider,
+  OAUTH_INVITE_COOKIE,
   OAUTH_RETURN_COOKIE,
   OAUTH_STATE_COOKIE,
   providerConfig,
+  RegistrationInviteError,
   safeReturnPath,
   setAuthCookies,
   requestSecure,
@@ -37,11 +39,13 @@ export async function GET(request: Request, { params }: Params) {
       ? await fetchGoogleProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider))
       : await fetchGitHubProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider));
     const user = { displayName: profile.displayName, email: profile.email, fullName: profile.displayName };
-    const canonicalUser = await ensureOAuthUser(user, provider, profile.providerId, profile.avatarUrl);
+    const invitationHash = cookieStore.get(OAUTH_INVITE_COOKIE)?.value ?? null;
+    const canonicalUser = await ensureOAuthUser(user, provider, profile.providerId, profile.avatarUrl, invitationHash);
     const session = await createOAuthSession(canonicalUser, provider);
     const destination = await setAuthCookies(session.token, returnTo, await requestSecure(request));
     return NextResponse.redirect(absoluteAppUrl(request, destination));
   } catch (error) {
+    if (error instanceof RegistrationInviteError) return redirectError(request, error.code);
     console.error("OAuth callback failed", error);
     return redirectError(request, "provider_error");
   }
@@ -79,5 +83,11 @@ async function fetchGitHubProfile(code: string, clientId: string, clientSecret: 
 function redirectError(request: Request, error: string) {
   const url = absoluteAppUrl(request, "/signin");
   url.searchParams.set("error", error);
-  return NextResponse.redirect(url);
+  const response = NextResponse.redirect(url);
+  const secure = url.protocol === "https:";
+  const options = { httpOnly: true, secure, sameSite: "lax" as const, path: "/", maxAge: 0 };
+  response.cookies.set(OAUTH_STATE_COOKIE, "", options);
+  response.cookies.set(OAUTH_RETURN_COOKIE, "", options);
+  response.cookies.set(OAUTH_INVITE_COOKIE, "", options);
+  return response;
 }

@@ -8,8 +8,27 @@ fi
 if ! systemctl is-active --quiet nginx.service; then
   failures+=("nginx_inactive")
 fi
+if ! systemctl is-active --quiet zaochang-upload-scanner.service; then
+  failures+=("upload_scanner_inactive")
+elif ! curl --fail --silent --show-error --max-time 3 http://127.0.0.1:3311/health >/dev/null; then
+  failures+=("upload_scanner_probe_failed")
+fi
+if ! systemctl is-enabled --quiet zaochang-clamav-update.timer \
+  || ! systemctl is-active --quiet zaochang-clamav-update.timer; then
+  failures+=("clamav_update_timer_inactive")
+fi
 if ! curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3001/api/community >/dev/null; then
   failures+=("app_probe_failed")
+fi
+
+latest_signature_epoch="$(find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) -printf '%T@\n' 2>/dev/null | sort -nr | head -n 1 | cut -d. -f1)"
+if [[ -z "$latest_signature_epoch" ]]; then
+  failures+=("clamav_signatures_missing")
+else
+  signature_age="$(( $(date +%s) - latest_signature_epoch ))"
+  if [[ "$signature_age" -gt 172800 ]]; then
+    failures+=("clamav_signatures_${signature_age}_seconds_old")
+  fi
 fi
 
 disk_percent="$(df --output=pcent / | tail -n 1 | tr -dc '0-9')"
