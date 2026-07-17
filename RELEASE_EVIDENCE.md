@@ -171,3 +171,22 @@
 - 本轮没有新增真实浏览器 Canvas、网络瀑布或控制台证据：内置浏览器未能附着，Chrome 未运行且 ChatGPT Chrome Extension 原生通信注册缺失。
 - 静态 P95 为 `17890.1ms`，动态 P95 为 `4320.9ms`；没有已批准的生产延迟 SLO，故不能声称延迟达标。
 - 公开生产仍未覆盖受支持的 Cloudflare D1/R2、非共享身份入口、Google 登录、跨机备份、恶意上传扫描和告警投递；非管理员 GitHub 拒绝、logout Cookie 重放、撤权/支付竞态、移动真机、弱网、Webhook 与邮件仍未验证。
+
+## 2026-07-17 PR #3 CI 重载竞态证据
+
+- 失败命题：GitHub Actions run `29573038076`、job `87861071901`、head `3f473176b3da9666436d86aa087aa8fc540f4e74` 的 `npm test` 退出 `1`；完整统计为 `67 pass / 1 fail / 0 cancelled / 0 skipped / 0 todo`。唯一失败在 `tests/rendered-html.test.mjs:883` 的 GET 抛出 `fetch failed`，持续 `302000.542884ms`；它直接证明旧测试运行器没有给该读取设置有界终态，不证明产品审核字段被错误修改。
+- 重试边界命题：`fetchIdempotentWithRetry` 的可证伪入口断言要求 `method ∈ {GET, HEAD}` 且 `body === undefined`；新增反例把 `POST` 传入该入口并由 `assert.rejects(... /only supports idempotent GET or HEAD/)` 判定拒绝。全套中该用例通过，证明当前测试调用不能借该助手重放 POST；它不证明仓库中所有其他手写重试均为幂等。
+- 审核不变量命题：D1 绕过批准失败后，状态读取先断言 `stateResponse.status == 200`，随后断言目标产品 `status == pending_review`、`reviewStatus == pending_review`、`approvedVersion == 0`、`state.products.some(id) == false`。本地定向命令退出 `0`、`1/1` 通过；当前精确 diff 的完整 `npm test` 退出 `0`、`69/69` 通过、无 skipped/todo、`duration_ms=304455.9513`，原失败用例为 `2690.0835ms`。
+- 静态门禁：`node --check tests/rendered-html.test.mjs`、`git diff --check`、`npx tsc --noEmit`、CI 同模式禁用测试扫描、`npm run db:generate && git diff --exit-code -- db/schema.ts drizzle` 均退出 `0`；lint 为 `0 errors / 9 warnings`；生产依赖审计为 `0 vulnerabilities`。
+
+### 本轮逐文件证据
+
+- `tests/rendered-html.test.mjs`：增加有界幂等读取、连续健康判定、POST 拒绝反例和原失败路径的显式 200 断言；定向 `1/1` 与全套 `69/69` 均退出 `0`，无 skipped/todo。
+- `PROJECT_STATUS.md`：记录远端失败、测试语义变化、本地反例和未覆盖远端状态；文档自身不证明 GitHub Actions 或合并结果。
+- `RELEASE_EVIDENCE.md`：记录命题—字段断言与逐文件证据；提交前仍需重新执行 `git diff --check`、改动集对账和暂存区凭据扫描。
+
+### 未覆盖范围
+
+- GitHub Actions 尚未在补丁 commit 上复验；PR `#3` 尚未合并，main 尚未包含补丁。
+- 未在更慢或更高抖动的 Linux runner 上证伪 12 秒恢复窗口；超过窗口时预期明确失败，而非继续重试。
+- 本节没有修改或复验生产服务器、Nginx、Cloudflare D1/R2、OAuth 回调、浏览器像素、移动真机、备份、恶意上传扫描或告警投递。

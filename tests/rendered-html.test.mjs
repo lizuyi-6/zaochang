@@ -46,15 +46,47 @@ async function executeD1Sql(sql, expectSuccess = true) {
   return `${result.stdout}\n${result.stderr}`;
 }
 
+async function fetchIdempotentWithRetry(input, init = {}, { deadlineMs = 12000, attemptTimeoutMs = 1500 } = {}) {
+  const method = (init.method ?? "GET").toUpperCase();
+  assert.equal(["GET", "HEAD"].includes(method), true, "retry helper only supports idempotent GET or HEAD requests");
+  assert.equal(init.body, undefined, "retry helper must not replay a request body");
+
+  const deadline = Date.now() + deadlineMs;
+  let attempts = 0;
+  let lastFailure;
+  while (Date.now() < deadline) {
+    attempts += 1;
+    try {
+      const response = await fetch(input, {
+        ...init,
+        method,
+        signal: AbortSignal.timeout(Math.min(attemptTimeoutMs, Math.max(1, deadline - Date.now()))),
+      });
+      if (response.status !== 502 && response.status !== 503) return response;
+      lastFailure = new Error(`idempotent read returned transient status ${response.status}`);
+      await response.body?.cancel();
+    } catch (error) {
+      lastFailure = error;
+    }
+    if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+  throw new Error(`idempotent read did not recover after ${attempts} attempts`, { cause: lastFailure });
+}
+
 async function executeLocalD1(sql, expectSuccess = true) {
   const result = await executeD1Sql(sql, expectSuccess);
-  const deadline = Date.now() + 8000;
+  const deadline = Date.now() + 12000;
   let healthy = false;
+  let consecutiveHealthyReads = 0;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(baseUrl);
-      if (response.ok) { healthy = true; break; }
+      const response = await fetch(baseUrl, { signal: AbortSignal.timeout(1500) });
+      const responseOk = response.ok;
+      await response.body?.cancel();
+      consecutiveHealthyReads = responseOk ? consecutiveHealthyReads + 1 : 0;
+      if (consecutiveHealthyReads >= 3) { healthy = true; break; }
     } catch {
+      consecutiveHealthyReads = 0;
       // Wrangler reloads after external local D1 maintenance.
     }
     await new Promise((resolve) => setTimeout(resolve, 120));
@@ -372,6 +404,13 @@ after(async () => {
 });
 
 describe("造场社区集成流程", { concurrency: false }, () => {
+test("idempotent retry helper rejects write requests before replay", async () => {
+  await assert.rejects(
+    fetchIdempotentWithRetry(`${baseUrl}/api/products`, { method: "POST" }),
+    /retry helper only supports idempotent GET or HEAD requests/,
+  );
+});
+
 test("keeps static preview traffic off Workerd without weakening product app headers", () => {
   const rateLimit = readFileSync(join(projectRoot, "deploy", "server", "nginx-rate-limit.conf"), "utf8");
   const nginx = readFileSync(join(projectRoot, "deploy", "server", "zaochang-preview.nginx.conf"), "utf8");
@@ -880,7 +919,9 @@ test("external demo URLs cannot cross the immutable review boundary", async () =
     VALUES ('external-demo-bypass-${runId}', ${productId}, 1, '${adminEmail}', 'approved', '尝试绕过 API 批准外链。')
   `, false);
   assert.match(directApproval, /external_demo_requires_immutable_package/);
-  const state = await (await fetch(`${baseUrl}/api/community`, { headers: ownerHeaders })).json();
+  const stateResponse = await fetchIdempotentWithRetry(`${baseUrl}/api/community`, { headers: ownerHeaders });
+  assert.equal(stateResponse.status, 200);
+  const state = await stateResponse.json();
   const product = state.ownedProducts.find((item) => item.id === productId);
   assert.equal(product.status, "pending_review");
   assert.equal(product.reviewStatus, "pending_review");

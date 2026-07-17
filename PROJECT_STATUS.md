@@ -400,3 +400,13 @@
 - 本轮改动可能引入的新风险：每个已认证 IP 可对静态命名空间瞬时发起最多 `160` 个突发请求，静态 TLS/带宽压力高于原 `100`；动态业务边界未放宽。128 份最大模块的 P95 为 `17890.1ms`，因此本节关闭“请求失败”容量缺口，不关闭 CDN、吞吐或延迟 SLO 缺口。测试进程若无法在优雅终止和 10 秒强制兜底内退出，套件现在会明确失败而不是无限等待，仍可能需要人工清理残留进程。
 - 仍阻断公开发布：生产数据仍运行在服务器本地 Wrangler/Workerd 持久化层而非受支持的 Cloudflare D1/R2；Basic Auth 是共享预览账号；Google 登录未配置；跨机备份、恶意上传扫描与生产告警接收链仍未验收。
 - 未覆盖范围：本机内置浏览器未能附着，Chrome 未运行且 ChatGPT Chrome Extension 原生通信注册缺失，因此本节没有新增 Canvas 像素、模块网络瀑布或控制台证据；非管理员 GitHub 拒绝、logout Cookie 重放、撤权/支付竞态、低端 Android、iOS Safari、4K、GPU context loss、弱网、Webhook、邮件和跨机灾备仍未验证。
+
+## 2026-07-17 PR #3 CI 重载竞态
+
+- 状态：部分完成；PR `#3` 仍为 `OPEN / MERGEABLE / UNSTABLE`。GitHub Actions run `29573038076` 在 commit `3f473176b3da9666436d86aa087aa8fc540f4e74` 上以 `67 pass / 1 fail / 0 skipped / 0 todo` 退出 `1`，唯一失败为 `external demo URLs cannot cross the immutable review boundary` 的状态 GET 在 Wrangler 重载后抛出 `fetch failed`，耗时 `302000.542884ms`。该结果不证明审核不变量失败；后续产品、支付和 OAuth 子测试继续执行并通过。
+- 测试运行器语义变更（触发轮次：2026-07-17 用户“同意修复并合并”；依据：上述 run 的 302 秒网络失败）：外部 D1 维护后的就绪条件从“单次首页 `response.ok`”改为“最多 12 秒内连续 3 次首页 `response.ok`，每次最多 1.5 秒”；失败用例的状态读取从“单次无界 GET”改为“仅 GET/HEAD、无请求体、单次最多 1.5 秒、总计最多 12 秒，并只重试网络错误或 502/503”。POST/支付/审核写请求不进入该重试函数。
+- 定向反例：`node --experimental-strip-types --test --test-name-pattern="external demo URLs cannot cross the immutable review boundary" tests/rendered-html.test.mjs` 退出码 `0`，统计 `1 pass / 0 fail / 0 skipped / 0 todo`；目标用例为 `4232.7224ms`。该定向结果只证明原失败路径，没有被用作全套门禁。
+- 全套字段：当前精确 diff 的 `npm test` 退出码 `0`，统计 `69 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo / duration_ms=304455.9513`；新增反例 `idempotent retry helper rejects write requests before replay` 通过，原失败用例为 `2690.0835ms`，并继续断言状态响应 `200`、产品 `status == reviewStatus == pending_review`、`approvedVersion == 0` 且公开列表中不存在该产品。
+- 其余本地门禁：`node --check tests/rendered-html.test.mjs`、`git diff --check`、`npx tsc --noEmit`、禁用测试扫描和迁移 diff 均退出 `0`；ESLint 为 `0 errors / 9 warnings`；Drizzle 为 `37 tables / No schema changes`；`npm audit --omit=dev --audit-level=high` 为 `found 0 vulnerabilities`。
+- 本轮改动可能引入的新风险：连续健康读取与 12 秒有界恢复会增加每次外部 D1 维护后的测试耗时；极慢 CI runner 可能明确超时失败，但不会无限等待。幂等重试当前只用于测试中的 `/api/community` GET，不改变生产请求处理，也不重试任何不可逆写操作。
+- 未覆盖范围：修复 commit 尚未推送，GitHub Actions Ubuntu runner 尚未复验，PR 尚未合并，main 尚未包含本节补丁；公开生产阻断项维持上一节不变。
