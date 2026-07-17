@@ -408,5 +408,6 @@
 - 定向反例：`node --experimental-strip-types --test --test-name-pattern="external demo URLs cannot cross the immutable review boundary" tests/rendered-html.test.mjs` 退出码 `0`，统计 `1 pass / 0 fail / 0 skipped / 0 todo`；目标用例为 `4232.7224ms`。该定向结果只证明原失败路径，没有被用作全套门禁。
 - 全套字段：当前精确 diff 的 `npm test` 退出码 `0`，统计 `69 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo / duration_ms=304455.9513`；新增反例 `idempotent retry helper rejects write requests before replay` 通过，原失败用例为 `2690.0835ms`，并继续断言状态响应 `200`、产品 `status == reviewStatus == pending_review`、`approvedVersion == 0` 且公开列表中不存在该产品。
 - 其余本地门禁：`node --check tests/rendered-html.test.mjs`、`git diff --check`、`npx tsc --noEmit`、禁用测试扫描和迁移 diff 均退出 `0`；ESLint 为 `0 errors / 9 warnings`；Drizzle 为 `37 tables / No schema changes`；`npm audit --omit=dev --audit-level=high` 为 `found 0 vulnerabilities`。
+- 远端复验：GitHub Actions run `29576605970` 在修复 commit `f2b33b412efe2856dde97f9ca023f3b6394c8665` 上以 `conclusion=success` 结束，job `87872378220` 耗时 `2m44s`；checkout、Node、`npm ci`、TypeScript、Lint、禁用测试扫描、`npm test`、diff check、迁移漂移和高危生产依赖门禁均为 `success`。当时 PR 字段为 `OPEN / MERGEABLE / CLEAN`。
 - 本轮改动可能引入的新风险：连续健康读取与 12 秒有界恢复会增加每次外部 D1 维护后的测试耗时；极慢 CI runner 可能明确超时失败，但不会无限等待。幂等重试当前只用于测试中的 `/api/community` GET，不改变生产请求处理，也不重试任何不可逆写操作。
-- 未覆盖范围：修复 commit 尚未推送，GitHub Actions Ubuntu runner 尚未复验，PR 尚未合并，main 尚未包含本节补丁；公开生产阻断项维持上一节不变。
+- 未覆盖范围：PR 尚未合并，main 尚未包含本节补丁；记录上述 run 的文档提交无法在自身内容中预先记录它尚未触发的后续 run，因此合并前仍必须从 GitHub 外部核对最终 head 的新 `verify == SUCCESS`。公开生产阻断项维持上一节不变。

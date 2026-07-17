@@ -178,6 +178,7 @@
 - 重试边界命题：`fetchIdempotentWithRetry` 的可证伪入口断言要求 `method ∈ {GET, HEAD}` 且 `body === undefined`；新增反例把 `POST` 传入该入口并由 `assert.rejects(... /only supports idempotent GET or HEAD/)` 判定拒绝。全套中该用例通过，证明当前测试调用不能借该助手重放 POST；它不证明仓库中所有其他手写重试均为幂等。
 - 审核不变量命题：D1 绕过批准失败后，状态读取先断言 `stateResponse.status == 200`，随后断言目标产品 `status == pending_review`、`reviewStatus == pending_review`、`approvedVersion == 0`、`state.products.some(id) == false`。本地定向命令退出 `0`、`1/1` 通过；当前精确 diff 的完整 `npm test` 退出 `0`、`69/69` 通过、无 skipped/todo、`duration_ms=304455.9513`，原失败用例为 `2690.0835ms`。
 - 静态门禁：`node --check tests/rendered-html.test.mjs`、`git diff --check`、`npx tsc --noEmit`、CI 同模式禁用测试扫描、`npm run db:generate && git diff --exit-code -- db/schema.ts drizzle` 均退出 `0`；lint 为 `0 errors / 9 warnings`；生产依赖审计为 `0 vulnerabilities`。
+- 远端命题：GitHub Actions run `29576605970` 的 `headSha == f2b33b412efe2856dde97f9ca023f3b6394c8665`、`status == completed`、`conclusion == success`；job `87872378220` 中 checkout、setup-node、`npm ci`、TypeScript、Lint、禁用测试扫描、`npm test`、diff check、迁移漂移和高危生产依赖门禁均为 success。该字段集合证明修复 commit 通过 Ubuntu runner，不证明随后记录本段文字的文档 commit。
 
 ### 本轮逐文件证据
 
@@ -187,6 +188,6 @@
 
 ### 未覆盖范围
 
-- GitHub Actions 尚未在补丁 commit 上复验；PR `#3` 尚未合并，main 尚未包含补丁。
+- 修复 commit 已有成功远端 run；记录该 run 的文档 commit 仍须触发并通过自己的新 run。PR `#3` 尚未合并，main 尚未包含补丁。
 - 未在更慢或更高抖动的 Linux runner 上证伪 12 秒恢复窗口；超过窗口时预期明确失败，而非继续重试。
 - 本节没有修改或复验生产服务器、Nginx、Cloudflare D1/R2、OAuth 回调、浏览器像素、移动真机、备份、恶意上传扫描或告警投递。
