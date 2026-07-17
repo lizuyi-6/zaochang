@@ -512,7 +512,8 @@ test("keeps static preview traffic off Workerd without weakening product app hea
   const scannerService = readFileSync(join(projectRoot, "deploy", "server", "zaochang-upload-scanner.service"), "utf8");
   assert.match(scannerService, /NoNewPrivileges=true/);
   assert.match(scannerService, /ProtectSystem=strict/);
-  assert.match(scannerService, /MemoryMax=1100M/);
+  assert.match(scannerService, /MemoryHigh=1000M/);
+  assert.match(scannerService, /MemoryMax=1150M/);
   assert.match(readFileSync(join(projectRoot, "deploy", "server", "zaochang-clamav-update.service"), "utf8"), /flock -w 300 -E 75 \/run\/lock\/zaochang-clamav\.lock/);
   assert.match(readFileSync(join(projectRoot, "deploy", "server", "zaochang-clamav-update.timer"), "utf8"), /OnCalendar=\*-\*-\* 03:20:00/);
 });

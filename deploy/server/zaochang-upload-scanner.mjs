@@ -112,7 +112,7 @@ function runClamScan(filePath) {
     const timeout = setTimeout(() => {
       child.kill("SIGKILL");
       reject(Object.assign(new Error("clamscan_timeout"), { status: 503 }));
-    }, 70_000);
+    }, 105_000);
     child.once("error", (error) => {
       clearTimeout(timeout);
       reject(Object.assign(error, { status: 503 }));

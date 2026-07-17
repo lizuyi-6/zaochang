@@ -78,7 +78,7 @@ export async function scanUpload(bytes: Uint8Array, expectedSha256: string): Pro
         "x-content-sha256": expectedSha256,
       },
       body: toArrayBuffer(bytes),
-      signal: AbortSignal.timeout(75_000),
+      signal: AbortSignal.timeout(112_000),
     });
   } catch {
     throw new UploadSecurityError("upload_scanner_unavailable", 503);
