@@ -386,3 +386,28 @@
 - 清理：`release-r4-tunnel` 浏览器会话已关闭，旧 `release-r4-rotated` 会话确认未打开，SSH 本地隧道进程已停止且端口 `39001` 不再监听；本地明文认证配置不存在。服务器 `/tmp/zaochang-90b10b4f8475.tar.gz` 与 6 个本次发布脚本均已删除并断言不存在。
 - 仍阻断公开发布：数据仍运行在服务器本地 Wrangler/Workerd 持久化层，而非受支持的 Cloudflare D1/R2；Basic Auth 是共享预览账号；Google 登录未配置；跨机备份、恶意上传扫描、告警投递链和容量/128 静态并发压力尚未验收。因此本节只证明受保护预览 r4 的部署和冒烟，不证明公开生产发布。
 - 未覆盖范围：非管理员 GitHub 账号的后台拒绝、真实 Google 回调、线上 logout 后旧 Cookie 重放、撤权与支付确认竞态、128 静态并发、低端 Android、iOS Safari、4K、高刷新率、GPU context loss、弱网、Webhook、邮件、跨机灾备和公开生产数据迁移仍未验证。
+
+## 2026-07-17 r5 静态容量与代理分层
+
+- 状态：部分完成；`https://aetherstudio.top` 仍是 Basic Auth 保护的远程验收环境，不是公开生产站。应用 release 仍为 r4，本节只改变 Nginx 静态交付层并保留可回退配置备份。
+- 反例：修正前在服务器回环以 HTTP/1.1 同时请求 128 份 `624888` 字节银河模块，客户端确实打开 `128` 个 socket，终态为 `117×200 + 11×502`；11 条 Nginx 错误均为 Workerd `upstream prematurely closed connection while reading response header`。服务未重启，但该结果直接否定 128 静态并发可用命题。
+- 语义变更（触发轮次：2026-07-17 用户“继续做”；依据：上述 `117/11` 反例）：`/assets/`、`/product-apps/`、`/favicon.svg` 从“共享 `10r/s + burst 100` 且代理到 Workerd”改为“独立 `64r/s + burst 160` 且由 Nginx 读取 `/opt/zaochang/current/dist/client`”；静态 `limit_conn=128` 不变。动态页面/API 仍为 `10r/s + burst 100 + limit_conn=30` 并代理到 Workerd。
+- 静态容量字段：仓库脚本 `zaochang-capacity-probe.mjs` 在服务器回环执行 `concurrency=128 / maxOpenSockets=128`，结果为 `statuses.200=128 / errors={} / fullBodyCount=128 / totalBytes=79985664`；`allExpectedStatus/noErrors/allExpectedBytes/restartsStable` 四个 verdict 均为 `true`。应用与 Nginx `NRestarts` 都保持 `0`，Nginx cgroup 峰值 `22536192` 字节。
+- 动态容量字段：同一脚本对 `/api/community` 执行 `concurrency=30`，结果为 `statuses.200=30 / errors={}`，四个 verdict 均为 `true`，P95 为 `4320.9ms`。该结果证明 30 个请求都有成功终态，不证明 4 秒级负载延迟满足尚未定义的生产 SLO。
+- 缓存与嵌入边界：成功银河模块为 `200 / 624888 bytes / Cache-Control=public,max-age=31536000,immutable`；同一路径匿名访问为 `401 / Cache-Control=null`，缺失资产为 `404 / Cache-Control=null`。WANDER 为 `SAMEORIGIN + geolocation=(self)`，MORI 为 `SAMEORIGIN + geolocation=()`，CSP、nosniff、Referrer-Policy 与 HSTS 均保留。
+- 自动门禁：加入 Nginx 配置和探针入口字段断言后，`npm test` 退出码 `0`，统计 `68 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`；该命令包含 Vite `8.1.4` 生产构建与空 D1 的 `0000..0009` 集成流程。候选和实际 `/etc/nginx/nginx.conf` 的 `nginx -t` 均退出 `0`，Nginx 为 `active/running/NRestarts=0`。
+- 测试清理反例与修正：一次全量复跑在 Windows `after()` 的无超时 `taskkill /T /F` 中挂起，留下 `workerd.exe` 并锁住 `dist/server/.wrangler`；随后构建以 `EPERM` 明确失败。测试服务器改为直接启动 Wrangler Node 入口，优先通过子进程句柄结束，并只把带 `10s` 超时的 `taskkill` 作为兜底。清除残留后当前完整 diff 的复跑退出码 `0`，终态为 `68/68`、`skipped=0`、`todo=0`、`duration_ms=380603.4928`，结束后 4179 无监听且无 Workerd 进程。
+- 本轮改动可能引入的新风险：每个已认证 IP 可对静态命名空间瞬时发起最多 `160` 个突发请求，静态 TLS/带宽压力高于原 `100`；动态业务边界未放宽。128 份最大模块的 P95 为 `17890.1ms`，因此本节关闭“请求失败”容量缺口，不关闭 CDN、吞吐或延迟 SLO 缺口。测试进程若无法在优雅终止和 10 秒强制兜底内退出，套件现在会明确失败而不是无限等待，仍可能需要人工清理残留进程。
+- 仍阻断公开发布：生产数据仍运行在服务器本地 Wrangler/Workerd 持久化层而非受支持的 Cloudflare D1/R2；Basic Auth 是共享预览账号；Google 登录未配置；跨机备份、恶意上传扫描与生产告警接收链仍未验收。
+- 未覆盖范围：本机内置浏览器未能附着，Chrome 未运行且 ChatGPT Chrome Extension 原生通信注册缺失，因此本节没有新增 Canvas 像素、模块网络瀑布或控制台证据；非管理员 GitHub 拒绝、logout Cookie 重放、撤权/支付竞态、低端 Android、iOS Safari、4K、GPU context loss、弱网、Webhook、邮件和跨机灾备仍未验证。
+
+## 2026-07-17 PR #3 CI 重载竞态
+
+- 状态：部分完成；PR `#3` 仍为 `OPEN / MERGEABLE / UNSTABLE`。GitHub Actions run `29573038076` 在 commit `3f473176b3da9666436d86aa087aa8fc540f4e74` 上以 `67 pass / 1 fail / 0 skipped / 0 todo` 退出 `1`，唯一失败为 `external demo URLs cannot cross the immutable review boundary` 的状态 GET 在 Wrangler 重载后抛出 `fetch failed`，耗时 `302000.542884ms`。该结果不证明审核不变量失败；后续产品、支付和 OAuth 子测试继续执行并通过。
+- 测试运行器语义变更（触发轮次：2026-07-17 用户“同意修复并合并”；依据：上述 run 的 302 秒网络失败）：外部 D1 维护后的就绪条件从“单次首页 `response.ok`”改为“最多 12 秒内连续 3 次首页 `response.ok`，每次最多 1.5 秒”；失败用例的状态读取从“单次无界 GET”改为“仅 GET/HEAD、无请求体、单次最多 1.5 秒、总计最多 12 秒，并只重试网络错误或 502/503”。POST/支付/审核写请求不进入该重试函数。
+- 定向反例：`node --experimental-strip-types --test --test-name-pattern="external demo URLs cannot cross the immutable review boundary" tests/rendered-html.test.mjs` 退出码 `0`，统计 `1 pass / 0 fail / 0 skipped / 0 todo`；目标用例为 `4232.7224ms`。该定向结果只证明原失败路径，没有被用作全套门禁。
+- 全套字段：当前精确 diff 的 `npm test` 退出码 `0`，统计 `69 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo / duration_ms=304455.9513`；新增反例 `idempotent retry helper rejects write requests before replay` 通过，原失败用例为 `2690.0835ms`，并继续断言状态响应 `200`、产品 `status == reviewStatus == pending_review`、`approvedVersion == 0` 且公开列表中不存在该产品。
+- 其余本地门禁：`node --check tests/rendered-html.test.mjs`、`git diff --check`、`npx tsc --noEmit`、禁用测试扫描和迁移 diff 均退出 `0`；ESLint 为 `0 errors / 9 warnings`；Drizzle 为 `37 tables / No schema changes`；`npm audit --omit=dev --audit-level=high` 为 `found 0 vulnerabilities`。
+- 远端复验：GitHub Actions run `29576605970` 在修复 commit `f2b33b412efe2856dde97f9ca023f3b6394c8665` 上以 `conclusion=success` 结束，job `87872378220` 耗时 `2m44s`；checkout、Node、`npm ci`、TypeScript、Lint、禁用测试扫描、`npm test`、diff check、迁移漂移和高危生产依赖门禁均为 `success`。当时 PR 字段为 `OPEN / MERGEABLE / CLEAN`。
+- 本轮改动可能引入的新风险：连续健康读取与 12 秒有界恢复会增加每次外部 D1 维护后的测试耗时；极慢 CI runner 可能明确超时失败，但不会无限等待。幂等重试当前只用于测试中的 `/api/community` GET，不改变生产请求处理，也不重试任何不可逆写操作。
+- 未覆盖范围：PR 尚未合并，main 尚未包含本节补丁；记录上述 run 的文档提交无法在自身内容中预先记录它尚未触发的后续 run，因此合并前仍必须从 GitHub 外部核对最终 head 的新 `verify == SUCCESS`。公开生产阻断项维持上一节不变。

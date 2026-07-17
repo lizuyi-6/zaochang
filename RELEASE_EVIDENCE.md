@@ -145,3 +145,49 @@
 
 - 公开生产仍未覆盖：受支持的 Cloudflare D1/R2、非共享身份入口、Google 登录、跨机备份、恶意上传扫描、告警投递、容量与 128 静态并发压力。
 - 行为仍未覆盖：非管理员 GitHub 账号拒绝、线上 logout Cookie 重放、撤权/支付确认竞态、低端 Android、iOS Safari、4K、高刷新率、GPU context loss、弱网、Webhook 和邮件。
+
+## 2026-07-17 r5 静态容量证据
+
+- 命题映射：待证命题是“单个已认证 IP 的 128 个静态请求都得到完整成功响应且服务不重启”；充分条件字段为 `statuses.200 == 128 && fullBodyCount == 128 && errors == {} && appRestartsBefore == appRestartsAfter && nginxRestartsBefore == nginxRestartsAfter`。修正前同一类探针为 `117×200 + 11×502`，因此旧配置不能推出该命题。
+- 修正后可复现探针：从受控凭据源把 Basic 值只经 stdin 传给服务器上的 `node /tmp/zaochang-capacity-probe.mjs --path /assets/galaxy-experience-CYxZKn6Z.js --concurrency 128 --expected-status 200 --expected-bytes 624888 --timeout-ms 30000 --label r5_static`，退出码 `0`；字段为 `maxActive=128 / maxOpenSockets=128 / statuses.200=128 / errors={} / totalBytes=79985664 / fullBodyCount=128 / P95=17890.1ms / app NRestarts 0→0 / nginx NRestarts 0→0`，四个 verdict 均为 `true`。
+- 动态反例边界：同一脚本执行 `--path /api/community --concurrency 30 --expected-status 200 --label r5_dynamic`，退出码 `0`；字段为 `statuses.200=30 / errors={} / P95=4320.9ms / NRestarts 0→0`。此证据证明 30 请求成功终态，不证明延迟 SLO。
+- 线上配置命题：候选与实际 Nginx 配置的 `nginx -t` 均退出 `0`；重载后 `nginx.service` 为 `active/running/NRestarts=0`。访问日志中 `r5_static` 请求为 128 个 `200`；从重载时间起 Workerd journal 没有对应银河资产请求，证明该批静态响应没有进入 Workerd。
+- 响应头命题：字段断言为成功资产 `status=200 / bytes=624888 / immutable cache`，匿名同路径 `status=401 / cacheControl=null`，缺失资产 `status=404 / cacheControl=null`；WANDER `status=200 / X-Frame-Options=SAMEORIGIN / geolocation=(self)`，MORI 对应 `geolocation=()`。这些字段是缓存和 iframe 边界的充分条件，不证明浏览器 Canvas。
+- 全量应用门禁：当前完整 diff 的 `npm test` 退出码 `0`，日志终止标记为 `__TEST_EXIT__=0`，统计 `68 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo / duration_ms=380603.4928`；包含新增配置字段断言、Vite `8.1.4` 生产构建与既有支付、审核、OAuth、上传和迁移行为。
+- 清理失败二分：旧清理路径的无超时 `taskkill` 挂起后，残留 Workerd 让下一次构建以 `EPERM dist/server/.wrangler` 退出 `1`；该证据证明“测试未形成终态且目录仍被占用”。修正后直接 Wrangler 子进程在 after hook 中退出，最终套件退出 `0`，并由 `4179` 无 LISTENING 与任务列表无 `workerd.exe` 证明“服务进程已退出且端口释放”。这不证明 Windows 在所有异常内核状态下都能强制终止进程；超时兜底失败时套件会显式失败。
+
+### 本轮逐文件证据
+
+- `deploy/server/nginx-rate-limit.conf`：新增静态 `64r/s` zone；配置测试断言精确值，远端候选与实际 `nginx -t` 均退出 0。
+- `deploy/server/zaochang-preview.nginx.conf`：静态直出、128 连接、160 burst、缓存与产品应用安全头；线上 128 请求、401/404 缓存反例和 WANDER/MORI 头字段共同覆盖，浏览器像素未单独验证。
+- `deploy/server/zaochang-capacity-probe.mjs`：可证伪容量探针；`node --check` 与 `--help` 均退出 0，服务器静态/动态两组 verdict 全为 true。
+- `tests/rendered-html.test.mjs`：新增配置、探针入口和有界测试服务器清理；旧路径出现 `taskkill` 挂起与后续 `EPERM`，修正后的当前完整 diff 全量 `npm test` 为 `68/68`、退出码 `0`、无跳过或 todo，结束后无 4179 listener/Workerd。
+- `PROJECT_STATUS.md`：记录语义变更、反例、结果和剩余阻断；运行语义由本节服务器字段支撑，文档自身不证明线上行为。
+- `RELEASE_RUNBOOK.md`：同步静态/动态分层、缓存失败语义和探针放行字段；尚未由另一名操作者独立演练。
+- `RELEASE_EVIDENCE.md`：记录本节命题映射与逐文件证据；最终 `git diff --check` 和改动文件对账仍需在提交前执行。
+
+### 未覆盖范围
+
+- 本轮没有新增真实浏览器 Canvas、网络瀑布或控制台证据：内置浏览器未能附着，Chrome 未运行且 ChatGPT Chrome Extension 原生通信注册缺失。
+- 静态 P95 为 `17890.1ms`，动态 P95 为 `4320.9ms`；没有已批准的生产延迟 SLO，故不能声称延迟达标。
+- 公开生产仍未覆盖受支持的 Cloudflare D1/R2、非共享身份入口、Google 登录、跨机备份、恶意上传扫描和告警投递；非管理员 GitHub 拒绝、logout Cookie 重放、撤权/支付竞态、移动真机、弱网、Webhook 与邮件仍未验证。
+
+## 2026-07-17 PR #3 CI 重载竞态证据
+
+- 失败命题：GitHub Actions run `29573038076`、job `87861071901`、head `3f473176b3da9666436d86aa087aa8fc540f4e74` 的 `npm test` 退出 `1`；完整统计为 `67 pass / 1 fail / 0 cancelled / 0 skipped / 0 todo`。唯一失败在 `tests/rendered-html.test.mjs:883` 的 GET 抛出 `fetch failed`，持续 `302000.542884ms`；它直接证明旧测试运行器没有给该读取设置有界终态，不证明产品审核字段被错误修改。
+- 重试边界命题：`fetchIdempotentWithRetry` 的可证伪入口断言要求 `method ∈ {GET, HEAD}` 且 `body === undefined`；新增反例把 `POST` 传入该入口并由 `assert.rejects(... /only supports idempotent GET or HEAD/)` 判定拒绝。全套中该用例通过，证明当前测试调用不能借该助手重放 POST；它不证明仓库中所有其他手写重试均为幂等。
+- 审核不变量命题：D1 绕过批准失败后，状态读取先断言 `stateResponse.status == 200`，随后断言目标产品 `status == pending_review`、`reviewStatus == pending_review`、`approvedVersion == 0`、`state.products.some(id) == false`。本地定向命令退出 `0`、`1/1` 通过；当前精确 diff 的完整 `npm test` 退出 `0`、`69/69` 通过、无 skipped/todo、`duration_ms=304455.9513`，原失败用例为 `2690.0835ms`。
+- 静态门禁：`node --check tests/rendered-html.test.mjs`、`git diff --check`、`npx tsc --noEmit`、CI 同模式禁用测试扫描、`npm run db:generate && git diff --exit-code -- db/schema.ts drizzle` 均退出 `0`；lint 为 `0 errors / 9 warnings`；生产依赖审计为 `0 vulnerabilities`。
+- 远端命题：GitHub Actions run `29576605970` 的 `headSha == f2b33b412efe2856dde97f9ca023f3b6394c8665`、`status == completed`、`conclusion == success`；job `87872378220` 中 checkout、setup-node、`npm ci`、TypeScript、Lint、禁用测试扫描、`npm test`、diff check、迁移漂移和高危生产依赖门禁均为 success。该字段集合证明修复 commit 通过 Ubuntu runner，不证明随后记录本段文字的文档 commit。
+
+### 本轮逐文件证据
+
+- `tests/rendered-html.test.mjs`：增加有界幂等读取、连续健康判定、POST 拒绝反例和原失败路径的显式 200 断言；定向 `1/1` 与全套 `69/69` 均退出 `0`，无 skipped/todo。
+- `PROJECT_STATUS.md`：记录远端失败、测试语义变化、本地反例和未覆盖远端状态；文档自身不证明 GitHub Actions 或合并结果。
+- `RELEASE_EVIDENCE.md`：记录命题—字段断言与逐文件证据；提交前仍需重新执行 `git diff --check`、改动集对账和暂存区凭据扫描。
+
+### 未覆盖范围
+
+- 修复 commit 已有成功远端 run；记录该 run 的文档 commit 仍须触发并通过自己的新 run。PR `#3` 尚未合并，main 尚未包含补丁。
+- 未在更慢或更高抖动的 Linux runner 上证伪 12 秒恢复窗口；超过窗口时预期明确失败，而非继续重试。
+- 本节没有修改或复验生产服务器、Nginx、Cloudflare D1/R2、OAuth 回调、浏览器像素、移动真机、备份、恶意上传扫描或告警投递。

@@ -127,7 +127,11 @@ systemctl start zaochang.service
 
 禁止通过删除 `/var/lib/zaochang/state` 回滚业务数据；该目录必须先做完整快照。正式开放前必须迁回受支持的 Cloudflare D1/R2 生产运行时，确认 GitHub OAuth App 只保留当前已验证的 Secret，并关闭其余发布阻断项。任何曾进入对话、日志或命令输出的 Secret 都必须先轮换并删除旧项。
 
-Nginx 对动态页面和 API 保持每 IP `limit_conn=30`；只对受信任的 `/assets/`、`/product-apps/` 和 `/favicon.svg` 静态命名空间使用 `limit_conn=128`。所有路径继续使用 `10 req/s`、`burst=100`，修改这些值后必须同时执行：
+Nginx 对动态页面和 API 保持每 IP `10 req/s + burst=100 + limit_conn=30`，并继续代理到 Workerd。只对受信任的 `/assets/`、`/product-apps/` 和 `/favicon.svg` 静态命名空间使用独立的 `64 req/s + burst=160 + limit_conn=128`；这些文件必须从原子发布链接 `/opt/zaochang/current/dist/client` 直接读取，不得重新代理到 Workerd。静态速率放宽只适用于版本化文件，动态写路径不得复用该 zone。
+
+`/assets/*` 的不可变缓存头只能出现在成功响应，匿名 `401` 与缺失文件 `404` 必须满足 `Cache-Control == null`。`/product-apps/*` 直接由 Nginx 提供后，仍必须逐字段保留 `X-Frame-Options: SAMEORIGIN`、`Content-Security-Policy`、`X-Content-Type-Options: nosniff`、Referrer-Policy 和 Permissions-Policy；WANDER 为 `geolocation=(self)`，其余五个应用为 `geolocation=()`。
+
+修改静态根目录、速率或并发值后必须同时执行：
 
 ```bash
 nginx -t
@@ -135,7 +139,9 @@ systemctl reload nginx
 systemctl show nginx -p ActiveState -p SubState -p NRestarts
 ```
 
-随后用全新浏览器上下文加载 `/galaxy`，要求每个模块与 favicon 都是 `200`、控制台 `0 errors` 且 Canvas 非空；只检查首页 `200` 不足以证明 HTTP/2 模块图没有被连接上限误杀。
+随后从受控凭据源把 `base64(username:password)` 只经 stdin 传给 `deploy/server/zaochang-capacity-probe.mjs`，不得写入参数、URL、环境文件或日志。静态探针使用 `--path /assets/<当前最大模块> --concurrency 128 --expected-status 200 --expected-bytes <真实字节数>`；动态探针使用 `--path /api/community --concurrency 30 --expected-status 200`。放行字段必须同时为 `allExpectedStatus == true`、`noErrors == true`、`allExpectedBytes == true`、`restartsStable == true`，并记录 P95；全状态码为 `200` 只证明请求终态，不证明延迟满足未定义的 SLO。
+
+最后用全新浏览器上下文加载 `/galaxy`，要求每个模块与 favicon 都是 `200`、控制台 `0 errors` 且 Canvas 非空；只检查首页 `200` 或容量探针不足以证明页面像素与 WebGL 终态。
 
 服务器加固资产位于 `deploy/server/`。`zaochang-backup.timer` 每日生成停服一致性快照并保留 14 天；`zaochang-health.timer` 每 5 分钟检查服务、回环 API、磁盘、内存、备份校验和与证书。每次发布后至少执行一次：
 
