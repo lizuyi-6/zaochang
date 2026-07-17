@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -262,11 +262,16 @@ before(async () => {
     }
   }
 
-  const executable = process.platform === "win32" ? process.env.ComSpec : "npx";
-  const args =
-    process.platform === "win32"
-      ? ["/d", "/s", "/c", `npx wrangler dev --config dist/server/wrangler.json --port ${port} --persist-to ${stateDir} --var APP_ENV:test --var ZAOCHANG_ADMIN_EMAILS:${adminEmail}`]
-      : ["wrangler", "dev", "--config", "dist/server/wrangler.json", "--port", String(port), "--persist-to", stateDir, "--var", "APP_ENV:test", "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail}`];
+  const executable = process.execPath;
+  const args = [
+    join(projectRoot, "node_modules", "wrangler", "bin", "wrangler.js"),
+    "dev",
+    "--config", "dist/server/wrangler.json",
+    "--port", String(port),
+    "--persist-to", stateDir,
+    "--var", "APP_ENV:test",
+    "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail}`,
+  ];
   server = spawn(
     executable,
     args,
@@ -326,14 +331,37 @@ before(async () => {
 });
 
 after(async () => {
-  if (server?.pid && process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], {
-      stdio: "ignore",
-      windowsHide: true,
+  const waitForExit = (timeoutMs) => {
+    if (!server || server.exitCode !== null) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), timeoutMs);
+      server.once("exit", () => {
+        clearTimeout(timer);
+        resolve(true);
+      });
     });
-  } else if (server?.pid) {
-    process.kill(-server.pid, "SIGTERM");
+  };
+
+  let stopped = true;
+  if (server?.pid && server.exitCode === null) {
+    if (process.platform === "win32") server.kill("SIGTERM");
+    else process.kill(-server.pid, "SIGTERM");
+    stopped = await waitForExit(5000);
   }
+  if (!stopped && server?.pid && process.platform === "win32") {
+    const forced = spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 10000,
+    });
+    assert.notEqual(forced.error?.code, "ETIMEDOUT", `taskkill timed out for preview server ${server.pid}`);
+    assert.equal(forced.status, 0, forced.stderr || forced.stdout);
+    stopped = await waitForExit(2000);
+  } else if (!stopped && server?.pid) {
+    process.kill(-server.pid, "SIGKILL");
+    stopped = await waitForExit(2000);
+  }
+  assert.equal(stopped, true, `preview server ${server?.pid ?? "unknown"} did not exit`);
   await rm(stateDir, {
     recursive: true,
     force: true,
@@ -344,6 +372,40 @@ after(async () => {
 });
 
 describe("造场社区集成流程", { concurrency: false }, () => {
+test("keeps static preview traffic off Workerd without weakening product app headers", () => {
+  const rateLimit = readFileSync(join(projectRoot, "deploy", "server", "nginx-rate-limit.conf"), "utf8");
+  const nginx = readFileSync(join(projectRoot, "deploy", "server", "zaochang-preview.nginx.conf"), "utf8");
+  const assets = nginx.match(/location \^~ \/assets\/ \{([\s\S]*?)\n    \}/)?.[1] ?? "";
+  const productApps = nginx.match(/location \^~ \/product-apps\/ \{([\s\S]*?)\n    \}/)?.[1] ?? "";
+  const favicon = nginx.match(/location = \/favicon\.svg \{([\s\S]*?)\n    \}/)?.[1] ?? "";
+
+  assert.match(rateLimit, /zone=zaochang_preview_static_per_ip:10m rate=64r\/s/);
+  assert.match(nginx, /map \$uri \$zaochang_product_permissions_policy/);
+  assert.match(nginx, /~\^\/product-apps\/wander\/ "camera=\(\), microphone=\(\), payment=\(\), geolocation=\(self\)"/);
+
+  for (const block of [assets, productApps, favicon]) {
+    assert.match(block, /limit_req zone=zaochang_preview_static_per_ip burst=160 nodelay/);
+    assert.match(block, /limit_conn zaochang_preview_connections 128/);
+    assert.match(block, /root \/opt\/zaochang\/current\/dist\/client/);
+    assert.doesNotMatch(block, /proxy_pass/);
+  }
+
+  assert.match(assets, /Cache-Control "public, max-age=31536000, immutable";/);
+  assert.doesNotMatch(assets, /Cache-Control "public, max-age=31536000, immutable" always/);
+  assert.match(productApps, /X-Content-Type-Options "nosniff" always/);
+  assert.match(productApps, /X-Frame-Options "SAMEORIGIN" always/);
+  assert.match(productApps, /Permissions-Policy \$zaochang_product_permissions_policy always/);
+  assert.match(productApps, /Content-Security-Policy "default-src 'self';[^"]+frame-ancestors 'self';[^"]+" always/);
+
+  const probe = spawnSync(process.execPath, [join(projectRoot, "deploy", "server", "zaochang-capacity-probe.mjs"), "--help"], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.equal(probe.status, 0, probe.stderr);
+  assert.match(probe.stdout, /credential_base64 \| node zaochang-capacity-probe\.mjs/);
+});
+
 test("server-renders the creator community", async () => {
   const response = await fetch(baseUrl, { headers: { accept: "text/html" } });
   assert.equal(response.status, 200);

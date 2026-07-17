@@ -386,3 +386,17 @@
 - 清理：`release-r4-tunnel` 浏览器会话已关闭，旧 `release-r4-rotated` 会话确认未打开，SSH 本地隧道进程已停止且端口 `39001` 不再监听；本地明文认证配置不存在。服务器 `/tmp/zaochang-90b10b4f8475.tar.gz` 与 6 个本次发布脚本均已删除并断言不存在。
 - 仍阻断公开发布：数据仍运行在服务器本地 Wrangler/Workerd 持久化层，而非受支持的 Cloudflare D1/R2；Basic Auth 是共享预览账号；Google 登录未配置；跨机备份、恶意上传扫描、告警投递链和容量/128 静态并发压力尚未验收。因此本节只证明受保护预览 r4 的部署和冒烟，不证明公开生产发布。
 - 未覆盖范围：非管理员 GitHub 账号的后台拒绝、真实 Google 回调、线上 logout 后旧 Cookie 重放、撤权与支付确认竞态、128 静态并发、低端 Android、iOS Safari、4K、高刷新率、GPU context loss、弱网、Webhook、邮件、跨机灾备和公开生产数据迁移仍未验证。
+
+## 2026-07-17 r5 静态容量与代理分层
+
+- 状态：部分完成；`https://aetherstudio.top` 仍是 Basic Auth 保护的远程验收环境，不是公开生产站。应用 release 仍为 r4，本节只改变 Nginx 静态交付层并保留可回退配置备份。
+- 反例：修正前在服务器回环以 HTTP/1.1 同时请求 128 份 `624888` 字节银河模块，客户端确实打开 `128` 个 socket，终态为 `117×200 + 11×502`；11 条 Nginx 错误均为 Workerd `upstream prematurely closed connection while reading response header`。服务未重启，但该结果直接否定 128 静态并发可用命题。
+- 语义变更（触发轮次：2026-07-17 用户“继续做”；依据：上述 `117/11` 反例）：`/assets/`、`/product-apps/`、`/favicon.svg` 从“共享 `10r/s + burst 100` 且代理到 Workerd”改为“独立 `64r/s + burst 160` 且由 Nginx 读取 `/opt/zaochang/current/dist/client`”；静态 `limit_conn=128` 不变。动态页面/API 仍为 `10r/s + burst 100 + limit_conn=30` 并代理到 Workerd。
+- 静态容量字段：仓库脚本 `zaochang-capacity-probe.mjs` 在服务器回环执行 `concurrency=128 / maxOpenSockets=128`，结果为 `statuses.200=128 / errors={} / fullBodyCount=128 / totalBytes=79985664`；`allExpectedStatus/noErrors/allExpectedBytes/restartsStable` 四个 verdict 均为 `true`。应用与 Nginx `NRestarts` 都保持 `0`，Nginx cgroup 峰值 `22536192` 字节。
+- 动态容量字段：同一脚本对 `/api/community` 执行 `concurrency=30`，结果为 `statuses.200=30 / errors={}`，四个 verdict 均为 `true`，P95 为 `4320.9ms`。该结果证明 30 个请求都有成功终态，不证明 4 秒级负载延迟满足尚未定义的生产 SLO。
+- 缓存与嵌入边界：成功银河模块为 `200 / 624888 bytes / Cache-Control=public,max-age=31536000,immutable`；同一路径匿名访问为 `401 / Cache-Control=null`，缺失资产为 `404 / Cache-Control=null`。WANDER 为 `SAMEORIGIN + geolocation=(self)`，MORI 为 `SAMEORIGIN + geolocation=()`，CSP、nosniff、Referrer-Policy 与 HSTS 均保留。
+- 自动门禁：加入 Nginx 配置和探针入口字段断言后，`npm test` 退出码 `0`，统计 `68 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`；该命令包含 Vite `8.1.4` 生产构建与空 D1 的 `0000..0009` 集成流程。候选和实际 `/etc/nginx/nginx.conf` 的 `nginx -t` 均退出 `0`，Nginx 为 `active/running/NRestarts=0`。
+- 测试清理反例与修正：一次全量复跑在 Windows `after()` 的无超时 `taskkill /T /F` 中挂起，留下 `workerd.exe` 并锁住 `dist/server/.wrangler`；随后构建以 `EPERM` 明确失败。测试服务器改为直接启动 Wrangler Node 入口，优先通过子进程句柄结束，并只把带 `10s` 超时的 `taskkill` 作为兜底。清除残留后当前完整 diff 的复跑退出码 `0`，终态为 `68/68`、`skipped=0`、`todo=0`、`duration_ms=380603.4928`，结束后 4179 无监听且无 Workerd 进程。
+- 本轮改动可能引入的新风险：每个已认证 IP 可对静态命名空间瞬时发起最多 `160` 个突发请求，静态 TLS/带宽压力高于原 `100`；动态业务边界未放宽。128 份最大模块的 P95 为 `17890.1ms`，因此本节关闭“请求失败”容量缺口，不关闭 CDN、吞吐或延迟 SLO 缺口。测试进程若无法在优雅终止和 10 秒强制兜底内退出，套件现在会明确失败而不是无限等待，仍可能需要人工清理残留进程。
+- 仍阻断公开发布：生产数据仍运行在服务器本地 Wrangler/Workerd 持久化层而非受支持的 Cloudflare D1/R2；Basic Auth 是共享预览账号；Google 登录未配置；跨机备份、恶意上传扫描与生产告警接收链仍未验收。
+- 未覆盖范围：本机内置浏览器未能附着，Chrome 未运行且 ChatGPT Chrome Extension 原生通信注册缺失，因此本节没有新增 Canvas 像素、模块网络瀑布或控制台证据；非管理员 GitHub 拒绝、logout Cookie 重放、撤权/支付竞态、低端 Android、iOS Safari、4K、GPU context loss、弱网、Webhook、邮件和跨机灾备仍未验证。
