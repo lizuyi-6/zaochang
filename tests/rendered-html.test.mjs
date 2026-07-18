@@ -479,6 +479,8 @@ test("keeps static preview traffic off Workerd without weakening product app hea
   assert.match(nginx, /map \$uri \$zaochang_product_permissions_policy/);
   assert.match(nginx, /~\^\/product-apps\/wander\/ "camera=\(\), microphone=\(\), payment=\(\), geolocation=\(self\)"/);
   assert.doesNotMatch(nginx, /auth_basic/);
+  assert.match(nginx, /proxy_redirect http:\/\/aetherstudio\.top\/ https:\/\/aetherstudio\.top\//);
+  assert.match(nginx, /proxy_redirect http:\/\/www\.aetherstudio\.top\/ https:\/\/www\.aetherstudio\.top\//);
 
   for (const block of [assets, productApps, favicon]) {
     assert.match(block, /limit_req zone=zaochang_preview_static_per_ip burst=160 nodelay/);
