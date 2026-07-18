@@ -10,6 +10,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
   const query = await searchParams;
   const returnToValue = Array.isArray(query.return_to) ? query.return_to[0] : query.return_to;
   const returnTo = safeReturnPath(returnToValue);
+  const loginHref = `/api/auth/github/start?return_to=${encodeURIComponent(returnTo)}`;
   const status = oauthProviderStatus();
   const error = Array.isArray(query.error) ? query.error[0] : query.error;
   const provider = Array.isArray(query.provider) ? query.provider[0] : query.provider;
@@ -40,15 +41,25 @@ export default async function SignInPage({ searchParams }: PageProps) {
         <h1>进入造场</h1>
         <p className="auth-intro">公开测试期间统一使用 GitHub。已有账号直接登录，首次注册需要邀请码。</p>
         {errorText && <p className="auth-error" role="alert">{errorText}</p>}
-        <form className="auth-invite-form" action="/api/auth/github/start" method="post">
+        {status.github ? (
+          <a className="auth-provider github" href={loginHref}>
+            <Github size={18} /><span>使用 GitHub 登录</span>
+          </a>
+        ) : (
+          <span className="auth-provider github is-disabled" aria-disabled="true">
+            <Github size={18} /><span>使用 GitHub 登录</span><small>待配置</small>
+          </span>
+        )}
+        <div className="auth-divider">首次注册</div>
+        <form className="auth-invite-form" action="/api/auth/github/start" method="get">
           <input type="hidden" name="return_to" value={returnTo} />
           <label htmlFor="invitation_code">
             邀请码
-            <span>已有账号可留空</span>
+            <span>首次注册必填</span>
           </label>
-          <input id="invitation_code" name="invitation_code" type="text" inputMode="text" autoComplete="one-time-code" minLength={8} maxLength={64} placeholder="首次注册时填写" />
+          <input id="invitation_code" name="invitation_code" type="text" inputMode="text" autoComplete="one-time-code" minLength={8} maxLength={64} placeholder="输入造场邀请码" required />
           <button className="auth-provider github" type="submit" disabled={!status.github}>
-            <Github size={18} /><span>使用 GitHub 登录</span>{!status.github && <small>待配置</small>}
+            <Github size={18} /><span>使用邀请码注册</span>{!status.github && <small>待配置</small>}
           </button>
         </form>
         <small className="auth-note">邀请码只在首次创建造场账号时原子消耗；后续登录不再需要。造场不会获得你的 GitHub 密码。</small>

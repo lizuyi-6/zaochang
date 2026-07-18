@@ -16,7 +16,9 @@ import {
 type Params = { params: Promise<{ provider: string }> };
 
 export async function GET(request: Request, { params }: Params) {
-  return startOAuth(request, await params, null, new URL(request.url).searchParams.get("return_to"));
+  const search = new URL(request.url).searchParams;
+  const invitationCode = String(search.get("invitation_code") ?? "").trim().slice(0, 64) || null;
+  return startOAuth(request, await params, invitationCode, search.get("return_to"));
 }
 
 export async function POST(request: Request, { params }: Params) {

@@ -663,8 +663,11 @@ test("uses GitHub-only invite registration and keeps unconfigured providers fail
   const html = await signin.text();
   assert.match(html, /使用 GitHub 登录/);
   assert.match(html, /name="invitation_code"/);
-  assert.match(html, /已有账号可留空/);
+  assert.match(html, /首次注册必填/);
+  assert.match(html, /使用邀请码注册/);
+  assert.match(html, /href="\/api\/auth\/github\/start\?return_to=%2Fwallet"/);
   assert.match(html, /action="\/api\/auth\/github\/start"/);
+  assert.match(html, /method="get"/);
   assert.doesNotMatch(html, /使用 Google 登录|使用 ChatGPT 登录/);
   assert.match(html, /待配置/);
   for (const provider of ["google", "github"]) {
