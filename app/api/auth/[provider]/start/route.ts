@@ -36,7 +36,7 @@ async function startOAuth(request: Request, params: { provider: string }, invita
     const url = absoluteAppUrl(request, "/signin");
     url.searchParams.set("error", "not_configured");
     url.searchParams.set("provider", provider);
-    return NextResponse.redirect(url);
+    return oauthRedirect(request, url);
   }
 
   const invitationHash = invitationCode ? await hashInvitationCode(invitationCode) : null;
@@ -44,7 +44,7 @@ async function startOAuth(request: Request, params: { provider: string }, invita
     const url = absoluteAppUrl(request, "/signin");
     url.searchParams.set("error", "invitation_invalid");
     url.searchParams.set("return_to", returnTo);
-    return NextResponse.redirect(url);
+    return oauthRedirect(request, url);
   }
 
   const state = `${provider}.${randomToken(24)}`;
@@ -58,7 +58,13 @@ async function startOAuth(request: Request, params: { provider: string }, invita
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("scope", provider === "google" ? "openid email profile" : "read:user user:email");
   if (provider === "google") authorizeUrl.searchParams.set("access_type", "online");
-  return NextResponse.redirect(authorizeUrl);
+  return oauthRedirect(request, authorizeUrl);
+}
+
+function oauthRedirect(request: Request, url: URL) {
+  // The sign-in form submits with POST. A 307 would replay that POST against
+  // GitHub's authorize endpoint; 303 converts the next hop to the required GET.
+  return NextResponse.redirect(url, request.method === "POST" ? 303 : 307);
 }
 
 export function generateStaticParams() {

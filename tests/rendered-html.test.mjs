@@ -672,6 +672,13 @@ test("uses GitHub-only invite registration and keeps unconfigured providers fail
     assert.equal(response.status, 307);
     assert.match(response.headers.get("location") ?? "", /\/signin\?error=not_configured&provider=/);
   }
+  const submitted = await fetch(`${baseUrl}/api/auth/github/start`, {
+    method: "POST",
+    body: new URLSearchParams({ return_to: "/wallet" }),
+    redirect: "manual",
+  });
+  assert.equal(submitted.status, 303);
+  assert.match(submitted.headers.get("location") ?? "", /\/signin\?error=not_configured&provider=github/);
 });
 
 test("production public origin is explicit, HTTPS-only, and fail-closed", () => {
