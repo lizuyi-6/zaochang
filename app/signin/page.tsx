@@ -20,8 +20,10 @@ export default async function SignInPage({ searchParams }: PageProps) {
       ? "你取消了授权，当前没有登录。"
       : error === "invalid_state"
         ? "登录状态已过期，请重新开始。"
-        : error === "provider_error"
-          ? "第三方登录没有完成，请检查配置后重试。"
+          : error === "provider_error"
+            ? "第三方登录没有完成，请检查配置后重试。"
+          : error === "github_unreachable"
+            ? "当前网络暂时无法连接 GitHub，请检查网络后重新登录。"
           : error === "invitation_required"
             ? "这是首次注册，请输入邀请码后重新使用 GitHub 登录。"
             : error === "invitation_invalid"
@@ -51,7 +53,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
           </span>
         )}
         <div className="auth-divider">首次注册</div>
-        <form className="auth-invite-form" action="/api/auth/github/start" method="get">
+        <form className="auth-invite-form" action="/api/auth/github/start" method="post">
           <input type="hidden" name="return_to" value={returnTo} />
           <label htmlFor="invitation_code">
             邀请码

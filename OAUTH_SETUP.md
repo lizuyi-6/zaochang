@@ -42,8 +42,11 @@ GITHUB_OAUTH_CLIENT_SECRET=<secret>
 ```text
 PUBLIC_APP_ORIGIN=https://aetherstudio.top
 GITHUB_OAUTH_CLIENT_ID=Ov23livgjlLc01RdgmuN
+ZAOCHANG_FOUNDER_EMAIL=<创始人 GitHub 已验证邮箱，必须且只能配置一个>
 Authorization callback URL=https://aetherstudio.top/api/auth/github/callback
 ```
+
+`ZAOCHANG_FOUNDER_EMAIL` 只控制创始人身份呈现，必须同时单独列入 `ZAOCHANG_ADMIN_EMAILS` 才能访问管理中心。两项权限不互相推导：创始人变量缺失或配置多个值时，页面按普通成员显示；管理员白名单缺失时，后台继续拒绝全部访问。
 
 Client Secret 不写入本文件、仓库或发布包，只能存在于服务器受限环境文件或正式 Secrets 管理器。GitHub 应用页面必须只保留当前验证过的 Secret；任何曾暴露的旧 Secret 要在新 Secret 完成真实 token exchange 后立即删除。
 

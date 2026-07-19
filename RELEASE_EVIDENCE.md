@@ -236,3 +236,28 @@
 - 未执行真实支付/退款 UI、真实审核决定、真实邀请码生命周期、举报提交、全新外部 GitHub 身份 callback、Google OAuth、320px/移动真机、弱网、跨机恢复、外部告警和正式延迟 SLO。
 - 回环 iframe 有同源 sandbox 警告与固定生产 origin 的 postMessage 警告；后两条由 `127.0.0.1` 隧道 origin 不匹配触发。没有在公网 origin 的 DevTools 会话重新证明 warning=0。
 - 本地外部明文 HTTP 被 `Server=Beaver` 返回 403，未到达 Nginx；只有服务器本机端口 80 `301 → HTTPS` 证据，缺少另一网络对公网 80 的终态验证。
+
+## 2026-07-19 GitHub 连接与创始人候选证据
+
+- OAuth start 命题：待证命题是“GitHub 不可达时，用户在有限时间内看见失败；可达时才离开造场”。动态反例在模拟 DOM 中连续触发三次 `image.onerror`，字段为 `navigatedTo == '' && actions.visible == true`；随后重试并触发 `image.onload`，字段为 `new URL(navigatedTo).hostname == github.com`。生产集成测试同时断言 `status == 200`、`maxAttempts == 3`、`timeoutMs == 5000`、CSP 精确相等、state Cookie 含 `HttpOnly/Secure/SameSite=Lax` 且 `decodeURIComponent(pageState) == cookieState`。这些字段不证明公网 GitHub 当前可达。
+- 回调超时命题：一次性 token exchange 不得自动重放。慢 provider 反例断言 `requestCount == 1` 且 50ms 测试上限触发 `TimeoutError`；生产配置为 token 12 秒、profile/email 各 8 秒。它证明有界和单次请求，不证明真实 GitHub token 响应成功。
+- 邀请码保密命题：登录表单 HTML 与源码均断言 `method == post` 且不存在 GET 表单。该字段证明浏览器不会把表单字段编码进 action URL；公网 Nginx 日志尚未在新版本复验。
+- 创始人权限命题：充分字段为 `founderProducts.length == 6`、每项 `ownerName == Abraham Valerio`、创始人 profile/admin 均 200、普通成员 admin 404、普通成员 HTML 不含 `/admin` 链接。`ZAOCHANG_FOUNDER_EMAIL` 缺失或多值时 `isFounderEmail == false`，管理权限仍由独立管理员白名单决定。线上只读 SQL 显示业务 products 为 0 行，因此未执行 owner_email/财务归属迁移。
+- 完整套件：`npm test` 退出码 `0`，`tests=75 / pass=75 / fail=0 / cancelled=0 / skipped=0 / todo=0`，包含生产构建、OAuth、邀请、管理权限、果子支付、退款、审核、上传和创始人身份字段。定向原失败用例为 `2 pass / 0 fail`。
+- 静态门禁：TypeScript 退出 `0`；修改文件定向 ESLint `0 errors / 3 warnings`；npm audit `0 vulnerabilities`；Drizzle `40 tables / No schema changes`；skip/only 与凭据扫描均无命中；diff check 退出 `0`。
+
+### 候选逐文件证据
+
+- `app/api/auth/[provider]/start/route.ts`、`github-connection-page.ts`、`app/lib/security-policy.ts`：生产集成测试直接断言同源 200、精确 CSP、安全 state Cookie 与连接页失败/重试字段。
+- `app/api/auth/[provider]/callback/route.ts`、`app/lib/fetch-with-timeout.ts`：慢 provider 反例断言一次请求与 TimeoutError；真实 GitHub callback 未验证。
+- `app/signin/page.tsx`：服务端 HTML 和源码断言 POST 邀请表单；公网日志未验证。
+- `app/api/_lib/admin.ts`、`app/layout.tsx`、`app/components/site-shell.tsx`：创始人/管理员独立判定，创始人管理入口 200 与普通成员 404/无入口反例通过。
+- `app/lib/community-data.ts`、`app/components/product-card.tsx`、`app/product/[slug]/product-experience.tsx`、`app/profile/page.tsx`、`app/globals.css`：六个静态应用 owner 与创始人标识由服务端 HTML 字段覆盖；像素、溢出与移动端尚未单独验证。
+- `worker/index.ts`：生产安全头映射由 GitHub start 集成响应字段覆盖；独立边缘部署尚未验证。
+- `tests/rendered-html.test.mjs`：迁移和测试 SQL 改为同一 SQLite WAL 文件的事务；完整 75 项通过。Node SQLite experimental 警告仍存在。
+- `OAUTH_SETUP.md`、`RELEASE_RUNBOOK.md`、`PROJECT_STATUS.md`、`RELEASE_EVIDENCE.md`：记录配置、回滚条件、事实与未覆盖范围；文档自身不构成运行证明。
+
+### 未覆盖范围
+
+- 候选尚未提交、合并、部署；线上仍是 r12，不能把本节本地证据外推为公网行为。
+- 真实 GitHub 授权/callback、邀请码不进入 Nginx 日志、浏览器像素/控制台、移动端、favicon 单点被阻断网络、Google OAuth、弱网、跨机恢复与外部告警未验证。

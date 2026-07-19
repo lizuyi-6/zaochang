@@ -2,6 +2,7 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { resolvePublicAppOrigin } from "../app/lib/public-origin";
+import { GITHUB_CONNECTION_CSP } from "../app/lib/security-policy";
 
 interface Env {
   ASSETS: Fetcher;
@@ -88,20 +89,22 @@ async function prepareRequestBody(request: Request) {
 function withSecurityHeaders(request: Request, response: Response, publicOrigin: string) {
   const url = new URL(request.url);
   const sameOriginEmbed = url.pathname.startsWith("/product-apps/");
+  const githubConnection = url.pathname === "/api/auth/github/start";
   const headers = new Headers(response.headers);
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", sameOriginEmbed ? "SAMEORIGIN" : "DENY");
-  headers.set("referrer-policy", "strict-origin-when-cross-origin");
-  headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(self), payment=()");
+  headers.set("referrer-policy", githubConnection ? "no-referrer" : "strict-origin-when-cross-origin");
+  headers.set("permissions-policy", githubConnection
+    ? "camera=(), microphone=(), geolocation=(), payment=()"
+    : "camera=(), microphone=(), geolocation=(self), payment=()");
   headers.set("cross-origin-opener-policy", "same-origin");
   if (new URL(publicOrigin).protocol === "https:") {
     headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
   }
   if ((headers.get("content-type") ?? "").startsWith("text/html")) {
-    headers.set(
-      "content-security-policy",
-      `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors ${sameOriginEmbed ? "'self'" : "'none'"}; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:`,
-    );
+    headers.set("content-security-policy", githubConnection
+      ? GITHUB_CONNECTION_CSP
+      : `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors ${sameOriginEmbed ? "'self'" : "'none'"}; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:`);
   }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

@@ -15,6 +15,7 @@ import {
   requestSecure,
 } from "../../../../oauth-session";
 import { cookies } from "next/headers";
+import { fetchWithTimeout } from "../../../../lib/fetch-with-timeout";
 
 type Params = { params: Promise<{ provider: string }> };
 type OAuthProfile = { providerId: string; email: string; displayName: string; avatarUrl: string | null };
@@ -64,15 +65,15 @@ async function fetchGoogleProfile(code: string, clientId: string, clientSecret: 
 }
 
 async function fetchGitHubProfile(code: string, clientId: string, clientSecret: string, redirectUri: string): Promise<OAuthProfile> {
-  const tokenResponse = await fetch("https://github.com/login/oauth/access_token", { method: "POST", headers: { accept: "application/json", "content-type": "application/json" }, body: JSON.stringify({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri }) });
+  const tokenResponse = await fetchWithTimeout("https://github.com/login/oauth/access_token", { method: "POST", headers: { accept: "application/json", "content-type": "application/json" }, body: JSON.stringify({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri }) }, 12_000);
   if (!tokenResponse.ok) throw new Error("GitHub token exchange failed");
   const token = await tokenResponse.json() as { access_token?: string };
   if (!token.access_token) throw new Error("GitHub access token missing");
   const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${token.access_token}`, "user-agent": "zaochang" };
-  const profileResponse = await fetch("https://api.github.com/user", { headers });
+  const profileResponse = await fetchWithTimeout("https://api.github.com/user", { headers }, 8_000);
   if (!profileResponse.ok) throw new Error("GitHub profile request failed");
   const profile = await profileResponse.json() as { id?: number; login?: string; name?: string; email?: string | null; avatar_url?: string };
-  const emailResponse = await fetch("https://api.github.com/user/emails", { headers });
+  const emailResponse = await fetchWithTimeout("https://api.github.com/user/emails", { headers }, 8_000);
   if (!emailResponse.ok) throw new Error("GitHub verified email request failed");
   const emails = await emailResponse.json() as Array<{ email: string; primary?: boolean; verified?: boolean }>;
   const email = emails.find((item) => item.primary && item.verified)?.email || emails.find((item) => item.verified)?.email;

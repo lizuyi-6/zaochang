@@ -17,6 +17,7 @@ import {
   Plus,
   Radio,
   Search,
+  ShieldCheck,
   Sparkles,
   Trophy,
   UserRound,
@@ -29,7 +30,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { circles, products } from "../lib/community-data";
 
-type Member = { signedIn: boolean; displayName: string; initial: string };
+type Member = { signedIn: boolean; displayName: string; initial: string; isAdmin: boolean; isFounder: boolean };
 type CircleStat = { slug: string; members: number; recentDiscussions: number };
 
 const navItems = [
@@ -59,6 +60,7 @@ const routeNames: Record<string, string> = {
   "/guide": "社区指南",
   "/developers": "开发者接入",
   "/developers/docs": "身份与果子 API",
+  "/admin": "管理中心",
 };
 
 function routeIsActive(pathname: string, href: string) {
@@ -197,7 +199,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
           </Link>
           <Link className="deep-create" href="/studio/new"><Plus size={17} /> 发布作品</Link>
           {member.signedIn ? (
-            <button className="deep-account" onClick={() => setAccountOpen((value) => !value)} title="账户菜单" aria-label="打开账户菜单" aria-expanded={accountOpen}>
+            <button className={`deep-account${member.isFounder ? " founder" : ""}`} onClick={() => setAccountOpen((value) => !value)} title={member.isFounder ? "创始人账户菜单" : "账户菜单"} aria-label="打开账户菜单" aria-expanded={accountOpen}>
               <span className="deep-avatar ink">{member.initial}</span><ChevronDown size={14} />
             </button>
           ) : (
@@ -207,10 +209,11 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         <AnimatePresence>
           {member.signedIn && accountOpen && (
             <motion.div className="account-menu" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
-              <div><span className="deep-avatar ink">{member.initial}</span><span><strong>{member.displayName}</strong><small>造场成员</small></span></div>
+              <div><span className="deep-avatar ink">{member.initial}</span><span><strong>{member.displayName}</strong><small className={member.isFounder ? "founder-role" : ""}>{member.isFounder ? "造场创始人" : member.isAdmin ? "平台管理员" : "造场成员"}</small></span></div>
               <Link href="/profile"><UserRound size={15} /> 个人主页</Link>
               <Link href="/profile/edit"><Layers3 size={15} /> 编辑资料</Link>
               <Link href="/developers"><Blocks size={15} /> 开发者接入</Link>
+              {member.isAdmin && <Link href="/admin"><ShieldCheck size={15} /> 管理中心</Link>}
               <a href="/api/auth/logout?return_to=%2F"><LogOut size={15} /> 退出登录</a>
             </motion.div>
           )}
@@ -236,6 +239,10 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
               {routeIsActive(pathname, "/wallet") && <motion.span className="deep-nav-active" layoutId="deep-nav-active" />}
               <WalletCards size={19} /><span>果子钱包</span>
             </Link>
+            {member.isAdmin && <Link href="/admin" className={routeIsActive(pathname, "/admin") ? "active admin-entry" : "admin-entry"}>
+              {routeIsActive(pathname, "/admin") && <motion.span className="deep-nav-active" layoutId="deep-nav-active" />}
+              <ShieldCheck size={19} /><span>管理中心</span>
+            </Link>}
           </LayoutGroup>
         </nav>
 

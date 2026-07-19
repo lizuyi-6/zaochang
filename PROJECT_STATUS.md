@@ -444,3 +444,16 @@
 - 本轮改动可能引入的新风险：新增 H1 会增加匿名/空状态提示的垂直高度；390px 稳定态未溢出不证明 320px、系统大字体或移动真机。官方应用 iframe 在回环隧道仍有 `allow-scripts + allow-same-origin` 浏览器警告；当前只承载仓库内官方静态应用且用户外链产品不能获批，但未来若允许不受信任包进入同源命名空间，必须重新隔离 origin。
 - 清理：服务器归档和 5 个 r12 临时脚本逐项断言不存在；Playwright 下载、控制台和审计脚本仍保留在 Git 忽略的 `output/` 目录作为本机证据，不进入仓库或发布包。
 - 未覆盖范围：真实支付/退款 UI、真实审核批准/驳回、真实邀请码创建/撤销、举报提交、使用新外部 GitHub 身份跑完 callback、Google OAuth、320px/移动真机、弱网、跨机灾备恢复、外部告警投递和正式延迟 SLO 仍未覆盖。本节证明公开测试流程，不证明托管 D1/R2、高可用或正式生产发布。
+
+## 2026-07-19 GitHub 连接可见失败与创始人身份候选
+
+- 状态：部分完成；本地候选尚未提交、合并或部署，线上仍运行 `/opt/zaochang/releases/20260719-091200-ea2748b-flow-audit-r12`。服务器应用只读字段为 `active/running / NRestarts=0 / ExecMainStatus=0`。
+- GitHub 根因：应用 start 在约 4ms 内返回 307，但服务器与当前网络到 `github.com/login` 的 TCP/TLS 建连随机超时，而 `api.github.com` 可达；旧流程让浏览器离开造场后无限等待。候选改为同源 200 连接页，三次探测 `https://github.com/favicon.ico`、每次 5 秒；任一次 `load` 成功才 `location.replace()` 到官方授权页，`error` 或超时均计为失败，全部失败则停在明确错误态并提供重试/返回登录。start 的 CSP 精确限制为 `default-src 'none' / img-src https://github.com / frame-ancestors 'none' / form-action 'none'`。
+- 安全语义变更：登录页邀请码从 `GET` 改为 `POST`，避免邀请码进入 URL、浏览器历史和 Nginx access log。GitHub token exchange 采用 12 秒上限，profile/email 各 8 秒；一次性授权码 POST 不自动重放。该变更尚未部署，因此 r12 仍保留旧行为。
+- 创始人身份：新增独立 `ZAOCHANG_FOUNDER_EMAIL`，缺失或配置多个值时按普通成员显示；它不自动授予管理权限，管理入口仍要求独立命中 `ZAOCHANG_ADMIN_EMAILS`。六个内置应用归属 `Abraham Valerio` 并保留各自产品配色；账号菜单、侧栏和个人主页展示创始人身份与管理中心入口，普通成员 `/admin` 仍为 404。
+- 线上归属核对：真实业务库只有一个 GitHub 身份 `displayName=Abraham Valerio`，业务 `products` 表当前无记录；因此本轮没有批量修改数据库 `owner_email`，也没有改变任何果子收款人、订单或账本。
+- 本地完整门禁：`npm test` 退出码 `0`，统计 `75 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`，包含 Vite 生产构建；创始人用例断言 `founderProducts.length == 6`、六项 owner 相等、创始人 `/admin == 200`、普通成员 `/admin == 404`。GitHub start 用例断言同源 HTML、state Cookie 与页面 state 相等、`HttpOnly/Secure/SameSite=Lax` 及精确 CSP；token 超时用例断言一次请求且有界失败。
+- 其余门禁：直接 TypeScript 编译退出 `0`；本轮 15 个代码/测试文件 ESLint 为 `0 errors / 3 existing img warnings`；`npm audit --audit-level=high` 为 `0 vulnerabilities`；Drizzle 为 `40 tables / No schema changes`；禁用/单跑测试扫描为 `NO_SKIP_OR_ONLY_MATCHES`；凭据模式扫描为 `NO_CREDENTIAL_PATTERN_MATCHES`；`git diff --check` 退出 `0`。
+- 测试基础设施反例：旧套件依赖 Wrangler 在外部 `d1 execute` 后热重载，曾出现 `72 pass / 2 fail`，两个失败均为 30 秒内未连续恢复三次；逐次强制重启方案又在 15 分钟超时。候选改为一次 Wrangler 建库、同一 SQLite WAL 文件中的事务化测试 SQL，定向原失败用例为 `2 pass / 0 fail / 0 skipped / 0 todo`，完整套件耗时降至约 34 秒测试阶段。该 Node SQLite 连接只存在于测试文件，不进入生产 worker。
+- 本轮改动可能引入的新风险：GitHub 连接页依赖 favicon 探针；若 GitHub 授权端点可达但 favicon 被网络策略单独阻断，会显示可重试错误而不进入授权。创始人显示名目前与已核对 GitHub 身份一致，后续 GitHub 展示名变化不会自动重写静态产品作者文案。Node 22 的 `node:sqlite` 仍标记 experimental，但仓库与 CI 最低版本均为 Node `22.13.0`。
+- 未覆盖范围：尚未在公网新版本执行真实 GitHub 授权、callback token exchange、邀请码 POST 的 Nginx 日志反例、创始人账号浏览器像素与移动布局、GitHub favicon 单独被阻断的企业网络、Google OAuth、移动真机和弱网。部署、回退、线上 Cookie/CSP 与浏览器证据仍待本候选合并后取得。

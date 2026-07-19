@@ -12,6 +12,8 @@ import {
   safeReturnPath,
   setOAuthState,
 } from "../../../../oauth-session";
+import { GITHUB_CONNECTION_CSP } from "../../../../lib/security-policy";
+import { githubConnectionPage } from "./github-connection-page";
 
 type Params = { params: Promise<{ provider: string }> };
 
@@ -60,6 +62,20 @@ async function startOAuth(request: Request, params: { provider: string }, invita
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("scope", provider === "google" ? "openid email profile" : "read:user user:email");
   if (provider === "google") authorizeUrl.searchParams.set("access_type", "online");
+  if (provider === "github") {
+    return new NextResponse(githubConnectionPage(authorizeUrl, returnTo), {
+      status: 200,
+      headers: {
+        "cache-control": "no-store, max-age=0",
+        "content-security-policy": GITHUB_CONNECTION_CSP,
+        "content-type": "text/html; charset=utf-8",
+        "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+      },
+    });
+  }
   return oauthRedirect(request, authorizeUrl);
 }
 

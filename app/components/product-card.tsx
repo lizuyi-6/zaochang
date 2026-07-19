@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Coins, Eye, Heart, Play } from "lucide-react";
+import { BadgeCheck, Coins, Eye, Heart, Play } from "lucide-react";
 import Link from "next/link";
 import { compactNumber, type Product } from "../lib/community-data";
 import { ReportButton } from "./report-button";
@@ -32,7 +32,7 @@ export function ProductCard({ product, index = 0, large = false }: { product: Pr
         <p>{product.description}</p>
         <div className="deep-product-meta">
           <span className={`deep-avatar ${product.coverTheme}`}>{product.ownerInitial}</span>
-          <strong>{product.ownerName}</strong>
+          <strong>{product.ownerName}{product.founderOwned && <BadgeCheck className="founder-product-mark" size={13} aria-label="造场创始人" />}</strong>
           <span><Eye size={14} /> {compactNumber(product.plays)}</span>
           <span><Heart size={14} /> {compactNumber(product.likes)}</span>
           {typeof product.id === "number" && <ReportButton targetType="product" targetRef={String(product.id)} />}

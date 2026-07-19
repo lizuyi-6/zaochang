@@ -81,6 +81,7 @@ ZAOCHANG_ADMIN_EMAILS
 - 未审核客户端获得果子写权限。
 - 伪造身份头可在生产环境创建登录态。
 - 管理员白名单为空时仍有人可访问后台。
+- `ZAOCHANG_FOUNDER_EMAIL` 配置为多个账号，或创始人账号不在 `ZAOCHANG_ADMIN_EMAILS` 时仍显示管理入口。
 - 没有 `product_review_decisions` 当前版本记录时，产品能被直接改成 `approved/published`。
 - 待审或驳回产品仍能新增订单、点赞、产品评论、打赏或点赞奖励。
 
