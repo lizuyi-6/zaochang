@@ -94,7 +94,7 @@ export function CreateProductFlow() {
           </motion.section>
         </AnimatePresence>
 
-        <div className="create-flow-actions"><button type="button" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}><ArrowLeft size={16} /> 上一步</button>{step < 2 ? <button type="button" className="primary-action" onClick={next}>继续 <ArrowRight size={17} /></button> : <button className="primary-action" disabled={submitting}>{submitting ? "提交中" : "提交平台预审"}<Sparkles size={16} /></button>}</div>
+        <div className="create-flow-actions"><button type="button" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}><ArrowLeft size={16} /> 上一步</button>{step < 2 ? <button key="next-step" type="button" className="primary-action" onClick={next}>继续 <ArrowRight size={17} /></button> : <button key="submit-product" type="submit" className="primary-action" disabled={submitting}>{submitting ? "提交中" : "提交平台预审"}<Sparkles size={16} /></button>}</div>
       </form>
     </div>
   );

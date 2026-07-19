@@ -665,11 +665,14 @@ test("uses GitHub-only invite registration and keeps unconfigured providers fail
   assert.match(html, /name="invitation_code"/);
   assert.match(html, /首次注册必填/);
   assert.match(html, /使用邀请码注册/);
-  assert.match(html, /href="\/api\/auth\/github\/start\?return_to=%2Fwallet"/);
   assert.match(html, /action="\/api\/auth\/github\/start"/);
   assert.match(html, /method="get"/);
   assert.doesNotMatch(html, /使用 Google 登录|使用 ChatGPT 登录/);
   assert.match(html, /待配置/);
+  assert.match(html, /class="auth-provider github is-disabled" aria-disabled="true"/);
+  assert.doesNotMatch(html, /href="\/api\/auth\/github\/start\?return_to=%2Fwallet"/);
+  const source = readFileSync(join(projectRoot, "app", "signin", "page.tsx"), "utf8");
+  assert.match(source, /<a className="auth-provider github" href=\{loginHref\}>/);
   for (const provider of ["google", "github"]) {
     const response = await fetch(`${baseUrl}/api/auth/${provider}/start?return_to=%2Fwallet`, { redirect: "manual" });
     assert.equal(response.status, 307);
@@ -915,6 +918,28 @@ test("product galaxy maps every planet to a real product and business sector", (
   assert.equal(new Set(GALAXY_PRODUCTS.map((product) => product.name)).size, 12);
   assert.equal(GALAXY_PRODUCTS.every((product) => PRODUCT_BY_PLANET[product.planetId] === product), true);
   assert.equal(GALAXY_PRODUCTS.every((product) => product.status.length > 0 && product.capabilities.length === 3), true);
+});
+
+test("incubation console distinguishes signed-out access from an empty signed-in account", async () => {
+  const anonymous = await fetch(`${baseUrl}/galaxy/incubator`, { headers: { accept: "text/html" } });
+  assert.equal(anonymous.status, 200);
+  const anonymousHtml = await anonymous.text();
+  assert.match(anonymousHtml, /登录后查看项目孵化进度/);
+  assert.doesNotMatch(anonymousHtml, /当前账号还没有孵化项目/);
+
+  const member = await fetch(`${baseUrl}/galaxy/incubator`, {
+    headers: { ...authHeaders("空轨道成员", `empty-incubator-${runId}@example.com`), accept: "text/html" },
+  });
+  assert.equal(member.status, 200);
+  const memberHtml = await member.text();
+  assert.match(memberHtml, /当前账号还没有孵化项目/);
+  assert.doesNotMatch(memberHtml, /登录后查看项目孵化进度/);
+});
+
+test("product creation keeps navigation and submission as distinct controls", () => {
+  const source = readFileSync(join(projectRoot, "app", "studio", "new", "create-product-flow.tsx"), "utf8");
+  assert.match(source, /key="next-step" type="button"/);
+  assert.match(source, /key="submit-product" type="submit"/);
 });
 
 test("rejects anonymous product publishing", async () => {
