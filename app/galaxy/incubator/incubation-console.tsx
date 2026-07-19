@@ -63,8 +63,8 @@ export function IncubationConsole({ signedIn }: { signedIn: boolean }) {
     setDetail({ title: item.name, eyebrow: `ORBIT STAGE / ${String(index + 1).padStart(2, "0")}`, body: index === stageIndex ? project?.waitingReason ?? "等待状态更新" : index < stageIndex ? "该阶段已由造场运营人员明确更新为完成。" : "上一阶段形成结论后才会进入这里。", items: [`状态：${item.state}`, `负责人：${index === stageIndex ? project?.assignedOwner || "尚未分配" : "以阶段记录为准"}`, `更新时间：${project?.updatedAt || "尚无"}`, `完成条件：由运营人员在阶段反馈中说明`] });
   };
 
-  if (!signedIn) return <div className={styles.consolePage}><section className={styles.demoNotice}><LogIn size={15} /><p>登录后查看项目孵化进度。阶段、当前任务、等待原因和项目资料只对本人开放。</p><Link href="/signin?return_to=%2Fgalaxy%2Fincubator">登录造场</Link></section></div>;
-  if (!project) return <div className={styles.consolePage}><section className={styles.demoNotice}><CircleAlert size={15} /><p>当前账号还没有孵化项目。提交后才会生成真实项目轨道，不展示示例进度。</p><Link href="/galaxy/apply">提交项目</Link></section></div>;
+  if (!signedIn) return <div className={styles.consolePage}><section className={styles.demoNotice}><LogIn size={15} /><div><h1>项目孵化控制台</h1><p>登录后查看项目孵化进度。阶段、当前任务、等待原因和项目资料只对本人开放。</p></div><Link href="/signin?return_to=%2Fgalaxy%2Fincubator">登录造场</Link></section></div>;
+  if (!project) return <div className={styles.consolePage}><section className={styles.demoNotice}><CircleAlert size={15} /><div><h1>项目孵化控制台</h1><p>当前账号还没有孵化项目。提交后才会生成真实项目轨道，不展示示例进度。</p></div><Link href="/galaxy/apply">提交项目</Link></section></div>;
 
   return <div className={styles.consolePage}>
     <section className={styles.consoleHero}>

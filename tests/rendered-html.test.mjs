@@ -924,6 +924,7 @@ test("incubation console distinguishes signed-out access from an empty signed-in
   const anonymous = await fetch(`${baseUrl}/galaxy/incubator`, { headers: { accept: "text/html" } });
   assert.equal(anonymous.status, 200);
   const anonymousHtml = await anonymous.text();
+  assert.match(anonymousHtml, /<h1>项目孵化控制台<\/h1>/);
   assert.match(anonymousHtml, /登录后查看项目孵化进度/);
   assert.doesNotMatch(anonymousHtml, /当前账号还没有孵化项目/);
 
@@ -932,6 +933,7 @@ test("incubation console distinguishes signed-out access from an empty signed-in
   });
   assert.equal(member.status, 200);
   const memberHtml = await member.text();
+  assert.match(memberHtml, /<h1>项目孵化控制台<\/h1>/);
   assert.match(memberHtml, /当前账号还没有孵化项目/);
   assert.doesNotMatch(memberHtml, /登录后查看项目孵化进度/);
 });

@@ -272,6 +272,8 @@
 .memberRow strong { font-size: 8px; }
 .memberRow small { color: var(--faint); font-size: 7px; }
 .demoNotice { align-items: center; border: 1px solid rgb(120 174 178 / 26%); color: var(--muted); display: flex; font-size: 8px; gap: 8px; margin-top: 22px; padding: 11px 14px; }
+.demoNotice > div { min-width: 0; }
+.demoNotice h1 { color: var(--text); font-family: "Songti SC", STSong, serif; font-size: 14px; font-weight: 500; margin: 0 0 3px; }
 .demoNotice p { margin: 0; }
 .demoNotice a { color: #bdd2d5; margin-left: auto; }
 .asideEmpty { color: var(--faint); font-size: 8px; padding: 22px 0 10px; }
