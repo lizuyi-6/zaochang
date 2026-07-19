@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { isAdminEmail, isFounderEmail } from "./api/_lib/admin";
 import { getChatGPTUser } from "./chatgpt-auth";
 import { SiteShell } from "./components/site-shell";
 import "./globals.css";
@@ -14,8 +15,14 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const user = await getChatGPTUser();
   const member = user
-    ? { signedIn: true, displayName: user.displayName, initial: (user.displayName.trim()[0] || "造").toUpperCase() }
-    : { signedIn: false, displayName: "游客", initial: "游" };
+    ? {
+        signedIn: true,
+        displayName: user.displayName,
+        initial: (user.displayName.trim()[0] || "造").toUpperCase(),
+        isAdmin: isAdminEmail(user.email),
+        isFounder: isFounderEmail(user.email),
+      }
+    : { signedIn: false, displayName: "游客", initial: "游", isAdmin: false, isFounder: false };
 
   return (
     <html lang="zh-CN">

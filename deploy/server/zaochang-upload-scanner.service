@@ -1,0 +1,33 @@
+[Unit]
+Description=Zaochang fail-closed upload malware scanner
+After=network.target
+Before=zaochang.service
+
+[Service]
+Type=simple
+User=zaochang
+Group=zaochang
+WorkingDirectory=/opt/zaochang/current
+Environment=NODE_ENV=production
+Environment=SCANNER_TEMP_DIR=/var/lib/zaochang/scanner
+EnvironmentFile=/etc/zaochang/scanner.env
+ExecStart=/usr/bin/node /opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=90
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/zaochang/scanner
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryHigh=1000M
+MemoryMax=1150M
+MemorySwapMax=1800M
+CPUQuota=150%
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

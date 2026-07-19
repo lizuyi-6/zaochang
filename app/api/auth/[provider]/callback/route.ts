@@ -5,14 +5,17 @@ import {
   createOAuthSession,
   ensureOAuthUser,
   isOAuthProvider,
+  OAUTH_INVITE_COOKIE,
   OAUTH_RETURN_COOKIE,
   OAUTH_STATE_COOKIE,
   providerConfig,
+  RegistrationInviteError,
   safeReturnPath,
   setAuthCookies,
   requestSecure,
 } from "../../../../oauth-session";
 import { cookies } from "next/headers";
+import { fetchWithTimeout } from "../../../../lib/fetch-with-timeout";
 
 type Params = { params: Promise<{ provider: string }> };
 type OAuthProfile = { providerId: string; email: string; displayName: string; avatarUrl: string | null };
@@ -37,11 +40,13 @@ export async function GET(request: Request, { params }: Params) {
       ? await fetchGoogleProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider))
       : await fetchGitHubProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider));
     const user = { displayName: profile.displayName, email: profile.email, fullName: profile.displayName };
-    const canonicalUser = await ensureOAuthUser(user, provider, profile.providerId, profile.avatarUrl);
+    const invitationHash = cookieStore.get(OAUTH_INVITE_COOKIE)?.value ?? null;
+    const canonicalUser = await ensureOAuthUser(user, provider, profile.providerId, profile.avatarUrl, invitationHash);
     const session = await createOAuthSession(canonicalUser, provider);
     const destination = await setAuthCookies(session.token, returnTo, await requestSecure(request));
     return NextResponse.redirect(absoluteAppUrl(request, destination));
   } catch (error) {
+    if (error instanceof RegistrationInviteError) return redirectError(request, error.code);
     console.error("OAuth callback failed", error);
     return redirectError(request, "provider_error");
   }
@@ -60,15 +65,15 @@ async function fetchGoogleProfile(code: string, clientId: string, clientSecret: 
 }
 
 async function fetchGitHubProfile(code: string, clientId: string, clientSecret: string, redirectUri: string): Promise<OAuthProfile> {
-  const tokenResponse = await fetch("https://github.com/login/oauth/access_token", { method: "POST", headers: { accept: "application/json", "content-type": "application/json" }, body: JSON.stringify({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri }) });
+  const tokenResponse = await fetchWithTimeout("https://github.com/login/oauth/access_token", { method: "POST", headers: { accept: "application/json", "content-type": "application/json" }, body: JSON.stringify({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri }) }, 12_000);
   if (!tokenResponse.ok) throw new Error("GitHub token exchange failed");
   const token = await tokenResponse.json() as { access_token?: string };
   if (!token.access_token) throw new Error("GitHub access token missing");
   const headers = { accept: "application/vnd.github+json", authorization: `Bearer ${token.access_token}`, "user-agent": "zaochang" };
-  const profileResponse = await fetch("https://api.github.com/user", { headers });
+  const profileResponse = await fetchWithTimeout("https://api.github.com/user", { headers }, 8_000);
   if (!profileResponse.ok) throw new Error("GitHub profile request failed");
   const profile = await profileResponse.json() as { id?: number; login?: string; name?: string; email?: string | null; avatar_url?: string };
-  const emailResponse = await fetch("https://api.github.com/user/emails", { headers });
+  const emailResponse = await fetchWithTimeout("https://api.github.com/user/emails", { headers }, 8_000);
   if (!emailResponse.ok) throw new Error("GitHub verified email request failed");
   const emails = await emailResponse.json() as Array<{ email: string; primary?: boolean; verified?: boolean }>;
   const email = emails.find((item) => item.primary && item.verified)?.email || emails.find((item) => item.verified)?.email;
@@ -79,5 +84,11 @@ async function fetchGitHubProfile(code: string, clientId: string, clientSecret: 
 function redirectError(request: Request, error: string) {
   const url = absoluteAppUrl(request, "/signin");
   url.searchParams.set("error", error);
-  return NextResponse.redirect(url);
+  const response = NextResponse.redirect(url);
+  const secure = url.protocol === "https:";
+  const options = { httpOnly: true, secure, sameSite: "lax" as const, path: "/", maxAge: 0 };
+  response.cookies.set(OAUTH_STATE_COOKIE, "", options);
+  response.cookies.set(OAUTH_RETURN_COOKIE, "", options);
+  response.cookies.set(OAUTH_INVITE_COOKIE, "", options);
+  return response;
 }

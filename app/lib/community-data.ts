@@ -2,6 +2,7 @@ export type Product = {
   id: string | number;
   slug?: string;
   official?: boolean;
+  founderOwned?: boolean;
   ownerName: string;
   ownerInitial: string;
   title: string;
@@ -20,6 +21,9 @@ export type Product = {
   release: string;
   tags: string[];
 };
+
+export const FOUNDER_DISPLAY_NAME = "Abraham Valerio";
+export const FOUNDER_INITIAL = "A";
 
 export type CommunityPost = {
   id: string | number;
@@ -40,8 +44,9 @@ export const products: Product[] = [
   {
     id: "mori",
     slug: "mori",
-    ownerName: "林默",
-    ownerInitial: "林",
+    founderOwned: true,
+    ownerName: FOUNDER_DISPLAY_NAME,
+    ownerInitial: FOUNDER_INITIAL,
     title: "MORI 专注森林",
     description: "把专注时段变成会生长的声音景观。",
     longDescription:
@@ -62,8 +67,9 @@ export const products: Product[] = [
   {
     id: "wander",
     slug: "wander",
-    ownerName: "小路",
-    ownerInitial: "路",
+    founderOwned: true,
+    ownerName: FOUNDER_DISPLAY_NAME,
+    ownerInitial: FOUNDER_INITIAL,
     title: "漫游路线生成器",
     description: "给我 40 分钟，带你绕开熟悉的街道。",
     longDescription:
@@ -85,8 +91,9 @@ export const products: Product[] = [
     id: "typewave",
     slug: "typewave",
     official: true,
-    ownerName: "Niko",
-    ownerInitial: "N",
+    founderOwned: true,
+    ownerName: FOUNDER_DISPLAY_NAME,
+    ownerInitial: FOUNDER_INITIAL,
     title: "字浪排版实验室",
     description: "用节奏控制字距、重量与呼吸。",
     longDescription:
@@ -107,8 +114,9 @@ export const products: Product[] = [
   {
     id: "loops",
     slug: "loops",
-    ownerName: "阿声",
-    ownerInitial: "声",
+    founderOwned: true,
+    ownerName: FOUNDER_DISPLAY_NAME,
+    ownerInitial: FOUNDER_INITIAL,
     title: "四拍 Loop 厨房",
     description: "把窗外的声音切成一段可以分享的节拍。",
     longDescription:
@@ -129,8 +137,9 @@ export const products: Product[] = [
   {
     id: "sprout",
     slug: "sprout",
-    ownerName: "松果工作室",
-    ownerInitial: "松",
+    founderOwned: true,
+    ownerName: FOUNDER_DISPLAY_NAME,
+    ownerInitial: FOUNDER_INITIAL,
     title: "阳台芽点日志",
     description: "轻量记录光照、浇水和每一片新叶。",
     longDescription:
@@ -151,8 +160,9 @@ export const products: Product[] = [
   {
     id: "minute",
     slug: "minute",
-    ownerName: "西米",
-    ownerInitial: "西",
+    founderOwned: true,
+    ownerName: FOUNDER_DISPLAY_NAME,
+    ownerInitial: FOUNDER_INITIAL,
     title: "一分钟小剧场",
     description: "把今天最普通的一句话变成一场微型演出。",
     longDescription:

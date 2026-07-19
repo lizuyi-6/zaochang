@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check, ChevronRight, CircleAlert, FileText, MessageSquareText, Plus, Upload, UserRound, Users } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, CircleAlert, FileText, LogIn, MessageSquareText, Plus, Upload, UserRound, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "../ecosystem.module.css";
@@ -12,7 +12,7 @@ type Material = { id: number; name: string; url: string; kind: string; createdAt
 type Feedback = { id: number; kind: string; content: string; createdAt: string };
 type DetailPanel = { title: string; eyebrow: string; body: string; items: string[]; action?: "upload" };
 
-export function IncubationConsole() {
+export function IncubationConsole({ signedIn }: { signedIn: boolean }) {
   const [project, setProject] = useState<StoredProject | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
@@ -22,13 +22,14 @@ export function IncubationConsole() {
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!signedIn) return;
     fetch("/api/incubation", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
       const payload = data as { project?: StoredProject | null; materials?: Material[]; feedback?: Feedback[] } | null;
       setProject(payload?.project ?? null);
       setMaterials(payload?.materials ?? []);
       setFeedback(payload?.feedback ?? []);
     }).catch(() => setNotice("项目状态暂时无法读取，请刷新重试。"));
-  }, []);
+  }, [signedIn]);
 
   const stageIndex = project ? Math.max(0, STAGES.indexOf(project.status)) : -1;
   const timeline = useMemo(() => STAGES.map((name, index) => ({ name, state: index < stageIndex ? "完成" : index === stageIndex ? "进行中" : "未开始" })), [stageIndex]);
@@ -62,7 +63,8 @@ export function IncubationConsole() {
     setDetail({ title: item.name, eyebrow: `ORBIT STAGE / ${String(index + 1).padStart(2, "0")}`, body: index === stageIndex ? project?.waitingReason ?? "等待状态更新" : index < stageIndex ? "该阶段已由造场运营人员明确更新为完成。" : "上一阶段形成结论后才会进入这里。", items: [`状态：${item.state}`, `负责人：${index === stageIndex ? project?.assignedOwner || "尚未分配" : "以阶段记录为准"}`, `更新时间：${project?.updatedAt || "尚无"}`, `完成条件：由运营人员在阶段反馈中说明`] });
   };
 
-  if (!project) return <div className={styles.consolePage}><section className={styles.demoNotice}><CircleAlert size={15} /><p>当前账号还没有孵化项目。提交后才会生成真实项目轨道，不展示示例进度。</p><Link href="/galaxy/apply">提交项目</Link></section></div>;
+  if (!signedIn) return <div className={styles.consolePage}><section className={styles.demoNotice}><LogIn size={15} /><div><h1>项目孵化控制台</h1><p>登录后查看项目孵化进度。阶段、当前任务、等待原因和项目资料只对本人开放。</p></div><Link href="/signin?return_to=%2Fgalaxy%2Fincubator">登录造场</Link></section></div>;
+  if (!project) return <div className={styles.consolePage}><section className={styles.demoNotice}><CircleAlert size={15} /><div><h1>项目孵化控制台</h1><p>当前账号还没有孵化项目。提交后才会生成真实项目轨道，不展示示例进度。</p></div><Link href="/galaxy/apply">提交项目</Link></section></div>;
 
   return <div className={styles.consolePage}>
     <section className={styles.consoleHero}>

@@ -1,15 +1,23 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cp, rm } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { GALAXIES, PLANETS, PLANETS_BY_GALAXY } from "../app/galaxy/cosmic-atlas.ts";
 import { GALAXY_BUSINESS, GALAXY_PRODUCTS, PRODUCT_BY_PLANET } from "../app/galaxy/product-galaxy.ts";
+import { FOUNDER_DISPLAY_NAME, products as showcaseProducts } from "../app/lib/community-data.ts";
+import { githubConnectionPage } from "../app/api/auth/[provider]/start/github-connection-page.ts";
 import { resolvePublicAppOrigin } from "../app/lib/public-origin.ts";
+import { fetchWithTimeout } from "../app/lib/fetch-with-timeout.ts";
+import { GITHUB_CONNECTION_CSP } from "../app/lib/security-policy.ts";
 
 const port = 4179;
 const baseUrl = `http://127.0.0.1:${port}`;
@@ -19,7 +27,56 @@ const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const stateDir = join(tmpdir(), `zaochang-test-state-${runId}`);
 const logPath = join(tmpdir(), `zaochang-wrangler-${runId}.log`);
 let server;
+let scannerServer;
+let scannerPort;
 let output = "";
+const scannerToken = `test-upload-scanner-${runId}-token`;
+
+const onePixelPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
+
+async function startFakeUploadScanner() {
+  scannerServer = createServer(async (request, response) => {
+    if (request.method !== "POST" || request.url !== "/scan") {
+      response.writeHead(404).end();
+      return;
+    }
+    if (request.headers.authorization !== `Bearer ${scannerToken}`) {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+    const chunks = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const body = Buffer.concat(chunks);
+    const sha256 = createHash("sha256").update(body).digest("hex");
+    if (request.headers["x-content-sha256"] !== sha256) {
+      response.writeHead(400, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "sha256_mismatch" }));
+      return;
+    }
+    if (body.includes(Buffer.from("SCANNER-UNAVAILABLE-TEST"))) {
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "scanner_unavailable" }));
+      return;
+    }
+    const infected = body.includes(Buffer.from("EICAR-STANDARD-ANTIVIRUS-TEST-FILE"));
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      engine: "integration-scanner/1",
+      sha256,
+      signature: infected ? "Eicar-Test-Signature" : null,
+      verdict: infected ? "infected" : "clean",
+    }));
+  });
+  await new Promise((resolve, reject) => {
+    scannerServer.once("error", reject);
+    scannerServer.listen(0, "127.0.0.1", resolve);
+  });
+  scannerPort = scannerServer.address().port;
+}
 
 function authHeaders(name, email) {
   return {
@@ -33,7 +90,8 @@ function authHeaders(name, email) {
 
 async function executeD1Sql(sql, expectSuccess = true) {
   const sqlPath = join(tmpdir(), `zaochang-test-sql-${crypto.randomUUID()}.sql`);
-  writeFileSync(sqlPath, `${sql};\n`, "utf8");
+  const normalizedSql = sql.trim();
+  writeFileSync(sqlPath, `${normalizedSql}${normalizedSql.endsWith(";") ? "" : ";"}\n`, "utf8");
   const result = spawnSync(process.execPath, [
     join(projectRoot, "node_modules", "wrangler", "bin", "wrangler.js"),
     "d1", "execute", "site-creator-d1", "--local",
@@ -44,6 +102,149 @@ async function executeD1Sql(sql, expectSuccess = true) {
   if (expectSuccess) assert.equal(result.status, 0, result.stderr || result.stdout);
   else assert.notEqual(result.status, 0, "expected local D1 command to fail");
   return `${result.stdout}\n${result.stderr}`;
+}
+
+function previewServerArgs() {
+  return [
+    join(projectRoot, "node_modules", "wrangler", "bin", "wrangler.js"),
+    "dev",
+    "--config", "dist/server/wrangler.json",
+    "--port", String(port),
+    "--persist-to", stateDir,
+    "--var", "APP_ENV:test",
+    "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail}`,
+    "--var", `ZAOCHANG_FOUNDER_EMAIL:${adminEmail}`,
+    "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,
+    "--var", `UPLOAD_SCANNER_TOKEN:${scannerToken}`,
+  ];
+}
+
+function waitForChildExit(child, timeoutMs) {
+  if (!child || child.exitCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+}
+
+async function stopPreviewServer() {
+  const currentServer = server;
+  if (!currentServer || currentServer.exitCode !== null) {
+    server = undefined;
+    return;
+  }
+
+  let stopped = false;
+  if (process.platform === "win32") {
+    const forced = spawnSync("taskkill", ["/pid", String(currentServer.pid), "/T", "/F"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 10000,
+    });
+    assert.notEqual(forced.error?.code, "ETIMEDOUT", `taskkill timed out for preview server ${currentServer.pid}`);
+    assert.equal(forced.status, 0, forced.stderr || forced.stdout);
+    stopped = await waitForChildExit(currentServer, 2000);
+  } else {
+    process.kill(-currentServer.pid, "SIGTERM");
+    stopped = await waitForChildExit(currentServer, 5000);
+    if (!stopped) {
+      process.kill(-currentServer.pid, "SIGKILL");
+      stopped = await waitForChildExit(currentServer, 2000);
+    }
+  }
+  assert.equal(stopped, true, `preview server ${currentServer.pid} did not exit`);
+
+  const closeDeadline = Date.now() + 5000;
+  let portClosed = false;
+  while (Date.now() < closeDeadline) {
+    try {
+      const response = await fetch(baseUrl, { signal: AbortSignal.timeout(300) });
+      await response.body?.cancel();
+    } catch {
+      portClosed = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(portClosed, true, `preview port ${port} remained reachable after stopping process ${currentServer.pid}`);
+  server = undefined;
+}
+
+async function startPreviewServer({ warmDatabase = false } = {}) {
+  assert.equal(server === undefined || server.exitCode !== null, true, "preview server is already running");
+  const outputOffset = output.length;
+  const nextServer = spawn(process.execPath, previewServerArgs(), {
+    cwd: projectRoot,
+    env: { ...process.env, WRANGLER_LOG_PATH: logPath },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+    detached: process.platform !== "win32",
+  });
+  server = nextServer;
+  nextServer.stdout.on("data", (chunk) => { output += chunk.toString(); });
+  nextServer.stderr.on("data", (chunk) => { output += chunk.toString(); });
+
+  const deadline = Date.now() + 30000;
+  let consecutiveHealthyReads = 0;
+  let healthReads = 0;
+  while (Date.now() < deadline) {
+    healthReads += 1;
+    if (nextServer.exitCode !== null) {
+      throw new Error(`Preview server exited early:\n${output.slice(outputOffset)}`);
+    }
+    try {
+      const response = await fetch(baseUrl, { signal: AbortSignal.timeout(1500) });
+      const responseOk = response.ok;
+      await response.body?.cancel();
+      consecutiveHealthyReads = responseOk ? consecutiveHealthyReads + 1 : 0;
+      if (consecutiveHealthyReads >= 3) break;
+    } catch {
+      consecutiveHealthyReads = 0;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+  assert.equal(
+    consecutiveHealthyReads >= 3,
+    true,
+    `preview server did not become stable: reads=${healthReads}\n${output.slice(outputOffset)}`,
+  );
+
+  if (!warmDatabase) return;
+  const warmHeaders = authHeaders("预热用户", `warm-${runId}@example.com`);
+  const databaseDeadline = Date.now() + 5000;
+  let databaseReady = false;
+  while (Date.now() < databaseDeadline) {
+    const response = await fetch(`${baseUrl}/api/community`, { headers: warmHeaders });
+    databaseReady = response.ok;
+    await response.body?.cancel();
+    if (databaseReady) break;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  assert.equal(databaseReady, true, `Community database read path did not become ready:\n${output.slice(outputOffset)}`);
+
+  const writeDeadline = Date.now() + 5000;
+  while (Date.now() < writeDeadline) {
+    const response = await fetch(`${baseUrl}/api/products`, {
+      method: "POST",
+      headers: warmHeaders,
+      body: JSON.stringify({ title: "x" }),
+    });
+    if (response.status === 400) {
+      await response.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const stable = await fetch(`${baseUrl}/api/community`, { headers: warmHeaders });
+      const stableOk = stable.ok;
+      await stable.body?.cancel();
+      if (stableOk) return;
+    } else {
+      await response.body?.cancel();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(`Community database write path did not become ready:\n${output.slice(outputOffset)}`);
 }
 
 async function fetchIdempotentWithRetry(input, init = {}, { deadlineMs = 12000, attemptTimeoutMs = 1500 } = {}) {
@@ -74,25 +275,37 @@ async function fetchIdempotentWithRetry(input, init = {}, { deadlineMs = 12000, 
 }
 
 async function executeLocalD1(sql, expectSuccess = true) {
-  const result = await executeD1Sql(sql, expectSuccess);
-  const deadline = Date.now() + 12000;
-  let healthy = false;
-  let consecutiveHealthyReads = 0;
-  while (Date.now() < deadline) {
+  const databaseDirectory = join(stateDir, "v3", "d1", "miniflare-D1DatabaseObject");
+  const databaseFiles = readdirSync(databaseDirectory)
+    .filter((name) => name.endsWith(".sqlite") && name !== "metadata.sqlite");
+  assert.equal(databaseFiles.length, 1, `expected one local D1 database, found ${databaseFiles.join(", ")}`);
+  const localDatabase = new DatabaseSync(join(databaseDirectory, databaseFiles[0]));
+  let sqlError;
+  try {
+    localDatabase.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+    localDatabase.exec("BEGIN IMMEDIATE;");
     try {
-      const response = await fetch(baseUrl, { signal: AbortSignal.timeout(1500) });
-      const responseOk = response.ok;
-      await response.body?.cancel();
-      consecutiveHealthyReads = responseOk ? consecutiveHealthyReads + 1 : 0;
-      if (consecutiveHealthyReads >= 3) { healthy = true; break; }
-    } catch {
-      consecutiveHealthyReads = 0;
-      // Wrangler reloads after external local D1 maintenance.
+      localDatabase.exec(sql.trim());
+      localDatabase.exec("COMMIT;");
+    } catch (error) {
+      sqlError = error;
+      try {
+        localDatabase.exec("ROLLBACK;");
+      } catch {
+        // Preserve the original SQL failure as the assertion subject.
+      }
     }
-    await new Promise((resolve) => setTimeout(resolve, 120));
+  } catch (error) {
+    sqlError ??= error;
+  } finally {
+    localDatabase.close();
   }
-  assert.equal(healthy, true, "preview server did not recover after local D1 maintenance");
-  return result;
+  if (expectSuccess) {
+    if (sqlError) throw sqlError;
+    return "";
+  }
+  assert.notEqual(sqlError, undefined, "expected local D1 SQL to fail");
+  return sqlError instanceof Error ? `${sqlError.name}: ${sqlError.message}\n${sqlError.stack ?? ""}` : String(sqlError);
 }
 
 async function creditTestFruit(email, amount = 20, label = crypto.randomUUID()) {
@@ -135,9 +348,17 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 }
 
 before(async () => {
-  for (const migrationFile of ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql"]) {
+  await startFakeUploadScanner();
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql"];
+  const bootstrapSql = migrationFiles
+    .slice(0, 8)
+    .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
+    .join("\n");
+  await executeD1Sql(bootstrapSql);
+
+  for (const migrationFile of migrationFiles.slice(8)) {
     if (migrationFile === "0008_noisy_jazinda.sql") {
-      await executeD1Sql(`
+      await executeLocalD1(`
         INSERT INTO members (email, display_name) VALUES ('legacy-review-migration@example.com', '迁移前作者');
         INSERT INTO members (email, display_name, joined_at)
           VALUES ('legacy-review-buyer@example.com', '迁移前买家', datetime('now', '-48 hours'));
@@ -161,22 +382,9 @@ before(async () => {
           FROM products WHERE owner_email = 'legacy-review-migration@example.com'
       `);
     }
-    const migrationCommand =
-      `npx wrangler d1 execute site-creator-d1 --local --config dist/server/wrangler.json --file drizzle/${migrationFile} --persist-to ${stateDir}`;
-    const migration =
-      process.platform === "win32"
-        ? spawnSync(process.env.ComSpec, ["/d", "/s", "/c", migrationCommand], {
-            cwd: projectRoot,
-            encoding: "utf8",
-            windowsHide: true,
-          })
-        : spawnSync("npx", migrationCommand.slice(4).split(" "), {
-            cwd: projectRoot,
-            encoding: "utf8",
-          });
-    assert.equal(migration.status, 0, `${migrationFile}\n${migration.stderr || migration.stdout}`);
+    await executeLocalD1(readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"));
     if (migrationFile === "0008_noisy_jazinda.sql") {
-      const bypassFailure = await executeD1Sql(
+      const bypassFailure = await executeLocalD1(
         `UPDATE products
          SET status = 'published', review_status = 'approved', approved_version = review_version,
              reviewed_by = owner_email, reviewed_at = CURRENT_TIMESTAMP, review_note = '绕过审核决定'
@@ -184,7 +392,7 @@ before(async () => {
         false,
       );
       assert.match(bypassFailure, /product_review_state_invalid/);
-      await executeD1Sql(`
+      await executeLocalD1(`
         CREATE TABLE migration_review_assertion (id integer);
         CREATE TRIGGER migration_review_assertion_guard BEFORE INSERT ON migration_review_assertion
         WHEN NOT EXISTS (
@@ -202,15 +410,15 @@ before(async () => {
           SELECT 'legacy-review-decision', id, review_version, owner_email, 'approved', '迁移测试批准当前版本。'
           FROM products WHERE owner_email = 'legacy-review-migration@example.com'
       `);
-      const mutableDecision = await executeD1Sql(`
+      const mutableDecision = await executeLocalD1(`
         UPDATE product_review_decisions SET note = '篡改审核意见' WHERE id = 'legacy-review-decision'
       `, false);
       assert.match(mutableDecision, /product_review_decision_immutable/);
-      const deletableDecision = await executeD1Sql(`
+      const deletableDecision = await executeLocalD1(`
         DELETE FROM product_review_decisions WHERE id = 'legacy-review-decision'
       `, false);
       assert.match(deletableDecision, /product_review_decision_immutable/);
-      await executeD1Sql(`
+      await executeLocalD1(`
         UPDATE products SET price = 1 WHERE owner_email = 'legacy-review-migration@example.com';
         CREATE TABLE material_review_assertion (id integer);
         CREATE TRIGGER material_review_assertion_guard BEFORE INSERT ON material_review_assertion
@@ -224,7 +432,7 @@ before(async () => {
         DROP TRIGGER material_review_assertion_guard;
         DROP TABLE material_review_assertion
       `);
-      const guardedOrder = await executeD1Sql(`
+      const guardedOrder = await executeLocalD1(`
         INSERT INTO product_orders
           (id, buyer_email, product_id, seller_email, pricing_model, amount,
            idempotency_key, purchase_operation_id, available_at)
@@ -233,18 +441,18 @@ before(async () => {
           FROM products WHERE owner_email = 'legacy-review-migration@example.com'
       `, false);
       assert.match(guardedOrder, /product_order_product_not_approved/);
-      const guardedLike = await executeD1Sql(`
+      const guardedLike = await executeLocalD1(`
         INSERT INTO product_likes (product_id, user_email)
           SELECT id, owner_email FROM products WHERE owner_email = 'legacy-review-migration@example.com'
       `, false);
       assert.match(guardedLike, /product_like_product_not_approved/);
-      const guardedComment = await executeD1Sql(`
+      const guardedComment = await executeLocalD1(`
         INSERT INTO comments (user_email, owner_name, target_type, target_ref, content)
           SELECT owner_email, owner_name, 'product', CAST(id AS TEXT), '待审产品评论'
           FROM products WHERE owner_email = 'legacy-review-migration@example.com'
       `, false);
       assert.match(guardedComment, /product_comment_product_not_approved/);
-      const guardedTip = await executeD1Sql(`
+      const guardedTip = await executeLocalD1(`
         INSERT INTO fruit_operations
           (id, kind, idempotency_key, actor_email, target_email, amount, reference_type, reference_id, description)
           SELECT 'review-guard-tip', 'tip', 'review-guard-tip', 'legacy-review-buyer@example.com',
@@ -252,7 +460,7 @@ before(async () => {
           FROM products WHERE owner_email = 'legacy-review-migration@example.com'
       `, false);
       assert.match(guardedTip, /product_tip_product_not_approved/);
-      await executeD1Sql(`
+      await executeLocalD1(`
         INSERT INTO product_review_decisions (id, product_id, review_version, reviewer_email, decision, note)
           SELECT 'legacy-review-decision-v2', id, review_version,
                  'legacy-review-migration@example.com', 'approved', '迁移测试批准第二版本。'
@@ -294,106 +502,11 @@ before(async () => {
     }
   }
 
-  const executable = process.execPath;
-  const args = [
-    join(projectRoot, "node_modules", "wrangler", "bin", "wrangler.js"),
-    "dev",
-    "--config", "dist/server/wrangler.json",
-    "--port", String(port),
-    "--persist-to", stateDir,
-    "--var", "APP_ENV:test",
-    "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail}`,
-  ];
-  server = spawn(
-    executable,
-    args,
-    {
-      cwd: projectRoot,
-      env: { ...process.env, WRANGLER_LOG_PATH: logPath },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-      detached: process.platform !== "win32",
-    },
-  );
-  server.stdout.on("data", (chunk) => { output += chunk.toString(); });
-  server.stderr.on("data", (chunk) => { output += chunk.toString(); });
-
-  const deadline = Date.now() + 15000;
-  let pageReady = false;
-  while (Date.now() < deadline) {
-    if (server.exitCode !== null) {
-      throw new Error(`Preview server exited early:\n${output}`);
-    }
-    try {
-      const response = await fetch(baseUrl);
-      if (response.ok) {
-        pageReady = true;
-        break;
-      }
-    } catch {
-      // The process is still starting.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-  if (!pageReady) throw new Error(`Preview server did not become ready:\n${output}`);
-
-  const databaseDeadline = Date.now() + 5000;
-  const warmHeaders = authHeaders("预热用户", `warm-${runId}@example.com`);
-  while (Date.now() < databaseDeadline) {
-    const response = await fetch(`${baseUrl}/api/community`, { headers: warmHeaders });
-    if (response.ok) break;
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-
-  const writeDeadline = Date.now() + 5000;
-  while (Date.now() < writeDeadline) {
-    const response = await fetch(`${baseUrl}/api/products`, {
-      method: "POST",
-      headers: warmHeaders,
-      body: JSON.stringify({ title: "x" }),
-    });
-    if (response.status === 400) {
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      const stable = await fetch(`${baseUrl}/api/community`, { headers: warmHeaders });
-      if (stable.ok) return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-  throw new Error(`Community database write path did not become ready:\n${output}`);
+  await startPreviewServer({ warmDatabase: true });
 });
 
 after(async () => {
-  const waitForExit = (timeoutMs) => {
-    if (!server || server.exitCode !== null) return Promise.resolve(true);
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(false), timeoutMs);
-      server.once("exit", () => {
-        clearTimeout(timer);
-        resolve(true);
-      });
-    });
-  };
-
-  let stopped = true;
-  if (server?.pid && server.exitCode === null) {
-    if (process.platform === "win32") server.kill("SIGTERM");
-    else process.kill(-server.pid, "SIGTERM");
-    stopped = await waitForExit(5000);
-  }
-  if (!stopped && server?.pid && process.platform === "win32") {
-    const forced = spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], {
-      encoding: "utf8",
-      windowsHide: true,
-      timeout: 10000,
-    });
-    assert.notEqual(forced.error?.code, "ETIMEDOUT", `taskkill timed out for preview server ${server.pid}`);
-    assert.equal(forced.status, 0, forced.stderr || forced.stdout);
-    stopped = await waitForExit(2000);
-  } else if (!stopped && server?.pid) {
-    process.kill(-server.pid, "SIGKILL");
-    stopped = await waitForExit(2000);
-  }
-  assert.equal(stopped, true, `preview server ${server?.pid ?? "unknown"} did not exit`);
+  await stopPreviewServer();
   await rm(stateDir, {
     recursive: true,
     force: true,
@@ -401,6 +514,9 @@ after(async () => {
     retryDelay: 120,
   });
   await rm(logPath, { force: true, maxRetries: 4, retryDelay: 80 });
+  if (scannerServer?.listening) {
+    await new Promise((resolve, reject) => scannerServer.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 describe("造场社区集成流程", { concurrency: false }, () => {
@@ -421,6 +537,9 @@ test("keeps static preview traffic off Workerd without weakening product app hea
   assert.match(rateLimit, /zone=zaochang_preview_static_per_ip:10m rate=64r\/s/);
   assert.match(nginx, /map \$uri \$zaochang_product_permissions_policy/);
   assert.match(nginx, /~\^\/product-apps\/wander\/ "camera=\(\), microphone=\(\), payment=\(\), geolocation=\(self\)"/);
+  assert.doesNotMatch(nginx, /auth_basic/);
+  assert.match(nginx, /proxy_redirect http:\/\/aetherstudio\.top\/ https:\/\/aetherstudio\.top\//);
+  assert.match(nginx, /proxy_redirect http:\/\/www\.aetherstudio\.top\/ https:\/\/www\.aetherstudio\.top\//);
 
   for (const block of [assets, productApps, favicon]) {
     assert.match(block, /limit_req zone=zaochang_preview_static_per_ip burst=160 nodelay/);
@@ -442,7 +561,22 @@ test("keeps static preview traffic off Workerd without weakening product app hea
     windowsHide: true,
   });
   assert.equal(probe.status, 0, probe.stderr);
-  assert.match(probe.stdout, /credential_base64 \| node zaochang-capacity-probe\.mjs/);
+  assert.match(probe.stdout, /--auth none/);
+  assert.match(probe.stdout, /credential_base64 \| node zaochang-capacity-probe\.mjs --auth basic/);
+
+  const scannerSyntax = spawnSync(process.execPath, ["--check", join(projectRoot, "deploy", "server", "zaochang-upload-scanner.mjs")], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.equal(scannerSyntax.status, 0, scannerSyntax.stderr);
+  const scannerService = readFileSync(join(projectRoot, "deploy", "server", "zaochang-upload-scanner.service"), "utf8");
+  assert.match(scannerService, /NoNewPrivileges=true/);
+  assert.match(scannerService, /ProtectSystem=strict/);
+  assert.match(scannerService, /MemoryHigh=1000M/);
+  assert.match(scannerService, /MemoryMax=1150M/);
+  assert.match(readFileSync(join(projectRoot, "deploy", "server", "zaochang-clamav-update.service"), "utf8"), /flock -w 300 -E 75 \/run\/lock\/zaochang-clamav\.lock/);
+  assert.match(readFileSync(join(projectRoot, "deploy", "server", "zaochang-clamav-update.timer"), "utf8"), /OnCalendar=\*-\*-\* 03:20:00/);
 });
 
 test("server-renders the creator community", async () => {
@@ -582,17 +716,159 @@ test("renders the signed-in profile from account data", async () => {
   assert.doesNotMatch(html, /登录后查看你的创作者主页/);
 });
 
-test("keeps OAuth providers explicit until runtime credentials are configured", async () => {
+test("founder identity owns the built-in portfolio and exposes management without widening admin access", async () => {
+  const founderProducts = showcaseProducts.filter((product) => product.founderOwned);
+  assert.equal(founderProducts.length, 6);
+  assert.equal(founderProducts.every((product) => product.ownerName === FOUNDER_DISPLAY_NAME), true);
+
+  const founderHeaders = authHeaders(FOUNDER_DISPLAY_NAME, adminEmail);
+  const [profileResponse, adminResponse, regularAdminResponse] = await Promise.all([
+    fetch(`${baseUrl}/profile`, { headers: founderHeaders }),
+    fetch(`${baseUrl}/admin`, { headers: founderHeaders }),
+    fetch(`${baseUrl}/admin`, { headers: authHeaders("普通成员", `regular-admin-${runId}@example.com`) }),
+  ]);
+  assert.equal(profileResponse.status, 200);
+  assert.equal(adminResponse.status, 200);
+  assert.equal(regularAdminResponse.status, 404);
+
+  const profileHtml = await profileResponse.text();
+  assert.match(profileHtml, /造场创始人/);
+  assert.match(profileHtml, /href="\/admin"/);
+  for (const product of founderProducts) assert.match(profileHtml, new RegExp(product.title));
+  assert.match(await adminResponse.text(), /发布运营控制台/);
+
+  const regularHome = await fetch(baseUrl, { headers: authHeaders("普通成员", `regular-shell-${runId}@example.com`) });
+  assert.equal(regularHome.status, 200);
+  const regularHtml = await regularHome.text();
+  assert.doesNotMatch(regularHtml, /href="\/admin"/);
+  assert.doesNotMatch(regularHtml, /class="founder-role"/);
+});
+
+test("uses GitHub-only invite registration and keeps unconfigured providers fail-closed", async () => {
   const signin = await fetch(`${baseUrl}/signin?return_to=%2Fwallet`, { headers: { accept: "text/html" } });
   assert.equal(signin.status, 200);
   const html = await signin.text();
-  assert.match(html, /使用 Google 登录/);
   assert.match(html, /使用 GitHub 登录/);
+  assert.match(html, /name="invitation_code"/);
+  assert.match(html, /首次注册必填/);
+  assert.match(html, /使用邀请码注册/);
+  assert.match(html, /action="\/api\/auth\/github\/start"/);
+  assert.match(html, /method="post"/);
+  assert.doesNotMatch(html, /method="get"/);
+  assert.doesNotMatch(html, /使用 Google 登录|使用 ChatGPT 登录/);
   assert.match(html, /待配置/);
+  assert.match(html, /class="auth-provider github is-disabled" aria-disabled="true"/);
+  assert.doesNotMatch(html, /href="\/api\/auth\/github\/start\?return_to=%2Fwallet"/);
+  const source = readFileSync(join(projectRoot, "app", "signin", "page.tsx"), "utf8");
+  assert.match(source, /<a className="auth-provider github" href=\{loginHref\}>/);
+  assert.match(source, /action="\/api\/auth\/github\/start" method="post"/);
   for (const provider of ["google", "github"]) {
     const response = await fetch(`${baseUrl}/api/auth/${provider}/start?return_to=%2Fwallet`, { redirect: "manual" });
     assert.equal(response.status, 307);
     assert.match(response.headers.get("location") ?? "", /\/signin\?error=not_configured&provider=/);
+  }
+  const submitted = await fetch(`${baseUrl}/api/auth/github/start`, {
+    method: "POST",
+    body: new URLSearchParams({ return_to: "/wallet" }),
+    redirect: "manual",
+  });
+  assert.equal(submitted.status, 303);
+  assert.match(submitted.headers.get("location") ?? "", /\/signin\?error=not_configured&provider=github/);
+});
+
+test("GitHub connection page fails visibly before OAuth navigation", () => {
+  const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
+  authorizeUrl.searchParams.set("client_id", "public-test-client");
+  authorizeUrl.searchParams.set("redirect_uri", "https://aetherstudio.top/api/auth/github/callback");
+  authorizeUrl.searchParams.set("state", "github.test-state");
+  const html = githubConnectionPage(authorizeUrl, "/wallet");
+  assert.match(html, /正在连接 GitHub/);
+  assert.match(html, /maxAttempts = 3/);
+  assert.match(html, /timeoutMs = 5000/);
+  assert.match(html, /github\.com\/favicon\.ico/);
+  assert.match(html, /当前网络暂时无法连接 GitHub，请检查网络后重试/);
+  assert.match(html, /location\.replace\(target\)/);
+  assert.match(html, /image\.onerror = \(\) => finish\(false\)/);
+  assert.match(html, /\/signin\?error=github_unreachable&amp;return_to=%2Fwallet/);
+  assert.doesNotMatch(html, /invitation_code|邀请码/);
+  assert.match(GITHUB_CONNECTION_CSP, /default-src 'none'/);
+  assert.match(GITHUB_CONNECTION_CSP, /img-src https:\/\/github\.com/);
+  assert.match(GITHUB_CONNECTION_CSP, /frame-ancestors 'none'/);
+
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.equal(typeof script, "string");
+  const images = [];
+  const timers = new Map();
+  let timerId = 0;
+  let navigatedTo = "";
+  const status = { textContent: "" };
+  const visibleClasses = new Set();
+  const actions = { classList: { add: (value) => visibleClasses.add(value), remove: (value) => visibleClasses.delete(value) } };
+  const retry = { click: undefined, addEventListener: (_type, handler) => { retry.click = handler; } };
+  class FakeImage {
+    constructor() { images.push(this); }
+    remove() {}
+  }
+  runInNewContext(script, {
+    Date,
+    Image: FakeImage,
+    clearTimeout: (id) => timers.delete(id),
+    document: {
+      body: { appendChild: () => undefined },
+      getElementById: (id) => ({ status, actions, retry })[id],
+    },
+    location: { replace: (value) => { navigatedTo = value; } },
+    setTimeout: (handler, timeout) => {
+      timerId += 1;
+      timers.set(timerId, { handler, timeout });
+      return timerId;
+    },
+  });
+  const runRetryTimer = () => {
+    const retryTimer = [...timers.entries()].find(([, value]) => value.timeout === 350);
+    assert.ok(retryTimer);
+    timers.delete(retryTimer[0]);
+    retryTimer[1].handler();
+  };
+  images.at(-1).onerror();
+  runRetryTimer();
+  images.at(-1).onerror();
+  runRetryTimer();
+  images.at(-1).onerror();
+  assert.equal(navigatedTo, "");
+  assert.equal(visibleClasses.has("visible"), true);
+  assert.match(status.textContent, /当前网络暂时无法连接 GitHub/);
+
+  retry.click();
+  images.at(-1).onload();
+  assert.equal(new URL(navigatedTo).hostname, "github.com");
+});
+
+test("OAuth provider timeout sends one request and reaches a bounded failure", async () => {
+  let requestCount = 0;
+  const slowProvider = createServer((_request, response) => {
+    requestCount += 1;
+    setTimeout(() => {
+      if (!response.destroyed) response.writeHead(200).end("late");
+    }, 250);
+  });
+  await new Promise((resolve, reject) => {
+    slowProvider.once("error", reject);
+    slowProvider.listen(0, "127.0.0.1", resolve);
+  });
+  try {
+    const address = slowProvider.address();
+    assert.equal(typeof address, "object");
+    const startedAt = Date.now();
+    await assert.rejects(
+      fetchWithTimeout(`http://127.0.0.1:${address.port}/token`, { method: "POST", body: "code=one-time" }, 50),
+      (error) => error instanceof Error && error.name === "TimeoutError",
+    );
+    assert.equal(requestCount, 1);
+    assert.equal(Date.now() - startedAt < 220, true);
+  } finally {
+    slowProvider.closeAllConnections();
+    await new Promise((resolve) => slowProvider.close(resolve));
   }
 });
 
@@ -618,6 +894,87 @@ test("keeps sign-in outside the community shell", async () => {
   assert.match(html, /class="auth-page"/);
   assert.match(html, /class="auth-brand"/);
   assert.doesNotMatch(html, /deep-topbar|deep-sidebar|deep-mobile-nav|deep-account/);
+});
+
+test("requires and atomically consumes an invitation for each new OAuth identity", async () => {
+  const adminHeaders = authHeaders("发布审核管理员", adminEmail);
+  const denied = await fetch(`${baseUrl}/api/admin/invitations`, { headers: authHeaders("普通成员", `invite-denied-${runId}@example.com`) });
+  assert.equal(denied.status, 403);
+  assert.deepEqual(await denied.json(), { error: "admin_forbidden" });
+
+  const created = await fetch(`${baseUrl}/api/admin/invitations`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ label: "集成测试邀请", maxUses: 1, expiresDays: 14 }),
+  });
+  assert.equal(created.status, 201);
+  const invitation = (await created.json()).invitation;
+  assert.match(invitation.code, /^ZC-[A-HJ-NP-Z2-9]{16}$/);
+  assert.equal(invitation.maxUses, 1);
+  assert.equal(invitation.usesCount, 0);
+
+  const listedBefore = await (await fetch(`${baseUrl}/api/admin/invitations`, { headers: adminHeaders })).json();
+  const listedInvitation = listedBefore.invitations.find((item) => item.id === invitation.id);
+  assert.equal(listedInvitation.usesCount, 0);
+  assert.equal(Object.hasOwn(listedInvitation, "code"), false);
+  assert.equal(Object.hasOwn(listedInvitation, "codeHash"), false);
+
+  const firstEmail = `invite-first-${runId}@example.com`;
+  const secondEmail = `invite-second-${runId}@example.com`;
+  await fetch(`${baseUrl}/api/community`, { headers: authHeaders("首位受邀者", firstEmail) });
+  await fetch(`${baseUrl}/api/community`, { headers: authHeaders("第二位受邀者", secondEmail) });
+
+  const bypass = await executeLocalD1(
+    `INSERT INTO oauth_accounts (provider, provider_account_id, email, display_name)
+     VALUES ('github', 'invite-first-bypass-${runId}', '${firstEmail}', '绕过邀请码')`,
+    false,
+  );
+  assert.match(bypass, /oauth_registration_invitation_required/);
+
+  const codeHash = createHash("sha256").update(invitation.code).digest("hex");
+  const providerAccountId = `invite-first-${runId}`;
+  const redemptionId = `invite-redemption-${runId}`;
+  await executeLocalD1(`
+    INSERT INTO invitation_redemptions (id, invitation_id, provider, provider_account_id, user_email)
+      SELECT '${redemptionId}', id, 'github', '${providerAccountId}', '${firstEmail}'
+      FROM invitation_codes WHERE code_hash = '${codeHash}';
+    INSERT INTO oauth_accounts (provider, provider_account_id, email, display_name)
+      VALUES ('github', '${providerAccountId}', '${firstEmail}', '首位受邀者');
+    CREATE TABLE invitation_state_assertion (id integer);
+    CREATE TRIGGER invitation_state_assertion_guard BEFORE INSERT ON invitation_state_assertion
+    WHEN NOT EXISTS (
+      SELECT 1 FROM invitation_codes c
+      JOIN invitation_redemptions r ON r.invitation_id = c.id
+      JOIN oauth_accounts a ON a.provider = r.provider AND a.provider_account_id = r.provider_account_id
+      WHERE c.id = '${invitation.id}' AND c.uses_count = 1 AND c.last_used_at IS NOT NULL
+        AND r.id = '${redemptionId}' AND r.user_email = '${firstEmail}'
+        AND a.email = '${firstEmail}'
+    ) BEGIN SELECT RAISE(ABORT, 'invitation_state_invalid'); END;
+    INSERT INTO invitation_state_assertion (id) VALUES (1);
+    DROP TRIGGER invitation_state_assertion_guard;
+    DROP TABLE invitation_state_assertion
+  `);
+
+  const reused = await executeLocalD1(
+    `INSERT INTO invitation_redemptions (id, invitation_id, provider, provider_account_id, user_email)
+       VALUES ('invite-reuse-${runId}', '${invitation.id}', 'github', 'invite-second-${runId}', '${secondEmail}')`,
+    false,
+  );
+  assert.match(reused, /invitation_not_available/);
+  const mutable = await executeLocalD1(`UPDATE invitation_redemptions SET user_email = '${secondEmail}' WHERE id = '${redemptionId}'`, false);
+  assert.match(mutable, /invitation_redemption_immutable/);
+  const deletable = await executeLocalD1(`DELETE FROM invitation_redemptions WHERE id = '${redemptionId}'`, false);
+  assert.match(deletable, /invitation_redemption_immutable/);
+
+  const listedAfter = await (await fetch(`${baseUrl}/api/admin/invitations`, { headers: adminHeaders })).json();
+  assert.equal(listedAfter.invitations.find((item) => item.id === invitation.id).usesCount, 1);
+  const revoked = await fetch(`${baseUrl}/api/admin/invitations`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ action: "revoke", id: invitation.id }),
+  });
+  assert.equal(revoked.status, 200);
+  assert.deepEqual(await revoked.json(), { updated: true, id: invitation.id });
 });
 
 test("logout deletes the server session so a copied cookie cannot be replayed", async () => {
@@ -649,14 +1006,23 @@ test("logout deletes the server session so a copied cookie cannot be replayed", 
 
 test("production rejects forged workspace identity headers unless explicitly trusted", async () => {
   const productionPort = port + 1;
+  const productionRoot = join(tmpdir(), `zaochang-production-root-${runId}`);
   const productionStateDir = join(tmpdir(), `zaochang-production-auth-${runId}`);
   let productionOutput = "";
-  const executable = process.platform === "win32" ? process.env.ComSpec : "npx";
-  const args = process.platform === "win32"
-    ? ["/d", "/s", "/c", `npx wrangler dev --config dist/server/wrangler.json --port ${productionPort} --persist-to ${productionStateDir} --var APP_ENV:production --var PUBLIC_APP_ORIGIN:https://production.example`]
-    : ["wrangler", "dev", "--config", "dist/server/wrangler.json", "--port", String(productionPort), "--persist-to", productionStateDir, "--var", "APP_ENV:production", "--var", "PUBLIC_APP_ORIGIN:https://production.example"];
-  const productionServer = spawn(executable, args, {
-    cwd: projectRoot,
+  await cp(join(projectRoot, "dist"), join(productionRoot, "dist"), { recursive: true, force: true });
+  const productionArgs = [
+    join(projectRoot, "node_modules", "wrangler", "bin", "wrangler.js"),
+    "dev",
+    "--config", "dist/server/wrangler.json",
+    "--port", String(productionPort),
+    "--persist-to", productionStateDir,
+    "--var", "APP_ENV:production",
+    "--var", "PUBLIC_APP_ORIGIN:https://production.example",
+    "--var", "GITHUB_OAUTH_CLIENT_ID:public-test-client",
+    "--var", "GITHUB_OAUTH_CLIENT_SECRET:test-secret",
+  ];
+  const productionServer = spawn(process.execPath, productionArgs, {
+    cwd: productionRoot,
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
     detached: process.platform !== "win32",
@@ -673,6 +1039,7 @@ test("production rejects forged workspace identity headers unless explicitly tru
           method: "POST",
           headers: authHeaders("伪造身份", "forged@example.com"),
           body: JSON.stringify({ title: "x" }),
+          signal: AbortSignal.timeout(1500),
         });
         break;
       } catch {
@@ -685,13 +1052,75 @@ test("production rejects forged workspace identity headers unless explicitly tru
     assert.equal(discovery.status, 200);
     assert.equal((await discovery.json()).issuer, "https://production.example");
     assert.match(discovery.headers.get("strict-transport-security") ?? "", /max-age=31536000/);
+
+    const githubStart = await fetch(`http://127.0.0.1:${productionPort}/api/auth/github/start?return_to=%2Fwallet`, {
+      headers: { "x-forwarded-proto": "https" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(githubStart.status, 200);
+    assert.equal(githubStart.headers.get("cache-control"), "no-store, max-age=0");
+    assert.equal(githubStart.headers.get("content-security-policy"), GITHUB_CONNECTION_CSP);
+    assert.equal(githubStart.headers.get("x-frame-options"), "DENY");
+    assert.equal(githubStart.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(githubStart.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=(), payment=()");
+    assert.match(githubStart.headers.get("content-type") ?? "", /^text\/html; charset=utf-8/);
+    const githubHtml = await githubStart.text();
+    assert.match(githubHtml, /https:\/\/github\.com\/login\/oauth\/authorize/);
+    assert.match(githubHtml, /redirect_uri=https%3A%2F%2Fproduction\.example%2Fapi%2Fauth%2Fgithub%2Fcallback/);
+    assert.doesNotMatch(githubHtml, /invitation_code|邀请码/);
+    const setCookies = typeof githubStart.headers.getSetCookie === "function"
+      ? githubStart.headers.getSetCookie()
+      : [githubStart.headers.get("set-cookie") ?? ""];
+    const stateCookie = setCookies.find((value) => value.startsWith("zaochang_oauth_state="));
+    assert.match(stateCookie ?? "", /; HttpOnly; Secure; SameSite=Lax/i);
+    const cookieState = stateCookie?.match(/^zaochang_oauth_state=([^;]+)/)?.[1];
+    const pageState = githubHtml.match(/[?&]state=([^&"\\]+)/)?.[1];
+    assert.ok(cookieState);
+    assert.ok(pageState);
+    assert.equal(decodeURIComponent(pageState), cookieState);
   } finally {
-    if (productionServer.pid && process.platform === "win32") {
-      spawnSync("taskkill", ["/pid", String(productionServer.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-    } else if (productionServer.pid) {
+    const waitForProductionExit = (timeoutMs) => {
+      if (productionServer.exitCode !== null) return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(false), timeoutMs);
+        productionServer.once("exit", () => {
+          clearTimeout(timer);
+          resolve(true);
+        });
+      });
+    };
+    let stopped = productionServer.exitCode !== null;
+    if (!stopped && productionServer.pid && process.platform === "win32") {
+      const forced = spawnSync("taskkill", ["/pid", String(productionServer.pid), "/T", "/F"], {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 10000,
+      });
+      assert.notEqual(forced.error?.code, "ETIMEDOUT", `taskkill timed out for production preview ${productionServer.pid}`);
+      assert.equal(forced.status, 0, forced.stderr || forced.stdout);
+      stopped = await waitForProductionExit(2000);
+    } else if (!stopped && productionServer.pid) {
       process.kill(-productionServer.pid, "SIGTERM");
+      stopped = await waitForProductionExit(5000);
     }
+    assert.equal(stopped, true, `production preview ${productionServer.pid ?? "unknown"} did not exit`);
+
+    const closeDeadline = Date.now() + 3000;
+    let portClosed = false;
+    while (Date.now() < closeDeadline) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${productionPort}/`, { signal: AbortSignal.timeout(300) });
+        await response.body?.cancel();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } catch {
+        portClosed = true;
+        break;
+      }
+    }
+    assert.equal(portClosed, true, `production preview port ${productionPort} remained reachable`);
     await rm(productionStateDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 120 });
+    await rm(productionRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 120 });
   }
 });
 
@@ -746,6 +1175,30 @@ test("product galaxy maps every planet to a real product and business sector", (
   assert.equal(new Set(GALAXY_PRODUCTS.map((product) => product.name)).size, 12);
   assert.equal(GALAXY_PRODUCTS.every((product) => PRODUCT_BY_PLANET[product.planetId] === product), true);
   assert.equal(GALAXY_PRODUCTS.every((product) => product.status.length > 0 && product.capabilities.length === 3), true);
+});
+
+test("incubation console distinguishes signed-out access from an empty signed-in account", async () => {
+  const anonymous = await fetch(`${baseUrl}/galaxy/incubator`, { headers: { accept: "text/html" } });
+  assert.equal(anonymous.status, 200);
+  const anonymousHtml = await anonymous.text();
+  assert.match(anonymousHtml, /<h1>项目孵化控制台<\/h1>/);
+  assert.match(anonymousHtml, /登录后查看项目孵化进度/);
+  assert.doesNotMatch(anonymousHtml, /当前账号还没有孵化项目/);
+
+  const member = await fetch(`${baseUrl}/galaxy/incubator`, {
+    headers: { ...authHeaders("空轨道成员", `empty-incubator-${runId}@example.com`), accept: "text/html" },
+  });
+  assert.equal(member.status, 200);
+  const memberHtml = await member.text();
+  assert.match(memberHtml, /<h1>项目孵化控制台<\/h1>/);
+  assert.match(memberHtml, /当前账号还没有孵化项目/);
+  assert.doesNotMatch(memberHtml, /登录后查看项目孵化进度/);
+});
+
+test("product creation keeps navigation and submission as distinct controls", () => {
+  const source = readFileSync(join(projectRoot, "app", "studio", "new", "create-product-flow.tsx"), "utf8");
+  assert.match(source, /key="next-step" type="button"/);
+  assert.match(source, /key="submit-product" type="submit"/);
 });
 
 test("rejects anonymous product publishing", async () => {
@@ -2016,6 +2469,7 @@ test("persists profile, collections, comments, and incubation state", async () =
   const materialForm = new FormData();
   materialForm.set("file", new File(["target users"], "personas.txt", { type: "text/plain" }));
   materialForm.set("visibility", "private");
+  materialForm.set("purpose", "incubation_material");
   const materialUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: uploadHeaders, body: materialForm });
   assert.equal(materialUpload.status, 201);
   const materialUrl = (await materialUpload.json()).url;
@@ -2083,6 +2537,7 @@ test("enforces upload visibility and ownership", async () => {
   assert.equal(privateUpload.status, 201);
   const privateBody = await privateUpload.json();
   assert.equal(privateBody.visibility, "private");
+  assert.equal(privateBody.scanStatus, "clean");
 
   const ownerDownload = await fetch(`${baseUrl}${privateBody.url}`, { headers: ownerHeaders });
   assert.equal(ownerDownload.status, 200);
@@ -2111,9 +2566,25 @@ test("enforces upload visibility and ownership", async () => {
   assert.equal(publicUpload.status, 201);
   const publicBody = await publicUpload.json();
   assert.equal(publicBody.visibility, "public");
+  assert.equal(publicBody.scanStatus, "clean");
   const publicDownload = await fetch(`${baseUrl}${publicBody.url}`);
   assert.equal(publicDownload.status, 200);
+  assert.match(publicDownload.headers.get("content-disposition") ?? "", /^attachment;/);
+  assert.equal(publicDownload.headers.get("x-content-type-options"), "nosniff");
   assert.equal(await publicDownload.text(), "public cover image");
+  const rewrittenScanState = await executeLocalD1(
+    `UPDATE uploaded_files SET scan_status = 'error' WHERE key = '${publicBody.key}'`,
+    false,
+  );
+  assert.match(rewrittenScanState, /uploaded_file_scan_state_immutable/);
+  const directCleanInsert = await executeLocalD1(
+    `INSERT INTO uploaded_files
+      (key, owner_email, original_name, media_type, byte_size, visibility, purpose, sha256, scan_status)
+     VALUES ('direct-clean-${runId}.txt', '${ownerEmail}', 'direct.txt', 'text/plain', 1, 'private', 'general',
+             'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'clean')`,
+    false,
+  );
+  assert.match(directCleanInsert, /uploaded_file_must_start_pending/);
 
   const missingVisibilityForm = new FormData();
   missingVisibilityForm.set("file", new File(["missing visibility"], "unknown.txt", { type: "text/plain" }));
@@ -2129,8 +2600,46 @@ test("enforces upload visibility and ownership", async () => {
   assert.equal(publishWithCover.status, 400);
   assert.deepEqual(await publishWithCover.json(), { error: "invalid_product_cover" });
 
+  const spoofedImageForm = new FormData();
+  spoofedImageForm.set("file", new File(["not a png"], "spoofed.png", { type: "image/png" }));
+  spoofedImageForm.set("visibility", "private");
+  spoofedImageForm.set("purpose", "product_cover");
+  const spoofedImage = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: spoofedImageForm });
+  assert.equal(spoofedImage.status, 400);
+  assert.deepEqual(await spoofedImage.json(), { error: "upload_content_type_mismatch" });
+
+  const infectedForm = new FormData();
+  infectedForm.set("file", new File(["X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"], `eicar-${runId}.txt`, { type: "text/plain" }));
+  infectedForm.set("visibility", "private");
+  const infectedUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: infectedForm });
+  assert.equal(infectedUpload.status, 422);
+  assert.deepEqual(await infectedUpload.json(), { error: "malware_detected" });
+
+  const unavailableForm = new FormData();
+  unavailableForm.set("file", new File(["SCANNER-UNAVAILABLE-TEST"], `scanner-error-${runId}.txt`, { type: "text/plain" }));
+  unavailableForm.set("visibility", "private");
+  const unavailableUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: unavailableForm });
+  assert.equal(unavailableUpload.status, 503);
+  assert.deepEqual(await unavailableUpload.json(), { error: "upload_scanner_unavailable" });
+  await executeLocalD1(`
+    CREATE TABLE upload_scan_assertion (id integer);
+    CREATE TRIGGER upload_scan_assertion_guard BEFORE INSERT ON upload_scan_assertion
+    WHEN NOT EXISTS (
+      SELECT 1 FROM uploaded_files
+      WHERE owner_email = '${ownerEmail}' AND original_name = 'eicar-${runId}.txt'
+        AND scan_status = 'infected' AND scan_signature = 'Eicar-Test-Signature'
+    ) OR NOT EXISTS (
+      SELECT 1 FROM uploaded_files
+      WHERE owner_email = '${ownerEmail}' AND original_name = 'scanner-error-${runId}.txt'
+        AND scan_status = 'error' AND quarantine_key IS NULL
+    ) BEGIN SELECT RAISE(ABORT, 'upload_scan_state_invalid'); END;
+    INSERT INTO upload_scan_assertion (id) VALUES (1);
+    DROP TRIGGER upload_scan_assertion_guard;
+    DROP TABLE upload_scan_assertion
+  `);
+
   const coverForm = new FormData();
-  coverForm.set("file", new File(["private product cover"], "review-cover.png", { type: "image/png" }));
+  coverForm.set("file", new File([onePixelPng], "review-cover.png", { type: "image/png" }));
   coverForm.set("visibility", "private");
   coverForm.set("purpose", "product_cover");
   const coverUpload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: ownerHeaders, body: coverForm });
@@ -2164,7 +2673,8 @@ test("enforces upload visibility and ownership", async () => {
   const approvedCover = await fetch(`${baseUrl}${coverBody.url}`);
   assert.equal(approvedCover.status, 200);
   assert.equal(approvedCover.headers.get("cache-control"), "no-store");
-  assert.equal(await approvedCover.text(), "private product cover");
+  assert.equal(approvedCover.headers.get("content-type"), "image/png");
+  assert.equal(Buffer.from(await approvedCover.arrayBuffer()).equals(onePixelPng), true);
 });
 
 test("generates account notifications and persists read state", async () => {

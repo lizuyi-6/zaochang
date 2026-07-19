@@ -33,7 +33,7 @@ ZAOCHANG_ADMIN_EMAILS
 
 ## 3. 数据与迁移
 
-1. 确认待部署版本只包含预期的 `0006_release_readiness.sql`、`0007_product_like_counters.sql`、`0008_noisy_jazinda.sql` 与 `0009_moderation_remediation.sql` 新迁移。
+1. 确认待部署版本只包含预期的 `0006_release_readiness.sql`、`0007_product_like_counters.sql`、`0008_noisy_jazinda.sql`、`0009_moderation_remediation.sql` 与 `0010_invite_upload_security.sql` 新迁移。
 2. 保存发布前 D1 数据导出或平台快照，并记录时间与版本。
 3. 在包含历史 `product_orders` 与 `product_likes` 引用的隔离数据库按 `0000` 至 `0009` 顺序重放，要求全部退出码为 0，且引用的 `product_id` 不变。
 4. 核对所有迁移前用户产品均变为 `status=review_status=pending_review`、`review_version=1`、`approved_version=0`，并已进入管理员预审队列。
@@ -81,55 +81,62 @@ ZAOCHANG_ADMIN_EMAILS
 - 未审核客户端获得果子写权限。
 - 伪造身份头可在生产环境创建登录态。
 - 管理员白名单为空时仍有人可访问后台。
+- `ZAOCHANG_FOUNDER_EMAIL` 配置为多个账号，或创始人账号不在 `ZAOCHANG_ADMIN_EMAILS` 时仍显示管理入口。
 - 没有 `product_review_decisions` 当前版本记录时，产品能被直接改成 `approved/published`。
 - 待审或驳回产品仍能新增订单、点赞、产品评论、打赏或点赞奖励。
 
 回滚应用后保留 `0006`、`0007`、`0008` 与 `0009` 新结构，不删除账本、订单、产品审核决定、退款/补偿分录、审计或风险记录。对已生效的错误财务动作先冻结相关钱包，再依据不可变分录进行人工对账；不得通过更新或删除历史分录“修正”余额。
 
-## 7. 当前外部阻断
+## 7. 公开测试边界
 
-Sites 项目的公开访问策略目前不是代码可修改项。在工作区管理员开放 internet publishing 前，只能保存并部署所有者可访问版本；此状态不能表述为已公开上线。
+阿里云入口可以作为“公开测试版”匿名开放首页、银河、产品页和公开社区读取。它仍使用服务器本地 Wrangler/Workerd 与 `/var/lib/zaochang/state`，单机数据库、单机备份和未建立外部告警接收链意味着它不得表述为正式生产或高可用发布。
 
-用户仍可把外部 `demoUrl` 作为待核对资料提交，但 `0009` 与管理员 API 会拒绝批准。正式发布能力因此只覆盖站内原型；外部体验恢复上线前必须实现受控站内包或可复核的不可变内容摘要。
+GitHub 是唯一启用的账户提供方。已有 `oauth_accounts` 身份直接登录；首次创建 OAuth 身份必须通过 `invitation_redemptions` 原子消耗有效邀请码。邀请码明文只允许由管理员创建接口返回一次，数据库只保存 SHA-256；不得把邀请码放进 OAuth URL、Nginx 日志或发布包。
 
-## 8. 阿里云受保护预发布
+所有上传必须经过 `uploaded_files.pending → ClamAV → clean|infected|error`。只有数据库和 R2 metadata 同时为 `clean` 且 SHA-256 相等的最终对象可以读取；扫描器缺失、超时、忙、签名更新中或响应不一致均返回 `503`，不得回退成直接上传。ClamAV 扫描和签名更新共用 `/run/lock/zaochang-clamav.lock`，避免在 1.6 GiB 主机上并发占用内存。
 
-当前预发布地址为 `https://aetherstudio.top/`，必须保留 Nginx Basic Auth。它使用服务器本地 Wrangler/Workerd 与 `/var/lib/zaochang/state`，只用于远端验收，不等价于 Cloudflare D1/R2 正式生产。
+用户仍可把外部 `demoUrl` 作为待核对资料提交，但 `0009` 与管理员 API 会拒绝批准。公开测试的可批准产品只覆盖站内原型；外部体验恢复前必须实现受控站内包或可复核的不可变内容摘要。
 
-Basic Auth 凭据禁止写入 URL、命令参数、截图、日志或对话，尤其禁止使用 URL userinfo 语法携带用户名和密码。浏览器自动化只能通过仓库外的临时 `contextOptions.httpCredentials` 配置注入；配置由受控凭据源生成，会话启动后立即删除，任务结束时关闭会话并断言临时配置不存在。若凭据曾进入 URL 或工具输出，必须按已暴露处理：立即轮换、确认旧值返回 `401`、新值返回 `200`，并记录事件，不得仅清理日志后继续使用旧值。
+## 8. 阿里云公开测试发布
 
 检查当前版本和服务：
 
 ```bash
 readlink -f /opt/zaochang/current
 systemctl show zaochang.service -p ActiveState -p SubState -p NRestarts -p ExecMainStatus
+systemctl show zaochang-upload-scanner.service -p ActiveState -p SubState -p NRestarts -p ExecMainStatus
 systemctl show nginx.service -p ActiveState -p SubState -p NRestarts -p ExecMainStatus
-ss -lntp | grep -E ':(80|443|3001)[[:space:]]'
+systemctl is-enabled zaochang-clamav-update.timer
+systemctl is-active zaochang-clamav-update.timer
+ss -lntp | grep -E ':(80|443|3001|3311)[[:space:]]'
 nginx -t
 certbot certificates
+sysctl vm.swappiness
 ```
 
-当前版本没有可回退的上一版。需要撤销预发布时，只停入口和应用，不删除数据或版本目录：
+部署扫描器前安装 `clamav` 与 `clamav-freshclam`，关闭其常驻 updater，改由仓库内串行 timer 更新；把 `deploy/server/99-zaochang-memory.conf` 安装到 `/etc/sysctl.d/` 后要求 `vm.swappiness == 20`。扫描 token 只保存在 `root:zaochang 0640` 的 `/etc/zaochang/scanner.env` 与应用 env，不输出明文：
 
 ```bash
-systemctl stop zaochang.service
-rm /etc/nginx/sites-enabled/zaochang-preview
-nginx -t && systemctl reload nginx
+apt-get install -y --no-install-recommends clamav clamav-freshclam
+systemctl disable --now clamav-freshclam.service
+install -o root -g root -m 0644 deploy/server/99-zaochang-memory.conf /etc/sysctl.d/99-zaochang-memory.conf
+sysctl --system
+systemctl enable --now zaochang-upload-scanner.service zaochang-clamav-update.timer
 ```
 
-恢复同一版本时重新建立 Nginx 链接并启动服务：
+需要立即关闭公开测试时，先恢复上一 release 的 Basic Auth Nginx 配置并验证匿名首页重新为 `401`，再决定是否回退应用。不得删除业务数据、新迁移表、邀请码兑换记录或上传扫描记录：
 
 ```bash
-ln -sfn /etc/nginx/sites-available/zaochang-preview /etc/nginx/sites-enabled/zaochang-preview
+install -o root -g root -m 0644 /opt/zaochang/releases/<上一版>/deploy/server/zaochang-preview.nginx.conf /etc/nginx/sites-available/zaochang-preview
 nginx -t && systemctl reload nginx
-systemctl start zaochang.service
+curl --resolve aetherstudio.top:443:127.0.0.1 -k -sS -o /dev/null -w '%{http_code}\n' https://aetherstudio.top/
 ```
 
-禁止通过删除 `/var/lib/zaochang/state` 回滚业务数据；该目录必须先做完整快照。正式开放前必须迁回受支持的 Cloudflare D1/R2 生产运行时，确认 GitHub OAuth App 只保留当前已验证的 Secret，并关闭其余发布阻断项。任何曾进入对话、日志或命令输出的 Secret 都必须先轮换并删除旧项。
+禁止通过删除 `/var/lib/zaochang/state` 回滚业务数据；该目录必须先做完整快照。正式生产前仍须迁回受支持的 Cloudflare D1/R2 或等价托管运行时，并补齐跨机备份和外部告警。任何曾进入对话、日志或命令输出的 Secret 都必须先轮换并删除旧项。
 
 Nginx 对动态页面和 API 保持每 IP `10 req/s + burst=100 + limit_conn=30`，并继续代理到 Workerd。只对受信任的 `/assets/`、`/product-apps/` 和 `/favicon.svg` 静态命名空间使用独立的 `64 req/s + burst=160 + limit_conn=128`；这些文件必须从原子发布链接 `/opt/zaochang/current/dist/client` 直接读取，不得重新代理到 Workerd。静态速率放宽只适用于版本化文件，动态写路径不得复用该 zone。
 
-`/assets/*` 的不可变缓存头只能出现在成功响应，匿名 `401` 与缺失文件 `404` 必须满足 `Cache-Control == null`。`/product-apps/*` 直接由 Nginx 提供后，仍必须逐字段保留 `X-Frame-Options: SAMEORIGIN`、`Content-Security-Policy`、`X-Content-Type-Options: nosniff`、Referrer-Policy 和 Permissions-Policy；WANDER 为 `geolocation=(self)`，其余五个应用为 `geolocation=()`。
+`/assets/*` 的不可变缓存头只能出现在成功响应，缺失文件 `404` 必须满足 `Cache-Control == null`。`/product-apps/*` 直接由 Nginx 提供后，仍必须逐字段保留 `X-Frame-Options: SAMEORIGIN`、`Content-Security-Policy`、`X-Content-Type-Options: nosniff`、Referrer-Policy 和 Permissions-Policy；WANDER 为 `geolocation=(self)`，其余五个应用为 `geolocation=()`。
 
 修改静态根目录、速率或并发值后必须同时执行：
 
@@ -139,11 +146,11 @@ systemctl reload nginx
 systemctl show nginx -p ActiveState -p SubState -p NRestarts
 ```
 
-随后从受控凭据源把 `base64(username:password)` 只经 stdin 传给 `deploy/server/zaochang-capacity-probe.mjs`，不得写入参数、URL、环境文件或日志。静态探针使用 `--path /assets/<当前最大模块> --concurrency 128 --expected-status 200 --expected-bytes <真实字节数>`；动态探针使用 `--path /api/community --concurrency 30 --expected-status 200`。放行字段必须同时为 `allExpectedStatus == true`、`noErrors == true`、`allExpectedBytes == true`、`restartsStable == true`，并记录 P95；全状态码为 `200` 只证明请求终态，不证明延迟满足未定义的 SLO。
+公开测试静态探针使用 `--auth none --path /assets/<当前最大模块> --concurrency 128 --expected-status 200 --expected-bytes <真实字节数>`；动态探针使用 `--auth none --path /api/community --concurrency 30 --expected-status 200`。放行字段必须同时为 `allExpectedStatus == true`、`noErrors == true`、`allExpectedBytes == true`、`restartsStable == true`，并记录 P95；全状态码为 `200` 只证明请求终态，不证明延迟满足未定义的 SLO。保留的 `--auth basic` 只用于关闭公开测试后的回滚探针，凭据仍只能经 stdin 传入。
 
 最后用全新浏览器上下文加载 `/galaxy`，要求每个模块与 favicon 都是 `200`、控制台 `0 errors` 且 Canvas 非空；只检查首页 `200` 或容量探针不足以证明页面像素与 WebGL 终态。
 
-服务器加固资产位于 `deploy/server/`。`zaochang-backup.timer` 每日生成停服一致性快照并保留 14 天；`zaochang-health.timer` 每 5 分钟检查服务、回环 API、磁盘、内存、备份校验和与证书。每次发布后至少执行一次：
+服务器加固资产位于 `deploy/server/`。`zaochang-backup.timer` 每日生成停服一致性快照并保留 14 天；`zaochang-health.timer` 每 5 分钟检查应用、Nginx、上传扫描器、签名年龄、签名更新 timer、回环 API、磁盘、内存、备份校验和与证书。每次发布后至少执行一次：
 
 ```bash
 systemctl start zaochang-backup.service

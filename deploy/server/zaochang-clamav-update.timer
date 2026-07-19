@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Zaochang ClamAV signature update
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+RandomizedDelaySec=45m
+Persistent=true
+Unit=zaochang-clamav-update.service
+
+[Install]
+WantedBy=timers.target

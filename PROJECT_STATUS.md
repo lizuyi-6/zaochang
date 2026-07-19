@@ -411,3 +411,49 @@
 - 远端复验：GitHub Actions run `29576605970` 在修复 commit `f2b33b412efe2856dde97f9ca023f3b6394c8665` 上以 `conclusion=success` 结束，job `87872378220` 耗时 `2m44s`；checkout、Node、`npm ci`、TypeScript、Lint、禁用测试扫描、`npm test`、diff check、迁移漂移和高危生产依赖门禁均为 `success`。当时 PR 字段为 `OPEN / MERGEABLE / CLEAN`。
 - 本轮改动可能引入的新风险：连续健康读取与 12 秒有界恢复会增加每次外部 D1 维护后的测试耗时；极慢 CI runner 可能明确超时失败，但不会无限等待。幂等重试当前只用于测试中的 `/api/community` GET，不改变生产请求处理，也不重试任何不可逆写操作。
 - 未覆盖范围：PR 尚未合并，main 尚未包含本节补丁；记录上述 run 的文档提交无法在自身内容中预先记录它尚未触发的后续 run，因此合并前仍必须从 GitHub 外部核对最终 head 的新 `verify == SUCCESS`。公开生产阻断项维持上一节不变。
+
+## 2026-07-17 r6 阿里云部署与公开放行审计
+
+- 状态：部分完成；PR `#3` 的 merge commit `efc90d7397317ab65f511b289d7db05554d3a62d` 已部署到受保护地址 `https://aetherstudio.top/`，当前 release 为 `/opt/zaochang/releases/20260717-201245-efc90d739731-main-r5`，上一版 r4 目录保留。公开放行审计未通过，Nginx Basic Auth 保持启用，匿名首页字段为 `401`，因此本节不构成公开上线。
+- 版本命题：本地待部署 HEAD 与远端 merge commit 的 Git tree 均为 `f3eaf491b0fa942b9374a83d732f8c83a593f5e5`。`90b10b4..HEAD` 只改发布配置、探针、测试与证据文档；`app/worker/db/drizzle/public/package.json/package-lock.json` 的 runtime diff 退出 `0`，故没有执行数据库迁移。
+- 回滚与数据：部署前生成停服一致性快照 `state-20260717T120542Z.tar.gz`，SHA-256 校验成功，恢复演练为 `restore_check=ok sqlite=4 files=4`。发布前后数据库均为 `integrity=ok / wallet drift=0 / negative wallets=0 / invalid published=0 / invalid approved=0 / approved external demos=0`。
+- 部署失败反例：首个 `git archive` 受 Windows 全局 `core.autocrlf=true` 影响导出 CRLF，文件 SHA 与 commit blob 不一致，脚本在切换 current 之前退出 `1`；现场仍指向 r4，应用 active、`NRestarts=0`。改用 `git -c core.autocrlf=false archive` 后，服务器四个文件的 `git hash-object` 与 HEAD blob 逐项相等，再原子切换 symlink；回环 `/api/community` 返回成功，应用与 Nginx 为 `active/running / NRestarts=0 / ExecMainStatus=0`，`nginx -t` 成功。
+- 受保护 HTTP 验收：带 DPAPI 凭据的内存脚本对 `/`、`/galaxy`、`/signin`、`/api/community`、OIDC discovery、六个产品应用入口和 favicon 均得到 `200`。普通页为 `X-Frame-Options=DENY + nosniff + HSTS`；六个应用为 `SAMEORIGIN + CSP`，MORI/TYPEWAVE/LOOPS/SPROUT/MINUTE 为 `geolocation=()`，WANDER 为 `geolocation=(self)`，各应用 2 至 3 个 JS/CSS 引用全部 `200`。匿名应用态断言 `signedIn=false / wallet=null / profile=null / ownedProducts=0`。
+- OAuth 字段：OIDC `issuer`、authorization、token 与 JWKS origin 均为 `https://aetherstudio.top`；GitHub start 为 `307` 到 `github.com/login/oauth/authorize`，`redirect_uri` 精确等于 HTTPS callback。Google 仍显示“待配置”，直接 start 为 `307` 回登录页，但 Location origin 是 `http://aetherstudio.top`，随后才由 Nginx 301 升级；该非规范降级跳转列为公开缺口。
+- 容量字段：最大银河模块为 `624879` 字节。静态 128 并发为 `statuses.200=128 / fullBodyCount=128 / errors={} / P95=16429.7ms / app+nginx restarts 0→0`；动态 `/api/community` 30 并发为 `statuses.200=30 / errors={} / P95=4434.4ms / restarts 0→0`。四个探针 verdict 均为 true；这些字段证明终态和 body 完整，不证明延迟满足尚未定义的 SLO。
+- 健康与日志：发布后健康服务 `Result=success / ExecMainStatus=0`，备份和健康 timer 均 active/waiting，证书到期 `2026-10-13`，Nginx error 为 0、访问 5xx 为 0。受控 `systemctl restart` 使 Wrangler 以 SIGTERM `143` 退出，systemd 记录 1 条 `Failed with result exit-code` 后立即启动新进程；当前服务状态正常，但 unit 尚未把 143 声明为预期退出码。
+- 浏览器边界：Playwright CLI 因 Windows/WSL 包装器和 run-code 版本差异未取得认证后的 Canvas/控制台证据；应用内浏览器无认证会话，访问银河明确返回 `ERR_INVALID_AUTH_CREDENTIALS`，与匿名 401 一致。未使用 URL userinfo、未把密码写入配置，浏览器会话不再出现在 WSL 进程列表。
+- 公开阻断字段：`SUPPORTED_PRODUCTION_DATA_RUNTIME=false`（Wrangler 日志明确 D1/R2 均为 local）、`BASIC_AUTH_USER_COUNT=1`、`MALWARE_SCANNER_BINARY=false`、`UPLOAD_SCANNER_CODE_MATCHES=0`、`CROSS_MACHINE_BACKUP_HOOK=false`、`ALERT_DELIVERY_HOOK=false`、`GOOGLE_OAUTH_COMPLETE=false`。因此没有移除 Basic Auth；这是发布阻断结论，不是普通后续优化。
+- 本轮可能引入的新风险：r5 的 `node_modules` 通过硬链接复用 r4 已审计依赖树，若以后在任一 release 内执行包管理器写操作可能同时污染回退版本；发布纪律必须保持 release 只读。当前 `dist` 是 Windows 本地门禁构建而非 GitHub Actions artifact，虽已在 Linux Workerd 下通过 HTTP、OAuth 与容量验收，但没有与 CI runner 产物做字节级一致性证明。静态 P95 仍为 16 秒级。
+- 清理：服务器 `/tmp` 发布归档、验收脚本和 `/run` 认证 Header 均逐项断言不存在；本机敏感临时 JSON/脚本不存在。主机删除策略拒绝递归删除 3 个不含凭据的本地发布归档（约 3.6 MB）和空白 Playwright 元数据目录，它们不在 Git 索引中。
+- 终场网络边界：最后一次成功 SSH 健康检查之后，本机 DNS 把 `aetherstudio.top` 解析为保留测试地址 `198.18.0.82`，GitHub 控制请求也在同一窗口超时。固定真实 IP 后 22/80/443 的 TCP connect 均为 true，但 SSH banner、HTTP body 与 TLS handshake 未形成终态。该组证据更支持本机网络/出口异常，但不能单独排除服务器后续异常；因此“此刻公网可达”未验证，前述运行字段只锚定最后一次成功服务器检查。
+- 未覆盖范围：真实 GitHub provider 完整登录/退出与旧 Cookie 重放、本轮认证后的 Canvas 像素和控制台、Google 完整回调、Cloudflare D1/R2 迁移、跨机灾备、恶意上传扫描、外部告警投递、Webhook、邮件、移动真机、弱网和已批准延迟 SLO 仍未覆盖。
+
+## 2026-07-19 全流程页面摸排与公开测试 r12
+
+- 状态：部分完成；公开测试 current 为 `/opt/zaochang/releases/20260719-091200-ea2748b-flow-audit-r12`，运行代码 commit 为 `ea2748b084b4424f4e1821d6053f44c6cb8011f4`。应用、上传扫描器与 Nginx 的终场字段均为 `active/running / NRestarts=0 / ExecMainStatus=0`，应用进程 cwd 精确等于 r12。
+- 流程修复：commit `2a197c8` 把作品创建的“继续”与最终“提交平台预审”分为不同按钮，并让匿名孵化控制台不请求私有 `/api/incubation`；commit `ea2748b` 为孵化控制台匿名和成员空状态补齐可见 `h1=项目孵化控制台`。全量 `npm test` 退出码 `0`，统计 `72 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`，包含生产构建与匿名/成员空状态 H1 字段断言。
+- 本地静态门禁：`npx tsc --noEmit` 退出码 `0`；Lint 为 `0 errors / 9 warnings`；官方 npm 审计为 `0 vulnerabilities`；Drizzle 为 `40 tables / No schema changes`；禁用/单跑测试扫描为 `NO_SKIP_OR_ONLY_MATCHES`；`git diff --check` 退出码 `0`。
+- 前半段全流程覆盖：匿名与成员各 31 个路由；成员实际执行资料保存、帖子/收藏创建、圈子加入退出、点赞收藏关注评论、OAuth public client 创建撤销、孵化提交与详情面板；普通成员管理员 API 反例为 `403 admin_forbidden`、`/admin=404`。管理员读取三类 API、刷新、非法邀请码 `400` 且数量不变；未执行真实批准、驳回、邀请创建和内容下架。临时成员、作品、项目、客户端、帖子、会话和邀请码清理后的字段为 `fixture_rows_remaining=0 / admin_session_remaining=0 / fixture_invites=0`。
+- r12 浏览器字段：匿名孵化页为 `status=200 / h1Visible=true / h1=项目孵化控制台 / private API requests=0 / consoleErrors=0`，且登录链接精确返回该页；`390x844` 的 27 路由稳定态矩阵为 `non200=[] / overflow=[] / hiddenH1=[]`。作品创建页在 160ms Reveal 过渡帧出现一次 `scrollWidth=392`，500ms 稳定态为 `scrollWidth=390 / offenders=[]`，因此记录为审计时序而非稳定布局缺陷。
+- 六个嵌入应用字段：MORI/WANDER 输入保留并存在 canvas；TYPEWAVE 模式、主题、播放与 JSON 导出；LOOPS 预设、播放与 Markdown 导出；SPROUT 五段输入保留；MINUTE 情绪、计时重置、日期、暮色主题和 Markdown 导出均命中。SPROUT 首次复跑在 React 挂载前读取到字段数 0，审计改为等待 `#root > *` 后同一 r12 复跑 6/6；该改动只位于被忽略的 `output/playwright` 证据脚本，不进入发布包。
+- 公网协议字段：`/`、孵化、登录、社区 API、OIDC 和 MINUTE 应用均为 `200`；GitHub start 为 `307` 到 `github.com/login/oauth/authorize`，`redirect_uri=https://aetherstudio.top/api/auth/github/callback` 且 state 非空；OIDC issuer 为 HTTPS 正式 origin；普通页 `DENY`、应用 `SAMEORIGIN`、HSTS 存在。服务器端口 80 回环为 `301` 到 HTTPS；本机外部明文 HTTP 被 `Server=Beaver` 返回 `403`，没有到达 Nginx，故未形成跨网络端口 80 证据。
+- 数据与回退：切换前备份为 `/var/backups/zaochang/state-20260719T090418Z.tar.gz`，SHA-256 `352d3d7b888201dc2fd79071fa91652c0f6cb6b2b6ba5dd404608907e2164206`，恢复探针为 `restore_check=ok sqlite=5 files=5`。切换前、切换后和终场真实业务库均为 `integrity=ok / tables=40 / wallet drift=0 / negative wallets=0 / invalid published=0 / approved external=0`。
+- 发布反例：服务器默认 `npmmirror` 不实现 audit API，首次审计以 `404 NOT_IMPLEMENTED` 退出，current 未切换；改用 `https://registry.npmjs.org` 后退出 `0 / found 0 vulnerabilities`。r11 与 Git 归档的 lock 文件字节不同，但规范化 JSON SHA 同为 `14f3d38d...f639` 且 Git diff 为空，依赖才被允许复用。11 个迁移逐文件去 CR 后 SHA 全相等，未执行迁移。
+- 发布窗口：systemd 的 `Failed with result exit-code` 对应主动停止 r11 时 Wrangler 收到 SIGTERM `143`，r12 随后一次启动即 Ready，`NRestarts=0`；唯一 Nginx 502 发生在 16:18 的 r11 权限事故，r12 从 17:13:59 起 5xx 检索为空，Ready 后 warning..alert 为空。健康服务终态为 `Result=success / ExecMainStatus=0`。
+- 本轮改动可能引入的新风险：新增 H1 会增加匿名/空状态提示的垂直高度；390px 稳定态未溢出不证明 320px、系统大字体或移动真机。官方应用 iframe 在回环隧道仍有 `allow-scripts + allow-same-origin` 浏览器警告；当前只承载仓库内官方静态应用且用户外链产品不能获批，但未来若允许不受信任包进入同源命名空间，必须重新隔离 origin。
+- 清理：服务器归档和 5 个 r12 临时脚本逐项断言不存在；Playwright 下载、控制台和审计脚本仍保留在 Git 忽略的 `output/` 目录作为本机证据，不进入仓库或发布包。
+- 未覆盖范围：真实支付/退款 UI、真实审核批准/驳回、真实邀请码创建/撤销、举报提交、使用新外部 GitHub 身份跑完 callback、Google OAuth、320px/移动真机、弱网、跨机灾备恢复、外部告警投递和正式延迟 SLO 仍未覆盖。本节证明公开测试流程，不证明托管 D1/R2、高可用或正式生产发布。
+
+## 2026-07-19 GitHub 连接可见失败与创始人身份候选
+
+- 状态：部分完成；本地候选尚未提交、合并或部署，线上仍运行 `/opt/zaochang/releases/20260719-091200-ea2748b-flow-audit-r12`。服务器应用只读字段为 `active/running / NRestarts=0 / ExecMainStatus=0`。
+- GitHub 根因：应用 start 在约 4ms 内返回 307，但服务器与当前网络到 `github.com/login` 的 TCP/TLS 建连随机超时，而 `api.github.com` 可达；旧流程让浏览器离开造场后无限等待。候选改为同源 200 连接页，三次探测 `https://github.com/favicon.ico`、每次 5 秒；任一次 `load` 成功才 `location.replace()` 到官方授权页，`error` 或超时均计为失败，全部失败则停在明确错误态并提供重试/返回登录。start 的 CSP 精确限制为 `default-src 'none' / img-src https://github.com / frame-ancestors 'none' / form-action 'none'`。
+- 安全语义变更：登录页邀请码从 `GET` 改为 `POST`，避免邀请码进入 URL、浏览器历史和 Nginx access log。GitHub token exchange 采用 12 秒上限，profile/email 各 8 秒；一次性授权码 POST 不自动重放。该变更尚未部署，因此 r12 仍保留旧行为。
+- 创始人身份：新增独立 `ZAOCHANG_FOUNDER_EMAIL`，缺失或配置多个值时按普通成员显示；它不自动授予管理权限，管理入口仍要求独立命中 `ZAOCHANG_ADMIN_EMAILS`。六个内置应用归属 `Abraham Valerio` 并保留各自产品配色；账号菜单、侧栏和个人主页展示创始人身份与管理中心入口，普通成员 `/admin` 仍为 404。
+- 线上归属核对：真实业务库只有一个 GitHub 身份 `displayName=Abraham Valerio`，业务 `products` 表当前无记录；因此本轮没有批量修改数据库 `owner_email`，也没有改变任何果子收款人、订单或账本。
+- 本地完整门禁：`npm test` 退出码 `0`，统计 `75 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`，包含 Vite 生产构建；创始人用例断言 `founderProducts.length == 6`、六项 owner 相等、创始人 `/admin == 200`、普通成员 `/admin == 404`。GitHub start 用例断言同源 HTML、state Cookie 与页面 state 相等、`HttpOnly/Secure/SameSite=Lax` 及精确 CSP；token 超时用例断言一次请求且有界失败。
+- 其余门禁：直接 TypeScript 编译退出 `0`；本轮 15 个代码/测试文件 ESLint 为 `0 errors / 3 existing img warnings`；`npm audit --audit-level=high` 为 `0 vulnerabilities`；Drizzle 为 `40 tables / No schema changes`；禁用/单跑测试扫描为 `NO_SKIP_OR_ONLY_MATCHES`；凭据模式扫描为 `NO_CREDENTIAL_PATTERN_MATCHES`；`git diff --check` 退出 `0`。
+- 测试基础设施反例：旧套件依赖 Wrangler 在外部 `d1 execute` 后热重载，曾出现 `72 pass / 2 fail`，两个失败均为 30 秒内未连续恢复三次；逐次强制重启方案又在 15 分钟超时。候选改为一次 Wrangler 建库、同一 SQLite WAL 文件中的事务化测试 SQL，定向原失败用例为 `2 pass / 0 fail / 0 skipped / 0 todo`，完整套件耗时降至约 34 秒测试阶段。该 Node SQLite 连接只存在于测试文件，不进入生产 worker。
+- 本轮改动可能引入的新风险：GitHub 连接页依赖 favicon 探针；若 GitHub 授权端点可达但 favicon 被网络策略单独阻断，会显示可重试错误而不进入授权。创始人显示名目前与已核对 GitHub 身份一致，后续 GitHub 展示名变化不会自动重写静态产品作者文案。Node 22 的 `node:sqlite` 仍标记 experimental，但仓库与 CI 最低版本均为 Node `22.13.0`。
+- 未覆盖范围：尚未在公网新版本执行真实 GitHub 授权、callback token exchange、邀请码 POST 的 Nginx 日志反例、创始人账号浏览器像素与移动布局、GitHub favicon 单独被阻断的企业网络、Google OAuth、移动真机和弱网。部署、回退、线上 Cookie/CSP 与浏览器证据仍待本候选合并后取得。

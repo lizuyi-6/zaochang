@@ -18,14 +18,16 @@ type ProviderConfig = {
 export const SESSION_COOKIE = "zaochang_session";
 export const OAUTH_STATE_COOKIE = "zaochang_oauth_state";
 export const OAUTH_RETURN_COOKIE = "zaochang_oauth_return";
+export const OAUTH_INVITE_COOKIE = "zaochang_oauth_invite";
 
 function runtimeEnv() {
   return env as unknown as Record<string, string | undefined>;
 }
 
 export function providerConfig(provider: OAuthProvider): ProviderConfig | null {
+  if (provider !== "github") return null;
   const values = runtimeEnv();
-  const prefix = provider === "google" ? "GOOGLE" : "GITHUB";
+  const prefix = "GITHUB";
   const clientId = values[`${prefix}_OAUTH_CLIENT_ID`];
   const clientSecret = values[`${prefix}_OAUTH_CLIENT_SECRET`];
   if (!clientId || !clientSecret) return null;
@@ -88,6 +90,21 @@ export async function hashToken(value: string) {
   return toHex(new Uint8Array(digest));
 }
 
+export async function hashInvitationCode(value: string) {
+  const normalized = value.trim();
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(normalized)) return null;
+  return hashToken(normalized);
+}
+
+export async function invitationAvailable(codeHash: string) {
+  const row = await database().prepare(
+    `SELECT id FROM invitation_codes
+     WHERE code_hash = ? AND revoked_at IS NULL
+       AND expires_at > CURRENT_TIMESTAMP AND uses_count < max_uses`,
+  ).bind(codeHash).first<{ id: string }>();
+  return Boolean(row);
+}
+
 function toBase64Url(bytes: Uint8Array) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -131,14 +148,31 @@ export async function createOAuthSession(user: SessionUser, provider: OAuthProvi
   return { token, expiresAt };
 }
 
-export async function ensureOAuthUser(user: SessionUser, provider: OAuthProvider, providerAccountId: string, avatarUrl: string | null): Promise<SessionUser> {
+export async function ensureOAuthUser(
+  user: SessionUser,
+  provider: OAuthProvider,
+  providerAccountId: string,
+  avatarUrl: string | null,
+  invitationHash: string | null,
+): Promise<SessionUser> {
   const db = database();
   const existing = await db.prepare(
     `SELECT email FROM oauth_accounts WHERE provider = ? AND provider_account_id = ?`,
   ).bind(provider, providerAccountId).first<{ email: string }>();
-  const canonicalUser = existing
-    ? { ...user, email: existing.email }
-    : user;
+  if (existing) {
+    const stable = { ...user, email: existing.email };
+    await db.batch([
+      db.prepare(`UPDATE members SET display_name = ? WHERE email = ?`).bind(stable.displayName, stable.email),
+      db.prepare(
+        `UPDATE oauth_accounts
+         SET display_name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE provider = ? AND provider_account_id = ?`,
+      ).bind(stable.displayName, avatarUrl, provider, providerAccountId),
+    ]);
+    return stable;
+  }
+  if (!invitationHash) throw new RegistrationInviteError("invitation_required");
+  const redemptionId = `invite-redemption:${crypto.randomUUID()}`;
 
   try {
     await db.batch([
@@ -146,30 +180,42 @@ export async function ensureOAuthUser(user: SessionUser, provider: OAuthProvider
       `INSERT INTO members (email, display_name)
        VALUES (?, ?)
        ON CONFLICT(email) DO UPDATE SET display_name = excluded.display_name`,
-    ).bind(canonicalUser.email, canonicalUser.displayName),
+    ).bind(user.email, user.displayName),
     db.prepare(
       `INSERT OR IGNORE INTO wallets (user_email, balance, lifetime_earned, lifetime_spent)
        VALUES (?, 0, 0, 0)`,
-    ).bind(canonicalUser.email),
+    ).bind(user.email),
+    db.prepare(
+      `INSERT INTO invitation_redemptions
+       (id, invitation_id, provider, provider_account_id, user_email)
+       SELECT ?, id, ?, ?, ? FROM invitation_codes
+       WHERE code_hash = ? AND revoked_at IS NULL
+         AND expires_at > CURRENT_TIMESTAMP AND uses_count < max_uses`,
+    ).bind(redemptionId, provider, providerAccountId, user.email, invitationHash),
     db.prepare(
       `INSERT INTO oauth_accounts
        (provider, provider_account_id, email, display_name, avatar_url, updated_at)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(provider, provider_account_id) DO UPDATE SET
-       display_name = excluded.display_name,
-       avatar_url = excluded.avatar_url, updated_at = CURRENT_TIMESTAMP`,
-    ).bind(provider, providerAccountId, canonicalUser.email, canonicalUser.displayName, avatarUrl),
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+    ).bind(provider, providerAccountId, user.email, user.displayName, avatarUrl),
     ]);
   } catch (error) {
     const winner = await db.prepare(
       `SELECT email FROM oauth_accounts WHERE provider = ? AND provider_account_id = ?`,
     ).bind(provider, providerAccountId).first<{ email: string }>();
-    if (!winner) throw error;
+    if (!winner) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("oauth_registration_invitation_required")
+        || message.includes("invitation_not_available")
+        || message.includes("invitation_redemptions")) {
+        throw new RegistrationInviteError("invitation_invalid");
+      }
+      throw error;
+    }
     const stable = { ...user, email: winner.email };
     await db.prepare(`UPDATE members SET display_name = ? WHERE email = ?`).bind(stable.displayName, stable.email).run();
     return stable;
   }
-  return canonicalUser;
+  return user;
 }
 
 export async function setAuthCookies(token: string, returnTo: string, secure: boolean) {
@@ -177,14 +223,17 @@ export async function setAuthCookies(token: string, returnTo: string, secure: bo
   cookieStore.set(SESSION_COOKIE, token, { httpOnly: true, secure, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
   cookieStore.set(OAUTH_STATE_COOKIE, "", { httpOnly: true, secure, sameSite: "lax", path: "/", maxAge: 0 });
   cookieStore.set(OAUTH_RETURN_COOKIE, "", { httpOnly: true, secure, sameSite: "lax", path: "/", maxAge: 0 });
+  cookieStore.set(OAUTH_INVITE_COOKIE, "", { httpOnly: true, secure, sameSite: "lax", path: "/", maxAge: 0 });
   return returnTo;
 }
 
-export async function setOAuthState(state: string, returnTo: string, secure: boolean) {
+export async function setOAuthState(state: string, returnTo: string, secure: boolean, invitationHash: string | null = null) {
   const cookieStore = await cookies();
   const options = { httpOnly: true, secure, sameSite: "lax" as const, path: "/", maxAge: 600 };
   cookieStore.set(OAUTH_STATE_COOKIE, state, options);
   cookieStore.set(OAUTH_RETURN_COOKIE, returnTo, options);
+  if (invitationHash) cookieStore.set(OAUTH_INVITE_COOKIE, invitationHash, options);
+  else cookieStore.set(OAUTH_INVITE_COOKIE, "", { ...options, maxAge: 0 });
 }
 
 export async function clearAuthCookie(secure: boolean) {
@@ -199,4 +248,13 @@ export async function clearAuthCookie(secure: boolean) {
 export async function requestSecure(request: Request) {
   const requestHeaders = await headers();
   return new URL(request.url).protocol === "https:" || requestHeaders.get("x-forwarded-proto") === "https";
+}
+
+export class RegistrationInviteError extends Error {
+  code: "invitation_required" | "invitation_invalid";
+
+  constructor(code: "invitation_required" | "invitation_invalid") {
+    super(code);
+    this.code = code;
+  }
 }

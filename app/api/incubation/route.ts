@@ -48,8 +48,19 @@ export async function POST(request: Request) {
       const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
       if (!bucket) return Response.json({ error: "uploads_unavailable" }, { status: 503 });
       const object = await bucket.head(key);
-      if (!object || object.customMetadata?.owner !== member.email || object.customMetadata?.visibility !== "private") {
+      const upload = await database().prepare(
+        `SELECT owner_email AS owner, visibility, purpose, scan_status AS scanStatus, sha256
+         FROM uploaded_files WHERE key = ?`,
+      ).bind(key).first<{ owner: string; visibility: string; purpose: string; scanStatus: string; sha256: string }>();
+      if (!object || !upload || upload.owner !== member.email) {
         return Response.json({ error: "material_not_owned" }, { status: 403 });
+      }
+      if (upload.scanStatus !== "clean"
+        || object.customMetadata?.scanStatus !== "clean"
+        || object.customMetadata?.sha256 !== upload.sha256
+        || upload.visibility !== "private"
+        || upload.purpose !== "incubation_material") {
+        return Response.json({ error: "material_not_scanned" }, { status: 409 });
       }
       const project = await database().prepare("SELECT id FROM incubation_projects WHERE id = ? AND user_email = ?").bind(projectId, member.email).first();
       if (!project) return Response.json({ error: "project_not_found" }, { status: 404 });
