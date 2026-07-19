@@ -212,3 +212,27 @@
 - 未执行真实 GitHub 完整回调、logout Cookie 重放、Google 回调、Cloudflare D1/R2、跨机恢复、恶意上传样本、告警投递、Webhook、邮件、移动真机或弱网验收。
 - 本节证明受保护预发布部署，不证明公开生产发布；Basic Auth 没有移除。
 - 终场可达性未覆盖：最后一次成功 health/SSH 之后，本机 DNS 与 GitHub 控制请求同时异常；真实 IP TCP connect 成功，但 SSH/HTTP/TLS 协议终态未返回。不能用先前 200/health 证据外推“此刻仍可达”，也不能据本机异常断言服务器已宕机。
+
+## 2026-07-19 r12 全流程页面证据
+
+- 代码命题：匿名与成员空状态都渲染可见“项目孵化控制台”标题。`tests/rendered-html.test.mjs` 的两个 `assert.match(html, /<h1>项目孵化控制台<\/h1>/)` 在完整 `npm test` 中通过；套件退出 `0`，统计为 `72/72`、`failed=0 / skipped=0 / todo=0`。该字段断言直接证明服务端 HTML，不证明 CSS 可见性；可见性由线上 Playwright 的 `h1Visible == true` 补充。
+- 移动命题：待证命题为 27 个核心路由在 `390x844` 稳定态均满足 `status == 200 && scrollWidth <= clientWidth + 1 && firstH1Visible == true`。Playwright 汇总字段为 `total=27 / non200=[] / overflow=[] / hiddenH1=[]`。160ms 过渡帧的 `/studio/new scrollWidth=392` 未被隐藏；500ms 定点反例为 `scrollWidth=390 / offenders=[]`，因此本证据只证明稳定态，不证明动画每一帧都无 2px 位移。
+- 嵌入交互命题：等待每个 iframe 的 `#root > *` 可见后，六个应用结果数组的 `passed` 全为 true。具体充分字段为 MORI/WANDER 输入值相等且 canvas 存在、TYPEWAVE/LOOPS 播放按钮状态改变且下载后缀分别为 `.json/.md`、SPROUT 五个 textarea 均非空、MINUTE `aria-checked=true`、暮色按钮 class 含 `is-active`、计时重置与 `.md` 下载。此前 SPROUT `fields=0` 是挂载前探针，修正等待后同一发布版本复跑通过。
+- OAuth/HTTPS 命题：外部 Node 探针退出 `0`，字段为首页/孵化/登录/社区/OIDC/产品应用均 `200`，GitHub `307`、目标 `github.com/login/oauth/authorize`、callback 精确为 `https://aetherstudio.top/api/auth/github/callback`、state 非空、OIDC issuer 精确为 HTTPS origin、普通页/应用 frame 头分别为 `DENY/SAMEORIGIN` 且 HSTS 存在。该 start 证据不证明 GitHub callback token exchange。
+- 发布与数据命题：运行 commit `ea2748b084b4424f4e1821d6053f44c6cb8011f4` 的归档本地/远端 SHA-256 同为 `5ff20bf6d478b036e9f968d73d86ca2537d40a394073eceb7f28b9bfff2b44f1`，276 条且敏感/运行目录命中 0。默认 mirror audit 的 `404 NOT_IMPLEMENTED` 被判失败；官方 registry 复跑为 `found 0 vulnerabilities`。11 个迁移规范化一致，Wrangler 目录为 `zaochang:zaochang 0755`，current 与进程 cwd 均为 r12。
+- 回退命题：切换前备份 SHA-256 为 `352d3d7b888201dc2fd79071fa91652c0f6cb6b2b6ba5dd404608907e2164206`，恢复字段为 `restore_check=ok sqlite=5 files=5`。真实业务库在 PRE/POST/终场脚本均断言 `integrity == ok && tables == 40 && walletDrift == 0 && negativeWallets == 0 && invalidPublished == 0 && approvedExternal == 0`。两次转义错误的内联 SQLite 诊断已明确作废；这里只引用上传只读脚本退出 `0` 的结果。
+- 服务命题：应用、扫描器、Nginx 均为 `active/running/NRestarts=0/ExecMainStatus=0`，健康任务为 `Result=success/ExecMainStatus=0`。切换 stop 让旧 Wrangler 以 143 退出并留下 systemd failed 日志，但新进程一次 Ready；r12 时间窗 Nginx 5xx 为空、Ready 后 warning..alert 为空。服务 unit 仍未把 143 配成预期成功退出码。
+
+### 本轮逐文件证据
+
+- `app/galaxy/incubator/incubation-console.tsx`：匿名和成员空状态增加同一 H1；线上 Playwright 断言 `h1 == 项目孵化控制台 && h1Visible == true`，完整测试同时断言两种 HTML 状态。
+- `app/galaxy/ecosystem.module.css`：为 notice 内标题和可缩容正文添加样式；390px 27 路由稳定态 overflow 为空。320px、系统大字体和逐动画帧未单独验证。
+- `tests/rendered-html.test.mjs`：新增两条 H1 响应体字段断言；完整套件 `72 pass / 0 fail / 0 skipped / 0 todo`，退出码 `0`。
+- `PROJECT_STATUS.md`：记录范围、反例、部署与剩余风险；文档自身不证明运行行为。
+- `RELEASE_EVIDENCE.md`：记录命题到字段的映射；最终 diff/凭据扫描和文档提交在本节之后执行。
+
+### 未覆盖范围
+
+- 未执行真实支付/退款 UI、真实审核决定、真实邀请码生命周期、举报提交、全新外部 GitHub 身份 callback、Google OAuth、320px/移动真机、弱网、跨机恢复、外部告警和正式延迟 SLO。
+- 回环 iframe 有同源 sandbox 警告与固定生产 origin 的 postMessage 警告；后两条由 `127.0.0.1` 隧道 origin 不匹配触发。没有在公网 origin 的 DevTools 会话重新证明 warning=0。
+- 本地外部明文 HTTP 被 `Server=Beaver` 返回 403，未到达 Nginx；只有服务器本机端口 80 `301 → HTTPS` 证据，缺少另一网络对公网 80 的终态验证。

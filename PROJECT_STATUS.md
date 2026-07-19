@@ -428,3 +428,19 @@
 - 清理：服务器 `/tmp` 发布归档、验收脚本和 `/run` 认证 Header 均逐项断言不存在；本机敏感临时 JSON/脚本不存在。主机删除策略拒绝递归删除 3 个不含凭据的本地发布归档（约 3.6 MB）和空白 Playwright 元数据目录，它们不在 Git 索引中。
 - 终场网络边界：最后一次成功 SSH 健康检查之后，本机 DNS 把 `aetherstudio.top` 解析为保留测试地址 `198.18.0.82`，GitHub 控制请求也在同一窗口超时。固定真实 IP 后 22/80/443 的 TCP connect 均为 true，但 SSH banner、HTTP body 与 TLS handshake 未形成终态。该组证据更支持本机网络/出口异常，但不能单独排除服务器后续异常；因此“此刻公网可达”未验证，前述运行字段只锚定最后一次成功服务器检查。
 - 未覆盖范围：真实 GitHub provider 完整登录/退出与旧 Cookie 重放、本轮认证后的 Canvas 像素和控制台、Google 完整回调、Cloudflare D1/R2 迁移、跨机灾备、恶意上传扫描、外部告警投递、Webhook、邮件、移动真机、弱网和已批准延迟 SLO 仍未覆盖。
+
+## 2026-07-19 全流程页面摸排与公开测试 r12
+
+- 状态：部分完成；公开测试 current 为 `/opt/zaochang/releases/20260719-091200-ea2748b-flow-audit-r12`，运行代码 commit 为 `ea2748b084b4424f4e1821d6053f44c6cb8011f4`。应用、上传扫描器与 Nginx 的终场字段均为 `active/running / NRestarts=0 / ExecMainStatus=0`，应用进程 cwd 精确等于 r12。
+- 流程修复：commit `2a197c8` 把作品创建的“继续”与最终“提交平台预审”分为不同按钮，并让匿名孵化控制台不请求私有 `/api/incubation`；commit `ea2748b` 为孵化控制台匿名和成员空状态补齐可见 `h1=项目孵化控制台`。全量 `npm test` 退出码 `0`，统计 `72 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo`，包含生产构建与匿名/成员空状态 H1 字段断言。
+- 本地静态门禁：`npx tsc --noEmit` 退出码 `0`；Lint 为 `0 errors / 9 warnings`；官方 npm 审计为 `0 vulnerabilities`；Drizzle 为 `40 tables / No schema changes`；禁用/单跑测试扫描为 `NO_SKIP_OR_ONLY_MATCHES`；`git diff --check` 退出码 `0`。
+- 前半段全流程覆盖：匿名与成员各 31 个路由；成员实际执行资料保存、帖子/收藏创建、圈子加入退出、点赞收藏关注评论、OAuth public client 创建撤销、孵化提交与详情面板；普通成员管理员 API 反例为 `403 admin_forbidden`、`/admin=404`。管理员读取三类 API、刷新、非法邀请码 `400` 且数量不变；未执行真实批准、驳回、邀请创建和内容下架。临时成员、作品、项目、客户端、帖子、会话和邀请码清理后的字段为 `fixture_rows_remaining=0 / admin_session_remaining=0 / fixture_invites=0`。
+- r12 浏览器字段：匿名孵化页为 `status=200 / h1Visible=true / h1=项目孵化控制台 / private API requests=0 / consoleErrors=0`，且登录链接精确返回该页；`390x844` 的 27 路由稳定态矩阵为 `non200=[] / overflow=[] / hiddenH1=[]`。作品创建页在 160ms Reveal 过渡帧出现一次 `scrollWidth=392`，500ms 稳定态为 `scrollWidth=390 / offenders=[]`，因此记录为审计时序而非稳定布局缺陷。
+- 六个嵌入应用字段：MORI/WANDER 输入保留并存在 canvas；TYPEWAVE 模式、主题、播放与 JSON 导出；LOOPS 预设、播放与 Markdown 导出；SPROUT 五段输入保留；MINUTE 情绪、计时重置、日期、暮色主题和 Markdown 导出均命中。SPROUT 首次复跑在 React 挂载前读取到字段数 0，审计改为等待 `#root > *` 后同一 r12 复跑 6/6；该改动只位于被忽略的 `output/playwright` 证据脚本，不进入发布包。
+- 公网协议字段：`/`、孵化、登录、社区 API、OIDC 和 MINUTE 应用均为 `200`；GitHub start 为 `307` 到 `github.com/login/oauth/authorize`，`redirect_uri=https://aetherstudio.top/api/auth/github/callback` 且 state 非空；OIDC issuer 为 HTTPS 正式 origin；普通页 `DENY`、应用 `SAMEORIGIN`、HSTS 存在。服务器端口 80 回环为 `301` 到 HTTPS；本机外部明文 HTTP 被 `Server=Beaver` 返回 `403`，没有到达 Nginx，故未形成跨网络端口 80 证据。
+- 数据与回退：切换前备份为 `/var/backups/zaochang/state-20260719T090418Z.tar.gz`，SHA-256 `352d3d7b888201dc2fd79071fa91652c0f6cb6b2b6ba5dd404608907e2164206`，恢复探针为 `restore_check=ok sqlite=5 files=5`。切换前、切换后和终场真实业务库均为 `integrity=ok / tables=40 / wallet drift=0 / negative wallets=0 / invalid published=0 / approved external=0`。
+- 发布反例：服务器默认 `npmmirror` 不实现 audit API，首次审计以 `404 NOT_IMPLEMENTED` 退出，current 未切换；改用 `https://registry.npmjs.org` 后退出 `0 / found 0 vulnerabilities`。r11 与 Git 归档的 lock 文件字节不同，但规范化 JSON SHA 同为 `14f3d38d...f639` 且 Git diff 为空，依赖才被允许复用。11 个迁移逐文件去 CR 后 SHA 全相等，未执行迁移。
+- 发布窗口：systemd 的 `Failed with result exit-code` 对应主动停止 r11 时 Wrangler 收到 SIGTERM `143`，r12 随后一次启动即 Ready，`NRestarts=0`；唯一 Nginx 502 发生在 16:18 的 r11 权限事故，r12 从 17:13:59 起 5xx 检索为空，Ready 后 warning..alert 为空。健康服务终态为 `Result=success / ExecMainStatus=0`。
+- 本轮改动可能引入的新风险：新增 H1 会增加匿名/空状态提示的垂直高度；390px 稳定态未溢出不证明 320px、系统大字体或移动真机。官方应用 iframe 在回环隧道仍有 `allow-scripts + allow-same-origin` 浏览器警告；当前只承载仓库内官方静态应用且用户外链产品不能获批，但未来若允许不受信任包进入同源命名空间，必须重新隔离 origin。
+- 清理：服务器归档和 5 个 r12 临时脚本逐项断言不存在；Playwright 下载、控制台和审计脚本仍保留在 Git 忽略的 `output/` 目录作为本机证据，不进入仓库或发布包。
+- 未覆盖范围：真实支付/退款 UI、真实审核批准/驳回、真实邀请码创建/撤销、举报提交、使用新外部 GitHub 身份跑完 callback、Google OAuth、320px/移动真机、弱网、跨机灾备恢复、外部告警投递和正式延迟 SLO 仍未覆盖。本节证明公开测试流程，不证明托管 D1/R2、高可用或正式生产发布。
