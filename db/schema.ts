@@ -745,7 +745,7 @@ export const uploadedFiles = sqliteTable(
     index("uploaded_files_scan_status_idx").on(table.scanStatus, table.createdAt),
     check("uploaded_files_size_valid", sql`${table.byteSize} between 1 and 10485760`),
     check("uploaded_files_visibility_valid", sql`${table.visibility} in ('public', 'private')`),
-    check("uploaded_files_purpose_valid", sql`${table.purpose} in ('general', 'product_cover', 'incubation_material')`),
+    check("uploaded_files_purpose_valid", sql`${table.purpose} in ('general', 'product_cover', 'incubation_material', 'book_cover')`),
     check("uploaded_files_scan_status_valid", sql`${table.scanStatus} in ('pending', 'clean', 'infected', 'error')`),
   ],
 );
@@ -826,6 +826,9 @@ export const docs = sqliteTable(
     isBook: integer("is_book").notNull().default(0),
     coverHue: integer("cover_hue").notNull().default(210),
     summary: text("summary").notNull().default(""),
+    // 封面图片地址(/api/uploads/<key>),指向经 ClamAV 扫描 clean 的上传对象;
+    // 空串 = 无封面,前端回退为 coverHue 渐变色。纯展示字段,不影响可见性/权限。
+    coverImage: text("cover_image").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },

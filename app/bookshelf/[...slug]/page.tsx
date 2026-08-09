@@ -59,7 +59,9 @@ export default async function BookPage({ params }: PageProps) {
       <Link href="/bookshelf" className="book-back"><ArrowLeft size={14} /> 书架</Link>
       <Link href={base} className="book-side-title">
         <span className="book-cover book-cover-sm" style={{ background: `linear-gradient(150deg, hsl(${book.coverHue} 42% 88%), hsl(${book.coverHue} 48% 70%))` }}>
-          <BookOpen size={18} style={{ color: `hsl(${book.coverHue} 40% 38%)` }} />
+          {book.coverImage
+            ? <img src={book.coverImage} alt={book.title} loading="lazy" />
+            : <BookOpen size={18} style={{ color: `hsl(${book.coverHue} 40% 38%)` }} />}
         </span>
         <strong>{book.title}</strong>
       </Link>
@@ -76,6 +78,8 @@ export default async function BookPage({ params }: PageProps) {
           {crumb.id === doc.id ? <strong>{crumb.title}</strong> : <Link href={`${base}/${crumbs.slice(1, index + 2).map((c) => encodeURIComponent(c.slug)).join("/")}`}>{crumb.title}</Link>}
         </span>)}
       </nav>}
+
+      {isCover && book.coverImage && <img className="book-banner" src={book.coverImage} alt={book.title} />}
 
       <header className="docs-article-header">
         <h1>{doc.title}</h1>

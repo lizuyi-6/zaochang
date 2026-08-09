@@ -14,6 +14,7 @@ type Doc = {
   isBook: number;
   coverHue: number;
   summary: string;
+  coverImage: string;
   updatedAt: string;
 };
 
@@ -27,9 +28,10 @@ type Draft = {
   isBook: boolean;
   coverHue: number;
   summary: string;
+  coverImage: string;
 };
 
-const EMPTY_DRAFT: Draft = { id: null, title: "", slug: "", parentId: "", visibility: "private", bodyMd: "", isBook: false, coverHue: 210, summary: "" };
+const EMPTY_DRAFT: Draft = { id: null, title: "", slug: "", parentId: "", visibility: "private", bodyMd: "", isBook: false, coverHue: 210, summary: "", coverImage: "" };
 
 const VISIBILITY_LABEL: Record<Doc["visibility"], string> = {
   public: "公开",
@@ -42,6 +44,7 @@ export function DocsManager() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   const load = async () => {
     const response = await fetch("/api/docs", { cache: "no-store" });
@@ -71,6 +74,7 @@ export function DocsManager() {
     isBook: doc.isBook === 1,
     coverHue: doc.coverHue,
     summary: doc.summary,
+    coverImage: doc.coverImage,
   });
 
   const save = async () => {
@@ -89,6 +93,7 @@ export function DocsManager() {
         isBook: draft.isBook,
         coverHue: draft.coverHue,
         summary: draft.summary,
+        coverImage: draft.coverImage,
       }),
     });
     const result = await response.json().catch(() => ({})) as { error?: string };
@@ -100,6 +105,33 @@ export function DocsManager() {
     setNotice(isEdit ? "文档已更新。" : "文档已创建。");
     setDraft(EMPTY_DRAFT);
     await load();
+  };
+
+  // 上传封面图(仅书)。走创始人专用 /api/docs/cover:ClamAV 扫描 clean 后
+  // 才把返回的公开地址写回该书 cover_image。需要书已存在(先保存书再传封面)。
+  const uploadCover = async (file: File) => {
+    if (!draft.id) {
+      setNotice("请先保存这本书，再为它上传封面。");
+      return;
+    }
+    setUploadingCover(true);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      form.set("docId", draft.id);
+      form.set("visibility", "public");
+      const response = await fetch("/api/docs/cover", { method: "POST", body: form });
+      const result = await response.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!response.ok || !result.url) {
+        setNotice(`封面上传未生效:${result.error === "malware_detected" ? "文件未通过安全扫描" : result.error === "book_not_found" ? "目标不是一本已存在的书" : result.error ?? "请求失败"}`);
+        return;
+      }
+      setDraft((c) => ({ ...c, coverImage: result.url as string }));
+      setNotice("封面已上传并写回该书。");
+      await load();
+    } finally {
+      setUploadingCover(false);
+    }
   };
 
   const remove = async (doc: Doc) => {
@@ -165,6 +197,13 @@ export function DocsManager() {
         {draft.isBook && <>
           <label>封面主题色(色相 0-360)<input type="number" min={0} max={360} value={draft.coverHue} onChange={(e) => setDraft((c) => ({ ...c, coverHue: Math.max(0, Math.min(360, Math.floor(Number(e.target.value)) || 0)) }))} /></label>
           <label>书籍简介<input value={draft.summary} maxLength={240} onChange={(e) => setDraft((c) => ({ ...c, summary: e.target.value }))} placeholder="这本书讲什么,一两句话" /></label>
+          <label>封面图片(经安全扫描,公开可读)
+            <span className="docs-manager-cover">
+              <input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploadingCover} onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadCover(f); e.currentTarget.value = ""; }} />
+              {uploadingCover && <small>正在扫描并上传…</small>}
+              {draft.coverImage && <span className="docs-manager-cover-preview"><img src={draft.coverImage} alt="封面预览" /><button type="button" onClick={() => setDraft((c) => ({ ...c, coverImage: "" }))}>移除封面</button></span>}
+            </span>
+          </label>
         </>}
         <label className="docs-manager-body">正文(Markdown,支持 $…$ / $$…$$ 数学公式与 ```mermaid 图)
           <textarea value={draft.bodyMd} onChange={(e) => setDraft((c) => ({ ...c, bodyMd: e.target.value }))} placeholder="# 标题&#10;&#10;支持 Markdown 语法…" />
