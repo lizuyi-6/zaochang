@@ -101,10 +101,13 @@ function withSecurityHeaders(request: Request, response: Response, publicOrigin:
   if (new URL(publicOrigin).protocol === "https:") {
     headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
   }
+  const signin = url.pathname === "/signin";
   if ((headers.get("content-type") ?? "").startsWith("text/html")) {
+    const frameAncestors = sameOriginEmbed ? "'self'" : "'none'";
+    const turnstileOrigins = signin ? " https://challenges.cloudflare.com" : "";
     headers.set("content-security-policy", githubConnection
       ? GITHUB_CONNECTION_CSP
-      : `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors ${sameOriginEmbed ? "'self'" : "'none'"}; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:`);
+      : `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors ${frameAncestors}; form-action 'self'; script-src 'self' 'unsafe-inline'${turnstileOrigins}; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'${turnstileOrigins}; worker-src 'self' blob:`);
   }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

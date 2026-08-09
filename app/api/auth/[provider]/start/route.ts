@@ -11,26 +11,30 @@ import {
   requestSecure,
   safeReturnPath,
   setOAuthState,
+  turnstileConfig,
 } from "../../../../oauth-session";
 import { GITHUB_CONNECTION_CSP } from "../../../../lib/security-policy";
 import { githubConnectionPage } from "./github-connection-page";
+import { verifyTurnstile } from "../../../_lib/turnstile";
 
 type Params = { params: Promise<{ provider: string }> };
 
 export async function GET(request: Request, { params }: Params) {
   const search = new URL(request.url).searchParams;
   const invitationCode = String(search.get("invitation_code") ?? "").trim().slice(0, 64) || null;
-  return startOAuth(request, await params, invitationCode, search.get("return_to"));
+  const turnstileToken = search.get("cf-turnstile-response");
+  return startOAuth(request, await params, invitationCode, search.get("return_to"), turnstileToken);
 }
 
 export async function POST(request: Request, { params }: Params) {
   const form = await request.formData();
   const invitationCode = String(form.get("invitation_code") ?? "").trim().slice(0, 64) || null;
   const returnTo = String(form.get("return_to") ?? "");
-  return startOAuth(request, await params, invitationCode, returnTo);
+  const turnstileToken = String(form.get("cf-turnstile-response") ?? "") || null;
+  return startOAuth(request, await params, invitationCode, returnTo, turnstileToken);
 }
 
-async function startOAuth(request: Request, params: { provider: string }, invitationCode: string | null, requestedReturnTo: string | null) {
+async function startOAuth(request: Request, params: { provider: string }, invitationCode: string | null, requestedReturnTo: string | null, turnstileToken: string | null) {
   const { provider: rawProvider } = params;
   if (!isOAuthProvider(rawProvider)) return NextResponse.json({ error: "unsupported_provider" }, { status: 404 });
   const provider = rawProvider;
@@ -41,6 +45,27 @@ async function startOAuth(request: Request, params: { provider: string }, invita
     url.searchParams.set("error", "not_configured");
     url.searchParams.set("provider", provider);
     return oauthRedirect(request, url);
+  }
+
+  // Bot protection: account creation (invitation redemption) requires a solved
+  // Cloudflare Turnstile challenge when TURNSTILE_SECRET_KEY is configured.
+  // Fail-closed — a missing/invalid token or any verification error rejects and
+  // returns the member to the sign-in page. The plain login link (no invite
+  // code) is unaffected: it only redirects to GitHub, which enforces its own
+  // bot protections, and account creation stays invitation-gated downstream.
+  if (invitationCode) {
+    const turnstile = turnstileConfig();
+    if (turnstile) {
+      const expectedHostname = new URL(request.url).hostname;
+      const remoteip = request.headers.get("cf-connecting-ip") ?? undefined;
+      const humanVerified = await verifyTurnstile(turnstileToken, turnstile.secret, expectedHostname, remoteip);
+      if (!humanVerified) {
+        const url = absoluteAppUrl(request, "/signin");
+        url.searchParams.set("error", "turnstile_invalid");
+        url.searchParams.set("return_to", returnTo);
+        return oauthRedirect(request, url);
+      }
+    }
   }
 
   const invitationHash = invitationCode ? await hashInvitationCode(invitationCode) : null;

@@ -23,6 +23,7 @@ const port = 4179;
 const baseUrl = `http://127.0.0.1:${port}`;
 const runId = `${process.pid}-${Date.now()}`;
 const adminEmail = `release-admin-${runId}@example.com`;
+const operationsAdminEmail = `operations-admin-${runId}@example.com`;
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const stateDir = join(tmpdir(), `zaochang-test-state-${runId}`);
 const logPath = join(tmpdir(), `zaochang-wrangler-${runId}.log`);
@@ -112,7 +113,7 @@ function previewServerArgs() {
     "--port", String(port),
     "--persist-to", stateDir,
     "--var", "APP_ENV:test",
-    "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail}`,
+    "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail},${operationsAdminEmail}`,
     "--var", `ZAOCHANG_FOUNDER_EMAIL:${adminEmail}`,
     "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,
     "--var", `UPLOAD_SCANNER_TOKEN:${scannerToken}`,
@@ -349,7 +350,7 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 
 before(async () => {
   await startFakeUploadScanner();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -716,32 +717,169 @@ test("renders the signed-in profile from account data", async () => {
   assert.doesNotMatch(html, /登录后查看你的创作者主页/);
 });
 
-test("founder identity owns the built-in portfolio and exposes management without widening admin access", async () => {
+test("founder identity owns the built-in portfolio and exposes founder management without widening access", async () => {
   const founderProducts = showcaseProducts.filter((product) => product.founderOwned);
   assert.equal(founderProducts.length, 6);
   assert.equal(founderProducts.every((product) => product.ownerName === FOUNDER_DISPLAY_NAME), true);
 
   const founderHeaders = authHeaders(FOUNDER_DISPLAY_NAME, adminEmail);
-  const [profileResponse, adminResponse, regularAdminResponse] = await Promise.all([
+  await fetch(`${baseUrl}/api/community`, { headers: founderHeaders });
+  const otherEmail = `other-owner-${runId}@example.com`;
+  await fetch(`${baseUrl}/api/community`, { headers: authHeaders("其他创作者", otherEmail) });
+  await executeLocalD1(`
+    INSERT INTO products
+      (owner_email, owner_name, title, description, category, status, review_status, approved_version)
+    VALUES
+      ('${adminEmail}', '${FOUNDER_DISPLAY_NAME}', '创始人数据库产品', '只应出现在创始人资产中', '效率工具', 'pending_review', 'pending_review', 0),
+      ('${otherEmail}', '其他创作者', '其他用户数据库产品', '不得划入创始人资产', '互动体验', 'pending_review', 'pending_review', 0)
+  `);
+
+  const [profileResponse, founderResponse, adminResponse, operationsAdminResponse, operationsFounderResponse, regularFounderResponse, regularAdminResponse] = await Promise.all([
     fetch(`${baseUrl}/profile`, { headers: founderHeaders }),
+    fetch(`${baseUrl}/founder`, { headers: founderHeaders }),
     fetch(`${baseUrl}/admin`, { headers: founderHeaders }),
+    fetch(`${baseUrl}/admin`, { headers: authHeaders("运营管理员", operationsAdminEmail) }),
+    fetch(`${baseUrl}/founder`, { headers: authHeaders("运营管理员", operationsAdminEmail) }),
+    fetch(`${baseUrl}/founder`, { headers: authHeaders("普通成员", `regular-founder-${runId}@example.com`) }),
     fetch(`${baseUrl}/admin`, { headers: authHeaders("普通成员", `regular-admin-${runId}@example.com`) }),
   ]);
   assert.equal(profileResponse.status, 200);
+  assert.equal(founderResponse.status, 200);
   assert.equal(adminResponse.status, 200);
+  assert.equal(operationsAdminResponse.status, 200);
+  assert.equal(operationsFounderResponse.status, 404);
+  assert.equal(regularFounderResponse.status, 404);
   assert.equal(regularAdminResponse.status, 404);
 
   const profileHtml = await profileResponse.text();
   assert.match(profileHtml, /造场创始人/);
+  assert.match(profileHtml, /href="\/founder"/);
   assert.match(profileHtml, /href="\/admin"/);
   for (const product of founderProducts) assert.match(profileHtml, new RegExp(product.title));
-  assert.match(await adminResponse.text(), /发布运营控制台/);
+  const founderHtml = await founderResponse.text();
+  assert.match(founderHtml, /<h1>创始人中心<\/h1>/);
+  assert.match(founderHtml, /造场预置产品<\/span><strong>6<\/strong>/);
+  assert.match(founderHtml, /创始人数据库产品/);
+  assert.doesNotMatch(founderHtml, /其他用户数据库产品/);
+  assert.match(founderHtml, /进入平台管理/);
+  const adminHtml = await adminResponse.text();
+  assert.match(adminHtml, /<h1>造场管理中心<\/h1>/);
+  assert.match(adminHtml, /aria-label="管理事项总览"/);
+  assert.match(adminHtml, /href="#product-review"/);
 
   const regularHome = await fetch(baseUrl, { headers: authHeaders("普通成员", `regular-shell-${runId}@example.com`) });
   assert.equal(regularHome.status, 200);
   const regularHtml = await regularHome.text();
+  assert.doesNotMatch(regularHtml, /href="\/founder"/);
   assert.doesNotMatch(regularHtml, /href="\/admin"/);
   assert.doesNotMatch(regularHtml, /class="founder-role"/);
+  await executeLocalD1(`DELETE FROM products WHERE title IN ('创始人数据库产品', '其他用户数据库产品')`);
+});
+
+test("docs: public visible to anonymous, members-only gated, tree and markdown sanitized", async () => {
+  const docsRunId = crypto.randomUUID();
+  const pubId = `doc:${docsRunId}-pub`;
+  const childId = `doc:${docsRunId}-child`;
+  const memId = `doc:${docsRunId}-mem`;
+  const xssTitle = `公开文档 ${docsRunId.slice(0, 8)}`;
+  const memberEmail = `docs-member-${docsRunId}@example.com`;
+  // seed:根公开文档(含 XSS)、其公开子文档、一篇 members 文档
+  await executeLocalD1(`
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order) VALUES
+      ('${pubId}', 'guide-${docsRunId.slice(0, 8)}', NULL, '${xssTitle}', '# 你好\n\n这是**公开**文档。<script>window.__xss=1</script><img src=x onerror=alert(1)>', 'public', '${adminEmail}', 1),
+      ('${childId}', 'setup', '${pubId}', '安装指南', '子级内容', 'public', '${adminEmail}', 1),
+      ('${memId}', 'internal-${docsRunId.slice(0, 8)}', NULL, '内部笔记', '只给登录用户看', 'members', '${adminEmail}', 2)
+  `);
+  const base = `guide-${docsRunId.slice(0, 8)}`;
+  try {
+    // 1) 公开文档:匿名可见,Markdown 渲染,且 XSS 被剥掉(行为断言,非状态码)
+    const anonPub = await fetch(`${baseUrl}/docs/${base}`);
+    assert.equal(anonPub.status, 200);
+    const anonPubHtml = await anonPub.text();
+    assert.match(anonPubHtml, new RegExp(xssTitle));
+    assert.match(anonPubHtml, /<strong>公开<\/strong>/);
+    assert.doesNotMatch(anonPubHtml, /<script>window\.__xss/);
+    assert.doesNotMatch(anonPubHtml, /onerror=/);
+    // 2) 匿名目录树:公开文档+子文档可见,members 文档不出现
+    const anonIndex = await fetch(`${baseUrl}/docs`);
+    assert.equal(anonIndex.status, 200);
+    const anonIndexHtml = await anonIndex.text();
+    assert.match(anonIndexHtml, new RegExp(xssTitle));
+    assert.match(anonIndexHtml, /安装指南/);
+    assert.doesNotMatch(anonIndexHtml, /内部笔记/);
+    // 3) members 文档:匿名访问 -> 404(fail-closed,不暴露存在性,与 /founder 对非创始人 404 同理)
+    const anonMem = await fetch(`${baseUrl}/docs/internal-${docsRunId.slice(0, 8)}`);
+    assert.equal(anonMem.status, 404);
+    // 4) members 文档:登录用户 -> 可见正文
+    const authMem = await fetch(`${baseUrl}/docs/internal-${docsRunId.slice(0, 8)}`, { headers: authHeaders("文档成员", memberEmail) });
+    assert.equal(authMem.status, 200);
+    const authMemHtml = await authMem.text();
+    assert.match(authMemHtml, /只给登录用户看/);
+    // 5) 嵌套子文档 URL 可达
+    const childPage = await fetch(`${baseUrl}/docs/${base}/setup`);
+    assert.equal(childPage.status, 200);
+    assert.match(await childPage.text(), /子级内容/);
+    // 6) 登录用户在目录树里能看到 members 文档
+    const authIndex = await fetch(`${baseUrl}/docs`, { headers: authHeaders("文档成员", memberEmail) });
+    assert.match(await authIndex.text(), /内部笔记/);
+  } finally {
+    await executeLocalD1(`DELETE FROM docs WHERE id IN ('${pubId}', '${childId}', '${memId}')`);
+  }
+});
+
+test("docs API: founder-gated CRUD, non-founder forbidden, cycle rejected", async () => {
+  const docsRunId = crypto.randomUUID();
+  const memberEmail = `docs-api-${docsRunId}@example.com`;
+  // 非创始人(普通成员)写 -> 403
+  const forbidden = await fetch(`${baseUrl}/api/docs`, {
+    method: "POST",
+    headers: authHeaders("普通成员", memberEmail),
+    body: JSON.stringify({ title: "越权文档", slug: "forbidden", visibility: "public" }),
+  });
+  assert.equal(forbidden.status, 403);
+  // 匿名写 -> 401
+  const anon = await fetch(`${baseUrl}/api/docs`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title: "匿名文档" }),
+  });
+  assert.equal(anon.status, 401);
+  // 创始人建父 + 子,再尝试把父移到子下 -> 409 防环
+  const mkDoc = async (payload) => {
+    const res = await fetch(`${baseUrl}/api/docs`, {
+      method: "POST",
+      headers: authHeaders("造场创始人", adminEmail),
+      body: JSON.stringify(payload),
+    });
+    const resText = await res.text();
+    assert.equal(res.status, 201, resText);
+    return JSON.parse(resText).doc;
+  };
+  const parent = await mkDoc({ title: `父 ${docsRunId.slice(0, 8)}`, slug: `p-${docsRunId.slice(0, 8)}`, visibility: "public" });
+  const child = await mkDoc({ title: "子", slug: "c", parentId: parent.id, visibility: "public" });
+  try {
+    const cycle = await fetch(`${baseUrl}/api/docs`, {
+      method: "PATCH",
+      headers: authHeaders("造场创始人", adminEmail),
+      body: JSON.stringify({ id: parent.id, parentId: child.id }),
+    });
+    assert.equal(cycle.status, 409);
+    // 删除有子级的父 -> 409;先删子再删父 -> 成功
+    const delParent = await fetch(`${baseUrl}/api/docs`, {
+      method: "DELETE",
+      headers: authHeaders("造场创始人", adminEmail),
+      body: JSON.stringify({ id: parent.id }),
+    });
+    assert.equal(delParent.status, 409);
+  } finally {
+    for (const id of [child.id, parent.id]) {
+      await fetch(`${baseUrl}/api/docs`, {
+        method: "DELETE",
+        headers: authHeaders("造场创始人", adminEmail),
+        body: JSON.stringify({ id }),
+      });
+    }
+  }
 });
 
 test("uses GitHub-only invite registration and keeps unconfigured providers fail-closed", async () => {

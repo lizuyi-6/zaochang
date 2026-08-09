@@ -1,6 +1,6 @@
 import { ArrowLeft, BadgeCheck, Github } from "lucide-react";
 import Link from "next/link";
-import { oauthProviderStatus, safeReturnPath } from "../oauth-session";
+import { oauthProviderStatus, safeReturnPath, turnstileSiteKey } from "../oauth-session";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -12,6 +12,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
   const returnTo = safeReturnPath(returnToValue);
   const loginHref = `/api/auth/github/start?return_to=${encodeURIComponent(returnTo)}`;
   const status = oauthProviderStatus();
+  const turnstileKey = turnstileSiteKey();
   const error = Array.isArray(query.error) ? query.error[0] : query.error;
   const provider = Array.isArray(query.provider) ? query.provider[0] : query.provider;
   const errorText = error === "not_configured"
@@ -28,6 +29,8 @@ export default async function SignInPage({ searchParams }: PageProps) {
             ? "这是首次注册，请输入邀请码后重新使用 GitHub 登录。"
             : error === "invitation_invalid"
               ? "邀请码无效、已用完或已经过期，请向造场团队获取新邀请码。"
+          : error === "turnstile_invalid"
+            ? "人机验证未通过，请稍后在登录页重新完成验证后再注册。"
           : null;
 
   return (
@@ -60,6 +63,12 @@ export default async function SignInPage({ searchParams }: PageProps) {
             <span>首次注册必填</span>
           </label>
           <input id="invitation_code" name="invitation_code" type="text" inputMode="text" autoComplete="one-time-code" minLength={8} maxLength={64} placeholder="输入造场邀请码" required />
+          {turnstileKey && (
+            <>
+              <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+              <div className="cf-turnstile auth-turnstile" data-sitekey={turnstileKey} data-appearance="interaction-only" />
+            </>
+          )}
           <button className="auth-provider github" type="submit" disabled={!status.github}>
             <Github size={18} /><span>使用邀请码注册</span>{!status.github && <small>待配置</small>}
           </button>
