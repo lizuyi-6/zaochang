@@ -38,6 +38,16 @@ export function isOAuthProvider(value: string): value is OAuthProvider {
   return value === "google" || value === "github";
 }
 
+export function turnstileConfig() {
+  const secret = runtimeEnv().TURNSTILE_SECRET_KEY;
+  return secret ? { secret } : null;
+}
+
+export function turnstileSiteKey() {
+  const key = runtimeEnv().TURNSTILE_SITE_KEY;
+  return key ? key : null;
+}
+
 export function oauthProviderStatus() {
   return {
     google: Boolean(providerConfig("google")),
