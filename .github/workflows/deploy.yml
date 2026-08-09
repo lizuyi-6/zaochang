@@ -1,0 +1,42 @@
+name: deploy-production
+
+# 仅在 release-gates(ci.yml)对 main 分支跑通后,才部署生产。
+# 手动 workflow_dispatch 可应急部署(会跳过 ci 门禁,仅在紧急时用)。
+on:
+  workflow_run:
+    workflows: [release-gates]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # 自动触发:仅当触发的 ci 成功;手动触发:总是跑(应急)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 65ebf2011c45b578d745221c646434fc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 部署触发 ci 的那个 commit,保证与通过测试的代码一致
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify migrations applied (fail-closed)
+        run: node scripts/check-migrations.mjs
+      - name: Deploy Worker
+        run: npx wrangler deploy --config wrangler.prod.jsonc
