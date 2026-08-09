@@ -1,0 +1,59 @@
+import type { Metadata } from "next";
+import { ArrowLeft, ChevronRight, FileText, Lock } from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { currentMember, docBreadcrumbs, findDocByPath, listChildren, renderDocHtml } from "../../api/_lib/docs.ts";
+
+export const dynamic = "force-dynamic";
+
+type PageProps = { params: Promise<{ slug: string[] }> };
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const member = await currentMember();
+  const doc = await findDocByPath(slug ?? [], member);
+  return { title: doc ? doc.title : "文档" };
+}
+
+export default async function DocDetailPage({ params }: PageProps) {
+  const { slug } = await params;
+  const slugs = (slug ?? []).map((segment) => decodeURIComponent(segment));
+  const member = await currentMember();
+  // fail-closed:不存在或对当前访问者不可见(members/private 且未登录)一律 404,
+  // 不暴露文档存在性。
+  const doc = await findDocByPath(slugs, member);
+  if (!doc) notFound();
+
+  const [crumbs, children] = await Promise.all([
+    docBreadcrumbs(doc, member),
+    listChildren(doc.id, member),
+  ]);
+  const crumbHref = (index: number) => "/docs/" + crumbs.slice(0, index + 1).map((crumb) => encodeURIComponent(crumb.slug)).join("/");
+
+  return <div className="docs-page docs-detail">
+    <nav className="docs-breadcrumb" aria-label="面包屑">
+      <Link href="/docs"><ArrowLeft size={14} /> 文档</Link>
+      {crumbs.map((crumb, index) => <span key={crumb.id}>
+        <ChevronRight size={13} />
+        {index === crumbs.length - 1 ? <strong>{crumb.title}</strong> : <Link href={crumbHref(index)}>{crumb.title}</Link>}
+      </span>)}
+    </nav>
+
+    <header className="docs-article-header">
+      <h1>{doc.title}</h1>
+      <small>更新于 {doc.updatedAt.slice(0, 10)}{doc.visibility === "members" ? " · 登录可见" : doc.visibility === "private" ? " · 私有" : ""}</small>
+    </header>
+    <article className="docs-body" dangerouslySetInnerHTML={{ __html: renderDocHtml(doc.bodyMd) }} />
+
+    {children.length > 0 && <section className="docs-children" aria-label="子文档">
+      <h2>本节目录</h2>
+      <ul>
+        {children.map((child) => <li key={child.id}>
+          <Link href={crumbHref(crumbs.length - 1) + "/" + encodeURIComponent(child.slug)}>
+            <FileText size={15} /><span>{child.title}</span>{child.visibility !== "public" && <Lock size={12} />}
+          </Link>
+        </li>)}
+      </ul>
+    </section>}
+  </div>;
+}
