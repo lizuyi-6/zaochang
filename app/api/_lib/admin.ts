@@ -26,6 +26,14 @@ export async function requireAdmin() {
   return member;
 }
 
+export async function requireFounder() {
+  const member = await requireMember();
+  if (!isFounderEmail(member.email)) {
+    throw Object.assign(new Error("founder_forbidden"), { code: "founder_forbidden", status: 403 });
+  }
+  return member;
+}
+
 export async function auditAdminAction(actorEmail: string, action: string, targetType: string, targetRef: string, detail = "") {
   await adminAuditStatement(actorEmail, action, targetType, targetRef, detail).run();
 }

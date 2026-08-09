@@ -60,6 +60,7 @@ const routeNames: Record<string, string> = {
   "/guide": "社区指南",
   "/developers": "开发者接入",
   "/developers/docs": "身份与果子 API",
+  "/founder": "创始人中心",
   "/admin": "管理中心",
 };
 
@@ -213,7 +214,8 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
               <Link href="/profile"><UserRound size={15} /> 个人主页</Link>
               <Link href="/profile/edit"><Layers3 size={15} /> 编辑资料</Link>
               <Link href="/developers"><Blocks size={15} /> 开发者接入</Link>
-              {member.isAdmin && <Link href="/admin"><ShieldCheck size={15} /> 管理中心</Link>}
+              {member.isFounder && <Link className="founder-menu-entry" href="/founder"><BadgeCheck size={15} /> 创始人中心</Link>}
+              {member.isAdmin && <Link href="/admin"><ShieldCheck size={15} /> 平台管理</Link>}
               <a href="/api/auth/logout?return_to=%2F"><LogOut size={15} /> 退出登录</a>
             </motion.div>
           )}
@@ -239,9 +241,13 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
               {routeIsActive(pathname, "/wallet") && <motion.span className="deep-nav-active" layoutId="deep-nav-active" />}
               <WalletCards size={19} /><span>果子钱包</span>
             </Link>
+            {member.isFounder && <Link href="/founder" className={routeIsActive(pathname, "/founder") ? "active founder-entry" : "founder-entry"}>
+              {routeIsActive(pathname, "/founder") && <motion.span className="deep-nav-active" layoutId="deep-nav-active" />}
+              <BadgeCheck size={19} /><span>创始人中心</span>
+            </Link>}
             {member.isAdmin && <Link href="/admin" className={routeIsActive(pathname, "/admin") ? "active admin-entry" : "admin-entry"}>
               {routeIsActive(pathname, "/admin") && <motion.span className="deep-nav-active" layoutId="deep-nav-active" />}
-              <ShieldCheck size={19} /><span>管理中心</span>
+              <ShieldCheck size={19} /><span>平台管理</span>
             </Link>}
           </LayoutGroup>
         </nav>

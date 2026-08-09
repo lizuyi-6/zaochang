@@ -23,6 +23,7 @@ const port = 4179;
 const baseUrl = `http://127.0.0.1:${port}`;
 const runId = `${process.pid}-${Date.now()}`;
 const adminEmail = `release-admin-${runId}@example.com`;
+const operationsAdminEmail = `operations-admin-${runId}@example.com`;
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const stateDir = join(tmpdir(), `zaochang-test-state-${runId}`);
 const logPath = join(tmpdir(), `zaochang-wrangler-${runId}.log`);
@@ -112,7 +113,7 @@ function previewServerArgs() {
     "--port", String(port),
     "--persist-to", stateDir,
     "--var", "APP_ENV:test",
-    "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail}`,
+    "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail},${operationsAdminEmail}`,
     "--var", `ZAOCHANG_FOUNDER_EMAIL:${adminEmail}`,
     "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,
     "--var", `UPLOAD_SCANNER_TOKEN:${scannerToken}`,
@@ -716,32 +717,63 @@ test("renders the signed-in profile from account data", async () => {
   assert.doesNotMatch(html, /登录后查看你的创作者主页/);
 });
 
-test("founder identity owns the built-in portfolio and exposes management without widening admin access", async () => {
+test("founder identity owns the built-in portfolio and exposes founder management without widening access", async () => {
   const founderProducts = showcaseProducts.filter((product) => product.founderOwned);
   assert.equal(founderProducts.length, 6);
   assert.equal(founderProducts.every((product) => product.ownerName === FOUNDER_DISPLAY_NAME), true);
 
   const founderHeaders = authHeaders(FOUNDER_DISPLAY_NAME, adminEmail);
-  const [profileResponse, adminResponse, regularAdminResponse] = await Promise.all([
+  await fetch(`${baseUrl}/api/community`, { headers: founderHeaders });
+  const otherEmail = `other-owner-${runId}@example.com`;
+  await fetch(`${baseUrl}/api/community`, { headers: authHeaders("其他创作者", otherEmail) });
+  await executeLocalD1(`
+    INSERT INTO products
+      (owner_email, owner_name, title, description, category, status, review_status, approved_version)
+    VALUES
+      ('${adminEmail}', '${FOUNDER_DISPLAY_NAME}', '创始人数据库产品', '只应出现在创始人资产中', '效率工具', 'pending_review', 'pending_review', 0),
+      ('${otherEmail}', '其他创作者', '其他用户数据库产品', '不得划入创始人资产', '互动体验', 'pending_review', 'pending_review', 0)
+  `);
+
+  const [profileResponse, founderResponse, adminResponse, operationsAdminResponse, operationsFounderResponse, regularFounderResponse, regularAdminResponse] = await Promise.all([
     fetch(`${baseUrl}/profile`, { headers: founderHeaders }),
+    fetch(`${baseUrl}/founder`, { headers: founderHeaders }),
     fetch(`${baseUrl}/admin`, { headers: founderHeaders }),
+    fetch(`${baseUrl}/admin`, { headers: authHeaders("运营管理员", operationsAdminEmail) }),
+    fetch(`${baseUrl}/founder`, { headers: authHeaders("运营管理员", operationsAdminEmail) }),
+    fetch(`${baseUrl}/founder`, { headers: authHeaders("普通成员", `regular-founder-${runId}@example.com`) }),
     fetch(`${baseUrl}/admin`, { headers: authHeaders("普通成员", `regular-admin-${runId}@example.com`) }),
   ]);
   assert.equal(profileResponse.status, 200);
+  assert.equal(founderResponse.status, 200);
   assert.equal(adminResponse.status, 200);
+  assert.equal(operationsAdminResponse.status, 200);
+  assert.equal(operationsFounderResponse.status, 404);
+  assert.equal(regularFounderResponse.status, 404);
   assert.equal(regularAdminResponse.status, 404);
 
   const profileHtml = await profileResponse.text();
   assert.match(profileHtml, /造场创始人/);
+  assert.match(profileHtml, /href="\/founder"/);
   assert.match(profileHtml, /href="\/admin"/);
   for (const product of founderProducts) assert.match(profileHtml, new RegExp(product.title));
-  assert.match(await adminResponse.text(), /发布运营控制台/);
+  const founderHtml = await founderResponse.text();
+  assert.match(founderHtml, /<h1>创始人中心<\/h1>/);
+  assert.match(founderHtml, /造场预置产品<\/span><strong>6<\/strong>/);
+  assert.match(founderHtml, /创始人数据库产品/);
+  assert.doesNotMatch(founderHtml, /其他用户数据库产品/);
+  assert.match(founderHtml, /进入平台管理/);
+  const adminHtml = await adminResponse.text();
+  assert.match(adminHtml, /<h1>造场管理中心<\/h1>/);
+  assert.match(adminHtml, /aria-label="管理事项总览"/);
+  assert.match(adminHtml, /href="#product-review"/);
 
   const regularHome = await fetch(baseUrl, { headers: authHeaders("普通成员", `regular-shell-${runId}@example.com`) });
   assert.equal(regularHome.status, 200);
   const regularHtml = await regularHome.text();
+  assert.doesNotMatch(regularHtml, /href="\/founder"/);
   assert.doesNotMatch(regularHtml, /href="\/admin"/);
   assert.doesNotMatch(regularHtml, /class="founder-role"/);
+  await executeLocalD1(`DELETE FROM products WHERE title IN ('创始人数据库产品', '其他用户数据库产品')`);
 });
 
 test("uses GitHub-only invite registration and keeps unconfigured providers fail-closed", async () => {
