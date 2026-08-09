@@ -1,6 +1,6 @@
-import { requireFounder } from "../_lib/admin.ts";
-import { database, jsonError } from "../_lib/community.ts";
-import { normalizeSlug, normalizeVisibility } from "../_lib/docs.ts";
+import { requireFounder } from "../_lib/admin";
+import { database, jsonError } from "../_lib/community";
+import { normalizeSlug, normalizeVisibility } from "../_lib/docs";
 
 export const dynamic = "force-dynamic";
 
@@ -72,12 +72,12 @@ export async function PATCH(request: Request) {
     if (parentId !== undefined && parentId !== null) {
       if (parentId === id) return Response.json({ error: "doc_cycle" }, { status: 409 });
       // 防环:新父级不能是自己的后代。
-      let cursor = parentId;
+      let cursor: string | null = parentId;
       const seen = new Set<string>([id]);
       while (cursor) {
         if (seen.has(cursor)) return Response.json({ error: "doc_cycle" }, { status: 409 });
         seen.add(cursor);
-        const node = await database().prepare(`SELECT parent_id AS parentId FROM docs WHERE id = ?`).bind(cursor).first<{ parentId: string | null }>();
+        const node: { parentId: string | null } | null = await database().prepare(`SELECT parent_id AS parentId FROM docs WHERE id = ?`).bind(cursor).first<{ parentId: string | null }>();
         cursor = node?.parentId ?? null;
       }
     }
