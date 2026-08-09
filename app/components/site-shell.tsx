@@ -156,9 +156,12 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   const productSlug = pathname.startsWith("/product/") ? pathname.slice("/product/".length).split("/")[0] : null;
   const officialProduct = productSlug ? products.find((product) => product.slug === productSlug && product.official) : undefined;
   const routeName = officialProduct ? "造场官方产品" : pathname.startsWith("/product/") ? "作品体验" : routeNames[pathname] ?? "造场";
+  // 书架阅读器(/bookshelf/某本书/...)进入沉浸模式:隐藏站侧栏、顶部搜索/发布,
+  // 只保留右上角账户区,让目录树与正文占满宽度。书架首页(/bookshelf)保留整站导航。
+  const readingMode = /^\/bookshelf\/[^/]+/.test(pathname);
 
   return (
-    <div className={`deep-shell${officialProduct ? " official-product-shell" : ""}`}>
+    <div className={`deep-shell${officialProduct ? " official-product-shell" : ""}${readingMode ? " reading-mode" : ""}`}>
       <motion.div
         key={`progress-${pathname}`}
         className="route-progress"
@@ -190,11 +193,11 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
           {officialProduct && <span className="deep-official-context"><BadgeCheck size={14} /> 造场官方项目</span>}
         </Link>
 
-        <button className="deep-search-trigger" onClick={() => setCommandOpen(true)}>
+        {!readingMode && <button className="deep-search-trigger" onClick={() => setCommandOpen(true)}>
           <Search size={17} />
           <span>搜索作品、创作者和圈子</span>
           <kbd>⌘ K</kbd>
-        </button>
+        </button>}
 
         <div className="deep-top-actions">
           <Link className="deep-icon-button" href="/notifications" aria-label="通知" title="通知">
@@ -204,7 +207,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
           <Link className="deep-balance" href="/wallet">
             <Coins size={17} /> <strong>{member.signedIn ? walletBalance ?? "--" : "--"}</strong><span>果</span>
           </Link>
-          <Link className="deep-create" href="/studio/new"><Plus size={17} /> 发布作品</Link>
+          {!readingMode && <Link className="deep-create" href="/studio/new"><Plus size={17} /> 发布作品</Link>}
           {member.signedIn ? (
             <button className={`deep-account${member.isFounder ? " founder" : ""}`} onClick={() => setAccountOpen((value) => !value)} title={member.isFounder ? "创始人账户菜单" : "账户菜单"} aria-label="打开账户菜单" aria-expanded={accountOpen}>
               <span className="deep-avatar ink">{member.initial}</span><ChevronDown size={14} />
@@ -228,7 +231,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         </AnimatePresence>
       </header>
 
-      <aside className="deep-sidebar">
+      {!readingMode && <aside className="deep-sidebar">
         <nav className="deep-nav" aria-label="主导航">
           <LayoutGroup>
             {navItems.map((item) => {
@@ -277,7 +280,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         </Link>
 
         <div className="deep-side-footer"><Link href="/guide#covenant">社区公约</Link><Link href="/guide#creator">创作者指南</Link><small>© 2026 造场</small></div>
-      </aside>
+      </aside>}
 
       <div className="deep-route-frame">
         <div className="deep-route-label"><span>{routeName}</span><small>{officialProduct ? "PRODUCT GALAXY / OFFICIAL" : "LIVE COMMUNITY / 2026"}</small></div>

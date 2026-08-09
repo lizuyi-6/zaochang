@@ -904,6 +904,15 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     assert.match(chapHtml, /<pre class="mermaid">/, "mermaid 应回填为 pre.mermaid");
     assert.match(chapHtml, /flowchart LR/, "mermaid 源码应保留供前端渲染");
     assert.doesNotMatch(chapHtml, /\$\\langle/, "原始 $...$ 不应裸露");
+    // 3b) 阅读器沉浸模式:正文页隐藏站侧栏/顶部搜索/发布,但保留右上角账户区;
+    //     书架首页(1) 保留整站导航,不在沉浸模式。
+    assert.match(chapHtml, /reading-mode/, "阅读器页应进入沉浸模式");
+    assert.doesNotMatch(chapHtml, /deep-search-trigger/, "沉浸模式不渲染顶部搜索");
+    assert.doesNotMatch(chapHtml, /deep-create/, "沉浸模式不渲染发布按钮");
+    assert.doesNotMatch(chapHtml, /<aside class="deep-sidebar">/, "沉浸模式不渲染站侧栏");
+    assert.match(chapHtml, /deep-top-actions/, "沉浸模式保留右上角账户区");
+    assert.doesNotMatch(anonHtml, /reading-mode/, "书架首页不进入沉浸模式,保留整站导航");
+    assert.match(anonHtml, /deep-sidebar/, "书架首页保留站侧栏");
     // 4) members 书:匿名 404(fail-closed),登录可见
     assert.equal((await fetch(`${baseUrl}/bookshelf/membook-${tag}`)).status, 404);
     const authMem = await fetch(`${baseUrl}/bookshelf/membook-${tag}`, { headers: authHeaders("书架成员", memberEmail) });
