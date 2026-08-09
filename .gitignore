@@ -44,3 +44,6 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# production DB backups (contain real user data, never commit)
+/backups/
