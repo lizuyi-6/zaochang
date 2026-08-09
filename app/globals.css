@@ -87,6 +87,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .deep-mobile-nav { display: none; }
 .deep-topbar, .deep-sidebar, .deep-route-label, .deep-route-content, .deep-mobile-nav { transition: background-color 260ms ease, border-color 260ms ease, color 260ms ease; }
 
+/* 滚动条统一细化:默认浏览器滚动条又粗又深,在浅色背景上扎眼。改为细窄半透明,
+   贴近配色;悬停时略加深。覆盖整页、目录侧栏与横向滚动容器(webkit + Firefox)。 */
+* { scrollbar-color: rgb(115 118 111 / 38%) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { height: 8px; width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgb(115 118 111 / 32%); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(115 118 111 / 52%); }
+::-webkit-scrollbar-corner { background: transparent; }
+.official-product-shell * { scrollbar-color: rgb(156 166 163 / 34%) transparent; }
+.official-product-shell ::-webkit-scrollbar-thumb { background: rgb(156 166 163 / 30%); }
+.official-product-shell ::-webkit-scrollbar-thumb:hover { background: rgb(156 166 163 / 50%); }
+
+
 /* 阅读器沉浸模式(/bookshelf/某本书):隐藏站侧栏与顶部搜索/发布,内容占满宽度,
    只保留右上角账户区(悬浮)。书架首页 /bookshelf 不在此模式,保留整站导航。 */
 .reading-mode .deep-route-frame { margin-left: 0; padding-top: 0; }
