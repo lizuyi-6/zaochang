@@ -807,3 +807,27 @@ export const adminAuditEvents = sqliteTable(
   },
   (table) => [index("admin_audit_created_idx").on(table.createdAt)],
 );
+
+export const docs = sqliteTable(
+  "docs",
+  {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull(),
+    parentId: text("parent_id"),
+    title: text("title").notNull(),
+    bodyMd: text("body_md").notNull().default(""),
+    visibility: text("visibility").notNull().default("private"),
+    authorEmail: text("author_email")
+      .notNull()
+      .references(() => members.email),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("docs_parent_slug_idx").on(table.parentId, table.slug),
+    index("docs_parent_sort_idx").on(table.parentId, table.sortOrder),
+    index("docs_author_idx").on(table.authorEmail, table.updatedAt),
+    check("docs_visibility_valid", sql`${table.visibility} in ('public', 'members', 'private')`),
+  ],
+);
