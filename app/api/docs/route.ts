@@ -1,12 +1,8 @@
 import { requireFounder } from "../_lib/admin";
 import { database, jsonError } from "../_lib/community";
-import { normalizeSlug, normalizeVisibility } from "../_lib/docs";
+import { DOC_COLUMNS, normalizeSlug, normalizeVisibility } from "../_lib/docs";
 
 export const dynamic = "force-dynamic";
-
-const DOC_COLUMNS = `id, slug, parent_id AS parentId, title, body_md AS bodyMd,
-  visibility, author_email AS authorEmail, sort_order AS sortOrder,
-  created_at AS createdAt, updated_at AS updatedAt`;
 
 export async function GET() {
   try {

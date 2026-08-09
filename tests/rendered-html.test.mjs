@@ -827,6 +827,31 @@ test("docs: public visible to anonymous, members-only gated, tree and markdown s
   }
 });
 
+test("docs tree hides unreachable child whose parent is invisible", async () => {
+  const docsRunId = crypto.randomUUID();
+  const privParent = `doc:${docsRunId}-pp`;
+  const pubChild = `doc:${docsRunId}-pc`;
+  const privSlug = `priv-${docsRunId.slice(0, 8)}`;
+  const childSlug = `pubchild-${docsRunId.slice(0, 8)}`;
+  // 私有父 + 公开子:子的访问路径必经不可见的父,对匿名不可达
+  await executeLocalD1(`
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order) VALUES
+      ('${privParent}', '${privSlug}', NULL, '私有父${docsRunId.slice(0, 6)}', 'x', 'private', '${adminEmail}', 1),
+      ('${pubChild}', '${childSlug}', '${privParent}', '公开子${docsRunId.slice(0, 6)}', 'y', 'public', '${adminEmail}', 1)
+  `);
+  try {
+    // 匿名目录树:不应列出不可达的公开子(否则显示一个点击必 404 的链接)
+    const idx = await fetch(`${baseUrl}/docs`);
+    const idxHtml = await idx.text();
+    assert.doesNotMatch(idxHtml, /公开子/);
+    // 经任何路径都不可达:直接根级查不到(父非根),经父路径父不可见 -> 均 404
+    assert.equal((await fetch(`${baseUrl}/docs/${childSlug}`)).status, 404);
+    assert.equal((await fetch(`${baseUrl}/docs/${privSlug}/${childSlug}`)).status, 404);
+  } finally {
+    await executeLocalD1(`DELETE FROM docs WHERE id IN ('${privParent}', '${pubChild}')`);
+  }
+});
+
 test("docs API: founder-gated CRUD, non-founder forbidden, cycle rejected", async () => {
   const docsRunId = crypto.randomUUID();
   const memberEmail = `docs-api-${docsRunId}@example.com`;
