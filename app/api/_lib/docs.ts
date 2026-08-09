@@ -19,7 +19,7 @@ export type DocRow = {
 
 export type DocNode = DocRow & { children: DocNode[] };
 
-const DOC_COLUMNS = `id, slug, parent_id AS parentId, title, body_md AS bodyMd,
+export const DOC_COLUMNS = `id, slug, parent_id AS parentId, title, body_md AS bodyMd,
   visibility, author_email AS authorEmail, sort_order AS sortOrder,
   created_at AS createdAt, updated_at AS updatedAt`;
 
@@ -63,15 +63,21 @@ export function canViewDoc(doc: DocRow, member: MemberIdentity | null): boolean 
 
 // 只保留对当前访问者可见的文档,再组装成目录树。
 export function buildDocTree(rows: DocRow[], member: MemberIdentity | null): DocNode[] {
+  const allIds = new Set(rows.map((row) => row.id));
   const visible = rows.filter((row) => canViewDoc(row, member));
   const nodes = new Map<string, DocNode>();
   for (const row of visible) nodes.set(row.id, { ...row, children: [] });
   const roots: DocNode[] = [];
   for (const node of nodes.values()) {
-    // 父级不可见或不存在时,把节点提升到根,避免整枝消失。
-    const parent = node.parentId ? nodes.get(node.parentId) : undefined;
-    if (parent) parent.children.push(node);
-    else roots.push(node);
+    if (!node.parentId) { roots.push(node); continue; }
+    const parent = nodes.get(node.parentId);
+    if (parent) {
+      parent.children.push(node);
+    } else if (!allIds.has(node.parentId)) {
+      // 父级真的不存在(孤儿数据),提升到根。
+      roots.push(node);
+    }
+    // 父级存在但不可见 -> 该节点经父级路径不可达,不显示(避免"目录列出但点击 404")。
   }
   return roots;
 }
