@@ -21,8 +21,12 @@ export default async function BookshelfPage() {
       ? <div className="bookshelf-grid">
         {books.map((book) => <Link key={book.id} href={`/bookshelf/${encodeURIComponent(book.slug)}`} className="book-card">
           <span className="book-cover" style={{ background: `linear-gradient(150deg, hsl(${book.coverHue} 42% 88%), hsl(${book.coverHue} 48% 70%))` }}>
-            <BookOpen size={30} style={{ color: `hsl(${book.coverHue} 40% 38%)` }} />
-            <strong style={{ color: `hsl(${book.coverHue} 44% 26%)` }}>{book.title}</strong>
+            {book.coverImage
+              ? <img src={book.coverImage} alt={book.title} loading="lazy" />
+              : <>
+                <BookOpen size={30} style={{ color: `hsl(${book.coverHue} 40% 38%)` }} />
+                <strong style={{ color: `hsl(${book.coverHue} 44% 26%)` }}>{book.title}</strong>
+              </>}
           </span>
           <span className="book-meta">
             <strong>{book.title}{book.visibility !== "public" && <Lock size={12} aria-label="登录后可见" />}</strong>
