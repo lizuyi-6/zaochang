@@ -99,6 +99,11 @@ GitHub 是唯一启用的账户提供方。已有 `oauth_accounts` 身份直接�
 
 ## 8. 阿里云公开测试发布
 
+> **⚠️ 已被取代(2026-08-09)**:生产已迁到 Cloudflare(Worker + D1 + R2 + Tunnel 扫描)。
+> 本节描述的阿里云直host部署**不再是生产**;盒子上 `zaochang.service` 已 `disabled`、
+> nginx 443 Web 入口已关,盒子只保留 ClamAV 扫描后端(经 Cloudflare Tunnel 供 CF 调用)。
+> **当前权威部署见 [`CLOUDFLARE_RUNBOOK.md`](CLOUDFLARE_RUNBOOK.md)。** 本节仅作历史/回滚参考。
+
 检查当前版本和服务：
 
 ```bash
