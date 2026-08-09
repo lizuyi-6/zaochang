@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ArrowLeft, ChevronRight, FileText, Lock } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { currentMember, docBreadcrumbs, findDocByPath, listChildren, renderDocHtml } from "../../api/_lib/docs.ts";
+import { currentMember, docBreadcrumbs, findDocByPath, listChildren, renderDocHtml } from "../../api/_lib/docs";
 
 export const dynamic = "force-dynamic";
 

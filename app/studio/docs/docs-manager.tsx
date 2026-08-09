@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText, Folder, Lock, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Doc = {
   id: string;
@@ -37,14 +37,23 @@ export function DocsManager() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = async () => {
     const response = await fetch("/api/docs", { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json() as { docs: Doc[] };
     setDocs(data.docs);
-  }, []);
+  };
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const response = await fetch("/api/docs", { cache: "no-store" });
+      if (!response.ok || cancelled) return;
+      const data = await response.json() as { docs: Doc[] };
+      if (!cancelled) setDocs(data.docs);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const startEdit = (doc: Doc) => setDraft({
     id: doc.id,

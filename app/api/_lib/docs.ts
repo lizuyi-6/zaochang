@@ -1,6 +1,6 @@
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
-import { database, optionalMember, type MemberIdentity } from "./community.ts";
+import { database, optionalMember, type MemberIdentity } from "./community";
 
 export type DocVisibility = "public" | "members" | "private";
 
@@ -84,7 +84,7 @@ export async function findDocByPath(slugs: string[], member: MemberIdentity | nu
   let parentId: string | null = null;
   let current: DocRow | null = null;
   for (const slug of slugs) {
-    const row = await database().prepare(
+    const row: DocRow | null = await database().prepare(
       `SELECT ${DOC_COLUMNS} FROM docs WHERE slug = ? AND ${parentId === null ? "parent_id IS NULL" : "parent_id = ?"} LIMIT 1`,
     ).bind(...(parentId === null ? [slug] : [slug, parentId])).first<DocRow>();
     if (!row || !canViewDoc(row, member)) return null;
