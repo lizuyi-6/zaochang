@@ -11,6 +11,9 @@ type Doc = {
   bodyMd: string;
   visibility: "public" | "members" | "private";
   sortOrder: number;
+  isBook: number;
+  coverHue: number;
+  summary: string;
   updatedAt: string;
 };
 
@@ -21,9 +24,12 @@ type Draft = {
   parentId: string;
   visibility: "public" | "members" | "private";
   bodyMd: string;
+  isBook: boolean;
+  coverHue: number;
+  summary: string;
 };
 
-const EMPTY_DRAFT: Draft = { id: null, title: "", slug: "", parentId: "", visibility: "private", bodyMd: "" };
+const EMPTY_DRAFT: Draft = { id: null, title: "", slug: "", parentId: "", visibility: "private", bodyMd: "", isBook: false, coverHue: 210, summary: "" };
 
 const VISIBILITY_LABEL: Record<Doc["visibility"], string> = {
   public: "公开",
@@ -62,6 +68,9 @@ export function DocsManager() {
     parentId: doc.parentId ?? "",
     visibility: doc.visibility,
     bodyMd: doc.bodyMd,
+    isBook: doc.isBook === 1,
+    coverHue: doc.coverHue,
+    summary: doc.summary,
   });
 
   const save = async () => {
@@ -77,6 +86,9 @@ export function DocsManager() {
         parentId: draft.parentId || null,
         visibility: draft.visibility,
         bodyMd: draft.bodyMd,
+        isBook: draft.isBook,
+        coverHue: draft.coverHue,
+        summary: draft.summary,
       }),
     });
     const result = await response.json().catch(() => ({})) as { error?: string };
@@ -146,7 +158,15 @@ export function DocsManager() {
             <option value="public">公开</option>
           </select>
         </label>
-        <label className="docs-manager-body">正文(Markdown)
+        <label className="docs-manager-check">
+          <input type="checkbox" checked={draft.isBook} onChange={(e) => setDraft((c) => ({ ...c, isBook: e.target.checked }))} />
+          这是一本书(出现在书架,章节挂到它下面)
+        </label>
+        {draft.isBook && <>
+          <label>封面主题色(色相 0-360)<input type="number" min={0} max={360} value={draft.coverHue} onChange={(e) => setDraft((c) => ({ ...c, coverHue: Math.max(0, Math.min(360, Math.floor(Number(e.target.value)) || 0)) }))} /></label>
+          <label>书籍简介<input value={draft.summary} maxLength={240} onChange={(e) => setDraft((c) => ({ ...c, summary: e.target.value }))} placeholder="这本书讲什么,一两句话" /></label>
+        </>}
+        <label className="docs-manager-body">正文(Markdown,支持 $…$ / $$…$$ 数学公式与 ```mermaid 图)
           <textarea value={draft.bodyMd} onChange={(e) => setDraft((c) => ({ ...c, bodyMd: e.target.value }))} placeholder="# 标题&#10;&#10;支持 Markdown 语法…" />
         </label>
         <div className="docs-manager-actions">
@@ -167,8 +187,8 @@ export function DocsManager() {
               {docs.some((d) => d.parentId === doc.id) ? <Folder size={15} /> : <FileText size={15} />}
             </span>
             <div>
-              <strong>{doc.title}</strong>
-              <small>/{doc.slug} · {doc.updatedAt.slice(0, 10)}</small>
+              <strong>{doc.isBook === 1 ? "📖 " : ""}{doc.title}</strong>
+              <small>/{doc.slug} · {doc.updatedAt.slice(0, 10)}{doc.isBook === 1 ? " · 书" : ""}</small>
             </div>
             <span className={`docs-manager-vis docs-vis-${doc.visibility}`}>
               {doc.visibility !== "public" && <Lock size={11} />} {VISIBILITY_LABEL[doc.visibility]}

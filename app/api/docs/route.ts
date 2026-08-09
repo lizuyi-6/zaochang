@@ -25,6 +25,9 @@ export async function POST(request: Request) {
     const visibility = normalizeVisibility(String(input.visibility ?? "private"));
     const parentId = input.parentId ? String(input.parentId) : null;
     const bodyMd = String(input.bodyMd ?? "").slice(0, 200_000);
+    const isBook = input.isBook ? 1 : 0;
+    const coverHue = Math.max(0, Math.min(360, Math.floor(Number(input.coverHue)) || 0));
+    const summary = String(input.summary ?? "").trim().slice(0, 240);
     if (title.length < 1 || !slug) {
       return Response.json({ error: "invalid_doc" }, { status: 400 });
     }
@@ -35,9 +38,9 @@ export async function POST(request: Request) {
     const id = `doc:${crypto.randomUUID()}`;
     try {
       await database().prepare(
-        `INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(id, slug, parentId, title, bodyMd, visibility, founder.email).run();
+        `INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, is_book, cover_hue, summary)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(id, slug, parentId, title, bodyMd, visibility, founder.email, isBook, coverHue, summary).run();
     } catch (error) {
       if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
         return Response.json({ error: "slug_taken" }, { status: 409 });
@@ -89,6 +92,9 @@ export async function PATCH(request: Request) {
     if (bodyMd !== undefined) { sets.push("body_md = ?"); values.push(bodyMd); }
     if (parentId !== undefined) { sets.push("parent_id = ?"); values.push(parentId); }
     if (input.sortOrder !== undefined) { sets.push("sort_order = ?"); values.push(Math.floor(Number(input.sortOrder)) || 0); }
+    if (input.isBook !== undefined) { sets.push("is_book = ?"); values.push(input.isBook ? 1 : 0); }
+    if (input.coverHue !== undefined) { sets.push("cover_hue = ?"); values.push(Math.max(0, Math.min(360, Math.floor(Number(input.coverHue)) || 0))); }
+    if (input.summary !== undefined) { sets.push("summary = ?"); values.push(String(input.summary).trim().slice(0, 240)); }
     if (sets.length === 0) return Response.json({ error: "nothing_to_update" }, { status: 400 });
     sets.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);

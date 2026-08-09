@@ -821,6 +821,11 @@ export const docs = sqliteTable(
       .notNull()
       .references(() => members.email),
     sortOrder: integer("sort_order").notNull().default(0),
+    // 书架:一本书 = 一棵以 is_book=1 行为根的文档树,章节靠 parent_id 挂在其下。
+    // is_book 缺省 0(普通文档),不放宽任何可见性/权限语义——纯展示性标记,非安全集合。
+    isBook: integer("is_book").notNull().default(0),
+    coverHue: integer("cover_hue").notNull().default(210),
+    summary: text("summary").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -828,6 +833,7 @@ export const docs = sqliteTable(
     uniqueIndex("docs_parent_slug_idx").on(table.parentId, table.slug),
     index("docs_parent_sort_idx").on(table.parentId, table.sortOrder),
     index("docs_author_idx").on(table.authorEmail, table.updatedAt),
+    index("docs_book_idx").on(table.isBook, table.sortOrder),
     check("docs_visibility_valid", sql`${table.visibility} in ('public', 'members', 'private')`),
   ],
 );

@@ -350,7 +350,7 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 
 before(async () => {
   await startFakeUploadScanner();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -849,6 +849,71 @@ test("docs tree hides unreachable child whose parent is invisible", async () => 
     assert.equal((await fetch(`${baseUrl}/docs/${privSlug}/${childSlug}`)).status, 404);
   } finally {
     await executeLocalD1(`DELETE FROM docs WHERE id IN ('${privParent}', '${pubChild}')`);
+  }
+});
+
+test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, members book gated", async () => {
+  const runId = crypto.randomUUID();
+  const tag = runId.slice(0, 8);
+  const bookId = `doc:${runId}-book`;
+  const partId = `doc:${runId}-part`;
+  const chapId = `doc:${runId}-chap`;
+  const memBookId = `doc:${runId}-membook`;
+  const memberEmail = `bookshelf-${runId}@example.com`;
+  // seed:一本公开书(书根 + 一个 Part + 一章,章节含 LaTeX 公式与 mermaid),一本 members 书。
+  // 章节正文用普通字符串拼接,避免模板串与 ``` 围栏 / 反引号 / ${} 冲突。
+  const fence = String.fromCharCode(96).repeat(3); // ```
+  const chapBody = [
+    "行内公式 $\\langle Q_i, K_j \\rangle$ 与块级:",
+    "",
+    "$$\\sqrt{d_k}$$",
+    "",
+    fence + "mermaid",
+    "flowchart LR",
+    "  A-->B",
+    fence,
+  ].join("\n");
+  await executeLocalD1(`
+    INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '书架管理员');
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary) VALUES
+      ('${bookId}', 'book-${tag}', NULL, '图解测试书${tag}', '# 封面正文', 'public', '${adminEmail}', 1, 1, 200, '这是一本测试书的简介'),
+      ('${partId}', 'part-1', '${bookId}', '第一部分 基础', '', 'public', '${adminEmail}', 1, 0, 210, ''),
+      ('${chapId}', 'chap-1', '${partId}', '第一章 注意力', '${chapBody.replace(/'/g, "''")}', 'public', '${adminEmail}', 1, 0, 210, ''),
+      ('${memBookId}', 'membook-${tag}', NULL, '内部书${tag}', 'x', 'members', '${adminEmail}', 2, 1, 120, '内部简介')
+  `);
+  try {
+    // 1) 书架:匿名看到公开书卡片(书名/简介/章节数),不看到 members 书
+    const anon = await fetch(`${baseUrl}/bookshelf`);
+    assert.equal(anon.status, 200);
+    const anonHtml = await anon.text();
+    assert.match(anonHtml, new RegExp(`图解测试书${tag}`));
+    assert.match(anonHtml, /这是一本测试书的简介/);
+    assert.doesNotMatch(anonHtml, new RegExp(`内部书${tag}`));
+    // 2) 书封面页:目录树列出 Part 与章节
+    const cover = await fetch(`${baseUrl}/bookshelf/book-${tag}`);
+    assert.equal(cover.status, 200);
+    const coverHtml = await cover.text();
+    assert.match(coverHtml, /第一部分 基础/);
+    assert.match(coverHtml, /第一章 注意力/);
+    // 3) 章节页:LaTeX 经 KaTeX 渲染成 span.katex,mermaid 占位成 pre.mermaid,XSS 不出现
+    const chap = await fetch(`${baseUrl}/bookshelf/book-${tag}/part-1/chap-1`);
+    assert.equal(chap.status, 200);
+    const chapHtml = await chap.text();
+    assert.match(chapHtml, /class="katex"/, "行内公式应被 KaTeX 渲染");
+    assert.match(chapHtml, /katex-block/, "块级公式应被 KaTeX 渲染");
+    assert.match(chapHtml, /<pre class="mermaid">/, "mermaid 应回填为 pre.mermaid");
+    assert.match(chapHtml, /flowchart LR/, "mermaid 源码应保留供前端渲染");
+    assert.doesNotMatch(chapHtml, /\$\\langle/, "原始 $...$ 不应裸露");
+    // 4) members 书:匿名 404(fail-closed),登录可见
+    assert.equal((await fetch(`${baseUrl}/bookshelf/membook-${tag}`)).status, 404);
+    const authMem = await fetch(`${baseUrl}/bookshelf/membook-${tag}`, { headers: authHeaders("书架成员", memberEmail) });
+    assert.equal(authMem.status, 200);
+    assert.match(await authMem.text(), new RegExp(`内部书${tag}`));
+    // 5) 登录用户在书架上能看到 members 书卡片
+    const authIndex = await fetch(`${baseUrl}/bookshelf`, { headers: authHeaders("书架成员", memberEmail) });
+    assert.match(await authIndex.text(), new RegExp(`内部书${tag}`));
+  } finally {
+    await executeLocalD1(`DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}', '${memBookId}')`);
   }
 });
 
