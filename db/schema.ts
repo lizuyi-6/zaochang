@@ -829,6 +829,8 @@ export const docs = sqliteTable(
     // 封面图片地址(/api/uploads/<key>),指向经 ClamAV 扫描 clean 的上传对象;
     // 空串 = 无封面,前端回退为 coverHue 渐变色。纯展示字段,不影响可见性/权限。
     coverImage: text("cover_image").notNull().default(""),
+    // 横版横幅图(封面页顶部展示);与竖版 coverImage(书架卡片)并存。同样指向扫描 clean 的上传对象。
+    bannerImage: text("banner_image").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },

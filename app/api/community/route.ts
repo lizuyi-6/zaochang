@@ -1,3 +1,4 @@
+import { isFounderEmail } from "../_lib/admin";
 import { database, ensureMember, jsonError, optionalMember } from "../_lib/community";
 import { settleDueExternalFruit } from "../_lib/external-fruit";
 import { settleDueFruit } from "../_lib/fruit";
@@ -201,6 +202,7 @@ export async function GET() {
       circleStats: publicState.circleStats,
       liveRoomStats: publicState.liveRoomStats,
       signedIn: Boolean(member),
+      isFounder: member ? isFounderEmail(member.email) : false,
     });
   } catch (error) {
     return jsonError(error);
