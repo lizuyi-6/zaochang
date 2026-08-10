@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { isAdminEmail, isFounderEmail } from "./api/_lib/admin";
+import { database } from "./api/_lib/community";
 import { getChatGPTUser } from "./chatgpt-auth";
 import { SiteShell } from "./components/site-shell";
 import "./globals.css";
@@ -14,6 +15,12 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const user = await getChatGPTUser();
+  let memberNumber: number | null = null;
+  if (user) {
+    // session 建立时 ensureMember 已写入 member 行;此处轻量主键查询取会员号供导航显示。
+    const row = await database().prepare("SELECT member_number AS memberNumber FROM members WHERE email = ?").bind(user.email).first<{ memberNumber: number | null }>();
+    memberNumber = row?.memberNumber ?? null;
+  }
   const member = user
     ? {
         signedIn: true,
@@ -21,8 +28,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         initial: (user.displayName.trim()[0] || "造").toUpperCase(),
         isAdmin: isAdminEmail(user.email),
         isFounder: isFounderEmail(user.email),
+        memberNumber,
       }
-    : { signedIn: false, displayName: "游客", initial: "游", isAdmin: false, isFounder: false };
+    : { signedIn: false, displayName: "游客", initial: "游", isAdmin: false, isFounder: false, memberNumber: null };
 
   return (
     <html lang="zh-CN">

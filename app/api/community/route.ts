@@ -55,7 +55,7 @@ export async function GET() {
       profile = await db
         .prepare(
           `SELECT display_name AS displayName, bio, location, website,
-                  reputation, joined_at AS joinedAt
+                  reputation, joined_at AS joinedAt, member_number AS memberNumber
            FROM members WHERE email = ?`,
         )
         .bind(member.email)
