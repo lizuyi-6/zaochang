@@ -457,3 +457,13 @@
 - 测试基础设施反例：旧套件依赖 Wrangler 在外部 `d1 execute` 后热重载，曾出现 `72 pass / 2 fail`，两个失败均为 30 秒内未连续恢复三次；逐次强制重启方案又在 15 分钟超时。候选改为一次 Wrangler 建库、同一 SQLite WAL 文件中的事务化测试 SQL，定向原失败用例为 `2 pass / 0 fail / 0 skipped / 0 todo`，完整套件耗时降至约 34 秒测试阶段。该 Node SQLite 连接只存在于测试文件，不进入生产 worker。
 - 本轮改动可能引入的新风险：GitHub 连接页依赖 favicon 探针；若 GitHub 授权端点可达但 favicon 被网络策略单独阻断，会显示可重试错误而不进入授权。创始人显示名目前与已核对 GitHub 身份一致，后续 GitHub 展示名变化不会自动重写静态产品作者文案。Node 22 的 `node:sqlite` 仍标记 experimental，但仓库与 CI 最低版本均为 Node `22.13.0`。
 - 未覆盖范围：尚未在公网新版本执行真实 GitHub 授权、callback token exchange、邀请码 POST 的 Nginx 日志反例、创始人账号浏览器像素与移动布局、GitHub favicon 单独被阻断的企业网络、Google OAuth、移动真机和弱网。部署、回退、线上 Cookie/CSP 与浏览器证据仍待本候选合并后取得。
+
+## 2026-08-10 Agent 服务账户:token 认证 + 显式写 scope(已上线激活)
+
+- 状态:已交付并激活。代码 commit `b7ddf36` 推送 main;CI release-gates(run 31365404703)与 deploy-production(run 31365529660)均 success;`ZAOCHANG_AGENT_TOKEN` 生产 secret 已注入并激活;生产端到端实测通过;E2E 产物已清理。
+- 机制:非用户机器身份 `agent@zaochang`(`member_number=0`,不占会员号序列,不建钱包/收藏),单一全局 Bearer token 认证,恒时比较;token 未配置时 worker 闸整段不进入 → 零行为变化。Worker 入口 fail-closed scope 闸仅放行 `AGENT_WRITE_CAPABILITIES`(POST/PATCH `/api/docs`、POST `/api/products`);docs 编辑语义变更 founder-only → founder OR agent(`requireDocEditor`),DELETE 仍 `requireFounder`(agent 被拦)。两处识别:worker 入口(scope 闸)+ `getChatGPTUser`(身份)。
+- 关键缺陷修复(scope 闸请求体排空):闸在 `prepareRequestBody` 之前早返回 403 时请求体未消费,残留字节污染 keep-alive 连接、使下一请求错误组帧,workerd 重启 isolate → 503 "worker restarted mid-request"(try/catch 接不住,属网络层非 JS 层)。二分定位:products 探针在首个 agent 操作/step5 后均 201,在 step6/7(DELETE/cover 的 403 闸拒绝)后 503。修复:闸拒绝时 `await request.arrayBuffer()` 排空。测试 step8(products 201)紧跟 step6/7 作回归守护。
+- 证据:本地门禁 `npm test` 86 pass/0 fail/0 skip/0 todo;tsc/lint(0 errors)/db:generate(No schema changes)/audit(0 vulns)/diff --check 全绿。生产实测:GET community `signedIn=true memberNumber=0 wallet=null isFounder=false`;POST /api/docs 201;DELETE /api/docs 403 `agent_scope_forbidden`;POST /api/products 201 `review=pending_review`(review gate 照常,agent 不绕审核);POST /api/reading-progress 403 `agent_scope_forbidden`;GET /api/admin/incubation 403 `admin_forbidden`。无 worker restarted。
+- secret 与权威来源:token 经管道生成注入,值未落对话/日志/磁盘;权威备份已写入盒子 `/etc/zaochang/zaochang.env`(`ZAOCHANG_AGENT_TOKEN`,root:zaochang 640),符合 runbook §2(盒子=唯一权威来源)。
+- 本轮改动可能引入的新风险:① 文档编辑放宽到 agent —— 由 worker 能力表收敛到 POST/PATCH /api/docs,DELETE/财务/admin 均 fail-closed;② token 为单一全局凭证,泄露即等于 agent 全写权限,需按需轮换(重设 secret + 更新盒子 env);③ 排空分支对超大 body 会先读后拒绝,受 prepareRequestBody 11 MiB 上限同等级防护。
+- 未覆盖范围:agent 调用速率限制/重试风暴、token 轮换流程演练、多 agent 隔离(现仅单一全局 token)、对 agent 写内容的后续审核 SLA 未覆盖。CLAUDE.md(项目根,既有遗留)仍未跟踪,未入本次 commit。
