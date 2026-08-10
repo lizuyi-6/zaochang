@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowLeft, BookOpen, ChevronRight, FileText, Folder, Lock } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, BookOpen, ChevronRight, FileText, Folder, Lock } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -7,11 +7,14 @@ import {
   currentMember,
   docBreadcrumbs,
   findInBook,
+  getBookContinueReading,
+  getChapterParagraph,
   renderDocHtml,
   type DocNode,
   type DocRow,
 } from "../../api/_lib/docs";
 import { MermaidRunner } from "../mermaid-runner";
+import { ReadingProgressTracker } from "../reading-progress-tracker";
 import "katex/dist/katex.min.css";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +56,9 @@ export default async function BookPage({ params }: PageProps) {
   const isCover = doc.id === book.id;
   const base = `/bookshelf/${encodeURIComponent(book.slug)}`;
   const crumbs: DocRow[] = isCover ? [] : await docBreadcrumbs(doc, member);
+  // 阅读进度:封面页算"继续阅读"点;章节页算当前章节的段落恢复点。仅登录用户。
+  const continueReading = member && isCover ? await getBookContinueReading(member, book) : null;
+  const initialParagraph = member && !isCover ? await getChapterParagraph(member, book.id, doc.id) : null;
 
   return <div className="book-page">
     <aside className="book-side">
@@ -88,10 +94,13 @@ export default async function BookPage({ params }: PageProps) {
 
       {isCover && book.summary && <p className="book-summary">{book.summary}</p>}
 
+      {continueReading && <Link className="book-continue-reading" href={continueReading.href}><Bookmark size={15} /> 继续阅读 · {continueReading.title} <ArrowRight size={15} /></Link>}
+
       {doc.bodyMd.trim().length > 0 && <>
         <div className="docs-body" dangerouslySetInnerHTML={{ __html: renderDocHtml(doc.bodyMd) }} />
         <MermaidRunner />
       </>}
+      <ReadingProgressTracker bookId={book.id} chapterId={doc.id} initialParagraph={initialParagraph} canRecord={!!member} />
 
       {isCover && tree.length > 0 && <section className="docs-children" aria-label="章节目录">
         <h2>目录</h2>

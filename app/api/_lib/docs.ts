@@ -249,6 +249,169 @@ export async function currentMember(): Promise<MemberIdentity | null> {
   return optionalMember();
 }
 
+// ---- 阅读进度(每用户每书一条恢复点:章节 + 段落序号)。----
+
+// 取某用户在某书的"继续阅读"点:上次的章节标题 + URL 路径 + 段落序号。
+// 进度指向书根本身(封面页)或章节已不可见/已删除 → 返回 null(fail-closed,不暴露)。
+export async function getBookContinueReading(
+  member: MemberIdentity,
+  book: DocRow,
+): Promise<{ chapterId: string; title: string; href: string; paragraph: number } | null> {
+  const row = await database().prepare(
+    "SELECT last_chapter_id AS lastChapterId, last_paragraph AS lastParagraph FROM reading_progress WHERE user_email = ? AND book_id = ?",
+  ).bind(member.email, book.id).first<{ lastChapterId: string; lastParagraph: number }>();
+  if (!row || row.lastChapterId === book.id) return null;
+  const chapter = await database().prepare(
+    `SELECT ${DOC_COLUMNS} FROM docs WHERE id = ? LIMIT 1`,
+  ).bind(row.lastChapterId).first<DocRow>();
+  if (!chapter || !canViewDoc(chapter, member)) return null;
+  const crumbs = await docBreadcrumbs(chapter, member);
+  // crumbs[0] 是书根;书内章节路径取 slice(1) 的 slug 链。
+  const chapterPath = crumbs.slice(1).map((c) => encodeURIComponent(c.slug)).join("/");
+  if (!chapterPath) return null;
+  return { chapterId: chapter.id, title: chapter.title, href: `/bookshelf/${encodeURIComponent(book.slug)}/${chapterPath}`, paragraph: row.lastParagraph };
+}
+
+// 取某用户在某书"当前章节"的段落恢复点:仅当进度恰好指向 chapterId 时返回段落序号,
+// 否则 null(用户主动导航到别处,不强行 scroll)。
+export async function getChapterParagraph(
+  member: MemberIdentity,
+  bookId: string,
+  chapterId: string,
+): Promise<number | null> {
+  const row = await database().prepare(
+    "SELECT last_paragraph AS lastParagraph FROM reading_progress WHERE user_email = ? AND book_id = ? AND last_chapter_id = ?",
+  ).bind(member.email, bookId, chapterId).first<{ lastParagraph: number }>();
+  return row?.lastParagraph ?? null;
+}
+
+// 批量取当前用户在所有书的"继续阅读"点(书架首页用)。返回 bookId → 点 的映射。
+// 排除进度指向书根本身的(停在封面页 = 无有效章节恢复点)。章节已删除/不可见 → 不含。
+export async function listReadingProgressForBooks(
+  member: MemberIdentity,
+): Promise<Map<string, { chapterId: string; title: string; href: string; paragraph: number }>> {
+  const db = database();
+  const rows = (
+    await db
+      .prepare(
+        `SELECT rp.book_id AS bookId, rp.last_chapter_id AS lastChapterId, rp.last_paragraph AS lastParagraph,
+                b.slug AS bookSlug, c.title AS chapterTitle
+         FROM reading_progress rp
+         JOIN docs b ON b.id = rp.book_id
+         JOIN docs c ON c.id = rp.last_chapter_id
+         WHERE rp.user_email = ? AND rp.last_chapter_id <> rp.book_id`,
+      )
+      .bind(member.email)
+      .all<{ bookId: string; lastChapterId: string; lastParagraph: number; bookSlug: string; chapterTitle: string }>()
+  ).results;
+  const all = await listAllDocs();
+  const byId = new Map(all.map((r) => [r.id, r] as const));
+  const result = new Map<string, { chapterId: string; title: string; href: string; paragraph: number }>();
+  for (const r of rows) {
+    const chapter = byId.get(r.lastChapterId);
+    if (!chapter || !canViewDoc(chapter, member)) continue;
+    const crumbs = await docBreadcrumbs(chapter, member);
+    const chapterPath = crumbs.slice(1).map((c) => encodeURIComponent(c.slug)).join("/");
+    if (!chapterPath) continue;
+    result.set(r.bookId, { chapterId: chapter.id, title: r.chapterTitle, href: `/bookshelf/${encodeURIComponent(r.bookSlug)}/${chapterPath}`, paragraph: r.lastParagraph });
+  }
+  return result;
+}
+
+// 最近阅读列表(studio "最近阅读"用):当前用户所有有进度的书,按 updated_at 倒序。
+// 每条含书的展示信息 + 上次章节标题 + 可直接续读的 href(一步到章节,非两步经封面)。
+// 章节已删除/停在封面/章节不可见 → href 退化为书封面页,chapterTitle 退化为"封面"。
+// 不从结果里删除这些条目:用户打开过封面也算"最近阅读",只是续读入口弱化。
+export async function listRecentReading(
+  member: MemberIdentity,
+): Promise<
+  Array<{
+    bookId: string;
+    bookSlug: string;
+    bookTitle: string;
+    coverHue: number;
+    coverImage: string;
+    visibility: DocVisibility;
+    summary: string;
+    chapterId: string;
+    chapterTitle: string;
+    href: string;
+    updatedAt: string;
+  }>
+> {
+  const db = database();
+  const rows = (
+    await db
+      .prepare(
+        `SELECT rp.book_id AS bookId, rp.last_chapter_id AS lastChapterId,
+                rp.updated_at AS updatedAt,
+                b.slug AS bookSlug, b.title AS bookTitle,
+                b.cover_hue AS coverHue, b.cover_image AS coverImage,
+                b.visibility, b.summary,
+                c.title AS chapterTitle
+         FROM reading_progress rp
+         JOIN docs b ON b.id = rp.book_id
+         LEFT JOIN docs c ON c.id = rp.last_chapter_id
+         WHERE rp.user_email = ?
+         ORDER BY rp.updated_at DESC`,
+      )
+      .bind(member.email)
+      .all<{
+        bookId: string;
+        lastChapterId: string;
+        updatedAt: string;
+        bookSlug: string;
+        bookTitle: string;
+        coverHue: number;
+        coverImage: string;
+        visibility: DocVisibility;
+        summary: string;
+        chapterTitle: string | null;
+      }>()
+  ).results;
+  const all = await listAllDocs();
+  const byId = new Map(all.map((r) => [r.id, r] as const));
+  const result: Array<{
+    bookId: string;
+    bookSlug: string;
+    bookTitle: string;
+    coverHue: number;
+    coverImage: string;
+    visibility: DocVisibility;
+    summary: string;
+    chapterId: string;
+    chapterTitle: string;
+    href: string;
+    updatedAt: string;
+  }> = [];
+  for (const r of rows) {
+    let href = `/bookshelf/${encodeURIComponent(r.bookSlug)}`;
+    let chapterTitle = r.chapterTitle ?? "封面";
+    const chapter = byId.get(r.lastChapterId);
+    if (chapter && r.lastChapterId !== r.bookId && canViewDoc(chapter, member)) {
+      const crumbs = await docBreadcrumbs(chapter, member);
+      const chapterPath = crumbs.slice(1).map((c) => encodeURIComponent(c.slug)).join("/");
+      if (chapterPath) href = `/bookshelf/${encodeURIComponent(r.bookSlug)}/${chapterPath}`;
+    } else {
+      chapterTitle = "封面";
+    }
+    result.push({
+      bookId: r.bookId,
+      bookSlug: r.bookSlug,
+      bookTitle: r.bookTitle,
+      coverHue: r.coverHue,
+      coverImage: r.coverImage,
+      visibility: r.visibility,
+      summary: r.summary,
+      chapterId: r.lastChapterId,
+      chapterTitle,
+      href,
+      updatedAt: r.updatedAt,
+    });
+  }
+  return result;
+}
+
 // ---- 书架:一本书 = 一棵以 is_book=1 行为根的文档树。----
 
 export type BookSummary = DocRow & { chapterCount: number };

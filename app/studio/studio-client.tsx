@@ -10,6 +10,7 @@ type StudioProduct = { id: number; title: string; category: string; imageUrl?: s
 type Wallet = { lifetimeEarned: number };
 type Draft = { title?: string; description?: string; category?: string; imageUrl?: string; theme?: string };
 type AuthoredBook = { id: string; slug: string; title: string; summary: string; coverHue: number; coverImage: string; bannerImage: string; visibility: "public" | "members" | "private"; chapterCount: number; updatedAt: string };
+type RecentBook = { bookId: string; bookSlug: string; bookTitle: string; coverHue: number; coverImage: string; visibility: "public" | "members" | "private"; summary: string; chapterId: string; chapterTitle: string; href: string; updatedAt: string };
 
 function reviewLabel(product: StudioProduct) {
   if (product.reviewStatus === "approved" && product.approvedVersion === product.reviewVersion) return { text: "已发布", className: "live" };
@@ -33,6 +34,7 @@ export function StudioClient() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [isFounder, setIsFounder] = useState(false);
   const [books, setBooks] = useState<AuthoredBook[]>([]);
+  const [reading, setReading] = useState<RecentBook[]>([]);
   const [wallet, setWallet] = useState<Wallet>({ lifetimeEarned: 0 });
 
   useEffect(() => {
@@ -41,12 +43,13 @@ export function StudioClient() {
       if (rawDraft) try { const parsed = JSON.parse(rawDraft) as Draft; if (parsed.title || parsed.description) setDraft(parsed); } catch { localStorage.removeItem("zaochang-product-draft"); }
     });
     fetch("/api/community", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
-      const payload = data as { signedIn?: boolean; isFounder?: boolean; ownedProducts?: StudioProduct[]; authoredBooks?: AuthoredBook[]; wallet?: Wallet | null } | null;
+      const payload = data as { signedIn?: boolean; isFounder?: boolean; ownedProducts?: StudioProduct[]; authoredBooks?: AuthoredBook[]; recentReading?: RecentBook[]; wallet?: Wallet | null } | null;
       const remote = payload?.ownedProducts ?? [];
       setSignedIn(Boolean(payload?.signedIn));
       setIsFounder(Boolean(payload?.isFounder));
       setProducts(remote);
       setBooks(payload?.authoredBooks ?? []);
+      setReading(payload?.recentReading ?? []);
       setWallet(payload?.wallet ?? { lifetimeEarned: 0 });
       const saved = localStorage.getItem("zaochang-studio-order");
       let parsed: number[] = [];
@@ -71,6 +74,11 @@ export function StudioClient() {
     <header className="route-hero studio-hero"><div><span className="deep-eyebrow"><Sparkles size={14} /> CREATOR STUDIO</span><h1>你的作品，正在怎样生长</h1><p>从发布、被体验到获得支持，所有信号都汇集在这里。</p></div><Link className="primary-action" href={signedIn === false ? "/signin?return_to=%2Fstudio%2Fnew" : "/studio/new"}><Plus size={17} /> 创建新作品</Link></header>
     <section className="studio-metrics"><div><span><Eye size={16} /> 总体验</span><strong><AnimatedNumber value={totals.plays} /></strong><small>{products.length ? `${approvedCount} 件已发布 · ${pendingCount} 件审核中` : "提交预审后开始记录"}</small><i className="metric-sparkline one" /></div><div><span><Heart size={16} /> 收到喜欢</span><strong><AnimatedNumber value={totals.likes} /></strong><small>{totals.plays ? `${Math.round(totals.likes / totals.plays * 100)}% 体验者留下喜欢` : "等待第一位体验者"}</small><i className="metric-sparkline two" /></div><div><span><Users size={16} /> 作品数量</span><strong><AnimatedNumber value={products.length} /></strong><small>{draft ? "另有 1 份本机草稿" : "包含审核中与已发布作品"}</small><i className="metric-sparkline three" /></div><div><span><Zap size={16} /> 累计获得</span><strong><AnimatedNumber value={wallet.lifetimeEarned} suffix=" 果" /></strong><small>来自有效点赞与作品收入</small><i className="metric-sparkline four" /></div></section>
     <div className="studio-grid"><section className="studio-panel analytics-panel"><div className="panel-heading"><span><BarChart3 size={17} /> 作品{metric}对比</span><div>{(["体验", "喜欢"] as const).map((item) => <button key={item} className={metric === item ? "active" : ""} onClick={() => setMetric(item)}>{item}</button>)}</div></div><div className="analytics-chart"><div className="chart-grid">{Array.from({ length: 5 }).map((_, index) => <i key={index} />)}</div><div className="chart-bars">{bars.map((height, index) => <span key={index} style={{ height }} title={orderedProducts[index] ? `${orderedProducts[index].title}: ${values[index]}` : "暂无数据"}><b /></span>)}</div><div className="chart-labels"><span>{orderedProducts[0]?.title ?? "暂无作品"}</span><span>{orderedProducts.at(-1)?.title ?? "提交后显示"}</span></div></div></section><aside className="studio-panel release-panel"><div className="panel-heading"><span><Radio size={17} /> 最近作品</span><Link href="/feed">发布动态</Link></div>{publishedProducts.slice(0, 3).map((item) => <Link className="release-row" href={`/product/${item.id}`} key={item.id}><i className={item.coverTheme} /><span><strong>{item.title}</strong><small>{item.createdAt}</small></span></Link>)}{publishedProducts.length === 0 && <div className="studio-panel-empty">平台审核通过后，公开版本会在这里汇总。</div>}</aside></div>
+    {/* 最近阅读(/api/community recentReading):当前用户打开过的书,一步续读到上次章节。 */}
+    {reading.length > 0 && <Reveal className="studio-reading">
+      <div className="deep-section-heading"><div><span className="deep-eyebrow">RECENT READING / {String(reading.length).padStart(2, "0")}</span><h2>最近阅读</h2></div><Link href="/bookshelf">逛书架 <ArrowRight size={15} /></Link></div>
+      <div className="studio-reading-list">{reading.map((book) => <Link key={book.bookId} href={book.href} className="reading-row"><span className="book-cover book-cover-sm" style={{ background: `linear-gradient(150deg, hsl(${book.coverHue} 42% 88%), hsl(${book.coverHue} 48% 70%))` }}>{book.coverImage ? <img src={book.coverImage} alt={book.bookTitle} loading="lazy" /> : <BookOpen size={16} style={{ color: `hsl(${book.coverHue} 40% 38%)` }} />}</span><span className="reading-meta"><strong>{book.bookTitle}{book.visibility !== "public" && <Lock size={11} aria-label="登录后可见" />}</strong><small>读到 · {book.chapterTitle}</small></span><ArrowRight size={15} /></Link>)}</div>
+    </Reveal>}
     {/* 当前账户名下的书(/api/community authoredBooks)。有书才显示,卡片点进书架阅读。 */}
     {books.length > 0 && <Reveal className="studio-books">
       <div className="deep-section-heading"><div><span className="deep-eyebrow">YOUR BOOKS / {String(books.length).padStart(2, "0")}</span><h2>我的书</h2></div>{isFounder && <Link className="studio-books-manage" href="/studio/docs">管理书架 <ArrowRight size={15} /></Link>}</div>

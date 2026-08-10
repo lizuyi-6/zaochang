@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { BookOpen, Lock } from "lucide-react";
 import Link from "next/link";
-import { currentMember, listBooks } from "../api/_lib/docs";
+import { currentMember, listBooks, listReadingProgressForBooks } from "../api/_lib/docs";
 
 export const metadata: Metadata = { title: "书架" };
 export const dynamic = "force-dynamic";
@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 export default async function BookshelfPage() {
   const member = await currentMember();
   const books = await listBooks(member);
+  // 每本读过的书的"继续阅读"点(登录用户)。书架卡片据此把链接直接指向上次章节。
+  const progress = member ? await listReadingProgressForBooks(member) : null;
 
   return <div className="bookshelf-page">
     <header className="bookshelf-header">
@@ -19,7 +21,9 @@ export default async function BookshelfPage() {
 
     {books.length > 0
       ? <div className="bookshelf-grid">
-        {books.map((book) => <Link key={book.id} href={`/bookshelf/${encodeURIComponent(book.slug)}`} className="book-card">
+        {books.map((book) => {
+          const cr = progress?.get(book.id);
+          return <Link key={book.id} href={cr?.href ?? `/bookshelf/${encodeURIComponent(book.slug)}`} className="book-card">
           <span className="book-cover" style={{ background: `linear-gradient(150deg, hsl(${book.coverHue} 42% 88%), hsl(${book.coverHue} 48% 70%))` }}>
             {book.coverImage
               ? <img src={book.coverImage} alt={book.title} loading="lazy" />
@@ -31,9 +35,10 @@ export default async function BookshelfPage() {
           <span className="book-meta">
             <strong>{book.title}{book.visibility !== "public" && <Lock size={12} aria-label="登录后可见" />}</strong>
             {book.summary && <small>{book.summary}</small>}
-            <em>{book.chapterCount} 章</em>
+            {cr ? <em className="book-continue-tag">继续 · {cr.title}</em> : <em>{book.chapterCount} 章</em>}
           </span>
-        </Link>)}
+        </Link>;
+        })}
       </div>
       : <div className="docs-empty"><BookOpen size={22} /><span><strong>书架还是空的</strong><small>创始人还没有在{member ? "这里" : "不登录也能看的范围内"}上架任何书。</small></span></div>}
   </div>;
