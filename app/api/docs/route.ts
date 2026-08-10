@@ -1,4 +1,4 @@
-import { requireFounder } from "../_lib/admin";
+import { requireDocEditor, requireFounder } from "../_lib/admin";
 import { database, jsonError } from "../_lib/community";
 import { DOC_COLUMNS, normalizeSlug, normalizeVisibility } from "../_lib/docs";
 
@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireFounder();
+    await requireDocEditor();
     const rows = await database().prepare(
       `SELECT ${DOC_COLUMNS} FROM docs ORDER BY sort_order ASC, created_at ASC`,
     ).all();
@@ -18,7 +18,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const founder = await requireFounder();
+    const editor = await requireDocEditor();
     const input = await request.json() as Record<string, unknown>;
     const title = String(input.title ?? "").trim().slice(0, 120);
     const slug = normalizeSlug(String(input.slug ?? title));
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       await database().prepare(
         `INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, is_book, cover_hue, summary, cover_image, banner_image)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(id, slug, parentId, title, bodyMd, visibility, founder.email, isBook, coverHue, summary, coverImage, bannerImage).run();
+      ).bind(id, slug, parentId, title, bodyMd, visibility, editor.email, isBook, coverHue, summary, coverImage, bannerImage).run();
     } catch (error) {
       if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
         return Response.json({ error: "slug_taken" }, { status: 409 });
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    await requireFounder();
+    await requireDocEditor();
     const input = await request.json() as Record<string, unknown>;
     const id = String(input.id ?? "").slice(0, 80);
     if (!id) return Response.json({ error: "invalid_doc" }, { status: 400 });

@@ -2,11 +2,13 @@ import { env } from "cloudflare:workers";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getOAuthSessionUser } from "./oauth-session";
+import { AGENT_DISPLAY_NAME, AGENT_EMAIL, isValidAgentToken, parseBearerToken } from "./api/_lib/agent-auth";
 
 export type ChatGPTUser = {
   displayName: string;
   email: string;
   fullName: string | null;
+  isAgent?: boolean;
 };
 
 const USER_EMAIL_HEADER = "oai-authenticated-user-email";
@@ -18,7 +20,20 @@ const SIGN_IN_PATH = "/signin-with-chatgpt";
 const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
 
+async function agentFromRequest(): Promise<ChatGPTUser | null> {
+  const secret = (env as unknown as Record<string, string | undefined>).ZAOCHANG_AGENT_TOKEN;
+  if (!secret) return null;
+  const requestHeaders = await headers();
+  const token = parseBearerToken(requestHeaders.get("authorization"));
+  if (!isValidAgentToken(token, secret)) return null;
+  return { email: AGENT_EMAIL, displayName: AGENT_DISPLAY_NAME, fullName: null, isAgent: true };
+}
+
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
+  // Agent Bearer token 最先识别:命中 → 返回 agent 服务账户身份(独立于人类登录)。
+  // Authorization 头不被浏览器自动携带(非 cookie),无 CSRF 风险。
+  const agent = await agentFromRequest();
+  if (agent) return agent;
   const oauthUser = await getOAuthSessionUser();
   if (oauthUser) return oauthUser;
   if (!oaiIdentityHeadersEnabled()) return null;

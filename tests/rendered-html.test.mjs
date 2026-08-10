@@ -126,6 +126,7 @@ function previewServerArgs() {
     "--var", `ZAOCHANG_FOUNDER_EMAIL:${adminEmail}`,
     "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,
     "--var", `UPLOAD_SCANNER_TOKEN:${scannerToken}`,
+    "--var", "ZAOCHANG_AGENT_TOKEN:test-agent-key",
   ];
 }
 
@@ -3294,5 +3295,101 @@ test("generates account notifications and persists read state", async () => {
   assert.deepEqual((await mark.json()).read, [notification.id]);
   const refreshed = await fetch(`${baseUrl}/api/community`, { headers: ownerHeaders });
   assert.equal((await refreshed.json()).actions.some((item) => item.kind === "read_notification" && item.targetRef === notification.id), true);
+});
+
+test("agent service account: token auth, read + content-write scope, fail-closed on the rest", async () => {
+  const runId = crypto.randomUUID();
+  const tag = runId.slice(0, 8);
+  const agentAuth = { authorization: "Bearer test-agent-key" };
+  const agentJson = { ...agentAuth, "content-type": "application/json", accept: "application/json" };
+
+
+  // 1) 无 token / 错 token = 普通匿名(agent 路径完全不激活)
+  const noToken = await (await fetch(`${baseUrl}/api/community`)).json();
+  assert.equal(noToken.signedIn, false, "无 token 应为匿名");
+  const wrongToken = await (await fetch(`${baseUrl}/api/community`, { headers: { authorization: "Bearer wrong-key", accept: "application/json" } })).json();
+  assert.equal(wrongToken.signedIn, false, "错 token 不应识别为 agent");
+
+  // 2) Agent GET /api/community → 已认证、非 founder、无钱包、member_number=0
+  const agentComm = await (await fetch(`${baseUrl}/api/community`, { headers: { ...agentAuth, accept: "application/json" } })).json();
+  assert.equal(agentComm.signedIn, true, "agent token 应认证通过");
+  assert.equal(agentComm.isFounder, false, "agent 不继承 founder");
+  assert.equal(agentComm.profile?.memberNumber, 0, "agent member_number 应为 0(不占序列)");
+  assert.equal(agentComm.wallet, null, "agent 不应有钱包");
+  const agentWallet = await queryLocalD1(`SELECT COUNT(*) AS n FROM wallets WHERE user_email = 'agent@zaochang'`);
+  assert.equal(agentWallet[0].n, 0, "agent 不应建钱包行");
+  const agentColl = await queryLocalD1(`SELECT COUNT(*) AS n FROM collections WHERE user_email = 'agent@zaochang'`);
+  assert.equal(agentColl[0].n, 0, "agent 不应建收藏");
+
+  // 3) Agent GET /api/docs → 200(requireDocEditor 放行 agent 读管理列表)
+  const docsList = await fetch(`${baseUrl}/api/docs`, { headers: { ...agentAuth, accept: "application/json" } });
+  assert.equal(docsList.status, 200, "agent 应能列出 docs");
+
+  // 4) Agent POST /api/docs → 201,author_email=agent@zaochang(行为层字段断言)
+  const docSlug = `agent-${tag}`;
+  const createDoc = await fetch(`${baseUrl}/api/docs`, {
+    method: "POST", headers: agentJson,
+    body: JSON.stringify({ title: `Agent 书${tag}`, slug: docSlug, bodyMd: "agent 创建", visibility: "public", isBook: true, coverHue: 200 }),
+  });
+  assert.equal(createDoc.status, 201, "agent 应能创建 doc");
+  const docId = (await createDoc.json()).doc.id;
+  const docRow = await queryLocalD1(`SELECT author_email AS a, visibility AS v FROM docs WHERE id = '${docId}'`);
+  assert.equal(docRow[0].a, "agent@zaochang", "author_email 应为 agent");
+  assert.equal(docRow[0].v, "public");
+
+  // 5) Agent PATCH /api/docs → 200 + 正文更新(行为层字段断言)
+  const patchDoc = await fetch(`${baseUrl}/api/docs`, {
+    method: "PATCH", headers: agentJson,
+    body: JSON.stringify({ id: docId, bodyMd: "agent 编辑后" }),
+  });
+  assert.equal(patchDoc.status, 200, "agent 应能编辑 doc");
+  const edited = await queryLocalD1(`SELECT body_md AS b FROM docs WHERE id = '${docId}'`);
+  assert.equal(edited[0].b, "agent 编辑后");
+
+
+  // 6) Agent DELETE /api/docs → 403(worker scope 闸拦,DELETE 不在能力表)+ doc 仍在
+  const delDoc = await fetch(`${baseUrl}/api/docs`, {
+    method: "DELETE", headers: agentJson,
+    body: JSON.stringify({ id: docId }),
+  });
+  assert.equal(delDoc.status, 403, "agent 不应删除 doc");
+  const stillExists = await queryLocalD1(`SELECT COUNT(*) AS n FROM docs WHERE id = '${docId}'`);
+  assert.equal(stillExists[0].n, 1, "DELETE 被拦后 doc 应仍存在");
+
+  // 7) Agent POST /api/docs/cover → 403(pathname /api/docs/cover 不精确匹配 /api/docs)
+  const coverAttempt = await fetch(`${baseUrl}/api/docs/cover`, {
+    method: "POST", headers: agentJson,
+    body: JSON.stringify({ id: docId }),
+  });
+  assert.equal(coverAttempt.status, 403, "agent 不应碰封面上传");
+
+  // 8) Agent POST /api/products → 201,owner=agent@zaochang,review_status=pending_review(review gate 照常)
+  //    此步紧跟 step 6/7 的闸拒绝(403 早返回):验证 scope 闸在拒绝时已排空请求体——
+  //    否则未消费字节会污染 keep-alive 连接,本步会被错误组帧导致 503 "worker restarted"。
+  const createProduct = await fetch(`${baseUrl}/api/products`, {
+    method: "POST", headers: agentJson,
+    body: JSON.stringify({ title: `Agent 作品${tag}`, description: "这是一个由 agent 自动创建的测试作品,用于验证 scope 闸与 review gate。", category: "效率工具", pricingModel: "free", coverTheme: "ink" }),
+  });
+  assert.equal(createProduct.status, 201, "agent 应能创建产品");
+  const productId = (await createProduct.json()).product.id;
+  const prodRow = await queryLocalD1(`SELECT owner_email AS o, review_status AS r FROM products WHERE id = ${productId}`);
+  assert.equal(prodRow[0].o, "agent@zaochang", "owner 应为 agent");
+  assert.equal(prodRow[0].r, "pending_review", "agent 产品仍走 review gate");
+
+  // 9) Agent POST /api/reading-progress → 403(不在能力表)+ 不落库
+  const progressAttempt = await fetch(`${baseUrl}/api/reading-progress`, {
+    method: "POST", headers: agentJson,
+    body: JSON.stringify({ bookId: docId, chapterId: docId, paragraph: 0 }),
+  });
+  assert.equal(progressAttempt.status, 403, "agent 不应写 reading-progress");
+  const rpRow = await queryLocalD1(`SELECT COUNT(*) AS n FROM reading_progress WHERE user_email = 'agent@zaochang'`);
+  assert.equal(rpRow[0].n, 0, "reading-progress 不应落库");
+
+  // 10) Agent GET /api/admin/incubation → 403(requireAdmin 拒绝 agent)
+  const adminAttempt = await fetch(`${baseUrl}/api/admin/incubation`, { headers: { ...agentAuth, accept: "application/json" } });
+  assert.equal(adminAttempt.status, 403, "agent 不应访问 admin");
+
+  // 清理:agent 创建的 doc/product + agent 系统行(子表先于父表,FK 约束)
+  await executeLocalD1(`DELETE FROM docs WHERE id = '${docId}'; DELETE FROM products WHERE id = ${productId}; DELETE FROM members WHERE email = 'agent@zaochang'`);
 });
 });
