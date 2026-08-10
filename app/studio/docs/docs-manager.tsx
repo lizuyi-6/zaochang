@@ -15,6 +15,7 @@ type Doc = {
   coverHue: number;
   summary: string;
   coverImage: string;
+  bannerImage: string;
   updatedAt: string;
 };
 
@@ -29,9 +30,10 @@ type Draft = {
   coverHue: number;
   summary: string;
   coverImage: string;
+  bannerImage: string;
 };
 
-const EMPTY_DRAFT: Draft = { id: null, title: "", slug: "", parentId: "", visibility: "private", bodyMd: "", isBook: false, coverHue: 210, summary: "", coverImage: "" };
+const EMPTY_DRAFT: Draft = { id: null, title: "", slug: "", parentId: "", visibility: "private", bodyMd: "", isBook: false, coverHue: 210, summary: "", coverImage: "", bannerImage: "" };
 
 const VISIBILITY_LABEL: Record<Doc["visibility"], string> = {
   public: "公开",
@@ -44,7 +46,7 @@ export function DocsManager() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingSlot, setUploadingSlot] = useState<"" | "cover" | "banner">("");
 
   const load = async () => {
     const response = await fetch("/api/docs", { cache: "no-store" });
@@ -75,6 +77,7 @@ export function DocsManager() {
     coverHue: doc.coverHue,
     summary: doc.summary,
     coverImage: doc.coverImage,
+    bannerImage: doc.bannerImage,
   });
 
   const save = async () => {
@@ -94,6 +97,7 @@ export function DocsManager() {
         coverHue: draft.coverHue,
         summary: draft.summary,
         coverImage: draft.coverImage,
+        bannerImage: draft.bannerImage,
       }),
     });
     const result = await response.json().catch(() => ({})) as { error?: string };
@@ -107,30 +111,32 @@ export function DocsManager() {
     await load();
   };
 
-  // 上传封面图(仅书)。走创始人专用 /api/docs/cover:ClamAV 扫描 clean 后
-  // 才把返回的公开地址写回该书 cover_image。需要书已存在(先保存书再传封面)。
-  const uploadCover = async (file: File) => {
+  // 上传封面/横幅图(仅书)。走创始人专用 /api/docs/cover:ClamAV 扫描 clean 后
+  // 才把返回的公开地址写回该书的 cover_image(slot=cover)或 banner_image(slot=banner)。
+  // 需要书已存在(先保存书再传图)。
+  const uploadImage = async (slot: "cover" | "banner", file: File) => {
     if (!draft.id) {
-      setNotice("请先保存这本书，再为它上传封面。");
+      setNotice("请先保存这本书，再为它上传封面/横幅。");
       return;
     }
-    setUploadingCover(true);
+    setUploadingSlot(slot);
     try {
       const form = new FormData();
       form.set("file", file);
       form.set("docId", draft.id);
+      form.set("slot", slot);
       form.set("visibility", "public");
       const response = await fetch("/api/docs/cover", { method: "POST", body: form });
       const result = await response.json().catch(() => ({})) as { url?: string; error?: string };
       if (!response.ok || !result.url) {
-        setNotice(`封面上传未生效:${result.error === "malware_detected" ? "文件未通过安全扫描" : result.error === "book_not_found" ? "目标不是一本已存在的书" : result.error ?? "请求失败"}`);
+        setNotice(`图片上传未生效:${result.error === "malware_detected" ? "文件未通过安全扫描" : result.error === "book_not_found" ? "目标不是一本已存在的书" : result.error ?? "请求失败"}`);
         return;
       }
-      setDraft((c) => ({ ...c, coverImage: result.url as string }));
-      setNotice("封面已上传并写回该书。");
+      setDraft((c) => (slot === "cover" ? { ...c, coverImage: result.url as string } : { ...c, bannerImage: result.url as string }));
+      setNotice(slot === "cover" ? "竖版封面已上传并写回该书。" : "横版横幅已上传并写回该书。");
       await load();
     } finally {
-      setUploadingCover(false);
+      setUploadingSlot("");
     }
   };
 
@@ -197,11 +203,18 @@ export function DocsManager() {
         {draft.isBook && <>
           <label>封面主题色(色相 0-360)<input type="number" min={0} max={360} value={draft.coverHue} onChange={(e) => setDraft((c) => ({ ...c, coverHue: Math.max(0, Math.min(360, Math.floor(Number(e.target.value)) || 0)) }))} /></label>
           <label>书籍简介<input value={draft.summary} maxLength={240} onChange={(e) => setDraft((c) => ({ ...c, summary: e.target.value }))} placeholder="这本书讲什么,一两句话" /></label>
-          <label>封面图片(经安全扫描,公开可读)
+          <label>竖版封面(书架卡片用,经安全扫描,公开可读)
             <span className="docs-manager-cover">
-              <input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploadingCover} onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadCover(f); e.currentTarget.value = ""; }} />
-              {uploadingCover && <small>正在扫描并上传…</small>}
-              {draft.coverImage && <span className="docs-manager-cover-preview"><img src={draft.coverImage} alt="封面预览" /><button type="button" onClick={() => setDraft((c) => ({ ...c, coverImage: "" }))}>移除封面</button></span>}
+              <input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploadingSlot !== ""} onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadImage("cover", f); e.currentTarget.value = ""; }} />
+              {uploadingSlot === "cover" && <small>正在扫描并上传…</small>}
+              {draft.coverImage && <span className="docs-manager-cover-preview"><img src={draft.coverImage} alt="竖版封面预览" /><button type="button" onClick={() => setDraft((c) => ({ ...c, coverImage: "" }))}>移除</button></span>}
+            </span>
+          </label>
+          <label>横版横幅(书封面页顶部用,经安全扫描,公开可读)
+            <span className="docs-manager-cover">
+              <input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploadingSlot !== ""} onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadImage("banner", f); e.currentTarget.value = ""; }} />
+              {uploadingSlot === "banner" && <small>正在扫描并上传…</small>}
+              {draft.bannerImage && <span className="docs-manager-cover-preview docs-manager-banner-preview"><img src={draft.bannerImage} alt="横版横幅预览" /><button type="button" onClick={() => setDraft((c) => ({ ...c, bannerImage: "" }))}>移除</button></span>}
             </span>
           </label>
         </>}

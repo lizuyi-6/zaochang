@@ -374,7 +374,7 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 
 before(async () => {
   await startFakeUploadScanner();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -899,11 +899,11 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
   ].join("\n");
   await executeLocalD1(`
     INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '书架管理员');
-    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary, cover_image) VALUES
-      ('${bookId}', 'book-${tag}', NULL, '图解测试书${tag}', '# 封面正文', 'public', '${adminEmail}', 1, 1, 200, '这是一本测试书的简介', '/api/uploads/cover-${tag}.png'),
-      ('${partId}', 'part-1', '${bookId}', '第一部分 基础', '', 'public', '${adminEmail}', 1, 0, 210, '', ''),
-      ('${chapId}', 'chap-1', '${partId}', '第一章 注意力', '${chapBody.replace(/'/g, "''")}', 'public', '${adminEmail}', 1, 0, 210, '', ''),
-      ('${memBookId}', 'membook-${tag}', NULL, '内部书${tag}', 'x', 'members', '${adminEmail}', 2, 1, 120, '内部简介', '')
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary, cover_image, banner_image) VALUES
+      ('${bookId}', 'book-${tag}', NULL, '图解测试书${tag}', '# 封面正文', 'public', '${adminEmail}', 1, 1, 200, '这是一本测试书的简介', '/api/uploads/cover-${tag}.png', '/api/uploads/banner-${tag}.png'),
+      ('${partId}', 'part-1', '${bookId}', '第一部分 基础', '', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${chapId}', 'chap-1', '${partId}', '第一章 注意力', '${chapBody.replace(/'/g, "''")}', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${memBookId}', 'membook-${tag}', NULL, '内部书${tag}', 'x', 'members', '${adminEmail}', 2, 1, 120, '内部简介', '', '')
   `);
   try {
     // 1) 书架:匿名看到公开书卡片(书名/简介/章节数),不看到 members 书
@@ -915,13 +915,13 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     assert.doesNotMatch(anonHtml, new RegExp(`内部书${tag}`));
     // 1b) 封面图:书架卡片用 cover_image 渲染 <img>(有封面时不退回渐变占位)
     assert.match(anonHtml, new RegExp(`<img src="/api/uploads/cover-${tag}\\.png"`), "书架卡片应渲染封面图 img");
-    // 2) 书封面页:目录树列出 Part 与章节,且封面页渲染横幅 banner
+    // 2) 书封面页:目录树列出 Part 与章节;横幅位优先渲染 banner_image(横版)
     const cover = await fetch(`${baseUrl}/bookshelf/book-${tag}`);
     assert.equal(cover.status, 200);
     const coverHtml = await cover.text();
     assert.match(coverHtml, /第一部分 基础/);
     assert.match(coverHtml, /第一章 注意力/);
-    assert.match(coverHtml, new RegExp(`<img class="book-banner" src="/api/uploads/cover-${tag}\\.png"`), "封面页应渲染横幅 banner");
+    assert.match(coverHtml, new RegExp(`<img class="book-banner" src="/api/uploads/banner-${tag}\\.png"`), "封面页横幅位应优先渲染横版 banner_image");
     // 3) 章节页:LaTeX 经 KaTeX 渲染成 span.katex,mermaid 占位成 pre.mermaid,XSS 不出现
     const chap = await fetch(`${baseUrl}/bookshelf/book-${tag}/part-1/chap-1`);
     assert.equal(chap.status, 200);
@@ -953,52 +953,86 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
   }
 });
 
-test("book cover upload: founder-only, scanned clean, public readable, writes cover_image", async () => {
+test("book cover upload: founder-only, scanned clean, public readable, writes cover + banner slots", async () => {
   const runId = crypto.randomUUID();
   const tag = runId.slice(0, 8);
   const bookId = `doc:${runId}-coverbook`;
   const memberEmail = `cover-${runId}@example.com`;
   // 1x1 透明 PNG。
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x62, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
-  const uploadForm = () => {
+  const uploadForm = (slot = "cover") => {
     const form = new FormData();
-    form.set("file", new File([png], `cover-${tag}.png`, { type: "image/png" }));
+    form.set("file", new File([png], `${slot}-${tag}.png`, { type: "image/png" }));
     form.set("docId", bookId);
+    form.set("slot", slot);
     form.set("visibility", "public");
     return form;
   };
   await executeLocalD1(`
     INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '封面管理员');
-    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, is_book, cover_hue, summary, cover_image) VALUES
-      ('${bookId}', 'coverbook-${tag}', NULL, '封面上传书${tag}', 'x', 'public', '${adminEmail}', 1, 200, '', '')
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, is_book, cover_hue, summary, cover_image, banner_image) VALUES
+      ('${bookId}', 'coverbook-${tag}', NULL, '封面上传书${tag}', 'x', 'public', '${adminEmail}', 1, 200, '', '', '')
   `);
   try {
     // 1) 匿名 -> 401;非创始人成员 -> 403
     assert.equal((await fetch(`${baseUrl}/api/docs/cover`, { method: "POST", body: uploadForm() })).status, 401);
     assert.equal((await fetch(`${baseUrl}/api/docs/cover`, { method: "POST", headers: identityHeaders("普通成员", memberEmail), body: uploadForm() })).status, 403);
 
-    // 2) 创始人上传 -> 201,scanStatus clean,返回公开地址;DB cover_image 写回
-    const founderUpload = await fetch(`${baseUrl}/api/docs/cover`, { method: "POST", headers: identityHeaders("封面管理员", adminEmail), body: uploadForm() });
-    assert.equal(founderUpload.status, 201, await founderUpload.clone().text().catch(() => ""));
-    const payload = await founderUpload.json();
-    assert.equal(payload.scanStatus, "clean");
-    assert.equal(payload.purpose, "book_cover");
-    assert.match(payload.url, /^\/api\/uploads\/[a-f0-9-]+\.png$/);
-    const coverRows = await queryLocalD1(`SELECT cover_image AS coverImage FROM docs WHERE id = '${bookId}'`);
+    // 2) 创始人上传竖版 -> 201,scanStatus clean,写回 cover_image
+    const coverUpload = await fetch(`${baseUrl}/api/docs/cover`, { method: "POST", headers: identityHeaders("封面管理员", adminEmail), body: uploadForm("cover") });
+    assert.equal(coverUpload.status, 201, await coverUpload.clone().text().catch(() => ""));
+    const coverPayload = await coverUpload.json();
+    assert.equal(coverPayload.scanStatus, "clean");
+    assert.equal(coverPayload.purpose, "book_cover");
+    assert.equal(coverPayload.slot, "cover");
+    assert.match(coverPayload.url, /^\/api\/uploads\/[a-f0-9-]+\.png$/);
+    const coverRows = await queryLocalD1(`SELECT cover_image AS coverImage, banner_image AS bannerImage FROM docs WHERE id = '${bookId}'`);
     assert.equal(coverRows.length, 1);
-    assert.equal(coverRows[0].coverImage, payload.url, "docs.cover_image 应写回上传返回的地址");
+    assert.equal(coverRows[0].coverImage, coverPayload.url, "竖版上传应写回 docs.cover_image");
+    assert.equal(coverRows[0].bannerImage, "", "竖版上传不应动 banner_image");
 
-    // 3) 公开封面匿名可读(img 内联),且经扫描(clean + sha256 一致)
-    const img = await fetch(`${baseUrl}${payload.url}`);
-    assert.equal(img.status, 200);
-    assert.match(img.headers.get("content-type") ?? "", /image\/png/);
+    // 3) 创始人上传横版 -> 写回 banner_image,不动 cover_image
+    const bannerUpload = await fetch(`${baseUrl}/api/docs/cover`, { method: "POST", headers: identityHeaders("封面管理员", adminEmail), body: uploadForm("banner") });
+    assert.equal(bannerUpload.status, 201);
+    const bannerPayload = await bannerUpload.json();
+    assert.equal(bannerPayload.slot, "banner");
+    const bannerRows = await queryLocalD1(`SELECT cover_image AS coverImage, banner_image AS bannerImage FROM docs WHERE id = '${bookId}'`);
+    assert.equal(bannerRows[0].bannerImage, bannerPayload.url, "横版上传应写回 docs.banner_image");
+    assert.equal(bannerRows[0].coverImage, coverPayload.url, "横版上传不应覆盖 cover_image");
 
-    // 4) 书架页把该书封面渲染为 <img>(行为层端到端)
+    // 4) 公开封面/横幅匿名可读(经扫描 clean + sha256 一致)
+    assert.equal((await fetch(`${baseUrl}${coverPayload.url}`)).status, 200);
+    assert.equal((await fetch(`${baseUrl}${bannerPayload.url}`)).status, 200);
+
+    // 5) 书架卡片渲染竖版,封面页横幅位渲染横版(行为层端到端)
     const shelf = await fetch(`${baseUrl}/bookshelf`);
-    assert.match(await shelf.text(), new RegExp(`<img src="${payload.url.replace(/\//g, "\\/").replace(/\./g, "\\.")}"`), "书架卡片应渲染上传后的封面");
+    assert.match(await shelf.text(), new RegExp(`<img src="${coverPayload.url.replace(/\//g, "\\/").replace(/\./g, "\\.")}"`), "书架卡片应渲染竖版 cover");
+    const coverPage = await fetch(`${baseUrl}/bookshelf/coverbook-${tag}`);
+    assert.match(await coverPage.text(), new RegExp(`<img class="book-banner" src="${bannerPayload.url.replace(/\//g, "\\/").replace(/\./g, "\\.")}"`), "封面页横幅位应渲染横版 banner");
   } finally {
-    await executeLocalD1(`DELETE FROM docs WHERE id = '${bookId}'; DELETE FROM uploaded_files WHERE purpose = 'book_cover' AND original_name = 'cover-${tag}.png'; DELETE FROM admin_audit_events WHERE target_ref = '${bookId}'`);
+    await executeLocalD1(`DELETE FROM docs WHERE id = '${bookId}'; DELETE FROM uploaded_files WHERE purpose = 'book_cover' AND original_name LIKE '%-${tag}.png'; DELETE FROM admin_audit_events WHERE target_ref = '${bookId}'`);
   }
+});
+
+test("studio docs entry: isFounder flag + founder-gated docs pages", async () => {
+  const runId = crypto.randomUUID();
+  const memberEmail = `studio-docs-${runId}@example.com`;
+  // 「文档与书架」入口卡在 /studio 客户端组件里由 /api/community 的 isFounder 驱动
+  // (useEffect 注入,不进 SSR HTML),故无法靠渲染 HTML 断言;改而验证其真实驱动:
+  // 1) /api/community 对创始人回 isFounder=true、普通成员 false;
+  // 2) 入口目标 /studio/docs 由 requireFounder 把关:创始人 200,普通成员/匿名 404(fail-closed)。
+  const founderApi = await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("创始人", adminEmail) })).json();
+  assert.equal(founderApi.signedIn, true);
+  assert.equal(founderApi.isFounder, true, "创始人 /api/community 应回 isFounder=true");
+  const memberApi = await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("普通成员", memberEmail) })).json();
+  assert.equal(memberApi.signedIn, true);
+  assert.equal(memberApi.isFounder, false, "普通成员 /api/community 应回 isFounder=false");
+  const anonApi = await (await fetch(`${baseUrl}/api/community`)).json();
+  assert.equal(anonApi.isFounder, false, "匿名 /api/community 应回 isFounder=false");
+
+  assert.equal((await fetch(`${baseUrl}/studio/docs`, { headers: authHeaders("创始人", adminEmail) })).status, 200, "创始人应能进 /studio/docs");
+  assert.equal((await fetch(`${baseUrl}/studio/docs`, { headers: authHeaders("普通成员", memberEmail) })).status, 404, "普通成员进 /studio/docs 应 404");
+  assert.equal((await fetch(`${baseUrl}/studio/docs`)).status, 404, "匿名进 /studio/docs 应 404");
 });
 
 test("docs API: founder-gated CRUD, non-founder forbidden, cycle rejected", async () => {

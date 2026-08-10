@@ -79,7 +79,7 @@ export default async function BookPage({ params }: PageProps) {
         </span>)}
       </nav>}
 
-      {isCover && book.coverImage && <img className="book-banner" src={book.coverImage} alt={book.title} />}
+      {isCover && (book.bannerImage || book.coverImage) && <img className="book-banner" src={book.bannerImage || book.coverImage} alt={book.title} />}
 
       <header className="docs-article-header">
         <h1>{doc.title}</h1>

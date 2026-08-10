@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     const coverHue = Math.max(0, Math.min(360, Math.floor(Number(input.coverHue)) || 0));
     const summary = String(input.summary ?? "").trim().slice(0, 240);
     const coverImage = String(input.coverImage ?? "").trim().slice(0, 400);
+    const bannerImage = String(input.bannerImage ?? "").trim().slice(0, 400);
     if (title.length < 1 || !slug) {
       return Response.json({ error: "invalid_doc" }, { status: 400 });
     }
@@ -39,9 +40,9 @@ export async function POST(request: Request) {
     const id = `doc:${crypto.randomUUID()}`;
     try {
       await database().prepare(
-        `INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, is_book, cover_hue, summary, cover_image)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(id, slug, parentId, title, bodyMd, visibility, founder.email, isBook, coverHue, summary, coverImage).run();
+        `INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, is_book, cover_hue, summary, cover_image, banner_image)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(id, slug, parentId, title, bodyMd, visibility, founder.email, isBook, coverHue, summary, coverImage, bannerImage).run();
     } catch (error) {
       if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
         return Response.json({ error: "slug_taken" }, { status: 409 });
@@ -97,6 +98,7 @@ export async function PATCH(request: Request) {
     if (input.coverHue !== undefined) { sets.push("cover_hue = ?"); values.push(Math.max(0, Math.min(360, Math.floor(Number(input.coverHue)) || 0))); }
     if (input.summary !== undefined) { sets.push("summary = ?"); values.push(String(input.summary).trim().slice(0, 240)); }
     if (input.coverImage !== undefined) { sets.push("cover_image = ?"); values.push(String(input.coverImage).trim().slice(0, 400)); }
+    if (input.bannerImage !== undefined) { sets.push("banner_image = ?"); values.push(String(input.bannerImage).trim().slice(0, 400)); }
     if (sets.length === 0) return Response.json({ error: "nothing_to_update" }, { status: 400 });
     sets.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);

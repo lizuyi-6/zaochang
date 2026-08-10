@@ -18,6 +18,7 @@ export type DocRow = {
   coverHue: number;
   summary: string;
   coverImage: string;
+  bannerImage: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -26,7 +27,7 @@ export type DocNode = DocRow & { children: DocNode[] };
 
 export const DOC_COLUMNS = `id, slug, parent_id AS parentId, title, body_md AS bodyMd,
   visibility, author_email AS authorEmail, sort_order AS sortOrder,
-  is_book AS isBook, cover_hue AS coverHue, summary, cover_image AS coverImage,
+  is_book AS isBook, cover_hue AS coverHue, summary, cover_image AS coverImage, banner_image AS bannerImage,
   created_at AS createdAt, updated_at AS updatedAt`;
 
 // ---- Markdown -> 安全 HTML。安全红线:禁行内原始 HTML,只允许白名单标签/属性。----

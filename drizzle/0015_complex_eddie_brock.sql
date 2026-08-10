@@ -1,0 +1,1 @@
+ALTER TABLE `docs` ADD `banner_image` text DEFAULT '' NOT NULL;
