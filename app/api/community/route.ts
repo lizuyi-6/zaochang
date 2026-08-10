@@ -3,6 +3,7 @@ import { database, ensureMember, jsonError, optionalMember } from "../_lib/commu
 import { settleDueExternalFruit } from "../_lib/external-fruit";
 import { settleDueFruit } from "../_lib/fruit";
 import { loadPublicCommunityState } from "../_lib/public-community";
+import { listRecentReading } from "../_lib/docs";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export async function GET() {
     let orders: unknown[] = [];
     let productLikes: unknown[] = [];
     let authoredBooks: unknown[] = [];
+    let recentReading: unknown[] = [];
 
     if (member) {
       wallet = await db
@@ -184,6 +186,7 @@ export async function GET() {
           .bind(member.email, member.email, member.email, member.email, member.displayName, member.email, member.email)
           .all()
       ).results;
+      recentReading = await listRecentReading(member);
       // 当前账户名下的书(is_book=1 且 author_email 匹配)。章节数用递归 CTE 统计
       // 该书根的全部后代,与书架前台 listBooks 的 chapterCount 同语义。
       authoredBooks = (
@@ -222,6 +225,7 @@ export async function GET() {
       orders,
       productLikes,
       authoredBooks,
+      recentReading,
       circleStats: publicState.circleStats,
       liveRoomStats: publicState.liveRoomStats,
       signedIn: Boolean(member),

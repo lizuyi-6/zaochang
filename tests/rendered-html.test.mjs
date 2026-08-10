@@ -374,7 +374,7 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 
 before(async () => {
   await startFakeUploadScanner();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -1131,6 +1131,124 @@ test("/api/community authoredBooks lists the signed-in member's books with chapt
     assert.equal(anonApi.authoredBooks.length, 0);
   } finally {
     await executeLocalD1(`DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}')`);
+  }
+});
+
+test("reading-progress: POST upserts, validates fail-closed, GET + recentReading + shelf SSR surface it", async () => {
+  const runId = crypto.randomUUID();
+  const tag = runId.slice(0, 8);
+  const bookId = `doc:${runId}-rpbook`;
+  const partId = `doc:${runId}-rppart`;
+  const chapId = `doc:${runId}-rpchap`;
+  const otherBookId = `doc:${runId}-rpother`;
+  const otherChapId = `doc:${runId}-rpochap`;
+  const readerEmail = `reader-${runId}@example.com`;
+  // seed:一本书(book + part + chap)+ 另一本独立书 + 它的章(用于跨书 fail-closed 校验)。
+  await executeLocalD1(`
+    INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '阅读进度管理员');
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary, cover_image, banner_image) VALUES
+      ('${bookId}', 'rpbook-${tag}', NULL, '进度书${tag}', '封面', 'public', '${adminEmail}', 1, 1, 210, '一本可读的书', '', ''),
+      ('${partId}', 'part-1', '${bookId}', '第一部分', '', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${chapId}', 'chap-1', '${partId}', '第一章', '正文', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${otherBookId}', 'rpother-${tag}', NULL, '另一本书', '', 'public', '${adminEmail}', 2, 1, 120, '', '', ''),
+      ('${otherChapId}', 'ochap-1', '${otherBookId}', '另一章', '正文', 'public', '${adminEmail}', 1, 0, 120, '', '', '')
+  `);
+  try {
+    // 1) 匿名 POST -> 401(requireMember)
+    const anonPost = await fetch(`${baseUrl}/api/reading-progress`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ bookId, chapterId: chapId, paragraph: 3 }),
+    });
+    assert.equal(anonPost.status, 401, "匿名上报进度应 401");
+
+    // 2) 合法 POST(upsert)→ DB 落 last_chapter_id=chapId, last_paragraph=3(行为层字段断言)
+    const post1 = await fetch(`${baseUrl}/api/reading-progress`, {
+      method: "POST",
+      headers: authHeaders("读者", readerEmail),
+      body: JSON.stringify({ bookId, chapterId: chapId, paragraph: 3 }),
+    });
+    assert.equal(post1.status, 200, "合法上报应 200");
+    const row1 = await queryLocalD1(`SELECT last_chapter_id AS c, last_paragraph AS p FROM reading_progress WHERE user_email = '${readerEmail}' AND book_id = '${bookId}'`);
+    assert.equal(row1.length, 1, "进度行应存在");
+    assert.equal(row1[0].c, chapId, "last_chapter_id 应为上报的章节");
+    assert.equal(row1[0].p, 3, "last_paragraph 应为上报值 3");
+
+    // 3) 再次 POST 更新(upsert,不新增行)→ paragraph 变化,行数仍 1
+    await fetch(`${baseUrl}/api/reading-progress`, {
+      method: "POST",
+      headers: authHeaders("读者", readerEmail),
+      body: JSON.stringify({ bookId, chapterId: chapId, paragraph: 7 }),
+    });
+    const rowCount = await queryLocalD1(`SELECT COUNT(*) AS n FROM reading_progress WHERE user_email = '${readerEmail}' AND book_id = '${bookId}'`);
+    assert.equal(rowCount[0].n, 1, "upsert 不应新增行");
+    const row2 = await queryLocalD1(`SELECT last_paragraph AS p FROM reading_progress WHERE user_email = '${readerEmail}' AND book_id = '${bookId}'`);
+    assert.equal(row2[0].p, 7, "last_paragraph 应更新为 7");
+
+    // 4) 负数 paragraph -> clamp 到 0(行为层字段断言,非仅状态码)
+    await fetch(`${baseUrl}/api/reading-progress`, {
+      method: "POST",
+      headers: authHeaders("读者", readerEmail),
+      body: JSON.stringify({ bookId, chapterId: chapId, paragraph: -5 }),
+    });
+    const rowNeg = await queryLocalD1(`SELECT last_paragraph AS p FROM reading_progress WHERE user_email = '${readerEmail}' AND book_id = '${bookId}'`);
+    assert.equal(rowNeg[0].p, 0, "负 paragraph 应 clamp 到 0");
+
+    // 5) 跨书校验 fail-closed:把 A 书章节记到 B 书名下 -> 404,不落库
+    const crossPost = await fetch(`${baseUrl}/api/reading-progress`, {
+      method: "POST",
+      headers: authHeaders("读者", readerEmail),
+      body: JSON.stringify({ bookId: otherBookId, chapterId: chapId, paragraph: 1 }),
+    });
+    assert.equal(crossPost.status, 404, "跨书章节应被 fail-closed 拒绝(404)");
+    const crossRow = await queryLocalD1(`SELECT COUNT(*) AS n FROM reading_progress WHERE user_email = '${readerEmail}' AND book_id = '${otherBookId}'`);
+    assert.equal(crossRow[0].n, 0, "跨书进度不应落库");
+
+    // 6) 不存在的 bookId -> 404(校验在 FK 之前,fail-closed 不泄露存在性)
+    const ghostPost = await fetch(`${baseUrl}/api/reading-progress`, {
+      method: "POST",
+      headers: authHeaders("读者", readerEmail),
+      body: JSON.stringify({ bookId: `doc:${runId}-ghost`, chapterId: chapId, paragraph: 1 }),
+    });
+    assert.equal(ghostPost.status, 404, "不存在的 bookId 应 404");
+
+    // 7) GET 返回当前用户进度(camelCase 字段)
+    const getRes = await fetch(`${baseUrl}/api/reading-progress`, { headers: authHeaders("读者", readerEmail) });
+    assert.equal(getRes.status, 200);
+    const getJson = await getRes.json();
+    assert.ok(Array.isArray(getJson.progress), "GET 应返回 progress 数组");
+    const mine = getJson.progress.find((r) => r.bookId === bookId);
+    assert.ok(mine, "GET 应含上报过的书");
+    assert.equal(mine.lastChapterId, chapId);
+
+    // 8) /api/community recentReading 含该书 + href 直指章节(非封面两步跳)
+    const comm = await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("读者", readerEmail) })).json();
+    assert.ok(Array.isArray(comm.recentReading), "recentReading 应为数组");
+    const cr = comm.recentReading.find((r) => r.bookId === bookId);
+    assert.ok(cr, "recentReading 应含读过的书");
+    assert.equal(cr.chapterTitle, "第一章");
+    assert.ok(cr.href.includes(`/bookshelf/rpbook-${tag}/part-1/chap-1`), `recentReading href 应指向章节路径,实际 ${cr.href}`);
+
+    // 9) 书架首页卡片 href 直指上次章节(SSR,非封面)
+    const shelfHtml = await (await fetch(`${baseUrl}/bookshelf`, { headers: authHeaders("读者", readerEmail) })).text();
+    assert.ok(shelfHtml.includes(`/bookshelf/rpbook-${tag}/part-1/chap-1`), "书架首页卡片应直指上次章节 URL");
+
+    // 10) 封面页"继续阅读"链接渲染 + href 指向章节
+    const coverHtml = await (await fetch(`${baseUrl}/bookshelf/rpbook-${tag}`, { headers: authHeaders("读者", readerEmail) })).text();
+    assert.ok(coverHtml.includes("继续阅读"), "封面页应渲染继续阅读入口");
+    assert.ok(coverHtml.includes(`/bookshelf/rpbook-${tag}/part-1/chap-1`), "封面页继续阅读 href 应指向章节");
+
+    // 11) 匿名 GET -> 401
+    const anonGet = await fetch(`${baseUrl}/api/reading-progress`);
+    assert.equal(anonGet.status, 401, "匿名 GET 进度应 401");
+  } finally {
+    await executeLocalD1(`
+      DELETE FROM reading_progress WHERE user_email = '${readerEmail}';
+      DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}', '${otherBookId}', '${otherChapId}');
+      DELETE FROM wallets WHERE user_email = '${readerEmail}';
+      DELETE FROM collections WHERE user_email = '${readerEmail}';
+      DELETE FROM members WHERE email = '${readerEmail}'
+    `);
   }
 });
 

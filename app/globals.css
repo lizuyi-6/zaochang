@@ -574,6 +574,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-cover-sm img { max-height: 44px; object-fit: contain; width: auto; }
 .book-banner { border: 1px solid var(--line); border-radius: 10px; display: block; height: auto; max-height: 320px; object-fit: cover; width: 100%; }
 .book-meta { display: grid; gap: 6px; padding: 14px 16px 16px; }.book-meta strong { align-items: center; display: flex; font-size: 14px; gap: 6px; }.book-meta small { color: var(--muted); display: -webkit-box; font-size: 11px; line-height: 1.6; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }.book-meta em { color: var(--muted); font-size: 10px; font-style: normal; }
+/* 书架卡片"继续 · 章节名"标签:比"N 章"更醒目,提示有可恢复的阅读进度。 */
+.book-meta em.book-continue-tag { color: var(--ink); font-weight: 600; }
+/* 封面页"继续阅读"大链接:显眼的恢复入口(非正文链接,独立成块)。 */
+.book-continue-reading { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); display: inline-flex; font-size: 13px; font-weight: 600; gap: 8px; padding: 11px 16px; width: fit-content; }.book-continue-reading:hover { background: var(--surface-2); border-color: var(--line-strong); }.book-continue-reading svg:first-child { color: var(--muted); }.book-continue-reading svg:last-child { color: var(--muted); }
+/* studio "最近阅读"列表:横向行式卡片(小封面 + 书名 + 读到章节 + 箭头)。 */
+.studio-reading { display: grid; gap: 14px; margin-top: 28px; }
+.studio-reading-list { display: grid; gap: 8px; }
+.reading-row { align-items: center; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 12px; grid-template-columns: auto 1fr auto; padding: 11px 14px; transition: border-color 0.15s ease; }.reading-row:hover { border-color: var(--line-strong); }.reading-row .book-cover-sm { border-radius: 6px; height: 38px; width: 32px; }
+.reading-meta { display: grid; gap: 2px; min-width: 0; }.reading-meta strong { font-size: 13px; }.reading-meta small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.reading-row > svg:last-child { color: var(--muted); }
 
 .book-page { display: grid; gap: 0; grid-template-columns: 260px 1fr; margin: 0 auto; max-width: 1180px; padding: 24px 20px 68px; }
 .book-side { border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 0 18px 24px 0; position: sticky; top: 24px; }

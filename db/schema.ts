@@ -848,3 +848,22 @@ export const docs = sqliteTable(
     check("docs_visibility_valid", sql`${table.visibility} in ('public', 'members', 'private')`),
   ],
 );
+
+// 阅读进度:每用户每书一条恢复点(章节 + 段落序号)。段落级精度靠客户端
+// ReadingProgressTracker 给正文顶层块打 data-pp 序号后上报,跨设备同步。
+// last_chapter_id 是否真为 book_id 的后代由 API 层验证(此处不加 DB 约束,
+// 避免迁移期/脏数据阻塞写入);可见性同样由 API 层 fail-closed 把关。
+export const readingProgress = sqliteTable(
+  "reading_progress",
+  {
+    userEmail: text("user_email").notNull().references(() => members.email),
+    bookId: text("book_id").notNull().references(() => docs.id),
+    lastChapterId: text("last_chapter_id").notNull().references(() => docs.id),
+    lastParagraph: integer("last_paragraph").notNull().default(0),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userEmail, table.bookId] }),
+    index("reading_progress_user_updated_idx").on(table.userEmail, table.updatedAt),
+  ],
+);
