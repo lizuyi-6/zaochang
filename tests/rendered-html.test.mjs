@@ -876,6 +876,66 @@ test("docs tree hides unreachable child whose parent is invisible", async () => 
   }
 });
 
+test("docs no longer lists books; old book URLs 308-redirect to bookshelf", async () => {
+  const runId = crypto.randomUUID();
+  const tag = runId.slice(0, 8);
+  const bookId = `doc:${runId}-book`;
+  const partId = `doc:${runId}-part`;
+  const chapId = `doc:${runId}-chap`;
+  const memBookId = `doc:${runId}-membook`;
+  const standaloneId = `doc:${runId}-standalone`;
+  const standaloneSlug = `standalone-${tag}`;
+  const memberEmail = `docs-redirect-${runId}@example.com`;
+  // seed:一本公开书(书根+part+章节)+ 一本 members 书 + 一个独立文档。
+  // 期望:独立文档留在 /docs;书与书的章节整体从 /docs 消失;旧书 URL 308 到书架。
+  await executeLocalD1(`
+    INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '文档去重管理员');
+    INSERT OR IGNORE INTO members (email, display_name) VALUES ('${memberEmail}', '文档成员');
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary, cover_image, banner_image) VALUES
+      ('${bookId}', 'docbook-${tag}', NULL, '去重测试书${tag}', '封面正文', 'public', '${adminEmail}', 1, 1, 210, '一本测试书', '', ''),
+      ('${partId}', 'part-a', '${bookId}', '第一部分', '', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${chapId}', 'chap-1', '${partId}', '第一章', '章节正文', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${memBookId}', 'memdocbook-${tag}', NULL, 'members测试书${tag}', 'x', 'members', '${adminEmail}', 2, 1, 200, '', '', '');
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book) VALUES
+      ('${standaloneId}', '${standaloneSlug}', NULL, '独立文档${tag}', '正文', 'public', '${adminEmail}', 9, 0)
+  `);
+  try {
+    // 1) /docs 目录:独立文档在,书与书的章节都不在(去重——方案甲的核心)。
+    const idx = await fetch(`${baseUrl}/docs`);
+    const idxHtml = await idx.text();
+    assert.match(idxHtml, /独立文档/, "独立文档应留在 /docs 目录");
+    assert.match(idxHtml, new RegExp(standaloneSlug), "独立文档链接应在 /docs 目录");
+    assert.doesNotMatch(idxHtml, /去重测试书/, "书根不应出现在 /docs 目录");
+    assert.doesNotMatch(idxHtml, /第一部分/, "书的 part 不应出现在 /docs 目录");
+    assert.doesNotMatch(idxHtml, /第一章/, "书的章节不应出现在 /docs 目录");
+
+    // 2) 旧书根 URL → 308 → /bookshelf/同路径
+    const redirRoot = await fetch(`${baseUrl}/docs/docbook-${tag}`, { redirect: "manual" });
+    assert.equal(redirRoot.status, 308, "旧书根 URL 应 308 永久重定向");
+    assert.match(redirRoot.headers.get("location") ?? "", new RegExp(`/bookshelf/docbook-${tag}([/?]|$)`), "location 应指向书架同路径");
+
+    // 3) 旧深层章节 URL → 308 → /bookshelf/同深路径
+    const redirDeep = await fetch(`${baseUrl}/docs/docbook-${tag}/part-a/chap-1`, { redirect: "manual" });
+    assert.equal(redirDeep.status, 308, "旧章节 URL 应 308");
+    assert.match(redirDeep.headers.get("location") ?? "", new RegExp(`/bookshelf/docbook-${tag}/part-a/chap-1([/?]|$)`), "深层 location 应指向书架同深路径");
+
+    // 4) members 书匿名访问旧 URL → 404(fail-closed:不重定向、不借 308 泄露存在性)
+    const memAnon = await fetch(`${baseUrl}/docs/memdocbook-${tag}`, { redirect: "manual" });
+    assert.equal(memAnon.status, 404, "匿名访问 members 书旧 URL 应 404,不重定向");
+
+    // 5) members 书登录用户 → 308(可见才重定向)
+    const memAuth = await fetch(`${baseUrl}/docs/memdocbook-${tag}`, { redirect: "manual", headers: authHeaders("文档成员", memberEmail) });
+    assert.equal(memAuth.status, 308, "登录用户访问 members 书旧 URL 应 308");
+
+    // 6) 独立文档 URL 不受影响:仍 200 直达,不重定向
+    const standalone = await fetch(`${baseUrl}/docs/${standaloneSlug}`);
+    assert.equal(standalone.status, 200, "独立文档 URL 不应被重定向");
+    assert.match(await standalone.text(), /正文/);
+  } finally {
+    await executeLocalD1(`DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}', '${memBookId}', '${standaloneId}'); DELETE FROM members WHERE email = '${memberEmail}'`);
+  }
+});
+
 test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, members book gated", async () => {
   const runId = crypto.randomUUID();
   const tag = runId.slice(0, 8);

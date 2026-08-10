@@ -130,6 +130,41 @@ export async function listAllDocs(): Promise<DocRow[]> {
   return result.results;
 }
 
+// /docs 文档目录专用:只返回独立文档(is_book=0),剔除所有书根(is_book=1)
+// 及其整棵章节子树。一个节点若其祖先链(含自身)任一是书根,即属书子树——
+// 它只该从书架进入,不在文档目录重复出现。整体剔除(而非只去掉书根那一行),
+// 否则书的章节会因父级缺失被 buildDocTree 提升为文档目录的根条目。
+export async function listStandaloneDocs(): Promise<DocRow[]> {
+  const all = await listAllDocs();
+  const bookIds = new Set(all.filter((row) => row.isBook === 1).map((row) => row.id));
+  if (bookIds.size === 0) return all;
+  const byId = new Map(all.map((row) => [row.id, row] as const));
+  const inBookSubtree = (row: DocRow): boolean => {
+    let cursor: DocRow | undefined = row;
+    const seen = new Set<string>();
+    while (cursor) {
+      if (seen.has(cursor.id)) break; // 防御环(脏数据)
+      seen.add(cursor.id);
+      if (bookIds.has(cursor.id)) return true;
+      cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+    }
+    return false;
+  };
+  return all.filter((row) => !inBookSubtree(row));
+}
+
+// 判断路径第一段是否对应一本对当前访问者可见的书根(is_book=1)。用于把旧的
+// /docs/<book>/... URL 永久重定向到 /bookshelf/<book>/...。fail-closed:
+// 书不存在或不可见(members/private 且未登录)返回 null,由调用方走 404,
+// 不借重定向泄露书的存在性。
+export async function resolveBookRootSlug(rootSlug: string, member: MemberIdentity | null): Promise<DocRow | null> {
+  const row = await database().prepare(
+    `SELECT ${DOC_COLUMNS} FROM docs WHERE slug = ? AND parent_id IS NULL LIMIT 1`,
+  ).bind(rootSlug).first<DocRow>();
+  if (!row || row.isBook !== 1 || !canViewDoc(row, member)) return null;
+  return row;
+}
+
 // 可见性规则:public 人人可见;members/private 需登录(后续可再细分创始人可见)。
 export function canViewDoc(doc: DocRow, member: MemberIdentity | null): boolean {
   if (doc.visibility === "public") return true;
