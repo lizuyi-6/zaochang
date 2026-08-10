@@ -374,7 +374,7 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 
 before(async () => {
   await startFakeUploadScanner();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -1132,6 +1132,42 @@ test("/api/community authoredBooks lists the signed-in member's books with chapt
   } finally {
     await executeLocalD1(`DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}')`);
   }
+});
+
+test("member_number: trigger auto-assigns sequential ids, UNIQUE-enforced, surfaced on profile + api", async () => {
+  const runId = crypto.randomUUID();
+  const emailA = `mem-a-${runId}@example.com`;
+  const emailB = `mem-b-${runId}@example.com`;
+  // 通过 /api/community(GET 内 ensureMember)创建两个 member → trigger 应自动赋号
+  await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("会员甲", emailA) })).json();
+  await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("会员乙", emailB) })).json();
+  const rows = await queryLocalD1(`SELECT email, member_number AS n FROM members WHERE email IN ('${emailA}', '${emailB}') ORDER BY member_number ASC`);
+  assert.equal(rows.length, 2, "两个 member 都应被 trigger 赋 member_number");
+  const nA = rows.find((r) => r.email === emailA).n;
+  const nB = rows.find((r) => r.email === emailB).n;
+  assert.ok(Number.isInteger(nA) && nA > 0, `A 会员号应为正整数,实际 ${nA}`);
+  assert.equal(nB, nA + 1, "trigger 应给后到的成员赋 MAX(member_number)+1");
+  // UNIQUE 约束:直接撞号写入应被拒(不变量不靠应用层)
+  const dupErr = await executeLocalD1(`INSERT INTO members (email, display_name, member_number) VALUES ('dup-${runId}@x.com', '撞号', ${nA})`, false);
+  assert.match(dupErr, /UNIQUE/i, "member_number 撞号应被 UNIQUE 索引拒绝");
+  // 不变量锚点:trigger 与 UNIQUE 索引确实存在于 schema
+  const schema = await queryLocalD1(`SELECT type, name FROM sqlite_master WHERE name IN ('members_assign_member_number', 'members_member_number_idx')`);
+  assert.ok(schema.some((r) => r.type === "trigger" && r.name === "members_assign_member_number"), "赋号 trigger 存在");
+  assert.ok(schema.some((r) => r.name === "members_member_number_idx"), "UNIQUE 索引存在");
+  // /api/community profile.memberNumber 与库一致
+  const api = await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("会员甲", emailA) })).json();
+  assert.equal(api.profile.memberNumber, nA);
+  // profile 页面 SSR 渲染零填充会员号 #00NN
+  const profileHtml = await (await fetch(`${baseUrl}/profile`, { headers: authHeaders("会员甲", emailA) })).text();
+  // React SSR 在相邻文本节点间插入 <!-- --> 注释;去掉后再断言,避免误判(hydration 后视觉无影响)。
+  const profileHtmlCleaned = profileHtml.replace(/<!--.*?-->/g, "");
+  assert.ok(profileHtmlCleaned.includes(`#${String(nA).padStart(4, "0")}`), `profile SSR 应含 #${String(nA).padStart(4, "0")}`);
+  // 清理(wallets/collections 经 ensureMember 创建,FK 引用 members,须先删)
+  await executeLocalD1(`
+    DELETE FROM collections WHERE user_email IN ('${emailA}', '${emailB}');
+    DELETE FROM wallets WHERE user_email IN ('${emailA}', '${emailB}');
+    DELETE FROM members WHERE email IN ('${emailA}', '${emailB}')
+  `);
 });
 
 test("docs API: founder-gated CRUD, non-founder forbidden, cycle rejected", async () => {

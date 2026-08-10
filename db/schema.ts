@@ -17,7 +17,13 @@ export const members = sqliteTable("members", {
   website: text("website").notNull().default(""),
   reputation: integer("reputation").notNull().default(0),
   joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+  // 会员号:展示用数字身份(如 #0001)。可空——回填覆盖全部历史行,
+  // 新成员由 trigger members_assign_member_number 自动赋 MAX+1,
+  // UNIQUE 索引兜底。应用层不应直接写入此列。
+  memberNumber: integer("member_number"),
+}, (table) => [
+  uniqueIndex("members_member_number_idx").on(table.memberNumber),
+]);
 
 export const oauthAccounts = sqliteTable(
   "oauth_accounts",

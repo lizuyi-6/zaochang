@@ -32,7 +32,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { circles, products } from "../lib/community-data";
 
-type Member = { signedIn: boolean; displayName: string; initial: string; isAdmin: boolean; isFounder: boolean };
+type Member = { signedIn: boolean; displayName: string; initial: string; isAdmin: boolean; isFounder: boolean; memberNumber: number | null };
 type CircleStat = { slug: string; members: number; recentDiscussions: number };
 
 const navItems = [
@@ -219,7 +219,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         <AnimatePresence>
           {member.signedIn && accountOpen && (
             <motion.div className="account-menu" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
-              <div><span className="deep-avatar ink">{member.initial}</span><span><strong>{member.displayName}</strong><small className={member.isFounder ? "founder-role" : ""}>{member.isFounder ? "造场创始人" : member.isAdmin ? "平台管理员" : "造场成员"}</small></span></div>
+              <div><span className="deep-avatar ink">{member.initial}</span><span><strong>{member.displayName}</strong>{member.memberNumber ? <em className="deep-member-number">#{String(member.memberNumber).padStart(4, "0")}</em> : null}<small className={member.isFounder ? "founder-role" : ""}>{member.isFounder ? "造场创始人" : member.isAdmin ? "平台管理员" : "造场成员"}</small></span></div>
               <Link href="/profile"><UserRound size={15} /> 个人主页</Link>
               <Link href="/profile/edit"><Layers3 size={15} /> 编辑资料</Link>
               <Link href="/developers"><Blocks size={15} /> 开发者接入</Link>
