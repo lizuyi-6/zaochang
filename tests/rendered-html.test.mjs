@@ -1095,6 +1095,45 @@ test("studio docs entry: isFounder flag + founder-gated docs pages", async () =>
   assert.equal((await fetch(`${baseUrl}/studio/docs`)).status, 404, "匿名进 /studio/docs 应 404");
 });
 
+test("/api/community authoredBooks lists the signed-in member's books with chapter count", async () => {
+  const runId = crypto.randomUUID();
+  const tag = runId.slice(0, 8);
+  const bookId = `doc:${runId}-mybook`;
+  const partId = `doc:${runId}-part`;
+  const chapId = `doc:${runId}-chap`;
+  const otherEmail = `nobooks-${runId}@example.com`;
+  // seed:adminEmail 名下的书(书根 + part + 章)。后代 = part + chap = 2。
+  await executeLocalD1(`
+    INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '我的书管理员');
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary, cover_image, banner_image) VALUES
+      ('${bookId}', 'mybook-${tag}', NULL, '我的书${tag}', '封面正文', 'public', '${adminEmail}', 1, 1, 210, '一本我的书', '', ''),
+      ('${partId}', 'part-a', '${bookId}', '第一部分', '', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${chapId}', 'chap-1', '${partId}', '第一章', '章节正文', 'public', '${adminEmail}', 1, 0, 210, '', '', '')
+  `);
+  try {
+    // founder(adminEmail)名下有这本书,chapterCount = 2(part + chap,递归后代)
+    const founderApi = await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("我的书创始人", adminEmail) })).json();
+    assert.ok(Array.isArray(founderApi.authoredBooks), "authoredBooks 应为数组");
+    const mine = founderApi.authoredBooks.find((b) => b.slug === `mybook-${tag}`);
+    assert.ok(mine, "founder 应在 authoredBooks 看到自己的书");
+    assert.equal(mine.title, `我的书${tag}`);
+    assert.equal(mine.chapterCount, 2, "章节数应含 part + chap");
+    assert.equal(mine.visibility, "public");
+
+    // 普通成员名下无书 -> authoredBooks 为空
+    const memberApi = await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("无书成员", otherEmail) })).json();
+    assert.ok(Array.isArray(memberApi.authoredBooks));
+    assert.equal(memberApi.authoredBooks.length, 0, "其他成员名下无书");
+
+    // 匿名 authoredBooks 也应存在且为空(不报错、不泄露)
+    const anonApi = await (await fetch(`${baseUrl}/api/community`)).json();
+    assert.ok(Array.isArray(anonApi.authoredBooks), "匿名 authoredBooks 应为数组(空)");
+    assert.equal(anonApi.authoredBooks.length, 0);
+  } finally {
+    await executeLocalD1(`DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}')`);
+  }
+});
+
 test("docs API: founder-gated CRUD, non-founder forbidden, cycle rejected", async () => {
   const docsRunId = crypto.randomUUID();
   const memberEmail = `docs-api-${docsRunId}@example.com`;

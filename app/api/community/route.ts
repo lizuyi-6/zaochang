@@ -26,6 +26,7 @@ export async function GET() {
     let notifications: unknown[] = [];
     let orders: unknown[] = [];
     let productLikes: unknown[] = [];
+    let authoredBooks: unknown[] = [];
 
     if (member) {
       wallet = await db
@@ -183,6 +184,27 @@ export async function GET() {
           .bind(member.email, member.email, member.email, member.email, member.displayName, member.email, member.email)
           .all()
       ).results;
+      // 当前账户名下的书(is_book=1 且 author_email 匹配)。章节数用递归 CTE 统计
+      // 该书根的全部后代,与书架前台 listBooks 的 chapterCount 同语义。
+      authoredBooks = (
+        await db
+          .prepare(
+            `WITH RECURSIVE tree(root, doc_id) AS (
+                 SELECT id, id FROM docs WHERE author_email = ? AND is_book = 1
+                 UNION ALL
+                 SELECT t.root, c.id FROM tree t JOIN docs c ON c.parent_id = t.doc_id
+               )
+               SELECT b.id, b.slug, b.title, b.summary, b.cover_hue AS coverHue,
+                      b.cover_image AS coverImage, b.banner_image AS bannerImage,
+                      b.visibility, b.updated_at AS updatedAt,
+                      COALESCE((SELECT COUNT(*) FROM tree t WHERE t.root = b.id AND t.doc_id <> b.id), 0) AS chapterCount
+               FROM docs b
+               WHERE b.author_email = ? AND b.is_book = 1
+               ORDER BY b.sort_order ASC, b.created_at ASC`,
+          )
+          .bind(member.email, member.email)
+          .all()
+      ).results;
     }
 
     return Response.json({
@@ -199,6 +221,7 @@ export async function GET() {
       notifications,
       orders,
       productLikes,
+      authoredBooks,
       circleStats: publicState.circleStats,
       liveRoomStats: publicState.liveRoomStats,
       signedIn: Boolean(member),
