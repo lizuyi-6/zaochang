@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { BookOpen, FileText, Folder, Lock } from "lucide-react";
 import Link from "next/link";
-import { buildDocTree, currentMember, listAllDocs, type DocNode } from "../api/_lib/docs";
+import { buildDocTree, currentMember, listStandaloneDocs, type DocNode } from "../api/_lib/docs";
 
 export const metadata: Metadata = { title: "文档" };
 export const dynamic = "force-dynamic";
@@ -26,7 +26,9 @@ function TreeBranch({ nodes, crumbs }: { nodes: DocNode[]; crumbs: string[] }) {
 
 export default async function DocsIndexPage() {
   const member = await currentMember();
-  const tree = buildDocTree(await listAllDocs(), member);
+  // 只列独立文档(is_book=0):书与书的章节由 listStandaloneDocs 整体剔除,
+  // 只从书架(/bookshelf)进入,不在文档目录重复出现。
+  const tree = buildDocTree(await listStandaloneDocs(), member);
 
   return <div className="docs-page">
     <header className="docs-header">

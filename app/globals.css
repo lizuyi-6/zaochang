@@ -543,6 +543,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 /* 创作台里的创始人「文档与书架」入口卡片 */
 .studio-docs-entry { display: grid; gap: 12px; }.studio-docs-entry-text { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 0; }.studio-docs-entry .primary-action { justify-self: start; }
 .docs-manager-list article { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 10px; padding: 12px 0; }.docs-manager-icon { color: var(--muted); display: inline-flex; }.docs-manager-list article > div { display: grid; flex: 1; gap: 3px; min-width: 0; }.docs-manager-list strong { font-size: 13px; }.docs-manager-list small { color: var(--muted); font-size: 10px; }.docs-manager-vis { align-items: center; border: 1px solid var(--line); border-radius: 20px; display: inline-flex; font-size: 9px; gap: 4px; padding: 4px 9px; white-space: nowrap; }.docs-vis-public { background: var(--mint); border-color: var(--mint); }.docs-vis-members { background: var(--yellow); border-color: var(--yellow); }.docs-manager-list button.danger { color: #a93f30; }
+
+/* 双 Tab 切换(书架管理 / 文档管理) */
+.docs-manager-tabs { border-bottom: 1px solid var(--line); display: flex; gap: 0; }.docs-manager-tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); font-size: 11px; gap: 6px; padding: 12px 18px; }.docs-manager-tabs button.active { border-bottom-color: var(--ink); color: var(--ink); }
+.docs-manager-editor-head { align-items: center; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; }.docs-manager-editor-head h2 { margin: 0; }
+.docs-manager-list-head { align-items: center; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding-bottom: 10px; }.docs-manager-list-head h3 { font-size: 14px; margin: 0; }.docs-manager-list-head button { font-size: 10px; }
+/* 书架管理:左书列表 + 右选中书详情(元信息/封面横幅/章节树) */
+.docs-manager-books { display: grid; gap: 24px; grid-template-columns: 240px 1fr; }
+.docs-manager-books-list { display: grid; gap: 8px; }
+.docs-manager-book-card { align-items: center; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; display: flex; gap: 10px; padding: 10px; text-align: left; transition: border-color 0.12s; }.docs-manager-book-card:hover { border-color: var(--muted); }.docs-manager-book-card.selected { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }.docs-manager-book-card-meta { display: grid; gap: 2px; min-width: 0; }.docs-manager-book-card-meta strong { font-size: 12px; }.docs-manager-book-card-meta small { color: var(--muted); font-size: 10px; }
+.docs-manager-book-detail { display: grid; gap: 14px; min-width: 0; }
+.docs-manager-book-head { align-items: flex-start; border-bottom: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; padding-bottom: 12px; }.docs-manager-book-head h3 { font-size: 18px; margin: 0 0 4px; }.docs-manager-book-head small { color: var(--muted); font-size: 10px; }.docs-manager-book-head-actions { display: flex; flex-shrink: 0; gap: 8px; }
+.docs-manager-book-summary { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 0; }
+.docs-manager-book-covers { display: flex; gap: 14px; }.docs-manager-book-covers small { color: var(--muted); font-size: 10px; }
+.docs-manager-book-detail h4 { color: var(--muted); font-size: 12px; letter-spacing: 0.04em; margin: 6px 0 0; text-transform: uppercase; }
+.docs-manager-chapter { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 10px; padding: 10px 0; }.docs-manager-chapter-main { display: grid; flex: 1; gap: 2px; min-width: 0; }.docs-manager-chapter-main strong { font-size: 12px; }.docs-manager-chapter-main small { color: var(--muted); font-size: 10px; }.docs-manager-chapter-actions { align-items: center; display: flex; gap: 4px; }.docs-manager-chapter-actions button { padding: 6px 8px; }.docs-manager-chapter-actions button.danger { color: #a93f30; }
+.docs-manager-empty { color: var(--muted); font-size: 12px; margin: 0; padding: 18px 0; }
+@media (max-width: 760px) { .docs-manager-books { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .docs-manager > header { grid-template-columns: 1fr; }.docs-manager > header button { grid-column: auto; grid-row: auto; justify-self: start; } }
 
 /* 书架:卡片墙 + 书的封面页/章节阅读页。字号沿用整站体系。封面为纯 CSS 渐变(无外链图)。 */
