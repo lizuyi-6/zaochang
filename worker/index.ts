@@ -3,12 +3,14 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { resolvePublicAppOrigin } from "../app/lib/public-origin";
 import { GITHUB_CONNECTION_CSP } from "../app/lib/security-policy";
+import { AGENT_WRITE_CAPABILITIES, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   APP_ENV?: string;
   PUBLIC_APP_ORIGIN?: string;
+  ZAOCHANG_AGENT_TOKEN?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -33,6 +35,23 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const origin = resolvePublicAppOrigin(url.href, env.APP_ENV, env.PUBLIC_APP_ORIGIN);
+    // Agent 服务账户 scope 闸:agent 非 GET 请求必须命中能力表,否则 fail-closed 403。
+    // 在所有路由之前,单一 chokepoint;token 未配置时整段不生效(零行为变化)。
+    if (request.method !== "GET" && env.ZAOCHANG_AGENT_TOKEN) {
+      const token = parseBearerToken(request.headers.get("authorization"));
+      if (isValidAgentToken(token, env.ZAOCHANG_AGENT_TOKEN)) {
+        const allowed = AGENT_WRITE_CAPABILITIES.some(
+          (cap) => cap.method === request.method && cap.pathname === url.pathname,
+        );
+        if (!allowed) {
+          // 必须排空请求体再早返回:此分支在 prepareRequestBody 之前返回,路由不会读到 body。
+          // 若不排空,未消费的字节会残留在 keep-alive 连接里,污染下一个请求的 HTTP 组帧,
+          // workerd 读到错误帧会重启 isolate(客户端看到 503 "worker restarted mid-request")。
+          await request.arrayBuffer().catch(() => {});
+          return withSecurityHeaders(request, Response.json({ error: "agent_scope_forbidden" }, { status: 403 }), origin);
+        }
+      }
+    }
     const prepared = await prepareRequestBody(request);
     if (prepared instanceof Response) return withSecurityHeaders(request, prepared, origin);
 

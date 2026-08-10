@@ -34,6 +34,15 @@ export async function requireFounder() {
   return member;
 }
 
+// 文档编辑准入:founder 或 agent。后者由 worker 入口能力表保证只命中 POST/PATCH /api/docs;
+// DELETE 走 requireFounder → agent 被拦。agent 不继承 founder 的其他权限(财务/admin 等)。
+export async function requireDocEditor() {
+  const member = await requireMember();
+  if (member.isAgent) return member;
+  if (isFounderEmail(member.email)) return member;
+  throw Object.assign(new Error("founder_forbidden"), { code: "founder_forbidden", status: 403 });
+}
+
 export async function auditAdminAction(actorEmail: string, action: string, targetType: string, targetRef: string, detail = "") {
   await adminAuditStatement(actorEmail, action, targetType, targetRef, detail).run();
 }
