@@ -147,11 +147,33 @@ function rewriteBookLinks(md: string, ctx: BookLinkContext): string {
     });
 }
 
+// MkDocs admonition 提示框:`!!! type "标题"` + 后续 4 空格(或 Tab)缩进的内容行。
+// marked 不认识,会把 `!!!` 裸露成文本、把内容塞进同一 <p>。这里在解析前改写成标准
+// markdown blockquote(书的提示框版式),标题加粗作首行,缩进内容逐行转为引用行。
+// 内容行可能含 **/code 等内联 markdown,逐行加 `> ` 前缀后由 marked 正常解析。
+// 仅匹配已知类型(info/warning/note/tip/danger/...),避免误伤正文里以 !!! 开头的普通强调。
+const ADMONITION_TYPES = "(?:note|info|tip|hint|important|warning|caution|danger|error|success|question|quote|example|abstract)";
+const ADMONITION_RE = new RegExp(
+  "^!!! ?" + ADMONITION_TYPES + "[ \\t]+[\"']([^\"']*)[\"'][ \\t]*\\r?\\n((?:[ \\t]{4}[^\\n]*\\r?\\n?)+)",
+  "gm",
+);
+function convertAdmonitions(md: string): string {
+  return md.replace(ADMONITION_RE, (_all, title: string, body: string) => {
+    const lines = body.split(/\r?\n/)
+      .map((line) => line.replace(/^[ \t]{4}/, "")) // 去 4 空格缩进
+      .filter((line) => line.trim().length > 0);
+    const quoted = lines.map((line) => `> ${line}`).join("\n");
+    return `> **${title}**\n>\n${quoted}\n`;
+  });
+}
+
 export function renderDocHtml(bodyMd: string, bookCtx?: BookLinkContext): string {
   // 1) 删 MkDocs 图标宏(留文字)。
   let pre = bodyMd.replace(MKDOCS_ICON_MACRO, "");
   // 2) 书内 .md 链接重写(仅书架页传入 bookCtx 时)。
   if (bookCtx) pre = rewriteBookLinks(pre, bookCtx);
+  // 3) MkDocs admonition(!!! type "标题" + 缩进内容)→ blockquote。
+  pre = convertAdmonitions(pre);
   const { md, blocks } = extractMermaid(pre);
   const raw = markedKatex.parse(md, { async: false }) as string;
   let clean = sanitizeHtml(raw, {

@@ -961,6 +961,10 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     "",
     // MkDocs 搬运遗留:.md 相对链接 + :material-*: 图标宏。验证渲染层重写/删除。
     "下一章 [:material-book-arrow-right: 第二章](chap-2.md),回[封面](../index.md)。",
+    "",
+    // MkDocs admonition 提示框:!!! type "标题" + 4 空格缩进内容,应转为 blockquote。
+    '!!! warning "分清两件事"',
+    "    Softmax 本身是**确定性**的:给定 Logits,分布固定。",
   ].join("\n");
   await executeLocalD1(`
     INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '书架管理员');
@@ -1005,6 +1009,12 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     assert.doesNotMatch(chapHtml, /\.\.\/index\.md/, "重写后不应残留 ../index.md");
     assert.doesNotMatch(chapHtml, /:material-[a-z0-9-]+:/, ":material-*: 图标宏应被删除,不应裸露");
     assert.match(chapHtml, /第二章/, "宏删除后链接文字应保留");
+    // 3d) MkDocs admonition(!!! type "标题" + 缩进内容)应转为 blockquote,!!! 不裸露,
+    //     标题加粗保留,内容里的内联 markdown(**code)仍被解析。
+    assert.doesNotMatch(chapHtml, /!!! ?warning/, "admonition 的 !!! 标记不应裸露");
+    assert.match(chapHtml, /<blockquote>/, "admonition 应渲染为 blockquote");
+    assert.match(chapHtml, /<strong>分清两件事<\/strong>/, "admonition 标题应加粗保留");
+    assert.match(chapHtml, /<strong>确定性<\/strong>/, "admonition 内容里的内联 ** 应仍被解析");
     // 3a) KaTeX 视觉层定位 style 必须经 allowedStyles 白名单放行(回归:sanitize 曾剥光
     //     inline style 导致 vlist 退化为普通流、公式整排塌陷)。块级 \sqrt 会产生
     //     height/vertical-align 等几何 style;断言至少一处合法几何 style 存活。
