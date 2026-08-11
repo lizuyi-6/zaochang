@@ -41,6 +41,29 @@ export const DOC_COLUMNS = `id, slug, parent_id AS parentId, title, body_md AS b
 // 原因:katex CSS 的 mathml 视觉隐藏(clip-path)依赖 <span class="katex-mathml"> 作为
 // .katex 第一个子节点来锚定;若禁用 mathml,clip 失去锚点,分数/上下标等重叠布局会整排错乱。
 const KATEX_OPTS: katex.KatexOptions = { throwOnError: false, strict: "ignore" };
+
+// KaTeX 视觉层(html span)的垂直/水平定位全部写死在 inline style 上(vlist 的 top、
+// 分数线的 height、定界符的 vertical-align 等)。sanitize 若剥掉 style,这些 span 退化为
+// 普通流,公式即塌陷(分子掉到分数线下方、范数重叠)。因此必须放行 style —— 但用
+// allowedStyles 按"属性白名单 + 值正则"锁定:只允许几何长度(em/px/%/数字/负值)与
+// position:relative,拒一切 url(/expression(/behavior/javascript,不扩大 XSS 面。
+// 实测 KaTeX 仅 span 携带 style、且只出现下列 11 个属性(见 .tmp 测量脚本)。
+const KATEX_LEN = /^-?\d+(\.\d+)?(em|rem|px|pt|%)?$/;
+const KATEX_ALLOWED_STYLES: Record<string, Record<string, RegExp[]>> = {
+  "*": {
+    top: [KATEX_LEN],
+    left: [KATEX_LEN],
+    height: [KATEX_LEN],
+    width: [KATEX_LEN],
+    "min-width": [KATEX_LEN],
+    "margin-left": [KATEX_LEN],
+    "margin-right": [KATEX_LEN],
+    "padding-left": [KATEX_LEN],
+    "vertical-align": [KATEX_LEN],
+    "border-bottom-width": [KATEX_LEN],
+    position: [/^relative$/],
+  },
+};
 const katexExtension = {
   extensions: [
     {
@@ -108,9 +131,10 @@ export function renderDocHtml(bodyMd: string): string {
       code: ["class"],
       th: ["align"],
       td: ["align"],
-      // KaTeX 依赖 class 区分 .katex/.katex-html/.katex-base/.mord 等;style 一律不放行,
-      // 防止借 style 注入(定位/背景图外链)。
-      span: ["class", "aria-hidden"],
+      // KaTeX 依赖 class 区分 .katex/.katex-html/.katex-base/.mord 等;style 必须放行给
+      // span(vlist 定位全靠 inline top/height/vertical-align),但由 allowedStyles 按
+      // 属性+值正则锁定(见上方 KATEX_ALLOWED_STYLES),只允许几何长度,拒 url/expression。
+      span: ["class", "aria-hidden", "style"],
       p: ["class"],
       // mathml 展示属性(按 KaTeX 实际输出实测的最小集;不放行 style/事件属性)。
       math: ["xmlns"],
@@ -131,6 +155,8 @@ export function renderDocHtml(bodyMd: string): string {
     allowedSchemes: ["https", "http", "mailto"],
     // 禁止 data: 协议与 javascript:,防 XSS。
     allowProtocolRelative: false,
+    // KaTeX 视觉层定位 style 白名单(属性 + 值正则),见文件顶部 KATEX_ALLOWED_STYLES。
+    allowedStyles: KATEX_ALLOWED_STYLES,
   });
   // 回填 mermaid 块为 <pre class="mermaid">(内容仅文本,不含可执行标签)。
   clean = clean.replace(new RegExp(`<p>${MERMAID_PLACEHOLDER}(\\d+)</p>`, "g"), (_all, idx: string) => {
