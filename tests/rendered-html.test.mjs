@@ -969,6 +969,10 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     // CommonMark strong-emphasis 闭合边界:inner 以标点()结尾、闭合**后跟中文时,
     // marked 的 Rule 16 flanking 判定不闭合 → 预处理改写为 <strong>。模拟生产"中文术语(English)"写法。
     "沿特征维度**拼接(Concatenation)**成一份长向量。",
+    "",
+    // 错配回归:前一个 emphasis 闭合后是标点(——),正则不能把它的闭合** 当下一对的开启、
+    // 错配到后续 **,从而漏修紧随的 emphasis。模拟生产 part-5/22 "外推" 漏修根因。
+    "先见**泛化(Generalization)**——再按模式**外推(Extrapolation)**到新输入。",
   ].join("\n");
   await executeLocalD1(`
     INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '书架管理员');
@@ -1023,6 +1027,8 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     //     marked 的 Rule 16 不闭合 → 预处理改写成 <strong>(绕开 flanking 判定)。
     assert.match(chapHtml, /<strong>拼接\(Concatenation\)<\/strong>/, "标点结尾的 **X** 在中文上下文应渲染为 <strong>");
     assert.doesNotMatch(chapHtml, /\*\*拼接\(/, "标点结尾的 **X** 不应裸露成文本");
+    assert.match(chapHtml, /<strong>泛化\(Generalization\)<\/strong>/, "错配回归:闭合后标点的前一个 emphasis 应渲染");
+    assert.match(chapHtml, /<strong>外推\(Extrapolation\)<\/strong>/, "错配回归:紧随的第二个 emphasis 不应被错配漏掉");
     // 3a) KaTeX 视觉层定位 style 必须经 allowedStyles 白名单放行(回归:sanitize 曾剥光
     //     inline style 导致 vlist 退化为普通流、公式整排塌陷)。块级 \sqrt 会产生
     //     height/vertical-align 等几何 style;断言至少一处合法几何 style 存活。

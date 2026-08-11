@@ -171,13 +171,17 @@ function convertAdmonitions(md: string): string {
 // (如 ) 。 , 」 》 )结尾、且闭合 ** 后紧跟非标点字符(如中文字),marked 判定不闭合,
 // **X** 原样裸露成文本、不渲染成 <strong>。本书"中文术语(English)"写法大量命中(例如
 // `**视觉编码器(ViT, Vision Transformer)**`、`**模态对齐(Modal Alignment)**`)。
-// 预处理:检测此漏渲染模式(inner 末字符是标点 + 闭合 ** 后非空白非标点),直接改写成
-// <strong>X</strong>(sanitize 白名单允许 strong),绕开 flanking 判定。仅干预 inner 不含
-// [ ` ~ 的简单强调——避免破坏链接/代码/删除线嵌套,那些交回 marked 原生路径处理。
-const STRONG_BUG_RE = /\*\*([^*\n[`~]+?)\*\*(?=[^\s\n\p{P}])/gu;
+// 预处理:遍历每对 **X** (非贪心顺序配对),若 inner 末字符是标点且闭合 ** 后是非空白非
+// 标点字符(marked 漏渲染的精确条件),直接改写成 <strong>X</strong>(sanitize 允许 strong)。
+// 仅干预 inner 不含 [ ` ~ 的简单强调——避免破坏链接/代码/删除线嵌套。
+// 注:"闭合后非标点"判定必须放回调里用 offset 取,不能放正则 lookahead——lookahead 失败
+// 时引擎会把闭合 ** 当下一对的开启,错配到后续 **,漏掉紧随的合法 emphasis(例如
+// `**A)**——x **B)**z`,lookahead 版会漏修 B)。
 function fixStrongEmphasis(md: string): string {
-  return md.replace(STRONG_BUG_RE, (all, inner: string) => {
+  return md.replace(/\*\*([^*\n[`~]+?)\*\*/gu, (all, inner: string, offset: number, str: string) => {
     if (!/\p{P}$/u.test(inner)) return all; // inner 末非标点,marked 能正常渲染
+    const after = str[offset + all.length] ?? "";
+    if (after === "" || /\s/.test(after) || /\p{P}/u.test(after)) return all; // 闭合后空白/标点/EOF,marked 能渲染
     return `<strong>${inner}</strong>`;
   });
 }
