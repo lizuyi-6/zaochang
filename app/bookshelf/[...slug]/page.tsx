@@ -15,11 +15,25 @@ import {
 } from "../../api/_lib/docs";
 import { MermaidRunner } from "../mermaid-runner";
 import { ReadingProgressTracker } from "../reading-progress-tracker";
+import { ChapterAside } from "../chapter-aside";
 import "katex/dist/katex.min.css";
 
 export const dynamic = "force-dynamic";
 
 type PageProps = { params: Promise<{ slug: string[] }> };
+
+// 拍平书的目录树为"叶子章节"序列(非分段容器),用于右侧进度 N/总。
+function collectLeaves(nodes: DocNode[]): DocNode[] {
+  const out: DocNode[] = [];
+  const walk = (ns: DocNode[]) => {
+    for (const n of ns) {
+      if (n.children.length > 0) walk(n.children);
+      else out.push(n);
+    }
+  };
+  walk(nodes);
+  return out;
+}
 
 function TocBranch({ nodes, base, activeId, depth = 0 }: { nodes: DocNode[]; base: string; activeId: string; depth?: number }) {
   if (nodes.length === 0) return null;
@@ -60,6 +74,26 @@ export default async function BookPage({ params }: PageProps) {
   const continueReading = member && isCover ? await getBookContinueReading(member, book) : null;
   const initialParagraph = member && !isCover ? await getChapterParagraph(member, book.id, doc.id) : null;
 
+  // 正文 HTML:章节页给 h2/h3 注入稳定 id(ch-N),供右栏本章目录锚定 + scroll-spy。
+  // renderDocHtml 经 sanitize 后 h2/h3 为裸标签(无属性),正则替换安全;不动安全消毒配置。
+  const headings: { id: string; text: string; level: number }[] = [];
+  let bodyHtml = doc.bodyMd.trim().length > 0 ? renderDocHtml(doc.bodyMd) : "";
+  if (!isCover && bodyHtml) {
+    let hi = 0;
+    bodyHtml = bodyHtml.replace(/<(h[23])>([\s\S]*?)<\/\1>/g, (m, tag: string, inner: string) => {
+      const text = inner.replace(/<[^>]+>/g, "").trim();
+      if (!text) return m;
+      const id = `ch-${hi++}`;
+      headings.push({ id, text, level: tag === "h2" ? 2 : 3 });
+      return `<${tag} id="${id}">${inner}</${tag}>`;
+    });
+  }
+
+  // 右栏章节进度:当前 doc 在叶子章节序列中的位置。
+  const leaves = !isCover ? collectLeaves(tree) : [];
+  const leafIdx = leaves.findIndex((l) => l.id === doc.id);
+  const progress = !isCover && leafIdx >= 0 ? { current: leafIdx + 1, total: leaves.length } : null;
+
   return <div className={`book-page ${isCover ? "book-page-cover" : "book-page-chapter"}`}>
     <aside className="book-side">
       <Link href="/bookshelf" className="book-back"><ArrowLeft size={14} /> 书架</Link>
@@ -97,7 +131,7 @@ export default async function BookPage({ params }: PageProps) {
       {continueReading && <Link className="book-continue-reading" href={continueReading.href}><Bookmark size={15} /> 继续阅读 · {continueReading.title} <ArrowRight size={15} /></Link>}
 
       {doc.bodyMd.trim().length > 0 && <>
-        <div className="docs-body" dangerouslySetInnerHTML={{ __html: renderDocHtml(doc.bodyMd) }} />
+        <div className="docs-body" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
         <MermaidRunner />
       </>}
       <ReadingProgressTracker bookId={book.id} chapterId={doc.id} initialParagraph={initialParagraph} canRecord={!!member} />
@@ -113,5 +147,7 @@ export default async function BookPage({ params }: PageProps) {
         </ul>
       </section>}
     </article>
+
+    {!isCover && <ChapterAside headings={headings} progress={progress} />}
   </div>;
 }
