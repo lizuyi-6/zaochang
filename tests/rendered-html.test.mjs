@@ -992,6 +992,14 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     assert.match(chapHtml, /<pre class="mermaid">/, "mermaid 应回填为 pre.mermaid");
     assert.match(chapHtml, /flowchart LR/, "mermaid 源码应保留供前端渲染");
     assert.doesNotMatch(chapHtml, /\$\\langle/, "原始 $...$ 不应裸露");
+    // 3a) KaTeX 视觉层定位 style 必须经 allowedStyles 白名单放行(回归:sanitize 曾剥光
+    //     inline style 导致 vlist 退化为普通流、公式整排塌陷)。块级 \sqrt 会产生
+    //     height/vertical-align 等几何 style;断言至少一处合法几何 style 存活。
+    assert.match(chapHtml, /style="[^"]*(height|vertical-align|top):-?[\d.]+(em|px)/, "KaTeX 视觉层几何 style 应经白名单保留");
+    // 危险 style 向量不得出现在任何 span 上(url 引用 / expression / 脚本协议)。
+    // 注:不断言 background/position —— 页面模板合法 inline style(如封面渐变)也用它,
+    // sanitize 的职责是挡注入,不是禁掉这些属性本身;值正则已拒 url(/expression(。
+    assert.doesNotMatch(chapHtml, /style="[^"]*(url\(|expression\(|javascript:|behavior:)/i, "危险 style 值(url/expression/脚本)不得放行");
     // 3b) 阅读器沉浸模式:正文页隐藏站侧栏/顶部搜索/发布,但保留右上角账户区;
     //     书架首页(1) 保留整站导航,不在沉浸模式。
     assert.match(chapHtml, /reading-mode/, "阅读器页应进入沉浸模式");
