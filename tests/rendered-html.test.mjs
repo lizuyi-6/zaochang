@@ -965,6 +965,10 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     // MkDocs admonition 提示框:!!! type "标题" + 4 空格缩进内容,应转为 blockquote。
     '!!! warning "分清两件事"',
     "    Softmax 本身是**确定性**的:给定 Logits,分布固定。",
+    "",
+    // CommonMark strong-emphasis 闭合边界:inner 以标点()结尾、闭合**后跟中文时,
+    // marked 的 Rule 16 flanking 判定不闭合 → 预处理改写为 <strong>。模拟生产"中文术语(English)"写法。
+    "沿特征维度**拼接(Concatenation)**成一份长向量。",
   ].join("\n");
   await executeLocalD1(`
     INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '书架管理员');
@@ -1015,6 +1019,10 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     assert.match(chapHtml, /<blockquote>/, "admonition 应渲染为 blockquote");
     assert.match(chapHtml, /<strong>分清两件事<\/strong>/, "admonition 标题应加粗保留");
     assert.match(chapHtml, /<strong>确定性<\/strong>/, "admonition 内容里的内联 ** 应仍被解析");
+    // 3e) CommonMark strong-emphasis 闭合边界:inner 以标点()结尾、闭合**后跟中文时,
+    //     marked 的 Rule 16 不闭合 → 预处理改写成 <strong>(绕开 flanking 判定)。
+    assert.match(chapHtml, /<strong>拼接\(Concatenation\)<\/strong>/, "标点结尾的 **X** 在中文上下文应渲染为 <strong>");
+    assert.doesNotMatch(chapHtml, /\*\*拼接\(/, "标点结尾的 **X** 不应裸露成文本");
     // 3a) KaTeX 视觉层定位 style 必须经 allowedStyles 白名单放行(回归:sanitize 曾剥光
     //     inline style 导致 vlist 退化为普通流、公式整排塌陷)。块级 \sqrt 会产生
     //     height/vertical-align 等几何 style;断言至少一处合法几何 style 存活。
