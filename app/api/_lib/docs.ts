@@ -167,6 +167,21 @@ function convertAdmonitions(md: string): string {
   });
 }
 
+// CommonMark 的 strong-emphasis 闭合规则(Rule 16)有一个边界:`**内容**` 的内容若以标点
+// (如 ) 。 , 」 》 )结尾、且闭合 ** 后紧跟非标点字符(如中文字),marked 判定不闭合,
+// **X** 原样裸露成文本、不渲染成 <strong>。本书"中文术语(English)"写法大量命中(例如
+// `**视觉编码器(ViT, Vision Transformer)**`、`**模态对齐(Modal Alignment)**`)。
+// 预处理:检测此漏渲染模式(inner 末字符是标点 + 闭合 ** 后非空白非标点),直接改写成
+// <strong>X</strong>(sanitize 白名单允许 strong),绕开 flanking 判定。仅干预 inner 不含
+// [ ` ~ 的简单强调——避免破坏链接/代码/删除线嵌套,那些交回 marked 原生路径处理。
+const STRONG_BUG_RE = /\*\*([^*\n[`~]+?)\*\*(?=[^\s\n\p{P}])/gu;
+function fixStrongEmphasis(md: string): string {
+  return md.replace(STRONG_BUG_RE, (all, inner: string) => {
+    if (!/\p{P}$/u.test(inner)) return all; // inner 末非标点,marked 能正常渲染
+    return `<strong>${inner}</strong>`;
+  });
+}
+
 export function renderDocHtml(bodyMd: string, bookCtx?: BookLinkContext): string {
   // 1) 删 MkDocs 图标宏(留文字)。
   let pre = bodyMd.replace(MKDOCS_ICON_MACRO, "");
@@ -175,7 +190,10 @@ export function renderDocHtml(bodyMd: string, bookCtx?: BookLinkContext): string
   // 3) MkDocs admonition(!!! type "标题" + 缩进内容)→ blockquote。
   pre = convertAdmonitions(pre);
   const { md, blocks } = extractMermaid(pre);
-  const raw = markedKatex.parse(md, { async: false }) as string;
+  // 4) CommonMark emphasis 闭合边界修复:inner 以标点结尾的 **X** 在闭合 ** 后跟非标点
+  //    字符(如中文)时 marked 不闭合,改写为 <strong> 绕开 flanking 判定(在 marked 解析前)。
+  const mdFixed = fixStrongEmphasis(md);
+  const raw = markedKatex.parse(mdFixed, { async: false }) as string;
   let clean = sanitizeHtml(raw, {
     allowedTags: [
       "h1", "h2", "h3", "h4", "h5", "h6",
