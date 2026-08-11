@@ -21,16 +21,16 @@ export const dynamic = "force-dynamic";
 
 type PageProps = { params: Promise<{ slug: string[] }> };
 
-function TocBranch({ nodes, base, activeId }: { nodes: DocNode[]; base: string; activeId: string }) {
+function TocBranch({ nodes, base, activeId, depth = 0 }: { nodes: DocNode[]; base: string; activeId: string; depth?: number }) {
   if (nodes.length === 0) return null;
   return <ul className="book-toc-list">
     {nodes.map((node) => <li key={node.id}>
-      <Link href={`${base}/${encodeURIComponent(node.slug)}`} className={node.id === activeId ? "active" : ""}>
-        {node.children.length > 0 ? <Folder size={14} /> : <FileText size={14} />}
+      <Link href={`${base}/${encodeURIComponent(node.slug)}`} className={node.id === activeId ? "active" : ""} data-depth={depth}>
+        {depth === 0 && (node.children.length > 0 ? <Folder size={13} /> : <FileText size={13} />)}
         <span>{node.title}</span>
         {node.visibility !== "public" && <Lock size={11} aria-label="登录后可见" />}
       </Link>
-      <TocBranch nodes={node.children} base={`${base}/${encodeURIComponent(node.slug)}`} activeId={activeId} />
+      <TocBranch nodes={node.children} base={`${base}/${encodeURIComponent(node.slug)}`} activeId={activeId} depth={depth + 1} />
     </li>)}
   </ul>;
 }
@@ -60,7 +60,7 @@ export default async function BookPage({ params }: PageProps) {
   const continueReading = member && isCover ? await getBookContinueReading(member, book) : null;
   const initialParagraph = member && !isCover ? await getChapterParagraph(member, book.id, doc.id) : null;
 
-  return <div className="book-page">
+  return <div className={`book-page ${isCover ? "book-page-cover" : "book-page-chapter"}`}>
     <aside className="book-side">
       <Link href="/bookshelf" className="book-back"><ArrowLeft size={14} /> 书架</Link>
       <Link href={base} className="book-side-title">
