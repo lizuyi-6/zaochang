@@ -37,7 +37,10 @@ export const DOC_COLUMNS = `id, slug, parent_id AS parentId, title, body_md AS b
 // 自定义 marked 扩展:行内 $...$ 与块级 $$...$$ 数学公式,服务端 KaTeX 渲染。
 // throwOnError:false + strict:"ignore":单个公式语法错误只渲染该公式为错误标记,
 // 不让整篇渲染崩溃(容错但不放行原始 HTML)。
-const KATEX_OPTS: katex.KatexOptions = { throwOnError: false, strict: "ignore", output: "html" };
+// KaTeX 服务端渲染:恢复 mathml+html 双输出(默认 htmlAndMathml)。
+// 原因:katex CSS 的 mathml 视觉隐藏(clip-path)依赖 <span class="katex-mathml"> 作为
+// .katex 第一个子节点来锚定;若禁用 mathml,clip 失去锚点,分数/上下标等重叠布局会整排错乱。
+const KATEX_OPTS: katex.KatexOptions = { throwOnError: false, strict: "ignore" };
 const katexExtension = {
   extensions: [
     {
@@ -94,6 +97,10 @@ export function renderDocHtml(bodyMd: string): string {
       "img",
       // KaTeX 输出仅用 span 承载结构,放行 span(不允许 style/事件属性)。
       "span",
+      // KaTeX mathml 输出(可访问性层 + 视觉隐藏锚点):纯语义标签,无 style/事件属性。
+      "math", "semantics", "annotation", "mrow", "mi", "mn", "mo", "mtext",
+      "mfrac", "msqrt", "msub", "msup", "msubsup", "munder", "mover", "mspace",
+      "mstyle", "mtable", "mtr", "mtd",
     ],
     allowedAttributes: {
       a: ["href", "title"],
@@ -105,6 +112,16 @@ export function renderDocHtml(bodyMd: string): string {
       // 防止借 style 注入(定位/背景图外链)。
       span: ["class", "aria-hidden"],
       p: ["class"],
+      // mathml 展示属性(按 KaTeX 实际输出实测的最小集;不放行 style/事件属性)。
+      math: ["xmlns"],
+      mi: ["mathvariant"],
+      mo: ["fence", "separator", "stretchy"],
+      mfrac: ["linethickness"],
+      mover: ["accent"],
+      mspace: ["width"],
+      mstyle: ["displaystyle", "scriptlevel"],
+      mtable: ["columnalign", "columnspacing", "rowspacing"],
+      annotation: ["encoding"],
     },
     allowedClasses: {
       span: [/^katex/, /^mord$/, /^mbin$/, /^mrel$/, /^mopen$/, /^mclose$/, /^mpunct$/, /^mop$/, /^msupsub$/, /^vlist/, /^sizing/, /^pstrut$/, /^strut$/, /^delimsizing/, /^nulldelimiter$/, /^base$/, /^text$/, /^rm$/, /^textit$/, /^textbf$/, /^mathrm$/, /^mathbf$/, /^mathit$/, /^mathbb$/, /^mathcal$/, /^mathsf$/, /^mathtt$/, /^cjk_fallback$/, /^accent/, /^sout$/, /^overline/, /^underline/, /^x-arrow/, /^stretchy$/, /^cr$/, /^halfarrow/, /^hline/, /^hdashline/, /^vertical-separator$/, /^mfrac$/, /^frac-line$/, /^sqrt$/, /^root$/, /^mspace$/, /^llap$/, /^rlap$/, /^rule$/, /^hide-tail$/, /^svg-align$/, /^mtable$/, /^col-align/, /^arraycolsep$/, /^vertical-separator$/, /^binrel$/, /^katex-error$/],
