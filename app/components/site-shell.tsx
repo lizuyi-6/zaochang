@@ -48,6 +48,11 @@ const navItems = [
   { href: "/developers", label: "开发者", icon: Blocks },
 ];
 
+// 手机底部 tab 的主入口白名单(按 href 取 navItems,不依赖数组顺序)。
+// 书架是核心阅读入口,需在手机一级可达;动态内容首页已有,故让位。
+const mobileTabHrefs = ["/", "/discover", "/bookshelf", "/circles"];
+const mobileTabItems = mobileTabHrefs.map((href) => navItems.find((item) => item.href === href)).filter((item) => item !== undefined);
+
 const routeNames: Record<string, string> = {
   "/": "今日造场",
   "/discover": "探索作品",
@@ -299,7 +304,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
       </div>
 
       <nav className="deep-mobile-nav" aria-label="移动端导航">
-        {navItems.slice(0, 4).map((item) => {
+        {mobileTabItems.map((item) => {
           const Icon = item.icon;
           return <Link key={item.href} href={item.href} className={routeIsActive(pathname, item.href) ? "active" : ""}><Icon size={20} /><span>{item.label}</span></Link>;
         })}
