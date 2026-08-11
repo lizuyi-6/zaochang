@@ -765,17 +765,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-toc-trigger, .book-toc-backdrop { display: none; }
 
 /* 手机(≤640px):书阅读页左目录从"静态堆叠在正文上方"改为左侧抽屉,让正文优先可见。
-   平板(641~1099px)沿用 ≤1099px 规则的静态堆叠,不变。reading-mode topbar 56px,触发条紧贴其下。 */
+   平板(641~1099px)沿用 ≤1099px 规则的静态堆叠,不变。
+   触发条用 sticky(top:56px):在文档流内占位、把正文自然推到其下,滚动时吸附在 topbar 下沿;
+   不用 fixed,避免脱离流后遮挡正文、及被 route-content 动画残留的 transform stacking context 困住。 */
 @media (max-width: 640px) {
-  .book-toc-trigger { align-items: center; background: rgb(251 250 247 / 97%); border-bottom: 1px solid var(--line); display: flex; font-size: 13px; gap: 6px; height: 42px; justify-content: center; left: 0; padding: 0 14px; position: fixed; right: 0; top: 56px; z-index: 40; }
-  /* 左目录:抽屉化,默认滑出视口左侧;打开时滑入。 */
+  .book-toc-trigger { align-items: center; background: rgb(251 250 247 / 97%); border-bottom: 1px solid var(--line); display: flex; font-size: 13px; gap: 6px; height: 42px; justify-content: center; padding: 0 14px; position: sticky; top: 56px; z-index: 70; }
+  /* 左目录:抽屉化,默认滑出视口左侧;打开时滑入。fixed 浮于内容上层,z-index 盖过底部导航(60)。 */
   .book-page-chapter .book-side, .book-page-cover .book-side {
-    background: #f5f4f0; border-right: 1px solid var(--line); bottom: 0; left: 0; max-height: none; max-width: 84vw; overflow-y: auto; padding: 16px 18px 24px; position: fixed; top: 56px; transform: translateX(-100%); transition: transform 220ms ease; width: 286px; z-index: 55; }
+    background: #f5f4f0; border-right: 1px solid var(--line); bottom: 0; left: 0; max-height: none; max-width: 84vw; overflow-y: auto; padding: 16px 18px 24px; position: fixed; top: 56px; transform: translateX(-100%); transition: transform 220ms ease; width: 286px; z-index: 95; }
   body.book-toc-open .book-side { box-shadow: 2px 0 22px rgb(0 0 0 / 14%); transform: translateX(0); }
-  /* 遮罩:点击关闭。 */
-  .book-toc-backdrop { background: rgb(0 0 0 / 32%); border: 0; bottom: 0; display: block; left: 0; position: fixed; right: 0; top: 0; z-index: 50; }
-  /* 正文:顶部留出目录条(42px)+呼吸;底部留出底部导航(65px)+safe-area。覆盖 ≤1099px 的 padding。 */
-  .book-page-chapter .book-reader, .book-page-cover .book-reader { padding: 52px 16px calc(70px + env(safe-area-inset-bottom)); }
+  /* 遮罩:点击关闭。z-index 盖过底部导航,低于抽屉。 */
+  .book-toc-backdrop { background: rgb(0 0 0 / 32%); border: 0; bottom: 0; display: block; left: 0; position: fixed; right: 0; top: 0; z-index: 90; }
+  /* 正文:触发条 sticky 已占位,顶部只需少量呼吸;底部留出底部导航(65px)+safe-area。 */
+  .book-page-chapter .book-reader, .book-page-cover .book-reader { padding: 16px 16px calc(70px + env(safe-area-inset-bottom)); }
 }
 
 
