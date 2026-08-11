@@ -943,6 +943,7 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
   const bookId = `doc:${runId}-book`;
   const partId = `doc:${runId}-part`;
   const chapId = `doc:${runId}-chap`;
+  const chap2Id = `doc:${runId}-chap2`;
   const memBookId = `doc:${runId}-membook`;
   const memberEmail = `bookshelf-${runId}@example.com`;
   // seed:一本公开书(书根 + 一个 Part + 一章,章节含 LaTeX 公式与 mermaid),一本 members 书。
@@ -957,6 +958,9 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     "flowchart LR",
     "  A-->B",
     fence,
+    "",
+    // MkDocs 搬运遗留:.md 相对链接 + :material-*: 图标宏。验证渲染层重写/删除。
+    "下一章 [:material-book-arrow-right: 第二章](chap-2.md),回[封面](../index.md)。",
   ].join("\n");
   await executeLocalD1(`
     INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', '书架管理员');
@@ -964,6 +968,7 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
       ('${bookId}', 'book-${tag}', NULL, '图解测试书${tag}', '# 封面正文', 'public', '${adminEmail}', 1, 1, 200, '这是一本测试书的简介', '/api/uploads/cover-${tag}.png', '/api/uploads/banner-${tag}.png'),
       ('${partId}', 'part-1', '${bookId}', '第一部分 基础', '', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
       ('${chapId}', 'chap-1', '${partId}', '第一章 注意力', '${chapBody.replace(/'/g, "''")}', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${chap2Id}', 'chap-2', '${partId}', '第二章 前馈', '第二章正文', 'public', '${adminEmail}', 2, 0, 210, '', '', ''),
       ('${memBookId}', 'membook-${tag}', NULL, '内部书${tag}', 'x', 'members', '${adminEmail}', 2, 1, 120, '内部简介', '', '')
   `);
   try {
@@ -992,6 +997,14 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     assert.match(chapHtml, /<pre class="mermaid">/, "mermaid 应回填为 pre.mermaid");
     assert.match(chapHtml, /flowchart LR/, "mermaid 源码应保留供前端渲染");
     assert.doesNotMatch(chapHtml, /\$\\langle/, "原始 $...$ 不应裸露");
+    // 3c) MkDocs 搬运兼容:.md 相对链接重写成造场路由;:material-*: 图标宏删除(留文字)。
+    //     chap-2.md → 同 part 下 chap-2 的书内路径;../index.md → 书封面。
+    assert.ok(chapHtml.includes(`/bookshelf/book-${tag}/part-1/chap-2`), `chap-2.md 链接应重写为造场路由,实际 HTML 未含该路径`);
+    assert.ok(chapHtml.includes(`href="/bookshelf/book-${tag}"`), `../index.md 应重写为书封面路由`);
+    assert.doesNotMatch(chapHtml, /chap-2\.md/, "重写后不应残留 .md 链接");
+    assert.doesNotMatch(chapHtml, /\.\.\/index\.md/, "重写后不应残留 ../index.md");
+    assert.doesNotMatch(chapHtml, /:material-[a-z0-9-]+:/, ":material-*: 图标宏应被删除,不应裸露");
+    assert.match(chapHtml, /第二章/, "宏删除后链接文字应保留");
     // 3a) KaTeX 视觉层定位 style 必须经 allowedStyles 白名单放行(回归:sanitize 曾剥光
     //     inline style 导致 vlist 退化为普通流、公式整排塌陷)。块级 \sqrt 会产生
     //     height/vertical-align 等几何 style;断言至少一处合法几何 style 存活。
