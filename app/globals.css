@@ -101,13 +101,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 
 /* 阅读器沉浸模式(/bookshelf/某本书):隐藏站侧栏与顶部搜索/发布,内容占满宽度,
-   只保留右上角账户区(悬浮)。书架首页 /bookshelf 不在此模式,保留整站导航。 */
-.reading-mode .deep-route-frame { margin-left: 0; padding-top: 0; }
+   顶栏改为轻量 56px 完整 header(brand 保留,搜索/发布隐藏,账户区不再悬浮),
+   与页内「← 书架」构成一条线,不再漂浮。书架首页 /bookshelf 不在此模式,保留整站导航。 */
+.reading-mode .deep-route-frame { margin-left: 0; padding-top: 56px; }
 .reading-mode .deep-route-label { border: 0; height: 0; overflow: hidden; padding: 0; }
-.reading-mode .deep-route-content { min-height: 100vh; padding: 0 0 40px; }
-.reading-mode .deep-topbar { background: transparent; border: 0; display: block; height: 0; padding: 0; pointer-events: none; }
-.reading-mode .deep-topbar .deep-brand { display: none; }
-.reading-mode .deep-topbar .deep-top-actions { pointer-events: auto; position: fixed; right: 18px; top: 14px; z-index: 60; }
+.reading-mode .deep-route-content { min-height: calc(100vh - 56px); padding: 0 0 40px; }
+.reading-mode .deep-topbar {
+  background: rgb(251 250 247 / 96%);
+  border-bottom: 1px solid var(--line);
+  grid-template-columns: auto 1fr auto;
+  height: 56px;
+  padding: 0 22px;
+}
+.reading-mode .deep-topbar .deep-brand strong { font-size: 17px; }
+.reading-mode .deep-topbar .deep-brand small { display: none; }
+.reading-mode .deep-topbar .deep-top-actions { position: static; }
+@media (max-width: 640px) {
+  .reading-mode .deep-topbar { height: 56px; }
+  .reading-mode .deep-route-frame { padding-top: 56px; }
+  .reading-mode .deep-route-content { min-height: calc(100vh - 56px); }
+}
 
 
 /* OAuth sign-in */
@@ -572,31 +585,71 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-cover:has(img) { padding: 0; }
 .book-cover img { display: block; height: 100%; object-fit: cover; width: 100%; }
 .book-cover-sm img { max-height: 44px; object-fit: contain; width: auto; }
-.book-banner { border: 1px solid var(--line); border-radius: 10px; display: block; height: auto; max-height: 320px; object-fit: cover; width: 100%; }
+.book-banner { display: block; height: auto; max-height: 360px; object-fit: cover; width: 100%; }
 .book-meta { display: grid; gap: 6px; padding: 14px 16px 16px; }.book-meta strong { align-items: center; display: flex; font-size: 14px; gap: 6px; }.book-meta small { color: var(--muted); display: -webkit-box; font-size: 11px; line-height: 1.6; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }.book-meta em { color: var(--muted); font-size: 10px; font-style: normal; }
 /* 书架卡片"继续 · 章节名"标签:比"N 章"更醒目,提示有可恢复的阅读进度。 */
 .book-meta em.book-continue-tag { color: var(--ink); font-weight: 600; }
 /* 封面页"继续阅读"大链接:显眼的恢复入口(非正文链接,独立成块)。 */
-.book-continue-reading { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); display: inline-flex; font-size: 13px; font-weight: 600; gap: 8px; padding: 11px 16px; width: fit-content; }.book-continue-reading:hover { background: var(--surface-2); border-color: var(--line-strong); }.book-continue-reading svg:first-child { color: var(--muted); }.book-continue-reading svg:last-child { color: var(--muted); }
+.book-continue-reading { align-items: center; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--ink); display: inline-flex; font-size: 12.5px; font-weight: 600; gap: 8px; padding: 9px 14px; width: fit-content; }
+.book-continue-reading:hover { background: var(--surface); border-color: var(--ink); }
+.book-continue-reading svg { color: var(--muted); }
+.book-continue-reading:hover svg { color: var(--ink); }
 /* studio "最近阅读"列表:横向行式卡片(小封面 + 书名 + 读到章节 + 箭头)。 */
 .studio-reading { display: grid; gap: 14px; margin-top: 28px; }
 .studio-reading-list { display: grid; gap: 8px; }
 .reading-row { align-items: center; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 12px; grid-template-columns: auto 1fr auto; padding: 11px 14px; transition: border-color 0.15s ease; }.reading-row:hover { border-color: var(--line-strong); }.reading-row .book-cover-sm { border-radius: 6px; height: 38px; width: 32px; }
 .reading-meta { display: grid; gap: 2px; min-width: 0; }.reading-meta strong { font-size: 13px; }.reading-meta small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.reading-row > svg:last-child { color: var(--muted); }
 
-.book-page { display: grid; gap: 0; grid-template-columns: 260px 1fr; margin: 0 auto; max-width: 1180px; padding: 24px 20px 68px; }
-.book-side { border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 0 18px 24px 0; position: sticky; top: 24px; }
+/* 阅读器:左目录 + 右连续纸张。整体最大宽 1140px,左栏 240px 贴正文不留缓冲带。 */
+.book-page { display: grid; gap: 0; grid-template-columns: 240px 1fr; margin: 0 auto; max-width: 1140px; padding: 12px 20px 68px; }
+.book-side { display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 0 22px 24px 0; position: sticky; top: 24px; }
 .book-back { align-items: center; color: var(--muted); display: inline-flex; font-size: 11px; gap: 6px; }.book-back:hover { color: var(--ink); }
-.book-side-title { align-items: center; display: flex; gap: 10px; }.book-side-title strong { font-size: 14px; line-height: 1.35; }
-.book-toc { overflow-y: auto; }.book-toc-list { display: grid; gap: 1px; list-style: none; margin: 0; padding: 0; }.book-toc-list .book-toc-list { border-left: 1px solid var(--line); margin: 1px 0 1px 13px; padding-left: 10px; }
-.book-toc-list > li > a { align-items: center; border-radius: 4px; color: var(--muted); display: flex; font-size: 12px; gap: 7px; padding: 7px 9px; }.book-toc-list > li > a:hover { background: var(--surface); color: var(--ink); }.book-toc-list > li > a.active { background: var(--surface-2); color: var(--ink); font-weight: 600; }.book-toc-list > li > a svg { color: var(--muted); flex: 0 0 auto; }.book-toc-list > li > a span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.book-reader { display: grid; gap: 18px; min-width: 0; padding: 24px 0 24px 34px; }
-/* 沉浸模式下正文顶部右移避让悬浮账户区(通知/果子/账户)。 */
-.reading-mode .book-reader { padding-right: 120px; }
-.book-summary { background: var(--surface); border-left: 3px solid var(--line-strong); color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0; padding: 12px 16px; }
+.book-side-title { align-items: center; display: flex; gap: 10px; }.book-side-title strong { font-size: 13px; line-height: 1.4; }
+.book-toc { overflow-y: auto; }
+/* 目录:一级加粗、字距拉开;二级降权、去图标、左侧细分级线;当前项左侧细条 + 浅底。 */
+.book-toc-list { display: grid; gap: 0; list-style: none; margin: 0; padding: 0; }
+.book-toc-list .book-toc-list { border-left: 1px solid var(--line); margin: 3px 0 3px 7px; padding-left: 0; }
+.book-toc-list > li > a { align-items: center; border-left: 2px solid transparent; border-radius: 3px; color: var(--muted); display: flex; font-size: 12px; gap: 7px; line-height: 1.4; padding: 6px 8px; }
+.book-toc-list > li > a[data-depth="0"] { color: var(--ink); font-weight: 600; margin-top: 8px; }
+.book-toc-list > li:first-child > a[data-depth="0"] { margin-top: 0; }
+.book-toc-list > li > a[data-depth="1"] { color: var(--muted); font-size: 11.5px; padding-left: 16px; }
+.book-toc-list > li > a[data-depth="2"] { color: var(--muted); font-size: 11px; padding-left: 26px; }
+.book-toc-list > li > a:hover { background: var(--surface); color: var(--ink); }
+.book-toc-list > li > a.active { background: var(--surface-2); border-left-color: var(--ink); color: var(--ink); font-weight: 600; }
+.book-toc-list > li > a svg { color: var(--muted); flex: 0 0 auto; }
+.book-toc-list > li > a.active svg { color: var(--ink); }
+.book-toc-list > li > a span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 正文容器:去 widget 感,以连续纸张呈现。左 padding 与左栏拉开一行距离,不再依赖分割线。 */
+.book-reader { display: grid; gap: 20px; min-width: 0; padding: 12px 0 24px 28px; }
+
+/* 章节页正文 measure 收窄;封面页保留更宽容器。 */
+.book-page-chapter .book-reader > * { max-width: 700px; }
+/* 章节页里"媒体/重型块"允许超出 measure:代码、mermaid、KaTeX、表格、图片。 */
+.book-page-chapter .book-reader > .docs-body pre,
+.book-page-chapter .book-reader > .docs-body .katex-block,
+.book-page-chapter .book-reader > .docs-body table,
+.book-page-chapter .book-reader > .docs-body img { max-width: 840px; }
+
+/* 封面页头部 H1 减重(避免与大 banner 抢身份),章节页 H1 已经是唯一标题。 */
+.book-page-cover .docs-article-header { border-bottom: 0; padding-bottom: 4px; }
+.book-page-cover .docs-article-header h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; }
+.book-page-cover .docs-article-header small { color: var(--muted); font-size: 10px; }
+.book-page-chapter .docs-article-header { border-bottom: 0; padding-bottom: 4px; }
+.book-page-chapter .docs-article-header h1 { font-size: 24px; line-height: 1.3; margin: 0 0 4px; }
+.book-page-chapter .docs-article-header small { color: var(--muted); font-size: 10px; }
+
+/* 简介块不再用背景+左边条,改为引用式轻提示。 */
+.book-summary { border-left: 2px solid var(--line-strong); color: var(--muted); font-size: 13px; line-height: 1.75; margin: 0; padding: 2px 0 2px 14px; }
+
 .book-reader .docs-body pre.mermaid { background: var(--surface); border: 1px solid var(--line); display: block; overflow-x: auto; padding: 16px; text-align: center; }.book-reader .docs-body pre.mermaid svg { max-width: 100%; }
 .book-reader .katex-block { margin: 16px 0; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
-@media (max-width: 860px) { .book-page { grid-template-columns: 1fr; }.book-side { border-right: 0; border-bottom: 1px solid var(--line); max-height: none; padding: 18px 0; position: static; }.book-reader { padding: 18px 0; } }
+@media (max-width: 860px) {
+  .book-page { grid-template-columns: 1fr; }
+  .book-side { max-height: none; padding: 18px 0; position: static; }
+  .book-reader { padding: 18px 0; }
+  .book-page-chapter .book-reader > * { max-width: 100%; }
+}
 
 
 .report-control { align-items: center; display: inline-flex; margin-left: auto; position: relative; }.report-control > button { align-items: center; color: var(--muted); display: inline-flex; font-size: 7px; gap: 4px; }.report-control > small { background: var(--ink); color: white; font-size: 7px; padding: 5px 7px; position: absolute; right: 0; top: calc(100% + 5px); white-space: nowrap; z-index: 8; }.report-menu { background: white; border: 1px solid var(--line); box-shadow: 0 10px 24px rgb(0 0 0 / 10%); display: grid; min-width: 138px; padding: 5px; position: absolute; right: 0; top: calc(100% + 4px); z-index: 9; }.report-menu button { border: 0; justify-content: flex-start; padding: 7px 8px; }
