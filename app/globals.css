@@ -3,6 +3,11 @@
 :root {
   --font-geist-sans: Arial, "Microsoft YaHei", sans-serif;
   --font-geist-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  /* 书站阅读字体系统(scoped 到 .book-page,不影响全站)。英文 Web Font(self-host woff2),
+     中文标题 Noto Serif SC(=思源宋体)Web Font,中文正文走系统 Sans fallback。 */
+  --font-reader-serif: "Source Serif 4", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  --font-reader-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-reader-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   --paper: #f3f1ec;
   --surface: #fbfaf7;
   --surface-2: #e9e7e1;
@@ -603,7 +608,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 /* 阅读器:章节页=非对称三栏(中央正文绝对视觉中心);封面页=居中落地页。两套结构分离。
    视觉优先级:中央正文 > 左侧书籍目录 > 右侧本章辅助。三栏不设大容器居中(规范明确要求),
    自然铺满 1440/1664/1920 桌面宽度。 */
-.book-page { align-items: start; }
+.book-page { align-items: start; font-family: var(--font-reader-sans); }
 .book-side { display: flex; flex-direction: column; gap: 14px; }
 
 /* 封面/落地页:左栏 dock 到视口左沿,正文在剩余宽度居中(上限 860px)。与章节页同一套
@@ -680,19 +685,30 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* 封面页 H1 减重(避免与大 banner 抢身份);章节页无 banner,H1 为唯一标题、提至 30px(规范:有分量但不巨大)。 */
 .book-page-cover .docs-article-header { border-bottom: 0; padding-bottom: 4px; }
-.book-page-cover .docs-article-header h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; }
+.book-page-cover .docs-article-header h1 { font-family: var(--font-reader-serif); font-size: clamp(30px, 3.2vw, 42px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; margin: 0 0 8px; color: #181817; }
 .book-page-cover .docs-article-header small { color: var(--muted); font-size: 10px; }
 .book-page-chapter .docs-article-header { border-bottom: 0; padding-bottom: 4px; }
-.book-page-chapter .docs-article-header h1 { font-size: 30px; line-height: 1.3; margin: 0 0 4px; }
+.book-page-chapter .docs-article-header h1 { font-family: var(--font-reader-serif); font-size: clamp(38px, 4vw, 52px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; margin: 0 0 10px; color: #181817; }
 .book-page-chapter .docs-article-header small { color: var(--muted); font-size: 10px; }
 /* 章节页正文:中文 16px / 1.8(规范),比 hosted docs 14px 更适合长读。 */
-.book-page-chapter .docs-body { font-size: 16px; line-height: 1.8; }
+.book-page-chapter .docs-body { font-family: var(--font-reader-sans); font-size: 18px; font-weight: 400; line-height: 1.85; color: #1f1f1f; }
 
 /* 简介块不再用背景+左边条,改为引用式轻提示。 */
 .book-summary { border-left: 2px solid var(--line-strong); color: var(--muted); font-size: 13px; line-height: 1.75; margin: 0; padding: 2px 0 2px 14px; }
 
 .book-reader .docs-body pre.mermaid { background: var(--surface); border: 1px solid var(--line); display: block; overflow-x: auto; padding: 16px; text-align: center; }.book-reader .docs-body pre.mermaid svg { max-width: 100%; }
 .book-reader .katex-block { margin: 16px 0; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+
+/* 书站阅读排版微调:Serif 章节标题(英文 Source Serif 4 / 中文 Noto Serif SC)、出版物感引用块、Mono 代码。
+   覆盖全局 .docs-body(创作台沿用原排版),scoped 到 .book-reader。 */
+.book-page-cover .docs-body { font-family: var(--font-reader-sans); font-size: 17px; line-height: 1.85; color: #1f1f1f; }
+.book-reader .docs-body h1, .book-reader .docs-body h2, .book-reader .docs-body h3 { font-family: var(--font-reader-serif); font-weight: 600; color: #181817; line-height: 1.4; }
+.book-reader .docs-body h2 { font-size: 28px; margin: 36px 0 14px; border-bottom: 0; padding-bottom: 0; }
+.book-reader .docs-body h3 { font-size: 23px; line-height: 1.45; margin: 30px 0 12px; }
+.book-reader .docs-body p { margin: 18px 0; }
+.book-reader .docs-body code { font-family: var(--font-reader-mono); }
+.book-reader .docs-body pre code { font-family: var(--font-reader-mono); }
+.book-reader .docs-body blockquote { background: #f4f2ee; border-left: 3px solid #c8c1b8; border-radius: 6px; color: #494642; margin: 22px 0; padding: 18px 22px; }
 /* 响应式:>=1440 完整三栏;1100~1439 隐右栏(中央+左栏);<1100 单栏堆叠(左栏去底色/静态)。 */
 @media (max-width: 1439px) {
   .book-page-chapter { grid-template-columns: 260px minmax(0, 1fr); }
