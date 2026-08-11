@@ -4,7 +4,7 @@
   --font-geist-sans: Arial, "Microsoft YaHei", sans-serif;
   --font-geist-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
   /* 书站阅读字体系统(scoped 到 .book-page,不影响全站)。英文 Web Font(self-host woff2),
-     中文标题 Noto Serif SC(=思源宋体)Web Font,中文正文走系统 Sans fallback。 */
+     中文 Serif 用 Noto Serif SC(=思源宋体)Web Font,中文 Sans 走系统 fallback。 */
   --font-reader-serif: "Source Serif 4", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
   --font-reader-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --font-reader-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
@@ -646,9 +646,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-reader { display: grid; gap: 20px; min-width: 0; }
 .book-page-chapter .book-reader { margin: 0 auto; max-width: 840px; padding: 22px 0 40px; width: 100%; }
 
-/* 文本 measure:章节页直接子项收敛到 700px(左对齐,与媒体共享左边沿,媒体可向右突破)。 */
-.book-page-chapter .book-reader > * { max-width: 700px; }
-/* docs-body 保留到 840px(让 pre/table/img/katex 突破文本宽);其内文本块再收敛回 700px。 */
+/* 文本 measure:章节页直接子项收敛到 680px(左对齐,与媒体共享左边沿,媒体可向右突破)。 */
+.book-page-chapter .book-reader > * { max-width: 680px; }
+/* docs-body 保留到 840px(让 pre/table/img/katex 突破文本宽);其内文本块再收敛回 680px。 */
 .book-page-chapter .book-reader > .docs-body { max-width: 840px; }
 .book-page-chapter .book-reader .docs-body > p,
 .book-page-chapter .book-reader .docs-body > h1,
@@ -659,7 +659,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-page-chapter .book-reader .docs-body > ul,
 .book-page-chapter .book-reader .docs-body > ol,
 .book-page-chapter .book-reader .docs-body > blockquote,
-.book-page-chapter .book-reader .docs-body > hr { max-width: 700px; }
+.book-page-chapter .book-reader .docs-body > hr { max-width: 680px; }
 /* 锚点跳转留出固定顶栏空间(56px 顶栏 + 视觉缓冲)。 */
 .book-page-chapter .book-reader .docs-body h2,
 .book-page-chapter .book-reader .docs-body h3 { scroll-margin-top: 88px; }
@@ -683,15 +683,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-aside-top:hover { color: var(--ink); }
 .book-aside-ai { color: #c2c2bc; cursor: not-allowed; font-size: 11.5px; }
 
-/* 封面页 H1 减重(避免与大 banner 抢身份);章节页无 banner,H1 为唯一标题、提至 30px(规范:有分量但不巨大)。 */
+/* 封面页 H1 减重(避免与大 banner 抢身份);章节页无 banner,H1 为唯一标题。Serif Medium,安静但为整页视觉锚点。 */
 .book-page-cover .docs-article-header { border-bottom: 0; padding-bottom: 4px; }
-.book-page-cover .docs-article-header h1 { font-family: var(--font-reader-serif); font-size: clamp(30px, 3.2vw, 42px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; margin: 0 0 8px; color: #181817; }
+.book-page-cover .docs-article-header h1 { font-family: var(--font-reader-serif); font-size: clamp(30px, 3vw, 40px); font-weight: 500; letter-spacing: -0.015em; line-height: 1.28; margin: 0 0 8px; color: #1d1b19; }
 .book-page-cover .docs-article-header small { color: var(--muted); font-size: 10px; }
 .book-page-chapter .docs-article-header { border-bottom: 0; padding-bottom: 4px; }
-.book-page-chapter .docs-article-header h1 { font-family: var(--font-reader-serif); font-size: clamp(38px, 4vw, 52px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; margin: 0 0 10px; color: #181817; }
+.book-page-chapter .docs-article-header h1 { font-family: var(--font-reader-serif); font-size: clamp(34px, 3vw, 44px); font-weight: 500; letter-spacing: -0.015em; line-height: 1.28; margin: 0 0 10px; color: #1d1b19; }
 .book-page-chapter .docs-article-header small { color: var(--muted); font-size: 10px; }
-/* 章节页正文:中文 16px / 1.8(规范),比 hosted docs 14px 更适合长读。 */
-.book-page-chapter .docs-body { font-family: var(--font-reader-sans); font-size: 18px; font-weight: 400; line-height: 1.85; color: #1f1f1f; }
+/* 章节页正文:Serif 17px / 1.9(现代出版物长读),轻、稳、连续;覆盖创作台 .docs-body 的 sans。 */
+.book-page-chapter .docs-body { font-family: var(--font-reader-serif); font-size: 17px; font-weight: 400; line-height: 1.9; letter-spacing: 0; color: #292724; }
 
 /* 简介块不再用背景+左边条,改为引用式轻提示。 */
 .book-summary { border-left: 2px solid var(--line-strong); color: var(--muted); font-size: 13px; line-height: 1.75; margin: 0; padding: 2px 0 2px 14px; }
@@ -699,16 +699,36 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-reader .docs-body pre.mermaid { background: var(--surface); border: 1px solid var(--line); display: block; overflow-x: auto; padding: 16px; text-align: center; }.book-reader .docs-body pre.mermaid svg { max-width: 100%; }
 .book-reader .katex-block { margin: 16px 0; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 
-/* 书站阅读排版微调:Serif 章节标题(英文 Source Serif 4 / 中文 Noto Serif SC)、出版物感引用块、Mono 代码。
-   覆盖全局 .docs-body(创作台沿用原排版),scoped 到 .book-reader。 */
-.book-page-cover .docs-body { font-family: var(--font-reader-sans); font-size: 17px; line-height: 1.85; color: #1f1f1f; }
-.book-reader .docs-body h1, .book-reader .docs-body h2, .book-reader .docs-body h3 { font-family: var(--font-reader-serif); font-weight: 600; color: #181817; line-height: 1.4; }
-.book-reader .docs-body h2 { font-size: 28px; margin: 36px 0 14px; border-bottom: 0; padding-bottom: 0; }
-.book-reader .docs-body h3 { font-size: 23px; line-height: 1.45; margin: 30px 0 12px; }
-.book-reader .docs-body p { margin: 18px 0; }
-.book-reader .docs-body code { font-family: var(--font-reader-mono); }
-.book-reader .docs-body pre code { font-family: var(--font-reader-mono); }
-.book-reader .docs-body blockquote { background: #f4f2ee; border-left: 3px solid #c8c1b8; border-radius: 6px; color: #494642; margin: 22px 0; padding: 18px 22px; }
+/* 书站阅读排版微调:正文/标题/引用/列表自然语言全部 Serif(书的声音),代码 Mono,UI Sans。
+   覆盖全局 .docs-body(创作台沿用原排版),scoped 到 .book-reader / .book-page-{cover,chapter}。 */
+.book-page-cover .docs-body { font-family: var(--font-reader-serif); font-size: 17px; font-weight: 400; line-height: 1.9; letter-spacing: 0; color: #292724; }
+/* 章节内小节标题(H2/H3/H4):Serif Medium、明显小于旧版,"翻到下一小节"而非"网页新模块"。 */
+.book-reader .docs-body h1, .book-reader .docs-body h2, .book-reader .docs-body h3, .book-reader .docs-body h4, .book-reader .docs-body h5, .book-reader .docs-body h6 { font-family: var(--font-reader-serif); font-weight: 500; color: #211f1d; }
+.book-reader .docs-body h1 { font-size: 27px; letter-spacing: -0.01em; line-height: 1.35; margin: 2.2em 0 0.8em; }
+.book-reader .docs-body h2 { font-size: 22.5px; letter-spacing: -0.01em; line-height: 1.45; margin: 2.1em 0 0.7em; border-bottom: 0; padding-bottom: 0; }
+.book-reader .docs-body h3 { font-size: 19px; line-height: 1.5; margin: 1.8em 0 0.6em; color: #272421; }
+.book-reader .docs-body h4 { font-size: 17.5px; line-height: 1.5; margin: 1.7em 0 0.55em; color: #272421; }
+.book-reader .docs-body h5, .book-reader .docs-body h6 { font-size: 17px; line-height: 1.5; margin: 1.6em 0 0.5em; color: #33302d; }
+/* 段落节奏:连续阅读流,不靠大段空白分节。 */
+.book-reader .docs-body p { margin: 0 0 1.05em; }
+/* 强调只是强调,不是新标题:Serif Medium 即可,不要 700。 */
+.book-reader .docs-body strong, .book-reader .docs-body b { font-weight: 500; color: #211f1d; }
+/* 列表自然语言同正文 Serif,行高随正文,项间轻微呼吸,不做卡片式。 */
+.book-reader .docs-body ul, .book-reader .docs-body ol { line-height: 1.85; margin: 0 0 1.05em; padding-left: 1.5em; }
+.book-reader .docs-body li { margin: 0.28em 0; }
+.book-reader .docs-body li > p { margin: 0 0 0.4em; }
+/* 代码:独立 Mono 声音,字号不随正文放大。 */
+.book-reader .docs-body code { font-family: var(--font-reader-mono); font-size: 0.82em; }
+.book-reader .docs-body pre { font-size: 14px; line-height: 1.65; }
+.book-reader .docs-body pre code { font-family: var(--font-reader-mono); font-size: 14px; }
+/* 引用块:编辑出版物式(暖底+细边条),非 Alert/Callout。 */
+.book-reader .docs-body blockquote { background: #f4f2ee; border-left: 3px solid #c8c1b8; border-radius: 5px; color: #494642; font-family: var(--font-reader-serif); margin: 1.4em 0; padding: 16px 20px; }
+.book-reader .docs-body blockquote p { margin: 0 0 0.6em; }
+.book-reader .docs-body blockquote p:last-child { margin-bottom: 0; }
+/* 表格内文字(Sans 数据感,小于正文);横向可滚。 */
+.book-reader .docs-body table { font-family: var(--font-reader-sans); font-size: 13.5px; line-height: 1.6; }
+/* 分隔线更安静。 */
+.book-reader .docs-body hr { border: 0; border-top: 1px solid rgb(0 0 0 / 8%); margin: 2.4em 0; }
 /* 响应式:>=1440 完整三栏;1100~1439 隐右栏(中央+左栏);<1100 单栏堆叠(左栏去底色/静态)。 */
 @media (max-width: 1439px) {
   .book-page-chapter { grid-template-columns: 260px minmax(0, 1fr); }
@@ -728,11 +748,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .book-page-chapter .book-reader .docs-body > ul,
   .book-page-chapter .book-reader .docs-body > ol,
   .book-page-chapter .book-reader .docs-body > blockquote { max-width: 100%; }
+  /* 移动端排版:标题/正文同步缩小,避免大屏字号堆到手机。 */
+  .book-page-chapter .docs-article-header h1 { font-size: clamp(30px, 8.4vw, 34px); }
+  .book-page-chapter .docs-body { font-size: 16.5px; }
+  .book-reader .docs-body h2 { font-size: 21.5px; }
+  .book-reader .docs-body h3 { font-size: 18.5px; }
 }
 @media (max-width: 860px) {
   .book-page-cover { grid-template-columns: 1fr; }
   .book-page-cover .book-side { background: none; border-right: 0; max-height: none; padding: 18px 20px; position: static; }
   .book-page-cover .book-reader { max-width: 100%; padding: 18px 20px 32px; }
+  .book-page-cover .docs-article-header h1 { font-size: clamp(28px, 8vw, 32px); }
 }
 
 

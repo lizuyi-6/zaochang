@@ -18,13 +18,19 @@ import { ReadingProgressTracker } from "../reading-progress-tracker";
 import { ChapterAside } from "../chapter-aside";
 import "katex/dist/katex.min.css";
 // 书站阅读字体(self-host woff2 via @fontsource;按 weight/subset 精确引入,浏览器按 unicode-range 按需下载)。
-// 英文:Inter(正文/UI)+ Source Serif 4(标题)+ JetBrains Mono(代码);中文标题:Noto Serif SC(=思源宋体,与 Source Han Serif SC 同字形)。
-// 中文正文不加载 Web Font,走系统 Sans fallback。import scoped 到书站路由 bundle,不影响其他页。
+// Serif(书的声音):英文 Source Serif 4 + 中文 Noto Serif SC(=思源宋体,与 Source Han Serif SC 同字形),覆盖正文 400/强调与标题 500/备用 600。
+// Sans(系统的声音):Inter(UI/目录/元信息)。Mono(代码的声音):JetBrains Mono。
+// 中文 Sans 不加载 Web Font,走系统 fallback(PingFang SC/Microsoft YaHei 等)。import scoped 到书站路由 bundle,不影响其他页。
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
+import "@fontsource/source-serif-4/400.css";
+import "@fontsource/source-serif-4/500.css";
 import "@fontsource/source-serif-4/600.css";
 import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
+import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
+import "@fontsource/noto-serif-sc/chinese-simplified-500.css";
 import "@fontsource/noto-serif-sc/chinese-simplified-600.css";
 
 export const dynamic = "force-dynamic";
