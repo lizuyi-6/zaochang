@@ -16,6 +16,7 @@ import {
 import { MermaidRunner } from "../mermaid-runner";
 import { ReadingProgressTracker } from "../reading-progress-tracker";
 import { ChapterAside } from "../chapter-aside";
+import { BookSideToggle } from "../book-side-toggle";
 import "katex/dist/katex.min.css";
 // 书站阅读字体(self-host woff2 via @fontsource;按 weight/subset 精确引入,浏览器按 unicode-range 按需下载)。
 // Serif(书的声音):英文 Source Serif 4 + 中文 Noto Serif SC(=思源宋体,与 Source Han Serif SC 同字形),覆盖正文 400/强调与标题 500/备用 600。
@@ -125,6 +126,7 @@ export default async function BookPage({ params }: PageProps) {
   const progress = !isCover && leafIdx >= 0 ? { current: leafIdx + 1, total: leaves.length } : null;
 
   return <div className={`book-page ${isCover ? "book-page-cover" : "book-page-chapter"}`}>
+    <BookSideToggle />
     <aside className="book-side">
       <Link href="/bookshelf" className="book-back"><ArrowLeft size={14} /> 书架</Link>
       <Link href={base} className="book-side-title">
