@@ -108,8 +108,51 @@ function extractMermaid(bodyMd: string): { md: string; blocks: string[] } {
 
 const markedKatex = marked.use(katexExtension);
 
-export function renderDocHtml(bodyMd: string): string {
-  const { md, blocks } = extractMermaid(bodyMd);
+// ---- MkDocs 搬运内容的兼容预处理 ----
+// 该书源文件是从 MkDocs Material 项目直接搬来的,带两种造场不支持的标记:
+//  1) `:material-*:` 图标短码(marked 不认识,原样输出成裸文本)。
+//  2) `.md` 相对文件链接(MkDocs 源文件路径,造场路由是 /bookshelf/<book>/<...slug>,点不动)。
+// 处理策略:
+//  - 图标宏:删掉宏文本、只留后面的文字(用户选定:不引入图标,保持 quiet 版式)。对所有文档
+//    安全——`:material-xxx:` 形式在非 MkDocs 内容里不该出现,不误伤正常文本。
+//  - .md 链接:需要书上下文(章节 slug → 书内完整路径),仅书架页通过 bookCtx 传入时重写;
+//    无 bookCtx(独立文档页/创作台预览)不重写、保持原样,行为不变。
+// 图标宏:形如 :material-book-arrow-right: / :fontawesome-*: 等,前后允许空格。
+const MKDOCS_ICON_MACRO = /:(?:material|fontawesome|octicons|simple-icons|ion|feather)-[a-z0-9-]+:/g;
+
+// 书籍上下文:把 .md 相对链接重写成造场书架路由。pathByLeafSlug 由调用方从目录树构建,
+// 键是章节叶子 slug(如 "01-why-token"),值是书内完整路径(如 "part-1/01-why-token")。
+export type BookLinkContext = {
+  bookSlug: string;
+  // 章节叶子 slug -> 书内路径(不含 /bookshelf/<book> 前缀)
+  pathByLeafSlug: ReadonlyMap<string, string>;
+};
+
+// 把 MkDocs 源里的 .md 相对链接重写成造场路由。仅处理能唯一映射的目标:
+//   NN-slug.md / chapters/NN-slug.md  → /bookshelf/<book>/<path-of-NN-slug>
+//   preface.md                        → /bookshelf/<book>/preface(若存在)
+//   ../index.md 或 index.md           → /bookshelf/<book>(封面)
+// 映射不到的(外部 .md、锚点等)保持原样,不猜。
+function rewriteBookLinks(md: string, ctx: BookLinkContext): string {
+  const base = `/bookshelf/${encodeURIComponent(ctx.bookSlug)}`;
+  // 匹配 markdown 链接目标:](xxx.md) 或 ](xxx.md#anchor),允许 ./ ../ chapters/ 前缀。
+  return md.replace(/\]\((\.\.\/|\.\/)?(?:chapters\/)?([a-z0-9][a-z0-9-]*)\.md(#[^)\s]*)?\)/gi,
+    (all, _prefix: string, stem: string, anchor: string | undefined) => {
+      const leaf = stem.toLowerCase();
+      // index → 封面
+      if (leaf === "index") return `](${base})`;
+      const path = ctx.pathByLeafSlug.get(leaf);
+      if (!path) return all; // 映射不到,保持原样
+      return `](${base}/${path.split("/").map(encodeURIComponent).join("/")}${anchor ?? ""})`;
+    });
+}
+
+export function renderDocHtml(bodyMd: string, bookCtx?: BookLinkContext): string {
+  // 1) 删 MkDocs 图标宏(留文字)。
+  let pre = bodyMd.replace(MKDOCS_ICON_MACRO, "");
+  // 2) 书内 .md 链接重写(仅书架页传入 bookCtx 时)。
+  if (bookCtx) pre = rewriteBookLinks(pre, bookCtx);
+  const { md, blocks } = extractMermaid(pre);
   const raw = markedKatex.parse(md, { async: false }) as string;
   let clean = sanitizeHtml(raw, {
     allowedTags: [

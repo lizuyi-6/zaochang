@@ -91,8 +91,23 @@ export default async function BookPage({ params }: PageProps) {
 
   // 正文 HTML:章节页给 h2/h3 注入稳定 id(ch-N),供右栏本章目录锚定 + scroll-spy。
   // renderDocHtml 经 sanitize 后 h2/h3 为裸标签(无属性),正则替换安全;不动安全消毒配置。
+  // 书籍上下文:把 MkDocs 搬运来的 .md 相对链接重写成造场路由。pathByLeafSlug 从目录树
+  // 收集"叶子章节 slug → 书内完整路径",供 renderDocHtml 重写 NN-slug.md 形式链接。
+  const pathByLeafSlug = new Map<string, string>();
+  {
+    const walk = (nodes: DocNode[], prefix: string[]) => {
+      for (const n of nodes) {
+        const path = [...prefix, n.slug];
+        if (n.children.length > 0) walk(n.children, path);
+        else if (!pathByLeafSlug.has(n.slug)) pathByLeafSlug.set(n.slug, path.join("/"));
+      }
+    };
+    walk(tree, []);
+  }
   const headings: { id: string; text: string; level: number }[] = [];
-  let bodyHtml = doc.bodyMd.trim().length > 0 ? renderDocHtml(doc.bodyMd) : "";
+  let bodyHtml = doc.bodyMd.trim().length > 0
+    ? renderDocHtml(doc.bodyMd, { bookSlug: book.slug, pathByLeafSlug })
+    : "";
   if (!isCover && bodyHtml) {
     let hi = 0;
     bodyHtml = bodyHtml.replace(/<(h[23])>([\s\S]*?)<\/\1>/g, (m, tag: string, inner: string) => {
