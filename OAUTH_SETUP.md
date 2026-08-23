@@ -91,13 +91,11 @@ write_access_approved=0
 ZAOCHANG_ADMIN_EMAILS=admin1@example.com,admin2@example.com
 ```
 
-生产环境默认拒绝客户端自行发送的 `oai-authenticated-user-email` 与相关姓名头。仅当部署平台保证剥离外部同名头并可信注入身份时，才设置：
+生产环境无条件拒绝客户端发送的 `oai-authenticated-user-email` 与相关姓名头（fail-closed）。`TRUST_OAI_IDENTITY_HEADERS` 仅在非生产环境（本地/测试联调）生效，不再作为生产逃逸门：
 
 ```text
-TRUST_OAI_IDENTITY_HEADERS=true
+TRUST_OAI_IDENTITY_HEADERS=true   # 仅非生产环境生效
 ```
-
-无法证明上述前置条件时必须保持未设置。
 
 ## 会话与退出
 

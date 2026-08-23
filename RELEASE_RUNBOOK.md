@@ -29,7 +29,7 @@ OIDC_SIGNING_PRIVATE_JWK (secret)
 ZAOCHANG_ADMIN_EMAILS
 ```
 
-`PUBLIC_APP_ORIGIN` 必须是纯 HTTPS origin，生产缺失或为 HTTP 时停止发布。Google 登录暂停时不要配置占位值。`TRUST_OAI_IDENTITY_HEADERS` 默认保持未设置；只有平台身份头注入边界经过独立验证后才能开启。
+`PUBLIC_APP_ORIGIN` 必须是纯 HTTPS origin，生产缺失或为 HTTP 时停止发布。Google 登录暂停时不要配置占位值。生产环境无条件拒绝 `oai-authenticated-user-*` 请求头（fail-closed）；`TRUST_OAI_IDENTITY_HEADERS` 仅在非生产环境生效。
 
 ## 3. 数据与迁移
 

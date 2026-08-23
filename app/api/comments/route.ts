@@ -4,6 +4,10 @@ import { findProduct } from "../../lib/community-data";
 
 export const dynamic = "force-dynamic";
 
+// 评论目标的合法类型白名单：product / post / circle_topic / live_room。
+// 其余任意 targetType 一律 400 拒绝，避免产生指向不存在目标的孤儿评论。
+const COMMENT_TARGET_TYPES = ["product", "post", "circle_topic", "live_room"];
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -36,8 +40,14 @@ export async function POST(request: Request) {
     if (!targetType || !targetRef || content.length < 2) {
       return Response.json({ error: "invalid_comment" }, { status: 400 });
     }
+    if (!COMMENT_TARGET_TYPES.includes(targetType)) {
+      return Response.json({ error: "invalid_target" }, { status: 400 });
+    }
     if (targetType === "product" && !(await productIsPublic(targetRef))) {
       return Response.json({ error: "product_not_found" }, { status: 404 });
+    }
+    if (targetType === "post" && !(await postExists(targetRef))) {
+      return Response.json({ error: "post_not_found" }, { status: 404 });
     }
     const db = database();
     let comment;
@@ -71,4 +81,10 @@ async function productIsPublic(targetRef: string) {
        AND review_status = 'approved' AND approved_version = review_version`,
   ).bind(Number(targetRef)).first();
   return Boolean(product);
+}
+
+async function postExists(targetRef: string) {
+  if (!/^\d+$/.test(targetRef)) return false;
+  const post = await database().prepare(`SELECT 1 AS found FROM posts WHERE id = ?`).bind(Number(targetRef)).first();
+  return Boolean(post);
 }

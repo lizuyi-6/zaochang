@@ -13,7 +13,10 @@ export async function rateLimitKey(namespace: string, value: string) {
 }
 
 export async function requestActorKey(request: Request, namespace: string) {
-  const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  // 只信任 Cloudflare 注入的 cf-connecting-ip 作限流键。x-forwarded-for 是客户端可控头,
+  // 用作回退会让攻击者轮换该头绕过限流(登录/oauth-token/发帖/点赞等)。
+  // cf-connecting-ip 缺失时统一落入 "unknown" 桶——更严格,而非信任伪造头。
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
   return rateLimitKey(namespace, ip);
 }
 

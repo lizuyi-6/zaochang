@@ -256,6 +256,12 @@ export async function clearAuthCookie(secure: boolean) {
 }
 
 export async function requestSecure(request: Request) {
+  // 生产（Cloudflare Workers）用运行时注入的 cf.httpProtocol 判定协议：客户端不可伪造，
+  // 避免信任 x-forwarded-proto 被伪造 https 导致 Cookie 误标 Secure。
+  // 仅在 cf 未报告 https（本地 dev / 测试）时，回退到 URL 协议与 x-forwarded-proto，
+  // 以模拟反向代理终止 TLS 的场景（wrangler dev 不注入真实 cf.httpProtocol）。
+  const cf = (request as Request & { cf?: { httpProtocol?: string } }).cf;
+  if (cf?.httpProtocol === "https") return true;
   const requestHeaders = await headers();
   return new URL(request.url).protocol === "https:" || requestHeaders.get("x-forwarded-proto") === "https";
 }
