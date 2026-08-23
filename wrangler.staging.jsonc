@@ -4,6 +4,11 @@
   "main": "dist/server/index.js",
   "compatibility_date": "2026-07-15",
   "compatibility_flags": ["nodejs_compat"],
+  // 与 prod 同步:Smart Placement 让 Worker 贴近 D1(APAC)运行,staging 用于
+  // 部署前实测该配置的延迟收益(见 wrangler.prod.jsonc 注释)。
+  "placement": {
+    "mode": "smart"
+  },
   "no_bundle": true,
   "rules": [
     {

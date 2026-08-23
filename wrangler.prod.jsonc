@@ -8,6 +8,13 @@
   "main": "dist/server/index.js",
   "compatibility_date": "2026-07-15",
   "compatibility_flags": ["nodejs_compat"],
+  // Smart Placement:把 Worker 放到 D1(APAC)旁运行。此前 Worker 跑在访客边缘
+  // (如 LAX),D1 在 APAC,页面 SSR 的串行 D1 查询每次都要跨洋往返(实测每查询
+  // 边际成本 ~1s,bookshelf 2 查询 TTFB 3-4s;cpuTimeP50 仅 12ms,瓶颈全在等待)。
+  // 开启后 HTML/动态请求由边缘转发到 APAC 就近查库;静态资源仍走边缘缓存不受影响。
+  "placement": {
+    "mode": "smart"
+  },
   "no_bundle": true,
   "rules": [
     {
