@@ -497,3 +497,14 @@
 - 证据(视觉亲验,headless Chrome,生产经 --host-resolver-rules 指向 CF 边缘):书架卡片(竖版 CPU 封面入 5:6 卡槽)、封面页横幅(横版 360px 带,标题与 CPU 图在中轴完整)、1920px 章节页(右栏约 340px,目录项 "Decode & Operand Fetch" 显示真实 & 而非字面 &amp;)。
 - 本轮改动可能引入的新风险:① 右栏 clamp 在 <1440px 窗口回落既有媒体查询断点,不影响移动/平板;② 实体解码遇未列举实体(如 &hellip;)保持原样直出,输出仍经 React 转义,不构成注入;③ 静态封面占仓库体积约 108KB,可忽略。
 - 未覆盖范围:clamp 中间断点(1100-1439px 两栏、<1100px 单栏)未逐一截图(沿既有媒体查询,本轮未改动其逻辑);Hello LLM 旧书右栏于 1920/1440 早前本地验无回归,生产更全断点未重验。
+
+## 2026-08-24 线上跳转卡顿治理:Smart Placement + 查询合并 + 匿访边缘缓存(已部署)
+
+- 状态:已上线。两轮:`8e54c9d`/`17ca976`(Smart Placement 开启 + 书站字体改 unicode-range 子集化,run 32646341084)与 `5c51fc1`(docs.ts 查询合并 + worker 匿访边缘缓存,run 32651012311)均 release-gates / deploy-production 双 success。第一轮后用户仍报"明显卡顿",第二轮命中真正根因。
+- 根因(测量定位,非推测):GraphQL Workers Analytics cpuTimeP50=12ms vs wallTimeP99=3516ms——瓶颈在等待不在 CPU。① Worker 跑在访客边缘、D1 主库在 APAC,串行查询每次往返百毫秒级;② 章节页每渲染 10-15 条串行 D1 查询(findInBook 每个 slug 段一条、docBreadcrumbs 每级父一条、generateMetadata 与页面组件重复调 currentMember+findInBook);③ vinext `prefetch=auto` 跳过动态路由,章节跳转每次冷渲染;④ `.rsc` 跳转 token 构建期稳定(两次独立浏览器加载同值)→ 同路由 .rsc URL 可跨访客共享缓存。
+- 机制(5c51fc1):docs.ts 树读取全部收敛到 per-request `React cache()` 的单次 listAllDocs(docs 表 112 行/285KB),findInBook/docBreadcrumbs 改内存解析(`UNIQUE(parent_id, slug)` 索引保证与原逐段 SQL 等价),listBooks 去掉独立书根查询,章节页登录态降到 ~3 条查询;可见性 fail-closed 判定未动。worker/index.ts 匿访边缘缓存:仅 `APP_ENV=production` + GET + 无任何 cookie/authorization + 路径不在排除表 + 200 且无 set-cookie + text/html 或 `.rsc`;存储 `s-maxage=60` + `max-age=0`(浏览器不落本地副本,匿名页不会在登录后遮蔽登录态);请求带 `no-cache` 也绕过(线上排查强制回源)。
+- 语义变更声明(6.4):匿名视角公开页面/feed 最多滞后 60 秒(刚发布/过审内容 ≤60s 后出现;刚转私有的书 ≤60s 内匿名仍可见缓存副本)。审查门控/订单/点赞/打赏/账本等强制不变量全在服务端触发器层执行,不受此缓存影响;带 cookie 的请求(登录态)永远绕过缓存读写。
+- 生产实测(部署后 curl 二连,本机经代理出口):`/bookshelf` HTML miss 2.64s → hit 0.33s(7-8×);`/bookshelf.rsc` miss 1.01s → hit 0.40s;深层章节 `hello-computer/preface.rsc`(28KB)miss 1.26s → hit 0.57s;带 cookie 请求无 `x-zc-anon-cache` 头、真实回源 0.96s(绕过 ✓);307 未入缓存(只存 200 ✓);匿访响应无 set-cookie(无 `__cf_bm` 注入,缓存对匿名持续可用)。
+- 证据(门禁):全量 94 pass/0 fail/0 skip/0 todo;tsc 0 错;lint 0 errors(4 warnings 均在外来未跟踪 scripts/);db:generate "No schema changes";git diff --check 通过。书架套件(卡片墙/封面目录树/深层章节渲染/members 书匿名 404/docs 308 重定向)断言重写后的解析路径,真实 D1 + 触发器。
+- 本轮改动可能引入的新风险:① 匿访 60s 滞后(上文声明,`ANON_PAGE_CACHE_TTL_SECONDS` 一常量可调);② React `cache()` 依赖 vinext 提供 per-request store——94 测试经真实 worker 运行时实证成立,若 vinext 升级破坏会抛错而非静默失效;③ listAllDocs 全表单查询(含 body_md)随书量增长——当前量级下单查询远优于 N 次往返,书库数量级增长后需再评估(如列裁剪);④ Smart Placement 是否真实搬迁未证实(站点流量 ~1.3 req/min 低于决策阈值,API 无执行 colo 维度可查)——本轮两修复已不依赖它。
+- 未覆盖范围:缓存命中路径无自动化测试(APP_ENV 门控在测试关闭,防 60s 陈旧污染断言;worker/index.ts 注释已声明,生产 curl 二连补上实测);真实登录用户端到端跳转体验未实测(无真实凭据;cookie 绕过路径与合并后渲染已由测试+生产 curl 分别验证);首页/feed 等其他页面的生产命中未逐一 curl(同管线,bookshelf 已代表)。
