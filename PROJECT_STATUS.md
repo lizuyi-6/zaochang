@@ -477,3 +477,12 @@
 - 本轮改动可能引入的新风险:① 0018 表重建在触发器缺位窗口内运行(D1 单迁移文件单事务,外部写不可插入,评估为可控);② provider CHECK 从 (google,github) 扩到 +email 为语义放宽(仅枚举校验层,插入仍受 oauth_registration_invitation_guard 门槛);③ 新增未认证端点真实外发邮件 = 成本/轰炸面,已由双层限流 + Turnstile + 邀请/成员前置闸收敛,上线后需观察;④ 生产 `EMAIL` binding 路径本轮从未真实执行(测试走 REST 假上游),部署后需真实收码验证。
 - 未覆盖范围:生产 send_email binding 端到端(需部署后实测);Turnstile 实际校验(测试环境无 keys,staging 有,部署后验);表单 JS 点击流(仅渲染截图验证,API 行为已由集成测试覆盖);0018 未在真实生产数据副本上演练(仅空库);CLAUDE.md 本轮新增邮箱路径说明,随功能一并提交。
 
+## 2026-08-23 第二轮:生产上线 + 邀请码转写归一化(已部署)
+
+- 状态:已上线。`841d454` 推送 main 后 release-gates 与 deploy-production 双 success;生产 D1 先行应用 0018(备份 `backups/pre-0018.sql` 566KB/113 INSERT → `d1 execute --file` 306 行写入 → 验证 `invitation_triggers=5`/新表在位/行数保留 → `__drizzle_migrations` 回填 id=19 created_at=1787478054485 与 journal 一致)。应用迁移前用 sqlite_master LIKE 断言三重建表只被已知 5 个邀请触发器文本引用(RENAME 重解析陷阱),无其他引用者。
+- 生产实测:边缘(盒子 --resolve)POST `/api/auth/email/request` → `200 {"status":"sent","expires_in":600}`(EMAIL binding 真实外发成功);`email_login_codes` 行 attempts=0/consumed=null/TTL 精确 10 分钟。曾误判 binding 结构化调用为"签名错误阻断级缺陷",经 worker-configuration.d.ts:11358 的 SendEmail builder 重载证伪,已收回。
+- 缺陷(用户报"新邀请码提示无效"):生产邀请码行完全健康(uses 0、未撤销、9 月到期),服务端生码/验码同函数——根因是**手输转写变形**(小写 zc-/中文输入法全角 ｚｃ-/空格):regex 放行但 sha256(变形)≠sha256(原文) → invitation_invalid。红测试复现(`actual: 400, expected: 200`),修复为 `hashInvitationCode` 入口归一化(去空白含全角、全角→半角、转大写)。**语义变更声明(6.4)**:接受集从"精确原文"扩为"原文的转写变体",任何通过者仍须哈希命中真实码;生成侧原文全大写半角,归一化对其恒等。GitHub 与邮箱两条路径共用该函数,一处修复双路径生效。表单侧另加 autoCapitalize/spellCheck 与"不区分大小写"占位提示。
+- 证据:新测试「invitation entry tolerates lowercase, full-width, and stray-space transcription」红→绿;全量 94 pass/0 fail/0 skip/0 todo(FULL_EXIT=0);tsc 0 错;lint 0 errors(4 warnings 均在外来未跟踪 scripts/);git diff --check 通过。存哈希断言:归一化后 code 行的 invitation_hash == sha256(原文),兑换 batch 命中、uses_count 归 1。
+- 本轮改动可能引入的新风险:① 归一化扩大哈希接受集(见上,已论证不构成门槛放宽);② 全角映射区间 [！-～] 恰为 FF01-FF5E 单调平移,不含全角空格(单独处理);③ 表单 placeholder 变化仅文案。
+- 未覆盖范围:GitHub start 路径的小写/全角变体未单独端到端测试(与 email 路径共用 hashInvitationCode,函数级已覆盖);用户重试真实手输场景待部署后确认。
+

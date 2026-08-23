@@ -109,8 +109,16 @@ export async function hashToken(value: string) {
 }
 
 export async function hashInvitationCode(value: string) {
-  const normalized = value.trim();
-  if (!/^[A-Za-z0-9_-]{8,64}$/.test(normalized)) return null;
+  // 邀请码由管理台生成为 "ZC-" + 大写字母数字(admin/invitations 的
+  // generateInvitationCode)。手输时常见转写变形:小写、中文输入法全角字符
+  // (ｚｃ－)、误敲/复制的空格。先归一化再哈希:任何通过者仍必须精确命中某个
+  // 真实码的哈希——这是输入容错,不是门槛放宽(生成侧原文已是全大写半角,
+  // 归一化对它是恒等变换)。
+  const normalized = value
+    .replace(/[\s 　]+/g, "")
+    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .toUpperCase();
+  if (!/^[A-Z0-9_-]{8,64}$/.test(normalized)) return null;
   return hashToken(normalized);
 }
 

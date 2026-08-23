@@ -161,9 +161,13 @@ export function EmailLoginForm({ returnTo, turnstileKey }: { returnTo: string; t
         id="email-invitation-code"
         name="invitation_code"
         type="text"
+        inputMode="text"
+        autoCapitalize="characters"
+        autoCorrect="off"
+        spellCheck={false}
         minLength={8}
         maxLength={64}
-        placeholder="已有造场账号可留空"
+        placeholder="ZC- 开头，不区分大小写"
         value={invitationCode}
         onChange={(event) => setInvitationCode(event.target.value)}
       />

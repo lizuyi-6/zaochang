@@ -1921,6 +1921,65 @@ test("email verification-code login registers with an invitation and issues an e
   );
 });
 
+test("invitation entry tolerates lowercase, full-width, and stray-space transcription", async () => {
+  const adminHeaders = authHeaders("发布审核管理员", adminEmail);
+  const email = `email-invite-case-${runId}@example.com`;
+
+  const created = await fetch(`${baseUrl}/api/admin/invitations`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ label: "转写归一化测试", maxUses: 1, expiresDays: 1 }),
+  });
+  assert.equal(created.status, 201);
+  const invitation = (await created.json()).invitation;
+
+  // 手抄形态:全角前缀「ｚｃ－」+ 小写正文 + 正文中一个全角空格。与原文哈希必然不同
+  // (sha256 对输入确定),归一化缺失时会得到 invitation_invalid——这正是生产上
+  // 用户拿新邀请码被拒的机制。
+  const typed = `ｚｃ－${invitation.code.slice(3).toLowerCase().slice(0, 8)}　${invitation.code.slice(3).toLowerCase().slice(8)}`;
+  assert.notEqual(typed, invitation.code);
+  assert.notEqual(
+    createHash("sha256").update(typed).digest("hex"),
+    createHash("sha256").update(invitation.code).digest("hex"),
+  );
+
+  const sent = await fetch(`${baseUrl}/api/auth/email/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, invitation_code: typed }),
+  });
+  assert.equal(sent.status, 200);
+  assert.equal((await sent.json()).status, "sent");
+
+  // 归一化后的哈希必须等于原文哈希(存进 code 行的 invitation_hash 与
+  // invitation_codes.code_hash 同源,后续 ensureEmailUser 的兑换 batch 才能命中)。
+  const row = (await queryLocalD1(
+    `SELECT invitation_hash AS invitationHash FROM email_login_codes WHERE email = '${email}'`,
+  ))[0];
+  assert.equal(
+    row.invitationHash,
+    createHash("sha256").update(invitation.code).digest("hex"),
+  );
+
+  // 全链路:验码后兑换正常消耗邀请码(uses_count 1),不是只过了预检。
+  const realCode = latestEmailCode(email);
+  assert.match(realCode ?? "", /^\d{6}$/);
+  const verified = await fetch(`${baseUrl}/api/auth/email/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, code: realCode }),
+  });
+  assert.equal(verified.status, 200);
+  assert.equal(
+    (await queryLocalD1(`SELECT uses_count AS usesCount FROM invitation_codes WHERE id = '${invitation.id}'`))[0].usesCount,
+    1,
+  );
+  const redemption = (await queryLocalD1(
+    `SELECT provider FROM invitation_redemptions WHERE user_email = '${email}'`,
+  ))[0];
+  assert.equal(redemption.provider, "email");
+});
+
 test("email verification codes lock after five wrong attempts and send failures leave no phantom state", async () => {
   const adminHeaders = authHeaders("发布审核管理员", adminEmail);
   const email = `email-lock-${runId}@example.com`;
