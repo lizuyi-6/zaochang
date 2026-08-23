@@ -3,6 +3,10 @@ import { cookies, headers } from "next/headers";
 import { resolvePublicAppOrigin } from "./lib/public-origin";
 
 export type OAuthProvider = "google" | "github";
+// 会话签发可用的 provider:OAuth 登录走 OAuthProvider,邮箱验证码登录走 "email"。
+// (oauth_accounts/invitation_redemptions 的 CHECK 自 0018 起同样接受 'email';
+// 0001 时代的 "google" 仅作历史兼容保留,当前无 google 登录入口。)
+export type SessionProvider = OAuthProvider | "email";
 
 export type SessionUser = {
   displayName: string;
@@ -95,6 +99,10 @@ function sqliteTimestamp(date: Date) {
   return date.toISOString().slice(0, 19).replace("T", " ");
 }
 
+export function expiryTimestamp(ttlSeconds: number) {
+  return sqliteTimestamp(new Date(Date.now() + ttlSeconds * 1000));
+}
+
 export async function hashToken(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return toHex(new Uint8Array(digest));
@@ -148,7 +156,7 @@ export async function getOAuthSessionUser(): Promise<SessionUser | null> {
   }
 }
 
-export async function createOAuthSession(user: SessionUser, provider: OAuthProvider) {
+export async function createOAuthSession(user: SessionUser, provider: SessionProvider) {
   const token = randomToken(32);
   const expiresAt = sqliteTimestamp(new Date(Date.now() + 1000 * 60 * 60 * 24 * 30));
   await database().prepare(
@@ -226,6 +234,68 @@ export async function ensureOAuthUser(
     return stable;
   }
   return user;
+}
+
+// 邮箱验证码登录的身份落地。身份锚点就是 members.email 本身:
+// - 已是成员(GitHub 注册过的邮箱、或之前邮箱注册过)→ 直接返回,无需再消耗邀请码
+//   ——邮箱收件人控制权即账号控制权,本人换登录方式不该被再收一次门票;
+// - 全新邮箱 → 与 ensureOAuthUser 完全同构的原子批次(members + wallets +
+//   invitation_redemptions + oauth_accounts,provider='email'),由
+//   oauth_registration_invitation_guard / invitation_redemption_* 触发器在 DB 层
+//   强制邀请码有效且原子消费,批次失败即整体失败(不会出现"扣了邀请码但没建号")。
+export async function ensureEmailUser(email: string, invitationHash: string | null): Promise<SessionUser> {
+  const db = database();
+  const existing = await db.prepare(
+    `SELECT display_name AS displayName FROM members WHERE email = ?`,
+  ).bind(email).first<{ displayName: string }>();
+  if (existing) return { displayName: existing.displayName, email, fullName: existing.displayName };
+  if (!invitationHash) throw new RegistrationInviteError("invitation_required");
+
+  const displayName = email.slice(0, email.indexOf("@")).slice(0, 40) || email.slice(0, 40);
+  const redemptionId = `invite-redemption:${crypto.randomUUID()}`;
+  try {
+    await db.batch([
+      db.prepare(
+        `INSERT INTO members (email, display_name)
+         VALUES (?, ?)
+         ON CONFLICT(email) DO NOTHING`,
+      ).bind(email, displayName),
+      db.prepare(
+        `INSERT OR IGNORE INTO wallets (user_email, balance, lifetime_earned, lifetime_spent)
+         VALUES (?, 0, 0, 0)`,
+      ).bind(email),
+      db.prepare(
+        `INSERT INTO invitation_redemptions
+         (id, invitation_id, provider, provider_account_id, user_email)
+         SELECT ?, id, 'email', ?, ? FROM invitation_codes
+         WHERE code_hash = ? AND revoked_at IS NULL
+           AND expires_at > CURRENT_TIMESTAMP AND uses_count < max_uses`,
+      ).bind(redemptionId, email, email, invitationHash),
+      db.prepare(
+        `INSERT INTO oauth_accounts
+         (provider, provider_account_id, email, display_name, avatar_url, updated_at)
+         VALUES ('email', ?, ?, ?, NULL, CURRENT_TIMESTAMP)`,
+      ).bind(email, email, displayName),
+    ]);
+  } catch (error) {
+    // 并发竞态败者恢复:同邮箱并发注册时,唯一索引让一方胜出;败者读回胜者即可
+    // (邮件验证码本身是单次消费的,这里的竞态窗口极小,防御与 ensureOAuthUser 对齐)。
+    const winner = await db.prepare(
+      `SELECT email, display_name AS displayName FROM oauth_accounts
+       WHERE provider = 'email' AND provider_account_id = ?`,
+    ).bind(email).first<{ email: string; displayName: string }>();
+    if (!winner) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("oauth_registration_invitation_required")
+        || message.includes("invitation_not_available")
+        || message.includes("invitation_redemptions")) {
+        throw new RegistrationInviteError("invitation_invalid");
+      }
+      throw error;
+    }
+    return { displayName: winner.displayName, email: winner.email, fullName: winner.displayName };
+  }
+  return { displayName, email, fullName: displayName };
 }
 
 export async function setAuthCookies(token: string, returnTo: string, secure: boolean) {

@@ -32,6 +32,14 @@
       "bucket_name": "zaochang-uploads"
     }
   ],
+  // 邮箱验证码登录的外发通道(CF Email Service)。要求 Workers Paid(已满足)。
+  // 发件地址在 app/api/_lib/email-send.ts 固定为 zaochang@aetherstudio.top,
+  // 需在 CF 控制台 Email Service 中确认该地址可用(Email Routing 已接管该地址收信)。
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
   "observability": {
     "enabled": true
   }

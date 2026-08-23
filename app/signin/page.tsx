@@ -1,6 +1,7 @@
 import { ArrowLeft, BadgeCheck, Github } from "lucide-react";
 import Link from "next/link";
 import { oauthProviderStatus, safeReturnPath, turnstileSiteKey } from "../oauth-session";
+import { EmailLoginForm } from "./email-form";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -44,8 +45,9 @@ export default async function SignInPage({ searchParams }: PageProps) {
         <Link className="auth-back" href={returnTo}><ArrowLeft size={15} /> 返回</Link>
         <div className="auth-mark"><BadgeCheck size={18} /> 造场账号</div>
         <h1>进入造场</h1>
-        <p className="auth-intro">公开测试期间统一使用 GitHub。已有账号直接登录，首次注册需要邀请码。</p>
+        <p className="auth-intro">公开测试期间支持 GitHub 或邮箱验证码登录。已有账号直接登录，首次注册需要邀请码。</p>
         {errorText && <p className="auth-error" role="alert">{errorText}</p>}
+        {turnstileKey && <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />}
         {status.github ? (
           <a className="auth-provider github" href={loginHref}>
             <Github size={18} /><span>使用 GitHub 登录</span>
@@ -55,7 +57,9 @@ export default async function SignInPage({ searchParams }: PageProps) {
             <Github size={18} /><span>使用 GitHub 登录</span><small>待配置</small>
           </span>
         )}
-        <div className="auth-divider">首次注册</div>
+        <div className="auth-divider">或邮箱验证码</div>
+        <EmailLoginForm returnTo={returnTo} turnstileKey={turnstileKey} />
+        <div className="auth-divider">首次注册（GitHub）</div>
         <form className="auth-invite-form" action="/api/auth/github/start" method="post">
           <input type="hidden" name="return_to" value={returnTo} />
           <label htmlFor="invitation_code">
@@ -63,17 +67,12 @@ export default async function SignInPage({ searchParams }: PageProps) {
             <span>首次注册必填</span>
           </label>
           <input id="invitation_code" name="invitation_code" type="text" inputMode="text" autoComplete="one-time-code" minLength={8} maxLength={64} placeholder="输入造场邀请码" required />
-          {turnstileKey && (
-            <>
-              <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
-              <div className="cf-turnstile auth-turnstile" data-sitekey={turnstileKey} data-appearance="interaction-only" />
-            </>
-          )}
+          {turnstileKey && <div className="cf-turnstile auth-turnstile" data-sitekey={turnstileKey} data-appearance="interaction-only" />}
           <button className="auth-provider github" type="submit" disabled={!status.github}>
             <Github size={18} /><span>使用邀请码注册</span>{!status.github && <small>待配置</small>}
           </button>
         </form>
-        <small className="auth-note">邀请码只在首次创建造场账号时原子消耗；后续登录不再需要。造场不会获得你的 GitHub 密码。</small>
+        <small className="auth-note">邀请码只在首次创建造场账号时原子消耗；后续登录不再需要。GitHub 登录不会获得你的 GitHub 密码；邮箱登录只用于接收验证码，我们会往你的邮箱发送登录验证码邮件。</small>
       </section>
       <span className="auth-context">AUTH GATEWAY / INVITE BETA</span>
     </main>

@@ -137,6 +137,51 @@ async function startFakeAiUpstream() {
   aiPort = aiServer.address().port;
 }
 
+// 假 CF Email Service 上游(仿 startFakeAiUpstream 模式):校验 Bearer,记录每次
+// send 调用的完整 body 到 sentEmails 供字段级断言;收件人含 fail-email-test(路由
+// 会把邮箱统一转小写,标记用小写)→ 500(测发送失败时验证码行必须删除、邀请码
+// 不得被幻影消耗)。测试永不触达真实外发。
+let emailServer;
+let emailPort;
+let sentEmails = [];
+
+async function startFakeEmailUpstream() {
+  emailServer = createServer(async (request, response) => {
+    const match = request.url?.match(/^\/accounts\/([^/]+)\/email\/sending\/send$/);
+    if (request.method !== "POST" || !match) {
+      response.writeHead(404).end();
+      return;
+    }
+    if (request.headers.authorization !== "Bearer test-email-key") {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+    const chunks = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    sentEmails.push({ account: decodeURIComponent(match[1]), ...body });
+    if (String(body.to?.[0] ?? "").includes("fail-email-test")) {
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "boom" }));
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ success: true, result: { message_id: `<fake-${sentEmails.length}@test>` } }));
+  });
+  await new Promise((resolve, reject) => {
+    emailServer.once("error", reject);
+    emailServer.listen(0, "127.0.0.1", resolve);
+  });
+  emailPort = emailServer.address().port;
+}
+
+// 从发往指定邮箱的最近一封邮件正文提取六位验证码。
+function latestEmailCode(email) {
+  const sent = sentEmails.filter((entry) => entry.to?.[0] === email).at(-1);
+  return sent?.text?.match(/(\d{6})/)?.[1] ?? null;
+}
+
 const onePixelPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -237,6 +282,9 @@ function previewServerArgs() {
     "--var", "AI_CHAT_MODEL:test-model-1",
     "--var", "AI_CHAT_MODEL_EXPERT:test-model-expert",
     "--var", "AI_CHAT_EXPERT_TRANSPORT:messages",
+    "--var", `EMAIL_SEND_BASE_URL:http://127.0.0.1:${emailPort}`,
+    "--var", "EMAIL_SEND_ACCOUNT_ID:test-email-account",
+    "--var", "EMAIL_SEND_API_TOKEN:test-email-key",
   ];
 }
 
@@ -486,7 +534,8 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql"];
+  await startFakeEmailUpstream();
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -656,6 +705,9 @@ after(async () => {
   }
   if (aiServer?.listening) {
     await new Promise((resolve, reject) => aiServer.close((error) => error ? reject(error) : resolve()));
+  }
+  if (emailServer?.listening) {
+    await new Promise((resolve, reject) => emailServer.close((error) => error ? reject(error) : resolve()));
   }
 });
 
@@ -1736,6 +1788,219 @@ test("requires and atomically consumes an invitation for each new OAuth identity
   assert.deepEqual(await revoked.json(), { updated: true, id: invitation.id });
 });
 
+test("email verification-code login registers with an invitation and issues an equivalent session", async () => {
+  const adminHeaders = authHeaders("发布审核管理员", adminEmail);
+  const email = `email-code-${runId}@example.com`;
+
+  // 全新地址无邀请码:拒绝发生在发码之前——不外发、不写库。
+  const sentBefore = sentEmails.length;
+  const noInvite = await fetch(`${baseUrl}/api/auth/email/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  assert.equal(noInvite.status, 400);
+  assert.deepEqual(await noInvite.json(), { error: "invitation_required" });
+  assert.equal(sentEmails.length, sentBefore);
+  assert.equal((await queryLocalD1(`SELECT COUNT(*) AS n FROM email_login_codes WHERE email = '${email}'`))[0].n, 0);
+
+  // 创建邀请码(maxUses 1)→ 带码发码:对假上游的请求做字段级断言。
+  const created = await fetch(`${baseUrl}/api/admin/invitations`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ label: "邮箱登录集成测试", maxUses: 1, expiresDays: 1 }),
+  });
+  assert.equal(created.status, 201);
+  const invitation = (await created.json()).invitation;
+
+  const sent = await fetch(`${baseUrl}/api/auth/email/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, invitation_code: invitation.code }),
+  });
+  assert.equal(sent.status, 200);
+  assert.equal((await sent.json()).status, "sent");
+  assert.equal(sentEmails.length, sentBefore + 1);
+  const mail = sentEmails.at(-1);
+  assert.equal(mail.account, "test-email-account");
+  assert.equal(mail.from, "zaochang@aetherstudio.top");
+  assert.deepEqual(mail.to, [email]);
+  assert.match(mail.subject, /\d{6}/);
+  assert.match(mail.html, /\d{6}/);
+
+  // DB 中只有 SHA-256 哈希,且哈希与邮件明文验证码一致(可证伪)。
+  const realCode = latestEmailCode(email);
+  assert.match(realCode ?? "", /^\d{6}$/);
+  const codeRow = (await queryLocalD1(
+    `SELECT code_hash AS codeHash, invitation_hash AS invitationHash, consumed_at AS consumedAt, attempts
+     FROM email_login_codes WHERE email = '${email}'`,
+  ))[0];
+  assert.match(codeRow.codeHash, /^[0-9a-f]{64}$/);
+  assert.equal(codeRow.codeHash, createHash("sha256").update(realCode).digest("hex"));
+  assert.equal(codeRow.consumedAt, null);
+  assert.equal(codeRow.attempts, 0);
+
+  // 错误验证码:attempts 累计,不下发会话。
+  const wrongCode = realCode === "000000" ? "111111" : "000000";
+  const wrong = await fetch(`${baseUrl}/api/auth/email/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, code: wrongCode }),
+  });
+  assert.equal(wrong.status, 400);
+  assert.deepEqual(await wrong.json(), { error: "code_invalid" });
+  assert.equal((await queryLocalD1(`SELECT attempts FROM email_login_codes WHERE email = '${email}'`))[0].attempts, 1);
+
+  // 正确验证码:会话 cookie + 完整注册落库(members/wallets/redemption/oauth_accounts/auth_sessions)。
+  const verified = await fetch(`${baseUrl}/api/auth/email/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, code: realCode, return_to: "/wallet" }),
+  });
+  assert.equal(verified.status, 200);
+  assert.equal((await verified.json()).return_to, "/wallet");
+  const setCookies = typeof verified.headers.getSetCookie === "function"
+    ? verified.headers.getSetCookie()
+    : [verified.headers.get("set-cookie") ?? ""];
+  const sessionCookie = setCookies.find((value) => value.startsWith("zaochang_session="))?.match(/^zaochang_session=([^;]+)/)?.[1];
+  assert.ok(sessionCookie, `no zaochang_session cookie in ${JSON.stringify(setCookies)}`);
+
+  const redemption = (await queryLocalD1(
+    `SELECT provider, provider_account_id AS providerAccountId, user_email AS userEmail
+     FROM invitation_redemptions WHERE user_email = '${email}'`,
+  ))[0];
+  assert.equal(redemption.provider, "email");
+  assert.equal(redemption.providerAccountId, email);
+  assert.equal(redemption.userEmail, email);
+
+  const account = (await queryLocalD1(
+    `SELECT provider FROM oauth_accounts WHERE provider = 'email' AND provider_account_id = '${email}'`,
+  ))[0];
+  assert.equal(account.provider, "email");
+
+  assert.equal((await queryLocalD1(`SELECT COUNT(*) AS n FROM wallets WHERE user_email = '${email}'`))[0].n, 1);
+  assert.equal(
+    (await queryLocalD1(`SELECT uses_count AS usesCount FROM invitation_codes WHERE id = '${invitation.id}'`))[0].usesCount,
+    1,
+  );
+  assert.equal(
+    (await queryLocalD1(`SELECT provider FROM auth_sessions WHERE user_email = '${email}' ORDER BY created_at DESC LIMIT 1`))[0].provider,
+    "email",
+  );
+  assert.notEqual(
+    (await queryLocalD1(`SELECT consumed_at AS consumedAt FROM email_login_codes WHERE email = '${email}'`))[0].consumedAt,
+    null,
+  );
+
+  // 会话与 GitHub 登录同权:cookie 换 /api/community 的成员视图(signedIn 字段断言)。
+  const community = await fetch(`${baseUrl}/api/community`, {
+    headers: { accept: "application/json", cookie: `zaochang_session=${sessionCookie}` },
+  });
+  assert.equal(community.status, 200);
+  assert.equal((await community.json()).signedIn, true);
+
+  // 已是成员:再次发码无需邀请码(登录场景),新码与旧码不同,消费不重复扣邀请码。
+  const again = await fetch(`${baseUrl}/api/auth/email/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  assert.equal(again.status, 200);
+  const secondCode = latestEmailCode(email);
+  assert.match(secondCode ?? "", /^\d{6}$/);
+  assert.notEqual(secondCode, realCode);
+  const secondLogin = await fetch(`${baseUrl}/api/auth/email/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, code: secondCode }),
+  });
+  assert.equal(secondLogin.status, 200);
+  assert.equal(
+    (await queryLocalD1(`SELECT uses_count AS usesCount FROM invitation_codes WHERE id = '${invitation.id}'`))[0].usesCount,
+    1,
+  );
+});
+
+test("email verification codes lock after five wrong attempts and send failures leave no phantom state", async () => {
+  const adminHeaders = authHeaders("发布审核管理员", adminEmail);
+  const email = `email-lock-${runId}@example.com`;
+  const created = await fetch(`${baseUrl}/api/admin/invitations`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ label: "验证码锁定测试", maxUses: 1, expiresDays: 1 }),
+  });
+  assert.equal(created.status, 201);
+  const invitation = (await created.json()).invitation;
+
+  const sent = await fetch(`${baseUrl}/api/auth/email/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, invitation_code: invitation.code }),
+  });
+  assert.equal(sent.status, 200);
+  const realCode = latestEmailCode(email);
+  assert.match(realCode ?? "", /^\d{6}$/);
+  const wrongCode = realCode === "000000" ? "111111" : "000000";
+
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const response = await fetch(`${baseUrl}/api/auth/email/verify`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, code: wrongCode }),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: attempt === 5 ? "code_locked" : "code_invalid" });
+  }
+  assert.equal((await queryLocalD1(`SELECT attempts FROM email_login_codes WHERE email = '${email}'`))[0].attempts, 5);
+
+  // 锁定后正确验证码也进不来(锁定优先于比对),且无任何注册副作用。
+  const lockedOut = await fetch(`${baseUrl}/api/auth/email/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, code: realCode }),
+  });
+  assert.equal(lockedOut.status, 400);
+  assert.deepEqual(await lockedOut.json(), { error: "code_locked" });
+  assert.equal((await queryLocalD1(`SELECT COUNT(*) AS n FROM auth_sessions WHERE user_email = '${email}'`))[0].n, 0);
+  assert.equal((await queryLocalD1(`SELECT COUNT(*) AS n FROM members WHERE email = '${email}'`))[0].n, 0);
+
+  // 发送失败(上游 500):验证码行必须删除、邀请码零消耗、无成员(操作未生效语义)。
+  const failEmail = `fail-email-test-${runId}@example.com`;
+  const failRequest = await fetch(`${baseUrl}/api/auth/email/request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: failEmail, invitation_code: invitation.code }),
+  });
+  assert.equal(failRequest.status, 502);
+  assert.deepEqual(await failRequest.json(), { error: "email_send_http_500" });
+  assert.equal(sentEmails.filter((entry) => entry.to?.[0] === failEmail).length, 1);
+  assert.equal((await queryLocalD1(`SELECT COUNT(*) AS n FROM email_login_codes WHERE email = '${failEmail}'`))[0].n, 0);
+  assert.equal((await queryLocalD1(`SELECT COUNT(*) AS n FROM members WHERE email = '${failEmail}'`))[0].n, 0);
+  assert.equal(
+    (await queryLocalD1(`SELECT uses_count AS usesCount FROM invitation_codes WHERE id = '${invitation.id}'`))[0].usesCount,
+    0,
+  );
+});
+
+test("email code requests are rate limited per address before any send", async () => {
+  const email = `email-rate-${runId}@example.com`;
+  const payload = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(`${baseUrl}/api/auth/email/request`, payload);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "invitation_required" });
+  }
+  const fourth = await fetch(`${baseUrl}/api/auth/email/request`, payload);
+  assert.equal(fourth.status, 429);
+  assert.deepEqual(await fourth.json(), { error: "rate_limited", retry_after: "15m" });
+  assert.equal(fourth.headers.get("retry-after"), "900");
+  assert.equal(sentEmails.filter((entry) => entry.to?.[0] === email).length, 0);
+});
+
 test("logout deletes the server session so a copied cookie cannot be replayed", async () => {
   const email = `logout-session-${runId}@example.com`;
   await fetch(`${baseUrl}/api/community`, { headers: authHeaders("退出登录用户", email) });
@@ -1845,6 +2110,17 @@ test("production rejects forged workspace identity headers unless explicitly tru
     assert.equal(prodDevLogin.status, 404);
     assert.equal(prodDevLogin.headers.get("set-cookie"), null);
     assert.deepEqual(await prodDevLogin.json(), { error: "not_found" });
+
+    // 邮件外发未配置(无 EMAIL binding、无 EMAIL_SEND_* vars)→ 惰性 503,与 ai_not_configured
+    // 同语义;显式报不可用,绝不静默吞掉发码请求。
+    const prodEmailRequest = await fetch(`http://127.0.0.1:${productionPort}/api/auth/email/request`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: `inert-${runId}@example.com` }),
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(prodEmailRequest.status, 503);
+    assert.deepEqual(await prodEmailRequest.json(), { error: "email_not_configured" });
   } finally {
     const waitForProductionExit = (timeoutMs) => {
       if (productionServer.exitCode !== null) return Promise.resolve(true);

@@ -467,3 +467,13 @@
 - secret 与权威来源:token 经管道生成注入,值未落对话/日志/磁盘;权威备份已写入盒子 `/etc/zaochang/zaochang.env`(`ZAOCHANG_AGENT_TOKEN`,root:zaochang 640),符合 runbook §2(盒子=唯一权威来源)。
 - 本轮改动可能引入的新风险:① 文档编辑放宽到 agent —— 由 worker 能力表收敛到 POST/PATCH /api/docs,DELETE/财务/admin 均 fail-closed;② token 为单一全局凭证,泄露即等于 agent 全写权限,需按需轮换(重设 secret + 更新盒子 env);③ 排空分支对超大 body 会先读后拒绝,受 prepareRequestBody 11 MiB 上限同等级防护。
 - 未覆盖范围:agent 调用速率限制/重试风暴、token 轮换流程演练、多 agent 隔离(现仅单一全局 token)、对 agent 写内容的后续审核 SLA 未覆盖。CLAUDE.md(项目根,既有遗留)仍未跟踪,未入本次 commit。
+
+## 2026-08-23 邮箱验证码登录(CF Email Service,未部署)
+
+- 状态:代码与测试完成,**未提交/未部署**(等用户确认)。全量集成测试 93 pass / 0 fail / 0 skip / 0 todo(FULL_EXIT=0);tsc 0 错、lint 0 errors(2 条 warning 来自外来未跟踪文件 `scripts/builder/core.mjs`,非本轮)、db:generate 无输出、git diff --check 通过;`/signin` 桌面 1280 与移动 390 无头截图亲验通过(邮箱表单/分隔线/邀请码区/无溢出重叠)。
+- 机制:`POST /api/auth/email/request` 发 6 位验证码(逐位拒绝采样、库存 SHA-256、10 分钟 TTL、5 次锁定、原子单次消费),`POST /api/auth/email/verify` 换会话(provider `email`,同一 cookie 管线)。发信走 `app/api/_lib/email-send.ts`:测试 `EMAIL_SEND_*` REST 覆盖 → 生产 `EMAIL` send_email binding → 两者皆无 ⇒ 503 `email_not_configured`(惰性检查位于一切 DB 写之前)。新地址必须带邀请码,与 OAuth 同一原子 batch、同一 SQLite 触发器门槛;老成员邮箱免邀请。限流:每 IP 10/时 + 每地址 3/15 分;Turnstile 配置即对每次发码 fail-closed 校验。
+- 迁移:`drizzle/0018_stale_speed_demon.sql` 新表 `email_login_codes` + 三表 provider CHECK 加 `'email'`(表重建)。**重建陷阱已修**:SQLite ALTER RENAME 重解析全 schema,`oauth_registration_invitation_guard` 文本引用 invitation_redemptions 导致 RENAME 炸(no such table)——迁移内先显式 DROP 该触发器、末尾逐字补建全部 5 个邀请触发器;迁移后 sqlite_master 验证 5 个触发器在位。生产 D1 尚未应用 0018(deploy 前必须 `d1 migrations apply`,check-migrations 会 fail-closed 拦截未应用)。
+- 测试断言到字段级:code_hash == sha256(邮件正文验证码)、invitation_redemptions.provider == 'email'、oauth_accounts 行、uses_count 递增、auth_sessions.provider == 'email'、cookie 登录态、5 次错码后 attempts == 5 锁定、发送失败(上游 500)后 email_login_codes/members/兑换 零残留、第 4 次发码 429 `rate_limited retry_after=15m` + retry-after:900;生产测试服务器(空 D1、无 email vars)断言 503 `email_not_configured`。
+- 本轮改动可能引入的新风险:① 0018 表重建在触发器缺位窗口内运行(D1 单迁移文件单事务,外部写不可插入,评估为可控);② provider CHECK 从 (google,github) 扩到 +email 为语义放宽(仅枚举校验层,插入仍受 oauth_registration_invitation_guard 门槛);③ 新增未认证端点真实外发邮件 = 成本/轰炸面,已由双层限流 + Turnstile + 邀请/成员前置闸收敛,上线后需观察;④ 生产 `EMAIL` binding 路径本轮从未真实执行(测试走 REST 假上游),部署后需真实收码验证。
+- 未覆盖范围:生产 send_email binding 端到端(需部署后实测);Turnstile 实际校验(测试环境无 keys,staging 有,部署后验);表单 JS 点击流(仅渲染截图验证,API 行为已由集成测试覆盖);0018 未在真实生产数据副本上演练(仅空库);CLAUDE.md 本轮新增邮箱路径说明,随功能一并提交。
+

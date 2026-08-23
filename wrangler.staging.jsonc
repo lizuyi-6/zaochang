@@ -28,6 +28,13 @@
       "bucket_name": "zaochang-uploads"
     }
   ],
+  // 同 wrangler.prod.jsonc:邮箱验证码登录外发(本地 npm test 不受影响——
+  // 测试 harness 走 EMAIL_SEND_BASE_URL 假上游,不依赖此 binding)。
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
   "observability": {
     "enabled": true
   }

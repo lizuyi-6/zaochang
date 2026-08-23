@@ -29,8 +29,12 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 
 - **Web/DB/存储/DNS 全部在 Cloudflare**;阿里云主机**只剩一个职责:跑 ClamAV 扫描后端**。
 - 旧 workerd(`zaochang.service` :3001)与盒子 nginx Web 入口(443)**已停用**。
-- 登录:GitHub OAuth(回调 `https://aetherstudio.top/api/auth/github/callback`)。
+- 登录:GitHub OAuth(回调 `https://aetherstudio.top/api/auth/github/callback`)**或邮箱验证码**
+  (`/api/auth/email/{request,verify}`,验证码邮件由 CF Email Service 从
+  `zaochang@aetherstudio.top` 外发,`send_email` binding 名 `EMAIL`,见 §2)。
 - OIDC issuer = `PUBLIC_APP_ORIGIN` = `https://aetherstudio.top`。
+- 域名邮件(收向):CF Email Routing 已接管——`zaochang@aetherstudio.top` 及 catch-all
+  全部转发到 `zaherharris65@gmail.com`(MX 3 条 + SPF + DKIM 已由 CF 自动落 DNS,状态 synced)。
 
 ## 1. 资源清单(ID 锚点)
 
@@ -50,12 +54,14 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 | GitHub OAuth App | `Ov23livgjlLc01RdgmuN` |
 | OIDC kid | `ce24416f-65a6-45b5-8c37-3f40779ba53c`(复用盒子密钥 → token 连续) |
 | Turnstile widget | `0x4AAAAAAEKsUkDbokWPOZp_`(staging 有,**生产未启用**) |
+| Email Routing(收信) | Zone 级启用(status synced);目的地址 `zaherharris65@gmail.com`(id `1f76bb42…`);规则 `zaochang@` → 转发(id `042ba8c2…`)+ catch-all → 转发(id `1985fef7…`) |
+| Email Service(发信) | REST `POST /accounts/{acct}/email/sending/send`;生产走 Worker `send_email` binding(`EMAIL`,wrangler.prod.jsonc,需 Workers Paid——已满足) |
 
 ### 凭证与权限边界(为什么有的步骤必须在哪做)
 
 | 凭证 | 位置 | 能做什么 | 不能 |
 |---|---|---|---|
-| 本地 `wrangler` OAuth | `X:\zaochang`(`npx wrangler …`,登录 zaherharris65@gmail.com) | deploy Worker、`secret put/list`、建 Workers Route | **DNS write、Workers Domains、tunnel config**(REST 10000) |
+| 本地 `wrangler` OAuth | `X:\zaochang`(`npx wrangler …`,登录 zaherharris65@gmail.com;已加 email_routing/email_sending write 权限,用于建 Email Routing 规则与 Email Service 发信) | deploy Worker、`secret put/list`、建 Workers Route、Email Routing 规则/目的地址、Email Service 发送测试 | **DNS write、Workers Domains、tunnel config**(REST 10000) |
 | MCP CF token | Claude MCP | D1 query、R2、Workers script+secret **write**、tunnel/DNS **read** | DNS/routes/domains/tunnel **write**(10000/1001) |
 | cloudflared `cert.pem` | 盒子 `/root/.cloudflared/cert.pem` | 建 tunnel、写 tunnel 本地配置、`route dns` | — |
 | Tunnel connector token | (已弃用,改 cert.pem 本地 tunnel) | — | — |
@@ -78,6 +84,12 @@ AI_CHAT_MODEL_EXPERT(可选)
 AI_CHAT_EXPERT_TRANSPORT(可选,=messages 时专家模型走 Anthropic Messages API /v1/messages,如 StepFun step-explore)
 (TURNSTILE_* 仅 staging)
 ```
+
+> 邮箱验证码登录**不新增任何 secret**:生产外发走 Worker `send_email` binding(`EMAIL`,
+> 声明在 wrangler.prod/staging.jsonc);本地 `npm test` 走 `EMAIL_SEND_BASE_URL/
+> EMAIL_SEND_ACCOUNT_ID/EMAIL_SEND_API_TOKEN` 三 var 指向测试内建假上游;两者皆无 ⇒
+> 端点惰性 503 `email_not_configured`(fail-closed,不静默吞)。binding 未在 CF 侧
+> 额外配置——Email Service 随 Workers Paid 开通,发件地址 `zaochang@aetherstudio.top`。
 
 - `AI_CHAT_MODEL_EXPERT` 可选:「问 AI」专家模式使用的模型;未设置(或空)时专家模式回落 `AI_CHAT_MODEL`。**模型名是运营配置,永不外泄给客户端**(done 帧无 model 字段,前端只显示"快速/专家"标签)。
 - `AI_CHAT_EXPERT_TRANSPORT` 可选:专家模型的传输协议。缺省/其他值 = OpenAI `chat/completions`;`messages` = Anthropic 风格 `/v1/messages`(仅开放 Messages API 的模型用,如 StepFun `step-explore`;`thinking_delta` 被服务端丢弃,不透传)。
@@ -179,6 +191,8 @@ const r=await fetch("/api/uploads",{method:"POST",body:fd});console.log("UPLOAD"
 | 本地 `curl aetherstudio.top` 怪(198.18.x.x / schannel 失败) | — | 本机 VPN 拦截,**别信**;一律用盒子 `--resolve` 到边缘 |
 | 201 但 D1/R2 无 | 见 §5 历史坑 | 打到盒子旧应用 |
 | 问 AI 503 `ai_not_configured` | `wrangler secret list` 是否有 `AI_CHAT_BASE_URL/API_KEY/MODEL` 三项;`BASE_URL` 是否含 `/v1` 版本段 | 三项缺一即惰性(by design);base 缺版本段 → 上游 404 → `ai_upstream_error` |
+| 邮箱验证码 503 `email_not_configured` | 部署配置里有没有 `send_email` binding(`wrangler.prod.jsonc`);测试环境三 `EMAIL_SEND_*` var 是否齐 | 两路(REST 覆盖/binding)都缺即惰性(by design) |
+| 邮箱验证码 502 `email_send_http_5xx/网络错` | CF 控制台 Email Service 发送日志;收件域是否拒收 | 发送失败时验证码行即删,无幻影状态;重试即重新发码 |
 | 问 AI 返回空/戛然而止 | 上游模型是否换成新的混合推理模型(推理 token 计入 `max_tokens`) | 预算由 `READING_AI_REASONING_HEADROOM` 按模式垫高;换非推理模型可调小,换更长思维链模型需调大(实测 800 裸预算 ⇒ 正文为空) |
 
 ## 7. 回滚
