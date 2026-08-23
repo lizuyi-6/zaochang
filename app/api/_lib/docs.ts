@@ -1,6 +1,7 @@
 import { marked } from "marked";
 import katex from "katex";
 import sanitizeHtml from "sanitize-html";
+import { cache } from "react";
 import { database, optionalMember, type MemberIdentity } from "./community";
 
 export type DocVisibility = "public" | "members" | "private";
@@ -253,12 +254,16 @@ export function renderDocHtml(bodyMd: string, bookCtx?: BookLinkContext): string
   return clean;
 }
 
-export async function listAllDocs(): Promise<DocRow[]> {
+// 性能:本文件的所有"读整表"型查询(书架/章节/目录/面包屑)都收敛到这一个
+// per-request 缓存的 listAllDocs 上(React cache:同一请求内——含 generateMetadata
+// 与页面组件的重复调用——只查一次 D1;docs 表 112 行/285KB,单查询取回远比
+// 逐段/逐父级的串行小查询快:D1 与 Worker 可能跨洋,每次往返边际成本 ~百毫秒级)。
+export const listAllDocs = cache(async (): Promise<DocRow[]> => {
   const result = await database().prepare(
     `SELECT ${DOC_COLUMNS} FROM docs ORDER BY sort_order ASC, created_at ASC, id ASC`,
   ).all<DocRow>();
   return result.results;
-}
+});
 
 // /docs 文档目录专用:只返回独立文档(is_book=0),剔除所有书根(is_book=1)
 // 及其整棵章节子树。一个节点若其祖先链(含自身)任一是书根,即属书子树——
@@ -340,23 +345,24 @@ export async function findDocByPath(slugs: string[], member: MemberIdentity | nu
   return current;
 }
 
-// 面包屑:从当前文档一路向父级回溯到根。
-export async function docBreadcrumbs(doc: DocRow, member: MemberIdentity | null): Promise<DocRow[]> {
+// 面包屑:从当前文档一路向父级回溯到根。改为从 per-request 的 listAllDocs 内存
+// 查表(等价:parent 命中按主键 id 最多一行,与原 WHERE id=? 相同),消除逐父级
+// 串行 D1 往返——章节深度 N 原来 = N 次跨洋查询,现在 0 次。
+export const docBreadcrumbs = cache(async (doc: DocRow, member: MemberIdentity | null): Promise<DocRow[]> => {
+  const byId = new Map((await listAllDocs()).map((row) => [row.id, row] as const));
   const chain: DocRow[] = [];
   let cursor: DocRow | null = doc;
   const seen = new Set<string>();
   while (cursor) {
-    if (seen.has(cursor.id)) break; // 防御环
+    if (seen.has(cursor.id)) break; // 防御环(脏数据)
     seen.add(cursor.id);
     chain.unshift(cursor);
     if (!cursor.parentId) break;
-    const parent: DocRow | null = await database().prepare(
-      `SELECT ${DOC_COLUMNS} FROM docs WHERE id = ? LIMIT 1`,
-    ).bind(cursor.parentId).first<DocRow>();
+    const parent: DocRow | null = byId.get(cursor.parentId) ?? null;
     cursor = parent && canViewDoc(parent, member) ? parent : null;
   }
   return chain;
-}
+});
 
 export async function listChildren(docId: string | null, member: MemberIdentity | null): Promise<DocRow[]> {
   const result = docId === null
@@ -375,32 +381,31 @@ export async function docUrlPath(doc: DocRow, member: MemberIdentity | null): Pr
   return "/docs/" + crumbs.map((crumb) => encodeURIComponent(crumb.slug)).join("/");
 }
 
-export async function currentMember(): Promise<MemberIdentity | null> {
-  return optionalMember();
-}
+// per-request 缓存:generateMetadata 与页面组件都会调 currentMember(各触发一次
+// 会话→成员 D1 查询);cache() 让同一请求内只查一次。请求间互不影响(语义不变)。
+export const currentMember = cache(async (): Promise<MemberIdentity | null> => optionalMember());
 
 // ---- 阅读进度(每用户每书一条恢复点:章节 + 段落序号)。----
 
 // 取某用户在某书的"继续阅读"点:上次的章节标题 + URL 路径 + 段落序号。
 // 进度指向书根本身(封面页)或章节已不可见/已删除 → 返回 null(fail-closed,不暴露)。
-export async function getBookContinueReading(
+export const getBookContinueReading = cache(async (
   member: MemberIdentity,
   book: DocRow,
-): Promise<{ chapterId: string; title: string; href: string; paragraph: number } | null> {
+): Promise<{ chapterId: string; title: string; href: string; paragraph: number } | null> => {
   const row = await database().prepare(
     "SELECT last_chapter_id AS lastChapterId, last_paragraph AS lastParagraph FROM reading_progress WHERE user_email = ? AND book_id = ?",
   ).bind(member.email, book.id).first<{ lastChapterId: string; lastParagraph: number }>();
   if (!row || row.lastChapterId === book.id) return null;
-  const chapter = await database().prepare(
-    `SELECT ${DOC_COLUMNS} FROM docs WHERE id = ? LIMIT 1`,
-  ).bind(row.lastChapterId).first<DocRow>();
+  // 章节行从 per-request 的 listAllDocs 查表(页面渲染本来就会取它),免一次串行往返。
+  const chapter = (await listAllDocs()).find((r) => r.id === row.lastChapterId) ?? null;
   if (!chapter || !canViewDoc(chapter, member)) return null;
   const crumbs = await docBreadcrumbs(chapter, member);
   // crumbs[0] 是书根;书内章节路径取 slice(1) 的 slug 链。
   const chapterPath = crumbs.slice(1).map((c) => encodeURIComponent(c.slug)).join("/");
   if (!chapterPath) return null;
   return { chapterId: chapter.id, title: chapter.title, href: `/bookshelf/${encodeURIComponent(book.slug)}/${chapterPath}`, paragraph: row.lastParagraph };
-}
+});
 
 // 取某用户在某书"当前章节"的段落恢复点:仅当进度恰好指向 chapterId 时返回段落序号,
 // 否则 null(用户主动导航到别处,不强行 scroll)。
@@ -547,13 +552,13 @@ export async function listRecentReading(
 export type BookSummary = DocRow & { chapterCount: number };
 
 // 列出所有对当前访问者可见的书(书架卡片)。章节数只统计可见后代。
+// 书根与章节统计共用同一次 listAllDocs(per-request 缓存),替代原来的
+// "书根一次查询 + 全表一次查询"两条串行往返;排序与原查询一致
+// (sort_order, created_at, id)。
 export async function listBooks(member: MemberIdentity | null): Promise<BookSummary[]> {
-  const result = await database().prepare(
-    `SELECT ${DOC_COLUMNS} FROM docs WHERE is_book = 1 ORDER BY sort_order ASC, created_at ASC, id ASC`,
-  ).all<DocRow>();
-  const visibleBooks = result.results.filter((row) => canViewDoc(row, member));
-  // 每本书统计可见章节数(后代中 body 非空、非书自身的可见节点)。
   const all = await listAllDocs();
+  const visibleBooks = all.filter((row) => row.isBook === 1 && canViewDoc(row, member));
+  // 每本书统计可见章节数(后代中非书自身的可见节点)。
   return visibleBooks.map((book) => {
     let chapterCount = 0;
     const stack = [book.id];
@@ -589,25 +594,27 @@ export async function bookTree(book: DocRow, member: MemberIdentity | null): Pro
 
 // 按「书 slug + 书内章节 slug 路径」解析。第一段定位书根(is_book=1 且 slug 匹配),
 // 其余段在该书子树内逐段解析。fail-closed:书不可见/任一段不存在都返回 null。
-export async function findInBook(slugs: string[], member: MemberIdentity | null): Promise<{ book: DocRow; doc: DocRow } | null> {
+// 改为在 per-request 的 listAllDocs 上内存解析:原实现是"书根 1 查询 + 每段 1 查询"
+// 的串行往返(章节深度 N = N+1 次 D1 往返,跨洋时每次 ~百毫秒)。语义等价:
+// 段内 (parent_id, slug) 有 UNIQUE 索引保证至多一行,与原 WHERE slug=? AND parent_id=?
+// 相同;书根若理论上出现同名多本,取排序靠前的第一本(原 LIMIT 1 无排序,本就未定义)。
+export const findInBook = cache(async (
+  slugs: string[],
+  member: MemberIdentity | null,
+): Promise<{ book: DocRow; doc: DocRow } | null> => {
   if (slugs.length === 0) return null;
-  const bookRow: DocRow | null = await database().prepare(
-    `SELECT ${DOC_COLUMNS} FROM docs WHERE slug = ? AND is_book = 1 LIMIT 1`,
-  ).bind(slugs[0]).first<DocRow>();
+  const all = await listAllDocs();
+  const bookRow = all.find((row) => row.isBook === 1 && row.slug === slugs[0]) ?? null;
   if (!bookRow || !canViewDoc(bookRow, member)) return null;
   if (slugs.length === 1) return { book: bookRow, doc: bookRow };
-  let parentId = bookRow.id;
-  let current: DocRow | null = null;
+  let current = bookRow;
   for (const slug of slugs.slice(1)) {
-    const row: DocRow | null = await database().prepare(
-      `SELECT ${DOC_COLUMNS} FROM docs WHERE slug = ? AND parent_id = ? LIMIT 1`,
-    ).bind(slug, parentId).first<DocRow>();
-    if (!row || !canViewDoc(row, member)) return null;
-    current = row;
-    parentId = row.id;
+    const next = all.find((row) => row.parentId === current.id && row.slug === slug) ?? null;
+    if (!next || !canViewDoc(next, member)) return null;
+    current = next;
   }
-  return current ? { book: bookRow, doc: current } : null;
-}
+  return { book: bookRow, doc: current };
+});
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,80}$/;
 

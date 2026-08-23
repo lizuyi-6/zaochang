@@ -31,6 +31,37 @@ interface ExecutionContext {
 // dangerouslyAllowSVG: true in next.config.js and uncomment below:
 // const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
 
+// ---- 匿访页面边缘缓存(性能优化;仅影响展示新鲜度,不触及任何强制不变量)----
+// 背景:页面 SSR 是若干串行 D1 往返(D1 主库在 APAC),冷渲染 0.7-4s,站内跳转的
+// .rsc 负载尤其明显;vinext 的 .rsc 跳转 token 是构建期稳定值,同一路由的 .rsc URL
+// 对所有访客一致,可按 URL 跨访客共享边缘缓存。
+// 语义取舍(有意为之):匿名访客看到的公开页面/feed 最多滞后 TTL 秒。审查门控、
+// 订单/点赞/打赏等强制不变量全部在服务端触发器层执行,与此缓存无关。
+// 边界:仅 GET、无任何 cookie/authorization、路径不在排除表、响应 200 且无
+// set-cookie、content-type 为 HTML 或路径以 .rsc 结尾。任何带 cookie 的请求(登录态)
+// 一律绕过——登录内容既不入缓存也不从缓存出。请求带 no-cache(标准语义)也绕过,
+// 便于线上排查时强制回源。仅 APP_ENV=production 启用:本地 dev 与集成测试 harness
+// (APP_ENV=test)不缓存,避免 TTL 内陈旧干扰开发与测试断言;代价是缓存命中路径
+// 无自动化测试覆盖,上线后用 curl 二连测 x-zc-anon-cache 头手动验证。
+const ANON_PAGE_CACHE_TTL_SECONDS = 60;
+const ANON_CACHE_EXCLUDED_PREFIXES = [
+  "/api/", "/oauth/", "/admin", "/founder", "/studio", "/wallet", "/notifications",
+  "/signin", "/signout", "/callback", "/invite", "/product-apps/", "/_vinext/", "/.well-known/",
+];
+
+function anonPageCacheEligible(request: Request, url: URL): boolean {
+  if (request.method !== "GET") return false;
+  if (request.headers.get("cookie")) return false;
+  if (request.headers.get("authorization")) return false;
+  if ((request.headers.get("cache-control") ?? "").includes("no-cache")) return false;
+  const pathname = url.pathname;
+  if (ANON_CACHE_EXCLUDED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix))) return false;
+  return true;
+}
+
+// Cloudflare Workers 专属的 caches.default(TS DOM lib 的 CacheStorage 类型没有它)。
+const edgeCache: Cache = (caches as unknown as { default: Cache }).default;
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -85,8 +116,40 @@ const worker = {
       }, allowedWidths), origin);
     }
 
+    // 匿访页面边缘缓存:命中直接返回(响应已含安全头,写入时经过同一管道)。
+    const anonCacheKey = env.APP_ENV === "production" && anonPageCacheEligible(request, url)
+      ? new Request(url.href, { method: "GET" })
+      : null;
+    if (anonCacheKey) {
+      const hit = await edgeCache.match(anonCacheKey);
+      if (hit) {
+        const served = new Response(hit.body, hit);
+        served.headers.set("x-zc-anon-cache", "hit");
+        return served;
+      }
+    }
+
     const response = await handler.fetch(prepared, env, ctx);
-    return withSecurityHeaders(request, response, origin);
+    const secured = withSecurityHeaders(request, response, origin);
+    if (
+      anonCacheKey
+      && secured.status === 200
+      && !secured.headers.get("set-cookie")
+      && ((secured.headers.get("content-type") ?? "").startsWith("text/html") || url.pathname.endsWith(".rsc"))
+    ) {
+      // 完整缓冲后写缓存(Cache API 不接受未消费完的流);客户端拿到的是同一份
+      // 已缓冲副本,响应头语义不变(浏览器侧仍不落本地缓存)。
+      const body = await secured.arrayBuffer();
+      const storedHeaders = new Headers(secured.headers);
+      // max-age=0:浏览器不复用本地副本(防止匿名页在登录后 60s 内仍被本地缓存命中);
+      // s-maxage:边缘共享缓存的生存时间。
+      storedHeaders.set("cache-control", `public, max-age=0, s-maxage=${ANON_PAGE_CACHE_TTL_SECONDS}`);
+      ctx.waitUntil(edgeCache.put(anonCacheKey, new Response(body, { status: secured.status, headers: storedHeaders })));
+      const served = new Response(body, { status: secured.status, headers: new Headers(secured.headers) });
+      served.headers.set("x-zc-anon-cache", "miss");
+      return served;
+    }
+    return secured;
   },
 };
 
