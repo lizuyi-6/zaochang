@@ -7,6 +7,7 @@ import {
   READING_AI_ACTION_LIMITS,
   READING_AI_LIMITS,
   READING_AI_MODES,
+  READING_AI_REASONING_HEADROOM,
   buildAskPrompt,
   buildExplainPrompt,
   buildSummaryPrompt,
@@ -108,7 +109,15 @@ export async function POST(request: Request) {
         ? AbortSignal.any([request.signal, AbortSignal.timeout(60_000)])
         : AbortSignal.timeout(60_000);
 
-    const generator = streamReadingAiCompletion({ prompt, mode, maxTokens: limits.maxTokens, temperature: limits.temperature, signal });
+    // max_tokens 必须覆盖推理 token(两档模型都先吐思维链且计入 max_tokens),
+    // 否则答案预算被推理挤光——见 READING_AI_REASONING_HEADROOM 注释。
+    const generator = streamReadingAiCompletion({
+      prompt,
+      mode,
+      maxTokens: limits.maxTokens + READING_AI_REASONING_HEADROOM[mode],
+      temperature: limits.temperature,
+      signal,
+    });
 
     // 先手动推进一步:配置/上游连接类错误在此抛出 → 头未发,可回干净 JSON。
     let firstChunk: string;

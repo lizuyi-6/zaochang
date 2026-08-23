@@ -179,6 +179,7 @@ const r=await fetch("/api/uploads",{method:"POST",body:fd});console.log("UPLOAD"
 | 本地 `curl aetherstudio.top` 怪(198.18.x.x / schannel 失败) | — | 本机 VPN 拦截,**别信**;一律用盒子 `--resolve` 到边缘 |
 | 201 但 D1/R2 无 | 见 §5 历史坑 | 打到盒子旧应用 |
 | 问 AI 503 `ai_not_configured` | `wrangler secret list` 是否有 `AI_CHAT_BASE_URL/API_KEY/MODEL` 三项;`BASE_URL` 是否含 `/v1` 版本段 | 三项缺一即惰性(by design);base 缺版本段 → 上游 404 → `ai_upstream_error` |
+| 问 AI 返回空/戛然而止 | 上游模型是否换成新的混合推理模型(推理 token 计入 `max_tokens`) | 预算由 `READING_AI_REASONING_HEADROOM` 按模式垫高;换非推理模型可调小,换更长思维链模型需调大(实测 800 裸预算 ⇒ 正文为空) |
 
 ## 7. 回滚
 

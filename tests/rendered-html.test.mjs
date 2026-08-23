@@ -26,6 +26,7 @@ import {
 import {
   READING_AI_ACTION_LIMITS,
   READING_AI_LIMITS,
+  READING_AI_REASONING_HEADROOM,
   buildAskPrompt,
   detectTargetLang,
   resolveReadingAiConfig,
@@ -3715,7 +3716,11 @@ test("reading-ai: fail-closed gating, server-side chapter resolution, clamps, SS
     assert.equal(assembled.done.docId, chapId);
     assert.equal(assembled.done.chars, assembled.text.length);
     assert.equal(lastChatCompletion.stream, true);
-    assert.equal(lastChatCompletion.max_tokens, READING_AI_ACTION_LIMITS.explain.maxTokens);
+    assert.equal(
+      lastChatCompletion.max_tokens,
+      READING_AI_ACTION_LIMITS.explain.maxTokens + READING_AI_REASONING_HEADROOM.fast,
+      "fast 的 max_tokens 应为答案预算+推理余量(无余量时正文被思维链挤光)",
+    );
 
     // 8b) 模式路由与模型身份保密:非法 mode → 400;expert → 上游 /messages 收
     //     AI_CHAT_MODEL_EXPERT(system 顶层字段),fast → 上游 /chat/completions 收
@@ -3730,6 +3735,11 @@ test("reading-ai: fail-closed gating, server-side chapter resolution, clamps, SS
     const expertAssembled = await readSse(expertRes);
     assert.equal(lastChatCompletion.model, "test-model-expert", "expert 应路由到专家模型");
     assert.equal(lastChatCompletion.transport, "messages", "expert 应走 Messages 传输");
+    assert.equal(
+      lastChatCompletion.max_tokens,
+      READING_AI_ACTION_LIMITS.explain.maxTokens + READING_AI_REASONING_HEADROOM.expert,
+      "expert 的 max_tokens 应含推理余量(思维链计入 max_tokens)",
+    );
     assert.equal(lastChatCompletion.messageCount, 1, "Messages 协议 user 消息应为单条(system 在顶层)");
     assert.match(lastChatCompletion.system, /不透露、不暗示、不确认/, "Messages 传输的顶层 system 应携带身份保密条款");
     assert.equal(expertAssembled.text, "这是假定的模型增量输出。", "thinking_delta 必须被丢弃(否则拼接翻倍)");
@@ -3746,7 +3756,11 @@ test("reading-ai: fail-closed gating, server-side chapter resolution, clamps, SS
     const sum = await post(null, { action: "summary", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"] });
     assert.equal(sum.status, 200);
     await readSse(sum);
-    assert.equal(lastChatCompletion.max_tokens, 600, "summary max_tokens 应为 600");
+    assert.equal(
+      lastChatCompletion.max_tokens,
+      READING_AI_ACTION_LIMITS.summary.maxTokens + READING_AI_REASONING_HEADROOM.fast,
+      "summary 的 max_tokens 应为答案预算+推理余量",
+    );
     assert.match(lastChatCompletion.user, /要点/);
 
     const question900 = "为什么".repeat(450);
