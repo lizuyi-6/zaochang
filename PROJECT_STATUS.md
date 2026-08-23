@@ -487,3 +487,13 @@
 - 未覆盖范围:GitHub start 路径的小写/全角变体未单独端到端测试(与 email 路径共用 hashInvitationCode,函数级已覆盖);用户重试真实手输场景待部署后确认。
 - 部署后闭环(补记):`9004301` 部署后,①运维侧自验:插入可撤销验证码 `invite:normcheck-9004301`(已知明文),以小写转写请求生产发码端点 → `200 sent`(旧构建同请求必 400,红测试锚定),验证码行已撤销(revoked=1, uses=0,永不可用);②用户侧实证:此前被拒的邀请码成功注册 `wa609765@foxmail.com`(provider='email' 兑换行,uses_count 0→1)——手输重试场景由真实用户闭环,上一条"待确认"销项。
 
+
+## 2026-08-23 书站右栏加宽 + 目录实体修复 + Hello Computer 封面(已部署)
+
+- 状态:已上线。commit `e45edb2` 推送 main,release-gates 与 deploy-production 双 success;生产 D1 `docs` 行 `doc:book-hello-computer` 的 cover_image/banner_image 已写入并回读确认。门禁:全量 94 pass/0 fail/0 skip/0 todo;tsc 0 错;eslint(page.tsx)0 错。
+- 语义变更(6.4):`.book-page-chapter` 右栏 grid 列由固定 `220px` 改为 `clamp(240px, 18vw, 340px)`(globals.css:624)。动因:新书长标题在 220px 下折成 3 行观感差;改后消费中栏死空间,中栏阅读列仍保 840px 上限(1440px 地板下中栏轨道仍 ≥840px,不被挤压)。纯展示层宽度,不触及可见性/权限/fail-closed。
+- 目录实体修复:章节 h2/h3 标题提取处(page.tsx:117-120)对 marked 转义实体解码(&amp;/&lt;/&gt;/&quot;/&#39;/&nbsp;),修右栏目录把 `&` 显示成字面 `&amp;`;`&amp;` 放最后解码避免 `&amp;lt;` 被二次解码成 `<`。书架测试章节夹具无 h2/h3,该回调对其为空操作,可证不影响既有断言。
+- 封面:新增 `public/book-covers/hello-computer-cover.webp`(竖版 900x1272 约 53KB→书架卡片)与 `hello-computer-banner.webp`(横版 1491x1055 约 55KB→封面页横幅),创始人可信静态资产,与内置 showcase 同级;schema 注释纯展示字段,不影响可见性/权限。生产库 UPDATE changes=1。
+- 证据(视觉亲验,headless Chrome,生产经 --host-resolver-rules 指向 CF 边缘):书架卡片(竖版 CPU 封面入 5:6 卡槽)、封面页横幅(横版 360px 带,标题与 CPU 图在中轴完整)、1920px 章节页(右栏约 340px,目录项 "Decode & Operand Fetch" 显示真实 & 而非字面 &amp;)。
+- 本轮改动可能引入的新风险:① 右栏 clamp 在 <1440px 窗口回落既有媒体查询断点,不影响移动/平板;② 实体解码遇未列举实体(如 &hellip;)保持原样直出,输出仍经 React 转义,不构成注入;③ 静态封面占仓库体积约 108KB,可忽略。
+- 未覆盖范围:clamp 中间断点(1100-1439px 两栏、<1100px 单栏)未逐一截图(沿既有媒体查询,本轮未改动其逻辑);Hello LLM 旧书右栏于 1920/1440 早前本地验无回归,生产更全断点未重验。
