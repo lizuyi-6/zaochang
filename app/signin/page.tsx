@@ -66,7 +66,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
             邀请码
             <span>首次注册必填</span>
           </label>
-          <input id="invitation_code" name="invitation_code" type="text" inputMode="text" autoComplete="one-time-code" minLength={8} maxLength={64} placeholder="输入造场邀请码" required />
+          <input id="invitation_code" name="invitation_code" type="text" inputMode="text" autoComplete="one-time-code" autoCapitalize="characters" autoCorrect="off" spellCheck={false} minLength={8} maxLength={64} placeholder="ZC- 开头，不区分大小写" required />
           {turnstileKey && <div className="cf-turnstile auth-turnstile" data-sitekey={turnstileKey} data-appearance="interaction-only" />}
           <button className="auth-provider github" type="submit" disabled={!status.github}>
             <Github size={18} /><span>使用邀请码注册</span>{!status.github && <small>待配置</small>}
