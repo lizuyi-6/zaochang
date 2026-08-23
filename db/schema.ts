@@ -39,7 +39,7 @@ export const oauthAccounts = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.provider, table.providerAccountId] }),
     index("oauth_accounts_email_idx").on(table.email),
-    check("oauth_provider_valid", sql`${table.provider} in ('google', 'github')`),
+    check("oauth_provider_valid", sql`${table.provider} in ('google', 'github', 'email')`),
   ],
 );
 
@@ -54,7 +54,7 @@ export const authSessions = sqliteTable(
   },
   (table) => [
     index("auth_sessions_expiry_idx").on(table.expiresAt),
-    check("session_provider_valid", sql`${table.provider} in ('google', 'github')`),
+    check("session_provider_valid", sql`${table.provider} in ('google', 'github', 'email')`),
   ],
 );
 
@@ -96,8 +96,29 @@ export const invitationRedemptions = sqliteTable(
   (table) => [
     uniqueIndex("invitation_redemptions_account_idx").on(table.provider, table.providerAccountId),
     index("invitation_redemptions_invitation_idx").on(table.invitationId, table.redeemedAt),
-    check("invitation_redemptions_provider_valid", sql`${table.provider} in ('google', 'github')`),
+    check("invitation_redemptions_provider_valid", sql`${table.provider} in ('google', 'github', 'email')`),
   ],
+);
+
+// 邮箱验证码登录:一次发码请求一行,验证码只存 SHA-256 哈希,10 分钟过期,
+// 错误尝试累计 5 次锁定,验证成功原子置 consumed_at。email 不设外键——验证码
+// 在成员存在之前就要能发(新用户首登);邀请码哈希随行携带,verify 时交给
+// ensureEmailUser 的原子批次消费(与 OAuth 注册共用 oauth_registration_invitation_guard
+// 触发器门槛)。request_ip_hash 只用于事后审计,不用于判定。
+export const emailLoginCodes = sqliteTable(
+  "email_login_codes",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    codeHash: text("code_hash").notNull(),
+    invitationHash: text("invitation_hash"),
+    requestIpHash: text("request_ip_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: text("expires_at").notNull(),
+    consumedAt: text("consumed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("email_login_codes_email_idx").on(table.email, table.createdAt)],
 );
 
 export const wallets = sqliteTable(
