@@ -112,7 +112,12 @@ export default async function BookPage({ params }: PageProps) {
   if (!isCover && bodyHtml) {
     let hi = 0;
     bodyHtml = bodyHtml.replace(/<(h[23])>([\s\S]*?)<\/\1>/g, (m, tag: string, inner: string) => {
-      const text = inner.replace(/<[^>]+>/g, "").trim();
+      // inner 里 marked 转义过的实体需解码回纯文本,否则右栏目录把 & 显示成字面 &amp;。
+      // &amp; 必须最后解码,避免 &amp;lt; 这类被二次解码成 <。
+      const text = inner.replace(/<[^>]+>/g, "")
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+        .replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+        .trim();
       if (!text) return m;
       const id = `ch-${hi++}`;
       headings.push({ id, text, level: tag === "h2" ? 2 : 3 });
