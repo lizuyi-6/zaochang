@@ -36,6 +36,17 @@ export const READING_AI_ACTION_LIMITS: Record<
   ask: { ratePerHour: 20, maxTokens: 800, temperature: 0.5 },
 };
 
+// 推理余量:当前两个上游模型都是混合推理模型(step-3.7-flash 吐 reasoning_content,
+// step-explore 吐 thinking_delta),推理 token 计入 max_tokens。不预留余量时上表
+// 600-1200 的答案预算会被思维链先耗尽,正文被截断(finish_reason=length)甚至为空。
+// 2026-08-23 对真实上游实测:800 预算全部 length;fast 4096 / expert 8192 均完整收尾;
+// 且无参数能稳定关掉推理(已试 reasoning/thinking/enable_thinking/chat_template_kwargs/
+// reasoning_effort)。答案长度仍由各 prompt 的任务条款约束,余量只兜思维链。
+export const READING_AI_REASONING_HEADROOM: Record<ReadingAiMode, number> = {
+  fast: 3_300,
+  expert: 7_400,
+};
+
 export type RawEnv = Record<string, string | undefined>;
 // 专家模型的传输协议:chat = OpenAI chat/completions(默认);messages = Anthropic 风格
 // /v1/messages(StepFun step-explore 等仅开放 Messages API 的模型用)。fast 恒走 chat。
