@@ -485,4 +485,5 @@
 - 证据:新测试「invitation entry tolerates lowercase, full-width, and stray-space transcription」红→绿;全量 94 pass/0 fail/0 skip/0 todo(FULL_EXIT=0);tsc 0 错;lint 0 errors(4 warnings 均在外来未跟踪 scripts/);git diff --check 通过。存哈希断言:归一化后 code 行的 invitation_hash == sha256(原文),兑换 batch 命中、uses_count 归 1。
 - 本轮改动可能引入的新风险:① 归一化扩大哈希接受集(见上,已论证不构成门槛放宽);② 全角映射区间 [！-～] 恰为 FF01-FF5E 单调平移,不含全角空格(单独处理);③ 表单 placeholder 变化仅文案。
 - 未覆盖范围:GitHub start 路径的小写/全角变体未单独端到端测试(与 email 路径共用 hashInvitationCode,函数级已覆盖);用户重试真实手输场景待部署后确认。
+- 部署后闭环(补记):`9004301` 部署后,①运维侧自验:插入可撤销验证码 `invite:normcheck-9004301`(已知明文),以小写转写请求生产发码端点 → `200 sent`(旧构建同请求必 400,红测试锚定),验证码行已撤销(revoked=1, uses=0,永不可用);②用户侧实证:此前被拒的邀请码成功注册 `wa609765@foxmail.com`(provider='email' 兑换行,uses_count 0→1)——手输重试场景由真实用户闭环,上一条"待确认"销项。
 
