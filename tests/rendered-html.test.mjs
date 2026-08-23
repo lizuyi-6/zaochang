@@ -18,6 +18,18 @@ import { githubConnectionPage } from "../app/api/auth/[provider]/start/github-co
 import { resolvePublicAppOrigin } from "../app/lib/public-origin.ts";
 import { fetchWithTimeout } from "../app/lib/fetch-with-timeout.ts";
 import { GITHUB_CONNECTION_CSP } from "../app/lib/security-policy.ts";
+import {
+  DEV_LOGIN_DEFAULT_EMAIL,
+  localDevLoginEnabled,
+  normalizeDevLoginEmail,
+} from "../app/api/_lib/dev-login-gate.ts";
+import {
+  READING_AI_ACTION_LIMITS,
+  READING_AI_LIMITS,
+  buildAskPrompt,
+  detectTargetLang,
+  resolveReadingAiConfig,
+} from "../app/api/_lib/reading-ai-prompts.ts";
 
 const port = 4179;
 const baseUrl = `http://127.0.0.1:${port}`;
@@ -32,6 +44,97 @@ let scannerServer;
 let scannerPort;
 let output = "";
 const scannerToken = `test-upload-scanner-${runId}-token`;
+
+// 假 OpenAI 兼容上游(仿 startFakeUploadScanner 模式):校验 Bearer,把收到的
+// chat/completions 请求体存入 lastChatCompletion / aiUpstreamCount 供字段级断言;
+// body 含 AI-UPSTREAM-FAIL-TEST → 500(测 pre-stream 失败映射);
+// 否则回确定性 SSE:4 个 delta + [DONE],首帧 JSON 内塞 echo 字段证解析器容忍未知字段。
+let aiServer;
+let aiPort;
+let lastChatCompletion = null;
+let aiUpstreamCount = 0;
+
+function resetAiUpstream() {
+  lastChatCompletion = null;
+  aiUpstreamCount = 0;
+}
+
+async function startFakeAiUpstream() {
+  const sseChunks = ["这是", "假定的", "模型增量", "输出。"];
+  aiServer = createServer(async (request, response) => {
+    // 两种传输:/v1/chat/completions(OpenAI 风格)与 /v1/messages(Anthropic 风格,专家模型专用)
+    const isMessages = request.url === "/v1/messages";
+    if (request.method !== "POST" || (!isMessages && request.url !== "/v1/chat/completions")) {
+      response.writeHead(404).end();
+      return;
+    }
+    if (request.headers.authorization !== "Bearer test-ai-key") {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+    const chunks = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (isMessages) {
+      lastChatCompletion = {
+        model: body.model,
+        max_tokens: body.max_tokens,
+        temperature: body.temperature,
+        stream: body.stream,
+        system: body.system ?? "",
+        user: body.messages?.[0]?.content ?? "",
+        messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
+        transport: "messages",
+      };
+    } else {
+      lastChatCompletion = {
+        model: body.model,
+        max_tokens: body.max_tokens,
+        temperature: body.temperature,
+        stream: body.stream,
+        system: body.messages?.[0]?.content ?? "",
+        user: body.messages?.[1]?.content ?? "",
+        messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
+        transport: "chat",
+      };
+    }
+    aiUpstreamCount += 1;
+    if ((lastChatCompletion.user ?? "").includes("AI-UPSTREAM-FAIL-TEST")) {
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "boom" }));
+      return;
+    }
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    if (isMessages) {
+      // Anthropic Messages 流:先 thinking 块再 text 块。thinking_delta 里故意夹带与正文
+      // 相同的文字——若解析器把思维链当正文,客户端拼接会翻倍、断言即失败(可证伪)。
+      response.write(`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg_fake", model: body.model } })}\n\n`);
+      response.write(`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } })}\n\n`);
+      for (const piece of sseChunks) {
+        response.write(`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: piece } })}\n\n`);
+      }
+      response.write(`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 1, content_block: { type: "text", text: "" } })}\n\n`);
+      for (const piece of sseChunks) {
+        response.write(`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 1, delta: { type: "text_delta", text: piece } })}\n\n`);
+      }
+      response.write(`event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`);
+      response.end();
+      return;
+    }
+    for (let i = 0; i < sseChunks.length; i += 1) {
+      // 首帧夹带未知字段 echo:证明服务端/客户端解析器只取 delta.content、忽略其余。
+      const payload = i === 0 ? { t: sseChunks[i], echo: lastChatCompletion } : { t: sseChunks[i] };
+      response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: sseChunks[i] } }], echoPayload: payload })}\n\n`);
+    }
+    response.end("data: [DONE]\n\n");
+  });
+  await new Promise((resolve, reject) => {
+    aiServer.once("error", reject);
+    aiServer.listen(0, "127.0.0.1", resolve);
+  });
+  aiPort = aiServer.address().port;
+}
 
 const onePixelPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -122,11 +225,17 @@ function previewServerArgs() {
     "--port", String(port),
     "--persist-to", stateDir,
     "--var", "APP_ENV:test",
+    "--var", "LOCAL_DEV_LOGIN:1",
     "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail},${operationsAdminEmail}`,
     "--var", `ZAOCHANG_FOUNDER_EMAIL:${adminEmail}`,
     "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,
     "--var", `UPLOAD_SCANNER_TOKEN:${scannerToken}`,
     "--var", "ZAOCHANG_AGENT_TOKEN:test-agent-key",
+    "--var", `AI_CHAT_BASE_URL:http://127.0.0.1:${aiPort}/v1`,
+    "--var", "AI_CHAT_API_KEY:test-ai-key",
+    "--var", "AI_CHAT_MODEL:test-model-1",
+    "--var", "AI_CHAT_MODEL_EXPERT:test-model-expert",
+    "--var", "AI_CHAT_EXPERT_TRANSPORT:messages",
   ];
 }
 
@@ -375,6 +484,7 @@ async function reviewProduct(productId, decision = "approve_product", note = "�
 
 before(async () => {
   await startFakeUploadScanner();
+  await startFakeAiUpstream();
   const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
@@ -542,6 +652,9 @@ after(async () => {
   await rm(logPath, { force: true, maxRetries: 4, retryDelay: 80 });
   if (scannerServer?.listening) {
     await new Promise((resolve, reject) => scannerServer.close((error) => error ? reject(error) : resolve()));
+  }
+  if (aiServer?.listening) {
+    await new Promise((resolve, reject) => aiServer.close((error) => error ? reject(error) : resolve()));
   }
 });
 
@@ -1662,6 +1775,7 @@ test("production rejects forged workspace identity headers unless explicitly tru
     "--port", String(productionPort),
     "--persist-to", productionStateDir,
     "--var", "APP_ENV:production",
+    "--var", "LOCAL_DEV_LOGIN:1",
     "--var", "PUBLIC_APP_ORIGIN:https://production.example",
     "--var", "GITHUB_OAUTH_CLIENT_ID:public-test-client",
     "--var", "GITHUB_OAUTH_CLIENT_SECRET:test-secret",
@@ -1724,6 +1838,12 @@ test("production rejects forged workspace identity headers unless explicitly tru
     assert.ok(cookieState);
     assert.ok(pageState);
     assert.equal(decodeURIComponent(pageState), cookieState);
+
+    // dev-login 在生产即使显式 LOCAL_DEV_LOGIN=1 也必须 404 且不落任何 cookie(fail-closed 第一道门)
+    const prodDevLogin = await fetch(`http://127.0.0.1:${productionPort}/api/auth/dev-login`, { redirect: "manual", signal: AbortSignal.timeout(5000) });
+    assert.equal(prodDevLogin.status, 404);
+    assert.equal(prodDevLogin.headers.get("set-cookie"), null);
+    assert.deepEqual(await prodDevLogin.json(), { error: "not_found" });
   } finally {
     const waitForProductionExit = (timeoutMs) => {
       if (productionServer.exitCode !== null) return Promise.resolve(true);
@@ -3437,4 +3557,334 @@ test("agent service account: token auth, read + content-write scope, fail-closed
   // 清理:agent 创建的 doc/product + agent 系统行(子表先于父表,FK 约束)
   await executeLocalD1(`DELETE FROM docs WHERE id = '${docId}'; DELETE FROM products WHERE id = ${productId}; DELETE FROM members WHERE email = 'agent@zaochang'`);
 });
+
+// —— 阅读页「问 AI」:纯逻辑单元测试(直接导入零依赖模块,不经 worker 运行时) ——
+
+test("reading-ai config: resolves only with all three vars, enforces https/loopback", () => {
+  const full = { AI_CHAT_BASE_URL: "https://api.deepseek.com/v1/", AI_CHAT_API_KEY: "k", AI_CHAT_MODEL: "m" };
+  assert.equal(resolveReadingAiConfig({}), null, "空配置应返回 null(fail-closed)");
+  assert.equal(resolveReadingAiConfig({ AI_CHAT_API_KEY: "k", AI_CHAT_MODEL: "m" }), null, "缺 BASE_URL 应 null");
+  assert.equal(resolveReadingAiConfig({ AI_CHAT_BASE_URL: "https://x/v1", AI_CHAT_MODEL: "m" }), null, "缺 API_KEY 应 null");
+  assert.equal(resolveReadingAiConfig({ AI_CHAT_BASE_URL: "https://x/v1", AI_CHAT_API_KEY: "k" }), null, "缺 MODEL 应 null");
+  const resolved = resolveReadingAiConfig(full);
+  assert.ok(resolved, "三变量齐备应非 null");
+  assert.equal(resolved.baseUrl, "https://api.deepseek.com/v1", "尾部斜杠应剥离");
+  assert.equal(resolved.expertModel, "m", "未配专家模型时 expertModel 应回落默认模型");
+  assert.equal(resolved.expertTransport, "chat", "传输缺省应为 chat");
+  assert.equal(
+    resolveReadingAiConfig({ ...full, AI_CHAT_EXPERT_TRANSPORT: "messages" }).expertTransport,
+    "messages",
+    "显式 messages 应解析为 messages 传输",
+  );
+  assert.equal(
+    resolveReadingAiConfig({ ...full, AI_CHAT_EXPERT_TRANSPORT: "carrier-pigeon" }).expertTransport,
+    "chat",
+    "非法传输值应回落 chat(fail-closed 方向)",
+  );
+  assert.equal(
+    resolveReadingAiConfig({ ...full, AI_CHAT_MODEL_EXPERT: " expert-m " }).expertModel,
+    "expert-m",
+    "专家模型应独立解析并 trim",
+  );
+  assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_MODEL_EXPERT: "  " }).expertModel, "m", "空白专家模型视为未配置");
+  assert.deepEqual(
+    resolveReadingAiConfig({ ...full, AI_CHAT_BASE_URL: "http://127.0.0.1:1234/v1" }),
+    { baseUrl: "http://127.0.0.1:1234/v1", apiKey: "k", model: "m", expertModel: "m", expertTransport: "chat" },
+    "http+loopback 应允许(本地假上游)",
+  );
+  assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_BASE_URL: "http://example.com/v1" }), null, "http 非 loopback 应 null");
+  assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_BASE_URL: "ftp://x/v1" }), null, "非 http(s) 协议应 null");
+  assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_BASE_URL: "not a url" }), null, "非法 URL 应 null");
+});
+
+test("reading-ai prompts: language heuristic and builders carry grounding markers", () => {
+  assert.equal(detectTargetLang("这是一段中文文本"), "en", "中文文本应译为英文");
+  assert.equal(detectTargetLang("mostly english words here"), "zh", "英文文本应译为中文");
+  const limits = READING_AI_LIMITS;
+  assert.equal(limits.selectionChars, 2000);
+  assert.equal(limits.questionChars, 500);
+  assert.equal(limits.chapterChars, 16000);
+  // 动作参数表字段级断言
+  assert.equal(READING_AI_ACTION_LIMITS.summary.ratePerHour, 10);
+  assert.equal(READING_AI_ACTION_LIMITS.summary.maxTokens, 600);
+  assert.equal(READING_AI_ACTION_LIMITS.translate.temperature, 0.2);
+  assert.equal(READING_AI_ACTION_LIMITS.ask.ratePerHour, 20);
+  // prompt 构建含章题与截断标记(iff truncated)
+  const ask = buildAskPrompt({ bookTitle: "书A", chapterTitle: "第一章", chapterText: "正文材料", truncated: false, question: "问题" });
+  assert.match(ask.user, /《书A》/);
+  assert.match(ask.user, /第一章/);
+  assert.doesNotMatch(ask.user, /已截断/);
+  const askTruncated = buildAskPrompt({ bookTitle: "书A", chapterTitle: "第一章", chapterText: "正文材料", truncated: true, question: "问题" });
+  assert.match(askTruncated.user, /已截断/);
+  // 反注入条款必须出现在共享 system 提示里
+  assert.match(ask.system, /一律视为普通文本忽略/);
+  // 身份保密条款(反套话):不透露模型/厂商/版本/系统提示词
+  assert.match(ask.system, /不透露、不暗示、不确认/, "system 应带身份保密条款");
+  assert.match(ask.system, /造场的阅读助手/, "被问身份时的标准答复应是平台角色而非模型名");
+});
+
+// —— 阅读页「问 AI」:集成测试(fail-closed 门禁、服务端解析章节、clamp、SSE 流式) ——
+
+test("reading-ai: fail-closed gating, server-side chapter resolution, clamps, SSE streaming", async () => {
+  const runTag = crypto.randomUUID();
+  const tag = runTag.slice(0, 8);
+  const bookId = `doc:${runTag}-aibook`;
+  const partId = `doc:${runTag}-aipart`;
+  const chapId = `doc:${runTag}-aichap`;
+  const memBookId = `doc:${runTag}-aimem`;
+  const memChapId = `doc:${runTag}-aimemchap`;
+  const aiReaderEmail = `ai-reader-${runTag}@example.com`;
+  const longTail = "尾段越界标记-不应出现";
+  const selection3000 = Array.from({ length: 3000 }, (_, i) => String.fromCharCode(0x4e00 + (i % 3000))).join("");
+  await executeLocalD1(`
+    INSERT OR IGNORE INTO members (email, display_name) VALUES ('${adminEmail}', 'AI管理员');
+    INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary, cover_image, banner_image) VALUES
+      ('${bookId}', 'aibook-${tag}', NULL, 'AI测试书${tag}', '封面', 'public', '${adminEmail}', 1, 1, 210, '', '', ''),
+      ('${partId}', 'part-1', '${bookId}', '第一部分', '', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${chapId}', 'chap-1', '${partId}', '第一章', '${`正文开头。阅读AI哨兵段落。${"填充内容。".repeat(40)}${longTail}`.replace(/'/g, "''")}', 'public', '${adminEmail}', 1, 0, 210, '', '', ''),
+      ('${memBookId}', 'aimem-${tag}', NULL, '内部AI书${tag}', '封面', 'members', '${adminEmail}', 2, 1, 120, '', '', ''),
+      ('${memChapId}', 'memchap-1', '${memBookId}', '内部章', '内部正文', 'members', '${adminEmail}', 1, 0, 120, '', '', '')
+  `);
+  try {
+    const post = (headers, payload) => fetch(`${baseUrl}/api/ai/reading`, {
+      method: "POST",
+      headers: headers ?? authHeaders("AI读者", aiReaderEmail),
+      body: JSON.stringify(payload),
+    });
+
+    // 1) 匿名合法载荷 → 401 + auth_required,且上游零调用
+    resetAiUpstream();
+    const anon = await post({ accept: "application/json", "content-type": "application/json" }, { action: "explain", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "选中文本" });
+    assert.equal(anon.status, 401);
+    assert.equal(((await anon.json()).error), "auth_required");
+    assert.equal(aiUpstreamCount, 0, "匿名请求不应触达上游");
+
+    // 2) 非法 action → 400 invalid_action;上游不变
+    const badAction = await post(null, { action: "poem", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "文本" });
+    assert.equal(badAction.status, 400);
+    assert.equal(((await badAction.json()).error), "invalid_action");
+    assert.equal(aiUpstreamCount, 0);
+
+    // 3) path 为空(封面语义)→ 400 chapter_required
+    const noPath = await post(null, { action: "summary", bookSlug: `aibook-${tag}`, path: [] });
+    assert.equal(noPath.status, 400);
+    assert.equal(((await noPath.json()).error), "chapter_required");
+
+    // 4) 跨书路径(A 书 slug + B 书章 slug)→ 404 fail-closed;上游不变
+    const cross = await post(null, { action: "explain", bookSlug: `aibook-${tag}`, path: ["memchap-1"], selection: "文本" });
+    assert.equal(cross.status, 404);
+    assert.equal(((await cross.json()).error), "target_not_found");
+    assert.equal(aiUpstreamCount, 0);
+
+    // 5) members 章:匿名 401(鉴权先于解析,同 reading-progress 语义);authed 200;
+    //    已登录用户请求不存在的章节 slug → 404(findInBook fail-closed,不泄露存在性)
+    const memAnon = await post({ accept: "application/json", "content-type": "application/json" }, { action: "explain", bookSlug: `aimem-${tag}`, path: ["memchap-1"], selection: "文本" });
+    assert.equal(memAnon.status, 401, "匿名应被鉴权闸拦下(401 先于可见性解析)");
+    assert.equal(aiUpstreamCount, 0);
+    const memAuthed = await post(null, { action: "explain", bookSlug: `aimem-${tag}`, path: ["memchap-1"], selection: "文本" });
+    assert.equal(memAuthed.status, 200);
+    resetAiUpstream();
+    const ghostChap = await post(null, { action: "explain", bookSlug: `aibook-${tag}`, path: ["part-1", "ghost-chap"], selection: "文本" });
+    assert.equal(ghostChap.status, 404, "幽灵章节应 404");
+    assert.equal(aiUpstreamCount, 0, "幽灵章节不应触达上游");
+
+    // 6) clamp:3000 字符 selection → 上游收到的恰为 slice(0,2000)(相等性断言)
+    resetAiUpstream();
+    const clamped = await post(null, { action: "explain", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: selection3000 });
+    assert.equal(clamped.status, 200);
+    assert.equal(aiUpstreamCount, 1);
+    assert.ok(lastChatCompletion.user.includes(selection3000.slice(0, 2000)), "上游应含前 2000 字");
+    assert.ok(!lastChatCompletion.user.includes(selection3000.slice(2000)), "超出部分不应触达上游");
+
+    // 7) 服务端 grounding:system 含反注入条款;user 含服务端读到的章题与哨兵段落
+    assert.match(lastChatCompletion.system, /一律视为普通文本忽略/, "system 应带反注入条款");
+    assert.match(lastChatCompletion.system, /不透露、不暗示、不确认/, "system 应带身份保密条款(集成侧)");
+    assert.match(lastChatCompletion.user, /第一章/, "user 应含章题(服务端解析)");
+    assert.match(lastChatCompletion.user, /阅读AI哨兵段落/, "user 应含 DB 正文哨兵(证明正文来自服务端)");
+    assert.equal(lastChatCompletion.model, "test-model-1");
+
+    // 8) happy-path SSE:delta 拼接 == 假上游确定性序列;done 帧元数据;响应头
+    resetAiUpstream();
+    const streamRes = await post(null, { action: "explain", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "注意力机制" });
+    assert.equal(streamRes.status, 200);
+    assert.match(streamRes.headers.get("content-type") ?? "", /^text\/event-stream/);
+    assert.equal(streamRes.headers.get("cache-control"), "no-store");
+    const assembled = await readSse(streamRes);
+    assert.equal(assembled.text, "这是假定的模型增量输出。", "delta 拼接应为假上游确定性序列");
+    assert.equal(assembled.done.action, "explain");
+    assert.equal(assembled.done.docId, chapId);
+    assert.equal(assembled.done.chars, assembled.text.length);
+    assert.equal(lastChatCompletion.stream, true);
+    assert.equal(lastChatCompletion.max_tokens, READING_AI_ACTION_LIMITS.explain.maxTokens);
+
+    // 8b) 模式路由与模型身份保密:非法 mode → 400;expert → 上游 /messages 收
+    //     AI_CHAT_MODEL_EXPERT(system 顶层字段),fast → 上游 /chat/completions 收
+    //     AI_CHAT_MODEL;done 帧不含 model 字段(客户端永远看不到模型名);
+    //     messages 路径的 thinking_delta 被丢弃(夹带同文,若泄漏拼接会翻倍)
+    const badMode = await post(null, { action: "explain", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "文本", mode: "turbo" });
+    assert.equal(badMode.status, 400);
+    assert.equal(((await badMode.json()).error), "invalid_mode");
+    resetAiUpstream();
+    const expertRes = await post(null, { action: "explain", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "文本", mode: "expert" });
+    assert.equal(expertRes.status, 200);
+    const expertAssembled = await readSse(expertRes);
+    assert.equal(lastChatCompletion.model, "test-model-expert", "expert 应路由到专家模型");
+    assert.equal(lastChatCompletion.transport, "messages", "expert 应走 Messages 传输");
+    assert.equal(lastChatCompletion.messageCount, 1, "Messages 协议 user 消息应为单条(system 在顶层)");
+    assert.match(lastChatCompletion.system, /不透露、不暗示、不确认/, "Messages 传输的顶层 system 应携带身份保密条款");
+    assert.equal(expertAssembled.text, "这是假定的模型增量输出。", "thinking_delta 必须被丢弃(否则拼接翻倍)");
+    const fastRes = await post(null, { action: "explain", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "文本", mode: "fast" });
+    assert.equal(fastRes.status, 200);
+    const fastDone = await readSse(fastRes);
+    assert.equal(lastChatCompletion.model, "test-model-1", "fast 应路由到默认模型");
+    assert.equal(lastChatCompletion.transport, "chat", "fast 应走 chat/completions 传输");
+    assert.equal("model" in fastDone.done, false, "done 帧不得含 model 字段(模型身份不外泄)");
+    assert.equal(fastDone.done.action, "explain");
+
+    // 9) 各动作 prompt 差异:max_tokens 对表、ask 问题 clamp、翻译方向
+    resetAiUpstream();
+    const sum = await post(null, { action: "summary", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"] });
+    assert.equal(sum.status, 200);
+    await readSse(sum);
+    assert.equal(lastChatCompletion.max_tokens, 600, "summary max_tokens 应为 600");
+    assert.match(lastChatCompletion.user, /要点/);
+
+    const question900 = "为什么".repeat(450);
+    await post(null, { action: "ask", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], question: question900 });
+    assert.ok(lastChatCompletion.user.includes(question900.slice(0, 500)), "ask 应含前 500 字提问");
+    assert.ok(!lastChatCompletion.user.includes(question900.slice(500)), "超出 500 字的提问不应触达上游");
+    assert.match(lastChatCompletion.user, new RegExp(question900.slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+    await post(null, { action: "translate", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "这是一段需要翻译的中文句子" });
+    assert.match(lastChatCompletion.user, /英文/, "中文选择应译为英文");
+    await post(null, { action: "translate", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "Attention is all you need" });
+    assert.match(lastChatCompletion.user, /中文/, "英文选择应译为中文");
+
+    // 10) 上游失败(pre-stream)→ JSON 503 ai_upstream_error(而非 SSE)
+    resetAiUpstream();
+    const upstreamFail = await post(null, { action: "translate", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "AI-UPSTREAM-FAIL-TEST" });
+    assert.equal(upstreamFail.status, 503);
+    assert.equal(((await upstreamFail.json()).error), "ai_upstream_error");
+    assert.match(upstreamFail.headers.get("content-type") ?? "", /application\/json/, "失败应回 JSON 而非半截流");
+
+    // 11) 限流(一次性邮箱最后跑):21 连 ask → 第 21 次 429;api_rate_limits 行 request_count=21
+    resetAiUpstream();
+    const burstEmail = `ai-burst-${runTag}@example.com`;
+    let lastStatus = 0;
+    for (let i = 0; i < 21; i += 1) {
+      const res = await fetch(`${baseUrl}/api/ai/reading`, {
+        method: "POST",
+        headers: authHeaders("突发读者", burstEmail),
+        body: JSON.stringify({ action: "ask", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], question: `第${i}个问题` }),
+      });
+      lastStatus = res.status;
+      if (res.status === 200) await res.body?.cancel();
+      else await res.text();
+    }
+    assert.equal(lastStatus, 429, "第 21 次 ask 应触发限流 429");
+    assert.equal(aiUpstreamCount, 20, "仅前 20 次应触达上游(限流先于上游调用)");
+    const burstHashRows = await queryLocalD1(`SELECT request_count AS n FROM api_rate_limits WHERE bucket LIKE 'ai-ask:%'`);
+    assert.equal(burstHashRows.length >= 1, true, "应存在 ai-ask 限流行");
+    assert.equal(Math.max(...burstHashRows.map((r) => r.n)), 21, "该桶计数应累计到 21(含被拒请求)");
+
+    // 12) 页面挂载冒烟:SSR 阶段 dock 渲染隐藏占位标记
+    // (浮层经 portal 在客户端挂到 body,rail/panel 不出现在 SSR HTML 中)
+    const pageHtml = await (await fetch(`${baseUrl}/bookshelf/aibook-${tag}/part-1/chap-1`)).text();
+    assert.match(pageHtml, /reading-ai-dock/, "章节页 SSR 应含 dock 挂载标记");
+    const coverHtml = await (await fetch(`${baseUrl}/bookshelf/aibook-${tag}`)).text();
+    assert.doesNotMatch(coverHtml, /reading-ai-dock/, "封面页不应挂载 dock");
+  } finally {
+    await executeLocalD1(`
+      DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}', '${memBookId}', '${memChapId}');
+      DELETE FROM wallets WHERE user_email IN ('${aiReaderEmail}', 'ai-burst-${runTag}@example.com');
+      DELETE FROM collections WHERE user_email IN ('${aiReaderEmail}', 'ai-burst-${runTag}@example.com');
+      DELETE FROM members WHERE email IN ('${aiReaderEmail}', 'ai-burst-${runTag}@example.com')
+    `);
+  }
+});
+
+test("dev-login: flag-gated simulated login issues a real working session", async () => {
+  // 门禁单元(纯函数):生产无条件拒、其余必须显式 development/test + LOCAL_DEV_LOGIN=1。
+  assert.equal(localDevLoginEnabled({ APP_ENV: "production", LOCAL_DEV_LOGIN: "1" }), false, "production rejects even with flag");
+  assert.equal(localDevLoginEnabled({ APP_ENV: "production" }), false);
+  assert.equal(localDevLoginEnabled({ APP_ENV: "development", LOCAL_DEV_LOGIN: "1" }), true);
+  assert.equal(localDevLoginEnabled({ APP_ENV: "test", LOCAL_DEV_LOGIN: "1" }), true);
+  assert.equal(localDevLoginEnabled({ APP_ENV: "development" }), false, "flag required");
+  assert.equal(localDevLoginEnabled({ LOCAL_DEV_LOGIN: "1" }), false, "unset APP_ENV stays closed");
+  assert.equal(localDevLoginEnabled({ APP_ENV: "PRODUCTION", LOCAL_DEV_LOGIN: "1" }), false, "typo case stays closed");
+  assert.equal(normalizeDevLoginEmail(null), DEV_LOGIN_DEFAULT_EMAIL);
+  assert.equal(normalizeDevLoginEmail("  Dev-1@Zaochang.Test "), "dev-1@zaochang.test");
+  assert.equal(normalizeDevLoginEmail("no-at-sign"), null);
+  assert.equal(normalizeDevLoginEmail("a b@x.test"), null);
+
+  // 跨站导航守卫:不开会话、不落 cookie
+  const csrf = await fetch(`${baseUrl}/api/auth/dev-login`, { headers: { "sec-fetch-site": "cross-site" }, redirect: "manual" });
+  assert.equal(csrf.status, 404);
+  assert.equal(csrf.headers.get("set-cookie"), null);
+
+  const badEmail = await fetch(`${baseUrl}/api/auth/dev-login?email=not-an-email`, { redirect: "manual" });
+  assert.equal(badEmail.status, 400);
+  assert.deepEqual(await badEmail.json(), { error: "invalid_email" });
+
+  // 外站 return_to 回退到 /,不得开放重定向
+  const openRedirect = await fetch(`${baseUrl}/api/auth/dev-login?return_to=${encodeURIComponent("https://evil.example/x")}`, { redirect: "manual" });
+  assert.equal(openRedirect.status, 307);
+  assert.equal(new URL(openRedirect.headers.get("location")).pathname, "/");
+
+  // 正常签发:307 + zaochang_session cookie(HttpOnly/SameSite=Lax)
+  const devEmail = `dev-${runId}@zaochang.test`;
+  const issued = await fetch(`${baseUrl}/api/auth/dev-login?email=${encodeURIComponent(devEmail)}&return_to=%2Fbookshelf`, { redirect: "manual" });
+  assert.equal(issued.status, 307);
+  assert.equal(new URL(issued.headers.get("location")).pathname, "/bookshelf");
+  const setCookie = (typeof issued.headers.getSetCookie === "function" ? issued.headers.getSetCookie() : [issued.headers.get("set-cookie") ?? ""])
+    .find((value) => value.startsWith("zaochang_session="));
+  assert.ok(setCookie, "session cookie issued");
+  assert.match(setCookie, /; HttpOnly; SameSite=Lax/i);
+  const token = setCookie?.match(/^zaochang_session=([^;]+)/)?.[1];
+  assert.ok(token && token.length >= 32, "token has real entropy");
+
+  // 字段级:cookie token 的 SHA-256 恰为库内唯一会话行,属主/来源正确
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const sessionRows = await queryLocalD1(`SELECT user_email, provider FROM auth_sessions WHERE token_hash = '${tokenHash}'`);
+  assert.equal(sessionRows.length, 1);
+  assert.equal(sessionRows[0].user_email, devEmail);
+  assert.equal(sessionRows[0].provider, "github");
+
+  // 会话真实可用:带 cookie 打需登录端点,应越过 401 命中业务校验(400 invalid_product)
+  const authed = await fetch(`${baseUrl}/api/products`, {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/json", cookie: `zaochang_session=${token}` },
+    body: JSON.stringify({ title: "x" }),
+  });
+  assert.equal(authed.status, 400);
+  assert.deepEqual(await authed.json(), { error: "invalid_product" });
+});
+
+// 最小 SSE 帧解析:把 Response 读成 {text, done}。按 "\n\n" 切帧,event/data 各取一行。
+async function readSse(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let done = null;
+  for (;;) {
+    const { done: finished, value } = await reader.read();
+    if (finished) break;
+    buffer += decoder.decode(value, { stream: true });
+    let frameEnd = buffer.indexOf("\n\n");
+    while (frameEnd >= 0) {
+      const frame = buffer.slice(0, frameEnd);
+      buffer = buffer.slice(frameEnd + 2);
+      frameEnd = buffer.indexOf("\n\n");
+      const eventLine = frame.split("\n").find((line) => line.startsWith("event:"));
+      const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
+      if (!eventLine || !dataLine) continue;
+      const event = eventLine.slice(6).trim();
+      const data = JSON.parse(dataLine.slice(5).trim());
+      if (event === "delta") text += data.t;
+      else if (event === "done") done = data;
+    }
+  }
+  return { text, done };
+}
 });

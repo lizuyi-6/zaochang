@@ -47,3 +47,6 @@ next-env.d.ts
 
 # production DB backups (contain real user data, never commit)
 /backups/
+
+# local wrangler preview state (demo session tokens, seeded D1, scripts)
+/.tmp-preview-state/
