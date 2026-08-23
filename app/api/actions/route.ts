@@ -9,6 +9,8 @@ export async function POST(request: Request) {
     const action = String(input.action ?? "");
     const db = database();
 
+    // experience 播放计数是公开曝光指标：匿名访客即可体验 demo，无需登录。
+    // 该分支刻意放在 requireMember() 之前，仅受 IP 限流（120/h）约束。
     if (action === "experience") {
       await enforceRateLimit(await requestActorKey(request, "experience"), 120, 60 * 60);
       const productId = Number(input.productId);

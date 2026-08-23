@@ -57,6 +57,11 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
 
 export function oaiIdentityHeadersEnabled() {
   const values = env as unknown as Record<string, string | undefined>;
+  // Fail-closed:生产环境(APP_ENV=production)无条件拒绝 oai-authenticated-user-* 遗留身份头。
+  // 一旦公网可达的 worker 信任这些头,任意客户端都能自封任意 email(含创始人/管理员),
+  // 造成整账户接管。生产拓扑(Cloudflare 直连)不存在可信的身份头注入边界,故不再提供
+  // TRUST_OAI_IDENTITY_HEADERS 逃逸门;该 flag 现仅作用于非生产环境(本地/测试联调)。
+  if (values.APP_ENV === "production") return false;
   if (values.TRUST_OAI_IDENTITY_HEADERS === "true") return true;
   return values.APP_ENV === "development" || values.APP_ENV === "test";
 }

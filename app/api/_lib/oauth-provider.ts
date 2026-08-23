@@ -134,9 +134,13 @@ function validHttpsUrl(value: unknown, allowLocalhost = true) {
   } catch {
     throw new OAuthProviderError("invalid_client_metadata", 400, "网址格式无效。");
   }
-  const local = allowLocalhost && parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
+  // 生产环境禁 loopback HTTP 回跳:明文 http://localhost/127.0.0.1 会让授权码与
+  // 支付回跳参数走本机明文,削弱「HTTPS-only 回跳」立场。localhost 例外仅在非生产
+  // (dev/test)放行,供本地联调。
+  const isProduction = runtimeValues().APP_ENV === "production";
+  const local = allowLocalhost && !isProduction && parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
   if ((parsed.protocol !== "https:" && !local) || parsed.username || parsed.password || parsed.hash) {
-    throw new OAuthProviderError("invalid_client_metadata", 400, "仅允许 HTTPS，或本地开发用的 localhost HTTP 地址。");
+    throw new OAuthProviderError("invalid_client_metadata", 400, "仅允许 HTTPS。");
   }
   return parsed.toString();
 }
@@ -156,6 +160,16 @@ async function clientById(clientId: string) {
 }
 
 async function redirectRegistered(clientId: string, redirectUri: string) {
+  // 生产环境即使库中已注册,也拒绝 loopback HTTP 回跳(补 validHttpsUrl 只拦新注册的缺口)。
+  // 覆盖授权码 redirect_uri 与外部支付 return_uri 两条走此查询的路径。
+  if (runtimeValues().APP_ENV === "production") {
+    try {
+      const parsed = new URL(redirectUri);
+      if (parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname)) return false;
+    } catch {
+      return false;
+    }
+  }
   return Boolean(await database().prepare(
     `SELECT 1 AS valid FROM oauth_provider_redirect_uris
      WHERE client_id = ? AND redirect_uri = ?`,

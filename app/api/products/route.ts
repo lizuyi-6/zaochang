@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     if (title.length < 2 || description.length < 12 || !categories.includes(category)) {
       return Response.json({ error: "invalid_product" }, { status: 400 });
     }
-    if (demoUrl && !/^https?:\/\//i.test(demoUrl)) {
+    if (demoUrl && !/^https:\/\//i.test(demoUrl)) {
       return Response.json({ error: "invalid_demo_url" }, { status: 400 });
     }
     if (imageUrl && !(/^https?:\/\//i.test(imageUrl) || /^\/api\/uploads\/[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(imageUrl))) {

@@ -86,7 +86,10 @@ export function jsonError(error: unknown) {
   if (message.includes("UNIQUE constraint failed")) {
     return Response.json({ error: "already_completed" }, { status: 409 });
   }
-  return Response.json({ error: message }, { status: 500 });
+  // 不把 error.message 原文返回客户端：它会泄露 D1 约束名/表结构等内部细节。
+  // 已识别的业务错误码在上方白名单；其余统一兜底为 server_error 并记录到服务端日志。
+  console.error("[jsonError] unhandled:", message);
+  return Response.json({ error: "server_error" }, { status: 500 });
 }
 
 class AuthRequiredError extends Error {
