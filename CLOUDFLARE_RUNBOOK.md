@@ -65,18 +65,31 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 
 ## 2. 密钥(名称清单,值永不入库/不入对话)
 
-生产 Worker `zaochang` 的 10 个 secret(`npx wrangler secret list --config wrangler.prod.jsonc`):
+生产 Worker `zaochang` 的 14 个 secret(`npx wrangler secret list --config wrangler.prod.jsonc`):
 
 ```
 PUBLIC_APP_ORIGIN            APP_ENV
 GITHUB_OAUTH_CLIENT_ID       GITHUB_OAUTH_CLIENT_SECRET
 OIDC_SIGNING_PRIVATE_JWK     ZAOCHANG_ADMIN_EMAILS
 ZAOCHANG_FOUNDER_EMAIL       UPLOAD_SCANNER_URL
-UPLOAD_SCANNER_TOKEN         (TURNSTILE_* 仅 staging)
+UPLOAD_SCANNER_TOKEN         AI_CHAT_BASE_URL
+AI_CHAT_API_KEY              AI_CHAT_MODEL
+AI_CHAT_MODEL_EXPERT(可选)
+AI_CHAT_EXPERT_TRANSPORT(可选,=messages 时专家模型走 Anthropic Messages API /v1/messages,如 StepFun step-explore)
+(TURNSTILE_* 仅 staging)
 ```
+
+- `AI_CHAT_MODEL_EXPERT` 可选:「问 AI」专家模式使用的模型;未设置(或空)时专家模式回落 `AI_CHAT_MODEL`。**模型名是运营配置,永不外泄给客户端**(done 帧无 model 字段,前端只显示"快速/专家"标签)。
+- `AI_CHAT_EXPERT_TRANSPORT` 可选:专家模型的传输协议。缺省/其他值 = OpenAI `chat/completions`;`messages` = Anthropic 风格 `/v1/messages`(仅开放 Messages API 的模型用,如 StepFun `step-explore`;`thinking_delta` 被服务端丢弃,不透传)。
+
+- **禁止**把 `LOCAL_DEV_LOGIN` 配进生产/staging secrets:它是本地模拟登录(`/api/auth/dev-login`)的开关,生产侧由 `APP_ENV=production` 无条件 404 兜底(双 fail-closed,见 `app/api/_lib/dev-login-gate.ts`),不要给第二道门留例外。
 
 - **唯一权威来源** = 盒子 `/etc/zaochang/zaochang.env`(app secrets)+ `/etc/zaochang/scanner.env`(`SCANNER_TOKEN`)。
 - **`UPLOAD_SCANNER_TOKEN` 必须 == 盒子的 `SCANNER_TOKEN`**(扫描器 Bearer 鉴权;不等 → 上传 401/503)。
+- **AI_CHAT_\* 三件(阅读页「问 AI」)**:OpenAI 兼容 chat-completions 上游(DeepSeek/OpenRouter/Moonshot 等)。
+  `AI_CHAT_BASE_URL` 需含版本段(如 `https://api.deepseek.com/v1`,路由在其后拼 `/chat/completions`);
+  **三项任一缺失 ⇒ 功能惰性**(接口回 503 `ai_not_configured`,前端显示未配置,零行为变化)。
+  本地/测试注入走 `wrangler dev --var`(同 `UPLOAD_SCANNER_URL`),无 `.dev.vars`;测试 harness 用假上游(tests 内 `startFakeAiUpstream`)。
 - 管道注入(值不打印):
   ```bash
   # 单个值(盒子 env -> Worker secret)
@@ -165,6 +178,7 @@ const r=await fetch("/api/uploads",{method:"POST",body:fd});console.log("UPLOAD"
 | 浏览器登录 GitHub 报「redirect_uri 无关联」 | 地址栏是 apex 还是 `*.workers.dev` | **在 staging 登录**(回调没注册);或 OAuth app 回调字符串不精确匹配 |
 | 本地 `curl aetherstudio.top` 怪(198.18.x.x / schannel 失败) | — | 本机 VPN 拦截,**别信**;一律用盒子 `--resolve` 到边缘 |
 | 201 但 D1/R2 无 | 见 §5 历史坑 | 打到盒子旧应用 |
+| 问 AI 503 `ai_not_configured` | `wrangler secret list` 是否有 `AI_CHAT_BASE_URL/API_KEY/MODEL` 三项;`BASE_URL` 是否含 `/v1` 版本段 | 三项缺一即惰性(by design);base 缺版本段 → 上游 404 → `ai_upstream_error` |
 
 ## 7. 回滚
 

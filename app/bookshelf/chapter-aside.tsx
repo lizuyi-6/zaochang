@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-// 章节页右侧 marginalia:本章小节目录(滚动联动) + 章节进度 + 回顶部 + 问 AI 占位。
+// 章节页右侧 marginalia:本章小节目录(滚动联动) + 章节进度 + 回顶部 + 问 AI 入口。
 // 服务端已把正文 h2/h3 注入 id=ch-N;此处用 IntersectionObserver 跟踪当前可视小节。
 // 视觉权重刻意低于左栏:共享正文底色、无分隔线、更浅字色、更小字号、更多留白。
+
+import { openReadingAi } from "./reading-ai-store";
 
 type Heading = { id: string; text: string; level: number };
 
@@ -93,9 +95,9 @@ export function ChapterAside({
         >
           ↑ 回到顶部
         </button>
-        <span className="book-aside-ai" title="即将推出">
+        <button type="button" className="book-aside-ai" onClick={(e) => openReadingAi(e.currentTarget)}>
           ✦ 问 AI
-        </span>
+        </button>
       </div>
     </aside>
   );

@@ -17,6 +17,7 @@ import { MermaidRunner } from "../mermaid-runner";
 import { ReadingProgressTracker } from "../reading-progress-tracker";
 import { ChapterAside } from "../chapter-aside";
 import { BookSideToggle } from "../book-side-toggle";
+import { ReadingAiDock } from "../reading-ai-dock";
 import "katex/dist/katex.min.css";
 // 书站阅读字体(self-host woff2 via @fontsource;按 weight/subset 精确引入,浏览器按 unicode-range 按需下载)。
 // Serif(书的声音):英文 Source Serif 4 + 中文 Noto Serif SC(=思源宋体,与 Source Han Serif SC 同字形),覆盖正文 400/强调与标题 500/备用 600。
@@ -181,5 +182,7 @@ export default async function BookPage({ params }: PageProps) {
     </article>
 
     {!isCover && <ChapterAside headings={headings} progress={progress} />}
+    {/* 问 AI dock:仅章节页(封面页正文是桩,无材料可用);path 为书内章节 slug 序列(slugs[0] 是书 slug,服务端拼回)。 */}
+    {!isCover && <ReadingAiDock bookSlug={book.slug} path={slugs.slice(1)} bookTitle={book.title} chapterTitle={doc.title} docId={doc.id} updatedAt={doc.updatedAt} />}
   </div>;
 }
