@@ -1,5 +1,17 @@
 # 造场项目账本
 
+## 2026-08-26 「问 AI」面板:回答 markdown+KaTeX 渲染 + 提问附图(多模态)(已部署)
+
+- 状态:已上线。commit `eac2bd3` 推送 main(本机直连 GitHub 被重置,经系统代理 `127.0.0.1:6518` per-command `-c http.proxy` 推送,未改 git config);release-gates run 32868949150 与 deploy-production run 32869111018 双 success;生产 Worker Current Version ID `b2bf83d9-c01c-4b42-8779-b76dfc46595d`;部署前置迁移核对通过(journal 最新 0018,本轮零新迁移)。
+- 动因:用户截图实证——AI 回答的 LaTeX(`$f = \frac{1}{T_{\text{clk}}}$`)与 `**粗体**` 以原始符号裸露(回答区是纯文本 pre-wrap),且多模态模型无图片提问入口。
+- 机制:① 渲染——把 docs.ts 的 marked+KaTeX+sanitize-html 管线抽为共享模块 `app/lib/markdown-katex.ts`(零 cloudflare import,客户端可打包),dock 回答区改 `dangerouslySetInnerHTML` + `useMemo` 全量重渲染(流式每 60ms flush 一次,未闭合 `$` 靠 throwOnError:false 容错);sanitize 白名单仍只维护一份,书籍正文渲染行为零变化。② 附图——客户端 canvas 压缩(长边 ≤1600、webp q0.85、~3.5 MiB 上限)后以 data URL 内联请求体直发上游;**刻意不走** R2+ClamAV 上传管道(瞬态输入不落库/不公开,11 MiB 请求体硬顶兜底),chat 传输映射为 `image_url` 块、Messages 传输映射为 base64 `image` 块;无图请求的上游消息体与改动前逐字节一致。
+- 安全门禁(新增,均为收紧):`AI_CHAT_VISION` 普通 var(非 secret)缺省关闭,未开时带图请求 fail-closed 400 `vision_not_supported`;`parseReadingAiImage` 只认 png/jpeg/webp data URL、解码后 >4 MiB 拒(400 `invalid_image`);非 ask 动作带图同 400。prod/staging 的 wrangler `vars` 已配 `"1"`(前提:上游两个模型均支持图像输入——用户确认其为多模态模型)。
+- 证据(门禁):全量 **96 pass / 0 fail / 0 skipped / 0 todo**(首跑 95/96,唯一失败暴露真 bug:base64 体积估算未扣 `=` 填充,恰在 4 MiB 上限的合法图被误拒;修为 `Math.floor((len-padding)*3/4)` 后 4194303/4194304/4194305 三点 PASS/PASS/REJECT 边界经 node 直算+套件复跑双确认);tsc 0 错;lint 0 errors;db:generate "No schema changes";git diff --check 通过。集成断言:fast 带图 `userContent[1].type==="image_url"` 且 url 逐字节相等、expert 带图 `content[0].type==="image"` 且 `source.data` 与发出 base64 相等、无图 content 保持 string(防回归)、坏 mime/超限/explain 带图均 400 且假上游计数不变。
+- UI 亲验(headless Chrome + dev-login + 假上游,11/11 项):附图 chip 出现且为 webp data URL、回答卡片含附图缩略图、行内公式 `.katex`≥1、块级公式 `.katex-block`≥1、`<strong>`/`<li>` 真实渲染、上游收到含【附图】指引的多模态数组;截图人工复核(分式 `f=1/T_clk`、E=mc² 居中块、粗体、列表排版正确)。
+- 生产实测(部署后,盒子 `--resolve` 到 CF 边缘,本机 DNS 被 VPN 污染不可信):未认证 POST `/api/ai/reading` → `401 auth_required`,鉴权闸完整、路由存活。
+- 本轮改动可能引入的新风险:① sanitize 白名单与正文共享,回答区攻击面=正文渲染面(已有 `onerror`/`javascript:`/`<script>` 剥除断言);② 附图内联放大请求体(单图 ≤4 MiB 解码,worker 11 MiB 硬顶+ask 20/h 限流双重兜底);③ 系统提示新增"公式用 LaTeX 表示"条款,模型若输出畸形 `$` 靠 throwOnError:false 降级为字面显示,不炸页面。
+- 未覆盖范围:① `vision_not_supported` 路由分支无集成测试(harness 恒开 `AI_CHAT_VISION:1`,仅 `resolveReadingAiConfig` 单测覆盖解析层,测试注释已留痕);② 粘贴附图路径未在浏览器点过(与 file input 共用同一 `attachImage`);③ 专家模式附图仅 API 层断言,浏览器点的是快速模式;④ 生产带图链路未实测(需登录态+真实上游,且会真实计费;本地全链路已验,生产 401 探针证明部署存活);⑤ 真实上游模型的图像理解质量属外部服务行为,首次真实使用即首验。
+
 ## 2026-07-10
 
 - 状态：部分完成
