@@ -793,7 +793,20 @@ body:has(.reading-ai-panel.open) .reading-ai-rail { display: none; }
 .reading-ai-item-remove { background: none; border: 0; color: #c2c2bc; cursor: pointer; padding: 0; }
 .reading-ai-item-remove:hover { color: var(--ink); }
 .reading-ai-item-quote { border-left: 2px solid var(--line-strong); color: var(--muted); font-size: 12px; line-height: 1.6; margin: 0; max-height: 4.8em; overflow: hidden; padding-left: 9px; }
-.reading-ai-item-text { color: #292724; font-family: var(--font-reader-serif); font-size: 14px; line-height: 1.85; white-space: pre-wrap; }
+.reading-ai-item-image { border: 1px solid var(--line); border-radius: 6px; display: block; max-height: 140px; max-width: 100%; object-fit: contain; }
+/* 回答正文由 markdown+KaTeX 渲染成 HTML(见 @/app/lib/markdown-katex),不再是 pre-wrap 纯文本。 */
+.reading-ai-item-text { color: #292724; font-family: var(--font-reader-serif); font-size: 14px; line-height: 1.85; overflow-wrap: break-word; }
+.reading-ai-item-text > :first-child { margin-top: 0; }
+.reading-ai-item-text > :last-child { margin-bottom: 0; }
+.reading-ai-item-text p { margin: 0.55em 0; }
+.reading-ai-item-text ul, .reading-ai-item-text ol { margin: 0.55em 0; padding-left: 1.5em; }
+.reading-ai-item-text li { margin: 0.2em 0; }
+.reading-ai-item-text code { background: #f0ede7; border-radius: 3px; font-family: var(--font-reader-mono, monospace); font-size: 0.9em; padding: 1px 4px; }
+.reading-ai-item-text pre { background: #f0ede7; border-radius: 6px; overflow-x: auto; padding: 10px 12px; }
+.reading-ai-item-text pre code { background: none; padding: 0; }
+.reading-ai-item-text blockquote { border-left: 2px solid var(--line-strong); color: var(--muted); margin: 0.55em 0; padding-left: 10px; }
+.reading-ai-item-text .katex-block { margin: 0.7em 0; overflow-x: auto; text-align: center; }
+.reading-ai-item-text .katex { font-size: 1.02em; }
 .reading-ai-item.error .reading-ai-item-text { color: var(--muted); }
 .reading-ai-cursor::after { animation: reading-ai-blink 1s steps(2) infinite; color: var(--coral); content: "▍"; }
 @keyframes reading-ai-blink { 50% { opacity: 0; } }
@@ -809,9 +822,15 @@ body:has(.reading-ai-panel.open) .reading-ai-rail { display: none; }
 .reading-ai-mode button.on { background: var(--ink); border-color: var(--ink); color: #f5f4f0; }
 .reading-ai-quick button { background: none; border: 1px solid var(--line-strong); border-radius: 5px; color: var(--ink); cursor: pointer; font-size: 11.5px; padding: 5px 12px; }
 .reading-ai-quick button:disabled, .reading-ai-ask button:disabled { cursor: default; opacity: 0.45; }
-.reading-ai-ask { display: flex; gap: 8px; }
+.reading-ai-ask { display: grid; gap: 6px; }
+.reading-ai-ask-row { display: flex; gap: 8px; }
 .reading-ai-ask textarea { border: 1px solid var(--line-strong); border-radius: 6px; font-family: var(--font-reader-sans); font-size: 12.5px; line-height: 1.6; max-width: 100%; padding: 8px 10px; resize: none; width: 100%; }
-.reading-ai-ask button { align-self: flex-end; background: var(--ink); border: 0; border-radius: 6px; color: #f5f4f0; cursor: pointer; flex: 0 0 auto; padding: 8px 10px; }
+.reading-ai-ask-row > button { align-self: flex-end; background: var(--ink); border: 0; border-radius: 6px; color: #f5f4f0; cursor: pointer; flex: 0 0 auto; padding: 8px 10px; }
+.reading-ai-ask-row .reading-ai-attach-btn { background: none; border: 1px solid var(--line-strong); color: var(--ink); }
+.reading-ai-attach { align-items: center; background: #f7f5f0; border: 1px solid var(--line); border-radius: 6px; display: flex; gap: 8px; padding: 5px 8px; width: fit-content; }
+.reading-ai-attach img { border-radius: 4px; display: block; max-height: 44px; max-width: 72px; object-fit: cover; }
+.reading-ai-attach button { background: none; border: 0; color: #a2a29b; cursor: pointer; padding: 2px; }
+.reading-ai-attach button:hover { color: var(--ink); }
 .reading-ai-spin { animation: reading-ai-rotate 0.9s linear infinite; }
 @keyframes reading-ai-rotate { to { transform: rotate(360deg); } }
 /* 划词气泡:选区上方浮出,ink 底白字(呼应 .action-toast 家族)。 */

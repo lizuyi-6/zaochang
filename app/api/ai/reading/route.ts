@@ -1,7 +1,7 @@
 import { jsonError, requireMember } from "../../_lib/community";
 import { findInBook } from "../../_lib/docs";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
-import { AiNotConfiguredError, AiUpstreamError, streamReadingAiCompletion } from "../../_lib/reading-ai-provider";
+import { AiNotConfiguredError, AiUpstreamError, getReadingAiConfig, streamReadingAiCompletion } from "../../_lib/reading-ai-provider";
 import {
   READING_AI_ACTIONS,
   READING_AI_ACTION_LIMITS,
@@ -12,7 +12,9 @@ import {
   buildExplainPrompt,
   buildSummaryPrompt,
   buildTranslatePrompt,
+  parseReadingAiImage,
   type ReadingAiAction,
+  type ReadingAiImage,
   type ReadingAiMode,
 } from "../../_lib/reading-ai-prompts";
 
@@ -33,6 +35,7 @@ type ReadingAiRequestInput = {
   selection?: unknown;
   question?: unknown;
   mode?: unknown;
+  image?: unknown;
 };
 
 function sseFrame(event: string, data: Record<string, unknown>): Uint8Array {
@@ -72,6 +75,23 @@ export async function POST(request: Request) {
       return Response.json({ error: "invalid_mode" }, { status: 400 });
     }
 
+    // 提问附图(多模态):仅 ask 允许;形态/体积由 parseReadingAiImage 校验;
+    // AI_CHAT_VISION 未开启时 fail-closed 400(上游模型不支持图像时不该放行)。
+    let image: ReadingAiImage | undefined;
+    if (input.image !== undefined && input.image !== null && input.image !== "") {
+      if (action !== "ask") return Response.json({ error: "invalid_image" }, { status: 400 });
+      const parsed = parseReadingAiImage(input.image);
+      if (!parsed) return Response.json({ error: "invalid_image" }, { status: 400 });
+      let vision = false;
+      try {
+        vision = getReadingAiConfig().vision;
+      } catch {
+        return Response.json({ error: "ai_not_configured" }, { status: 503 });
+      }
+      if (!vision) return Response.json({ error: "vision_not_supported" }, { status: 400 });
+      image = parsed;
+    }
+
     const limits = READING_AI_ACTION_LIMITS[action];
     await enforceRateLimit(await rateLimitKey(`ai-${action}`, member.email), limits.ratePerHour, 60 * 60);
 
@@ -101,7 +121,7 @@ export async function POST(request: Request) {
           ? buildTranslatePrompt({ bookTitle: found.book.title, chapterTitle: found.doc.title, selection })
           : action === "summary"
             ? buildSummaryPrompt({ bookTitle: found.book.title, chapterTitle: found.doc.title, chapterText, truncated })
-            : buildAskPrompt({ bookTitle: found.book.title, chapterTitle: found.doc.title, chapterText, truncated, question });
+            : buildAskPrompt({ bookTitle: found.book.title, chapterTitle: found.doc.title, chapterText, truncated, question, hasImage: Boolean(image) });
 
     // 客户端断开(request.signal)与总时长兜底合并;AbortSignal.any 缺失时退化为仅超时。
     const signal =
@@ -117,6 +137,7 @@ export async function POST(request: Request) {
       maxTokens: limits.maxTokens + READING_AI_REASONING_HEADROOM[mode],
       temperature: limits.temperature,
       signal,
+      image,
     });
 
     // 先手动推进一步:配置/上游连接类错误在此抛出 → 头未发,可回干净 JSON。

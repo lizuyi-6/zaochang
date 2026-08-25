@@ -49,5 +49,10 @@
   ],
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    // 「问 AI」多模态开关:=1 才允许提问附图(内联 base64 直发上游)。上游模型
+    // 不支持图像输入时必须保持关闭——路由对带图请求 fail-closed 400。
+    "AI_CHAT_VISION": "1"
   }
 }

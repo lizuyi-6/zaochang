@@ -8,10 +8,11 @@
 // 客户端用 fetch + reader 手解帧(EventSource 不能 POST);TextDecoder(stream:true)
 // + 半帧缓冲处理跨 chunk 断行/断多字节。
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Send, Sparkles, Trash2, X } from "lucide-react";
+import { ImagePlus, Loader2, Send, Sparkles, Trash2, X } from "lucide-react";
 import type { ReadingAiAction, ReadingAiMode } from "../api/_lib/reading-ai-prompts";
+import { renderMarkdownKatexHtml } from "@/app/lib/markdown-katex";
 import {
   abortRunning,
   appendReadingAiDelta,
@@ -48,6 +49,42 @@ const ACTION_LABELS: Record<ReadingAiAction, string> = {
 const MODE_LABELS: Record<ReadingAiMode, string> = { fast: "快速", expert: "专家" };
 const MODE_HINTS: Record<ReadingAiMode, string> = { fast: "秒回,适合随手查", expert: "更深,适合啃难点" };
 
+// 回答正文:markdown + KaTeX(与书籍正文同一条渲染管线,见 @/app/lib/markdown-katex)。
+// 流式期间每 60ms flush 触发一次全量重渲染——回答 ≤ 几 KB,开销可忽略;未闭合的 $
+// 保持字面显示(KaTeX throwOnError:false 容错)。memo 化避免面板开合时重渲染全部历史项。
+const AnswerHtml = memo(function AnswerHtml({ text }: { text: string }) {
+  const html = useMemo(() => renderMarkdownKatexHtml(text), [text]);
+  // 管线已做 sanitize 白名单消毒(禁行内原始 HTML/脚本),与书籍正文同一安全边界。
+  return <div className="reading-ai-item-text" dangerouslySetInnerHTML={{ __html: html }} />;
+});
+
+// 提问附图:客户端 canvas 压缩(长边 ≤1600、webp q0.85)后以 data URL 内联随提问发送,
+// 不经 /api/uploads 存储管道——附图是瞬态输入,只回显给提问者本人。
+const IMAGE_MAX_EDGE = 1600;
+const IMAGE_MAX_DATAURL_CHARS = 4_700_000; // ≈3.5 MiB base64,留足服务端 4 MiB 解码上限余量
+
+async function prepareImageDataUrl(file: File): Promise<string> {
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error("unsupported_type");
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no_canvas");
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL("image/webp", 0.85);
+    if (!dataUrl.startsWith("data:image/")) throw new Error("encode_failed");
+    if (dataUrl.length > IMAGE_MAX_DATAURL_CHARS) throw new Error("too_large");
+    return dataUrl;
+  } finally {
+    bitmap.close();
+  }
+}
+
 // summary 的会话级缓存:同章节同模式未重编辑(updatedAt 键)直接复用,零后端。
 function summaryCacheKey(docId: string, updatedAt: string, mode: ReadingAiMode) {
   return `reading-ai:s:${mode}:${docId}:${updatedAt}`;
@@ -74,7 +111,9 @@ export function ReadingAiDock(props: Props) {
   const state = useSyncExternalStore(subscribeReadingAi, getReadingAiSnapshot, getReadingAiServerSnapshot);
   const [bubble, setBubble] = useState<{ top: number; left: number; selection: string } | null>(null);
   const [question, setQuestion] = useState("");
+  const [image, setImage] = useState<string | null>(null);
   const [hint, setHint] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const invokerRef = useRef<HTMLElement | null>(null);
@@ -140,7 +179,7 @@ export function ReadingAiDock(props: Props) {
   // —— 请求生命周期 ——
 
   const runAction = useCallback(
-    async (kind: ReadingAiAction, payload: { selection?: string; question?: string }) => {
+    async (kind: ReadingAiAction, payload: { selection?: string; question?: string; image?: string }) => {
       setHint("");
       const mode = state.mode;
       if (kind === "summary") {
@@ -155,6 +194,7 @@ export function ReadingAiDock(props: Props) {
         kind,
         label: ACTION_LABELS[kind],
         quote: payload.selection ? payload.selection.slice(0, 120) : payload.question?.slice(0, 120),
+        image: payload.image,
       });
       if (!state.open) toggleReadingAi();
       const controller = new AbortController();
@@ -169,6 +209,7 @@ export function ReadingAiDock(props: Props) {
             path: props.path,
             selection: payload.selection,
             question: payload.question,
+            image: payload.image,
             mode,
           }),
           signal: controller.signal,
@@ -243,9 +284,20 @@ export function ReadingAiDock(props: Props) {
       setHint("问题太短,再补充一些");
       return;
     }
+    const attached = image ?? undefined;
     setQuestion("");
-    void runAction("ask", { question: text });
-  }, [question, runAction]);
+    setImage(null);
+    void runAction("ask", { question: text, image: attached });
+  }, [question, image, runAction]);
+
+  const attachImage = useCallback(async (file: File) => {
+    setHint("");
+    try {
+      setImage(await prepareImageDataUrl(file));
+    } catch {
+      setHint("仅支持 PNG/JPEG/WebP 图片,体积不能太大");
+    }
+  }, []);
 
   const handleSelectionAction = useCallback(
     (kind: ReadingAiAction) => {
@@ -334,7 +386,8 @@ export function ReadingAiDock(props: Props) {
                 </button>
               </header>
               {item.quote && <blockquote className="reading-ai-item-quote">{item.quote}</blockquote>}
-              <div className="reading-ai-item-text">{item.text}</div>
+              {item.image && <img className="reading-ai-item-image" src={item.image} alt="提问附图" />}
+              <AnswerHtml text={item.text} />
               {item.status === "streaming" && <span className="reading-ai-cursor" aria-hidden="true" />}
               {item.status === "error" && (
                 <p className="reading-ai-item-error">
@@ -344,7 +397,11 @@ export function ReadingAiDock(props: Props) {
                       ? "助手尚未配置"
                       : item.errorCode === "auth_required"
                         ? "请先登录"
-                        : "生成失败,请重试"}
+                        : item.errorCode === "vision_not_supported"
+                          ? "当前模型不支持看图"
+                          : item.errorCode === "invalid_image"
+                            ? "图片格式或体积不支持"
+                            : "生成失败,请重试"}
                 </p>
               )}
             </article>
@@ -373,22 +430,67 @@ export function ReadingAiDock(props: Props) {
             </button>
           </div>
           <div className="reading-ai-ask">
-            <textarea
-              value={question}
-              maxLength={500}
-              rows={2}
-              placeholder="针对本章提问…"
-              onChange={(event) => setQuestion(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  submitQuestion();
-                }
-              }}
-            />
-            <button type="button" disabled={state.running || state.unconfigured} onClick={submitQuestion} aria-label="发送提问">
-              {state.running ? <Loader2 size={15} className="reading-ai-spin" /> : <Send size={15} />}
-            </button>
+            {image && (
+              <div className="reading-ai-attach">
+                <img src={image} alt="附图预览" />
+                <button type="button" onClick={() => setImage(null)} aria-label="移除附图">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+            <div className="reading-ai-ask-row">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void attachImage(file);
+                }}
+              />
+              <button
+                type="button"
+                className="reading-ai-attach-btn"
+                disabled={state.running || state.unconfigured}
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="附加图片"
+                title="附加图片(也可直接粘贴截图)"
+              >
+                <ImagePlus size={15} />
+              </button>
+              <textarea
+                value={question}
+                maxLength={500}
+                rows={2}
+                placeholder="针对本章提问…"
+                onChange={(event) => setQuestion(event.target.value)}
+                onPaste={(event) => {
+                  const items = event.clipboardData?.items;
+                  if (!items) return;
+                  for (const clipItem of items) {
+                    if (clipItem.type.startsWith("image/")) {
+                      const file = clipItem.getAsFile();
+                      if (file) {
+                        event.preventDefault();
+                        void attachImage(file);
+                      }
+                      return;
+                    }
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    submitQuestion();
+                  }
+                }}
+              />
+              <button type="button" disabled={state.running || state.unconfigured} onClick={submitQuestion} aria-label="发送提问">
+                {state.running ? <Loader2 size={15} className="reading-ai-spin" /> : <Send size={15} />}
+              </button>
+            </div>
           </div>
         </footer>
       </div>
