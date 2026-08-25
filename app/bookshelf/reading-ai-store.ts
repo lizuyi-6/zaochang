@@ -14,6 +14,7 @@ export type ReadingAiItem = {
   kind: ReadingAiAction;
   label: string;
   quote?: string; // 选中文本摘录或用户提问,展示在答案上方
+  image?: string; // 提问附图的 data URL(仅内存,不持久化),展示缩略图
   text: string;
   status: "streaming" | "done" | "error";
   errorCode?: string;
@@ -102,13 +103,14 @@ export function toggleReadingAi(invoker?: HTMLElement | null) {
 
 let itemSeq = 0;
 
-export function startReadingAiItem(input: { kind: ReadingAiAction; label: string; quote?: string; cachedText?: string }): ReadingAiItem {
+export function startReadingAiItem(input: { kind: ReadingAiAction; label: string; quote?: string; image?: string; cachedText?: string }): ReadingAiItem {
   itemSeq += 1;
   const item: ReadingAiItem = {
     id: `ai-${Date.now()}-${itemSeq}`,
     kind: input.kind,
     label: input.label,
     quote: input.quote,
+    image: input.image,
     text: input.cachedText ?? "",
     status: input.cachedText ? "done" : "streaming",
     cached: Boolean(input.cachedText),

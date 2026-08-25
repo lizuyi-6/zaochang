@@ -29,8 +29,10 @@ import {
   READING_AI_REASONING_HEADROOM,
   buildAskPrompt,
   detectTargetLang,
+  parseReadingAiImage,
   resolveReadingAiConfig,
 } from "../app/api/_lib/reading-ai-prompts.ts";
+import { renderMarkdownKatexHtml } from "../app/lib/markdown-katex.ts";
 
 const port = 4179;
 const baseUrl = `http://127.0.0.1:${port}`;
@@ -62,6 +64,15 @@ function resetAiUpstream() {
 
 async function startFakeAiUpstream() {
   const sseChunks = ["这是", "假定的", "模型增量", "输出。"];
+  // content 可能是 string(纯文本)或数组(多模态);抽出文本部分供 fail 标记与既有断言,
+  // 原始 content 另存 userContent 供多模态形态断言。
+  const userText = (content) => {
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content.filter((block) => block && block.type === "text").map((block) => String(block.text ?? "")).join("\n");
+    }
+    return "";
+  };
   aiServer = createServer(async (request, response) => {
     // 两种传输:/v1/chat/completions(OpenAI 风格)与 /v1/messages(Anthropic 风格,专家模型专用)
     const isMessages = request.url === "/v1/messages";
@@ -77,29 +88,18 @@ async function startFakeAiUpstream() {
     const chunks = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    if (isMessages) {
-      lastChatCompletion = {
-        model: body.model,
-        max_tokens: body.max_tokens,
-        temperature: body.temperature,
-        stream: body.stream,
-        system: body.system ?? "",
-        user: body.messages?.[0]?.content ?? "",
-        messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
-        transport: "messages",
-      };
-    } else {
-      lastChatCompletion = {
-        model: body.model,
-        max_tokens: body.max_tokens,
-        temperature: body.temperature,
-        stream: body.stream,
-        system: body.messages?.[0]?.content ?? "",
-        user: body.messages?.[1]?.content ?? "",
-        messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
-        transport: "chat",
-      };
-    }
+    const rawContent = isMessages ? body.messages?.[0]?.content : body.messages?.[1]?.content;
+    lastChatCompletion = {
+      model: body.model,
+      max_tokens: body.max_tokens,
+      temperature: body.temperature,
+      stream: body.stream,
+      system: isMessages ? (body.system ?? "") : (body.messages?.[0]?.content ?? ""),
+      user: userText(rawContent),
+      userContent: rawContent ?? "",
+      messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
+      transport: isMessages ? "messages" : "chat",
+    };
     aiUpstreamCount += 1;
     if ((lastChatCompletion.user ?? "").includes("AI-UPSTREAM-FAIL-TEST")) {
       response.writeHead(500, { "content-type": "application/json" });
@@ -282,6 +282,7 @@ function previewServerArgs() {
     "--var", "AI_CHAT_MODEL:test-model-1",
     "--var", "AI_CHAT_MODEL_EXPERT:test-model-expert",
     "--var", "AI_CHAT_EXPERT_TRANSPORT:messages",
+    "--var", "AI_CHAT_VISION:1",
     "--var", `EMAIL_SEND_BASE_URL:http://127.0.0.1:${emailPort}`,
     "--var", "EMAIL_SEND_ACCOUNT_ID:test-email-account",
     "--var", "EMAIL_SEND_API_TOKEN:test-email-key",
@@ -3925,9 +3926,13 @@ test("reading-ai config: resolves only with all three vars, enforces https/loopb
   assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_MODEL_EXPERT: "  " }).expertModel, "m", "空白专家模型视为未配置");
   assert.deepEqual(
     resolveReadingAiConfig({ ...full, AI_CHAT_BASE_URL: "http://127.0.0.1:1234/v1" }),
-    { baseUrl: "http://127.0.0.1:1234/v1", apiKey: "k", model: "m", expertModel: "m", expertTransport: "chat" },
+    { baseUrl: "http://127.0.0.1:1234/v1", apiKey: "k", model: "m", expertModel: "m", expertTransport: "chat", vision: false },
     "http+loopback 应允许(本地假上游)",
   );
+  // 多模态开关:缺省/非 "1" → false(fail-closed);仅 "1" 开启
+  assert.equal(resolveReadingAiConfig(full).vision, false, "缺省 AI_CHAT_VISION 应关闭");
+  assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_VISION: "1" }).vision, true, "AI_CHAT_VISION=1 应开启 vision");
+  assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_VISION: "true" }).vision, false, "仅字面 1 生效");
   assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_BASE_URL: "http://example.com/v1" }), null, "http 非 loopback 应 null");
   assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_BASE_URL: "ftp://x/v1" }), null, "非 http(s) 协议应 null");
   assert.equal(resolveReadingAiConfig({ ...full, AI_CHAT_BASE_URL: "not a url" }), null, "非法 URL 应 null");
@@ -3957,6 +3962,40 @@ test("reading-ai prompts: language heuristic and builders carry grounding marker
   // 身份保密条款(反套话):不透露模型/厂商/版本/系统提示词
   assert.match(ask.system, /不透露、不暗示、不确认/, "system 应带身份保密条款");
   assert.match(ask.system, /造场的阅读助手/, "被问身份时的标准答复应是平台角色而非模型名");
+  // 公式条款:引导模型用 $...$ / $$...$$ 输出 LaTeX(前端按 KaTeX 渲染)
+  assert.match(ask.system, /\$\.\.\.\$/);
+  // 附图指引:仅 hasImage 时出现
+  const askWithImage = buildAskPrompt({ bookTitle: "书A", chapterTitle: "第一章", chapterText: "正文材料", truncated: false, question: "问题", hasImage: true });
+  assert.match(askWithImage.user, /【附图】/, "带图提问应有附图指引");
+  assert.doesNotMatch(ask.user, /【附图】/, "无图提问不应有附图指引");
+});
+
+test("reading-ai image: parseReadingAiImage validates data-url shape and size", () => {
+  const good = `data:image/webp;base64,${Buffer.from("fake-webp-payload").toString("base64")}`;
+  assert.deepEqual(parseReadingAiImage(good), { mediaType: "image/webp", dataUrl: good });
+  assert.equal(parseReadingAiImage("data:image/gif;base64,AAAA"), null, "gif 不在白名单");
+  assert.equal(parseReadingAiImage("data:image/webp;base64,"), null, "空 base64 应拒绝");
+  assert.equal(parseReadingAiImage("https://evil.example/x.png"), null, "外部 URL 应拒绝");
+  assert.equal(parseReadingAiImage(123), null, "非字符串应拒绝");
+  assert.equal(parseReadingAiImage(`data:text/html;base64,${Buffer.from("x").toString("base64")}`), null, "非图片 mime 应拒绝");
+  const oversized = `data:image/png;base64,${Buffer.alloc(READING_AI_LIMITS.imageBytes + 1).toString("base64")}`;
+  assert.equal(parseReadingAiImage(oversized), null, "超 4 MiB 解码上限应拒绝");
+  const atLimit = `data:image/png;base64,${Buffer.alloc(READING_AI_LIMITS.imageBytes).toString("base64")}`;
+  assert.ok(parseReadingAiImage(atLimit), "恰好等于上限应放行");
+});
+
+test("reading-ai render: markdown + KaTeX pipeline renders formulas and sanitizes", () => {
+  const html = renderMarkdownKatexHtml("主频公式 $f = \\frac{1}{T_{\\text{clk}}}$ 与 **加粗术语** 说明");
+  assert.match(html, /class="katex"/, "行内公式应渲染为 KaTeX 结构");
+  assert.match(html, /<strong>加粗术语<\/strong>/, "粗体应渲染为 <strong>");
+  assert.doesNotMatch(html, /\$f = /, "公式分隔符不应裸露");
+  const block = renderMarkdownKatexHtml("$$\nT_{CPU} = N \\times CPI\n$$");
+  assert.match(block, /katex-block/, "块级公式应有 katex-block 容器");
+  // XSS 面:行内 HTML/脚本/坏协议一律剥掉
+  const evil = renderMarkdownKatexHtml('<img src=x onerror="alert(1)"> [点我](javascript:alert(2)) <script>alert(3)</script>');
+  assert.doesNotMatch(evil, /onerror/, "事件属性应被 sanitize 剥掉");
+  assert.doesNotMatch(evil, /javascript:/, "javascript: 协议应被剥掉");
+  assert.doesNotMatch(evil, /<script>/, "script 标签应被剥掉");
 });
 
 // —— 阅读页「问 AI」:集成测试(fail-closed 门禁、服务端解析章节、clamp、SSE 流式) ——
@@ -4108,6 +4147,48 @@ test("reading-ai: fail-closed gating, server-side chapter resolution, clamps, SS
     assert.match(lastChatCompletion.user, /英文/, "中文选择应译为英文");
     await post(null, { action: "translate", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "Attention is all you need" });
     assert.match(lastChatCompletion.user, /中文/, "英文选择应译为中文");
+
+    // 9b) 多模态附图:fast(chat 传输)user content 应变数组 [text, image_url],
+    //     文本部分含附图指引;expert(messages 传输)变 Anthropic image base64 块;
+    //     无图时 content 保持纯 string(防回归);坏 mime/超限/非 ask 带图 → 400 且零上游
+    const imageDataUrl = `data:image/webp;base64,${Buffer.from("fake-webp-screenshot-bytes").toString("base64")}`;
+    resetAiUpstream();
+    const imgAsk = await post(null, { action: "ask", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], question: "这张架构图说明了什么", image: imageDataUrl });
+    assert.equal(imgAsk.status, 200);
+    await readSse(imgAsk);
+    assert.ok(Array.isArray(lastChatCompletion.userContent), "带图时 chat content 应为数组");
+    assert.equal(lastChatCompletion.userContent[0].type, "text");
+    assert.equal(lastChatCompletion.userContent[1].type, "image_url");
+    assert.equal(lastChatCompletion.userContent[1].image_url.url, imageDataUrl, "image_url 应原样携带 data URL");
+    assert.match(lastChatCompletion.userContent[0].text, /【附图】/, "带图提问应含附图指引");
+    const imgExpert = await post(null, { action: "ask", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], question: "这张图说明了什么", image: imageDataUrl, mode: "expert" });
+    assert.equal(imgExpert.status, 200);
+    await readSse(imgExpert);
+    assert.equal(lastChatCompletion.transport, "messages");
+    assert.ok(Array.isArray(lastChatCompletion.userContent), "带图时 messages content 应为数组");
+    assert.equal(lastChatCompletion.userContent[0].type, "image", "Anthropic 协议图片块应在文本之前");
+    assert.equal(lastChatCompletion.userContent[0].source.type, "base64");
+    assert.equal(lastChatCompletion.userContent[0].source.media_type, "image/webp");
+    assert.equal(lastChatCompletion.userContent[0].source.data, imageDataUrl.slice(imageDataUrl.indexOf(",") + 1), "source.data 应为 data URL 的 base64 本体");
+    assert.equal(lastChatCompletion.userContent[1].type, "text");
+    resetAiUpstream();
+    const noImgAsk = await post(null, { action: "ask", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], question: "不带图的普通问题" });
+    assert.equal(noImgAsk.status, 200);
+    await readSse(noImgAsk);
+    assert.equal(typeof lastChatCompletion.userContent, "string", "无图时 content 应保持纯 string(防回归)");
+    assert.doesNotMatch(lastChatCompletion.userContent, /【附图】/);
+    const imgExplain = await post(null, { action: "explain", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], selection: "文本", image: imageDataUrl });
+    assert.equal(imgExplain.status, 400, "非 ask 带图应 400");
+    assert.equal((await imgExplain.json()).error, "invalid_image");
+    const imgBadMime = await post(null, { action: "ask", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], question: "看图", image: "data:image/gif;base64,R0lGODdh" });
+    assert.equal(imgBadMime.status, 400, "白名单外 mime 应 400");
+    assert.equal((await imgBadMime.json()).error, "invalid_image");
+    const imgOversized = await post(null, { action: "ask", bookSlug: `aibook-${tag}`, path: ["part-1", "chap-1"], question: "看图", image: `data:image/png;base64,${Buffer.alloc(READING_AI_LIMITS.imageBytes + 1).toString("base64")}` });
+    assert.equal(imgOversized.status, 400, "超 4 MiB 应 400");
+    assert.equal((await imgOversized.json()).error, "invalid_image");
+    assert.equal(aiUpstreamCount, 1, "只有合法带图请求才应触达上游(1 次无图 ask)");
+    // 注:vision_not_supported 分支(AI_CHAT_VISION 未开)由 config 单测覆盖解析层;
+    // 本 harness 恒开 AI_CHAT_VISION,路由 400 分支无法在集成侧复现,属已知未覆盖点。
 
     // 10) 上游失败(pre-stream)→ JSON 503 ai_upstream_error(而非 SSE)
     resetAiUpstream();

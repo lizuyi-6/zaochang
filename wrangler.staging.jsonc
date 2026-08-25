@@ -42,5 +42,9 @@
   ],
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    // 同 wrangler.prod.jsonc:「问 AI」多模态开关。
+    "AI_CHAT_VISION": "1"
   }
 }

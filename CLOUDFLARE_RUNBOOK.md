@@ -93,6 +93,7 @@ AI_CHAT_EXPERT_TRANSPORT(可选,=messages 时专家模型走 Anthropic Messages 
 
 - `AI_CHAT_MODEL_EXPERT` 可选:「问 AI」专家模式使用的模型;未设置(或空)时专家模式回落 `AI_CHAT_MODEL`。**模型名是运营配置,永不外泄给客户端**(done 帧无 model 字段,前端只显示"快速/专家"标签)。
 - `AI_CHAT_EXPERT_TRANSPORT` 可选:专家模型的传输协议。缺省/其他值 = OpenAI `chat/completions`;`messages` = Anthropic 风格 `/v1/messages`(仅开放 Messages API 的模型用,如 StepFun `step-explore`;`thinking_delta` 被服务端丢弃,不透传)。
+- `AI_CHAT_VISION`(普通 var,**非 secret**,配在 wrangler.*.jsonc 的 `vars`):「问 AI」提问附图(多模态)开关。`=1` 才放行;缺省/其他值 ⇒ 带图请求 fail-closed 400 `vision_not_supported`,不带图零行为变化。附图内联 base64 直发上游(解码后 ≤4 MiB,仅 png/jpeg/webp),**不走** /api/uploads 的 R2+ClamAV 管道——瞬态输入不落库。上游换成不支持图像输入的模型时必须关掉。本地/测试用 `wrangler dev --var AI_CHAT_VISION:1` 注入(`.openai/hosting.json` 只有绑定名,无 vars 概念)。
 
 - **禁止**把 `LOCAL_DEV_LOGIN` 配进生产/staging secrets:它是本地模拟登录(`/api/auth/dev-login`)的开关,生产侧由 `APP_ENV=production` 无条件 404 兜底(双 fail-closed,见 `app/api/_lib/dev-login-gate.ts`),不要给第二道门留例外。
 

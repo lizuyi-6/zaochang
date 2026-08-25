@@ -4,6 +4,7 @@ import {
   type BuiltPrompt,
   type RawEnv,
   type ReadingAiConfig,
+  type ReadingAiImage,
   type ReadingAiMode,
 } from "./reading-ai-prompts";
 // OpenAI 兼容 chat-completions 流式客户端(DeepSeek / OpenRouter / Moonshot 等通用),
@@ -42,6 +43,11 @@ function resolveConfigOrThrow(): ReadingAiConfig {
   return config;
 }
 
+// 路由在发流前需要读配置(如校验 vision 开关)时用;缺配置抛 AiNotConfiguredError(fail-closed)。
+export function getReadingAiConfig(): ReadingAiConfig {
+  return resolveConfigOrThrow();
+}
+
 type ChatCompletionChunk = {
   choices?: Array<{ delta?: { content?: unknown } }>;
 };
@@ -77,12 +83,28 @@ export async function* streamReadingAiCompletion(options: {
   maxTokens: number;
   temperature: number;
   signal: AbortSignal;
+  // 提问附图(多模态):存在时 user content 从纯 string 改为数组形态(两种传输各自的多模态格式)。
+  image?: ReadingAiImage;
 }): AsyncGenerator<string> {
   const { baseUrl, apiKey, model, expertModel, expertTransport } = resolveConfigOrThrow();
   const chosenModel = options.mode === "expert" ? expertModel : model;
   // 专家模型可切 Anthropic Messages 传输(AI_CHAT_EXPERT_TRANSPORT=messages):
   // StepFun step-explore 等模型仅开放 /v1/messages,不支持 chat/completions。fast 恒走 chat。
   const useMessages = options.mode === "expert" && expertTransport === "messages";
+  // 多模态 content:chat 走 OpenAI image_url 块;messages 走 Anthropic image base64 块
+  // (source 需要从 data URL 拆出 media_type 与 base64 本体)。无图时 content 保持纯 string,
+  // 消息体与改动前逐字节一致。
+  const userContent: unknown = options.image
+    ? useMessages
+      ? [
+          { type: "image", source: { type: "base64", media_type: options.image.mediaType, data: options.image.dataUrl.slice(options.image.dataUrl.indexOf(",") + 1) } },
+          { type: "text", text: options.prompt.user },
+        ]
+      : [
+          { type: "text", text: options.prompt.user },
+          { type: "image_url", image_url: { url: options.image.dataUrl } },
+        ]
+    : options.prompt.user;
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${useMessages ? "/messages" : "/chat/completions"}`, {
@@ -99,7 +121,7 @@ export async function* streamReadingAiCompletion(options: {
             max_tokens: options.maxTokens,
             // Messages 协议里 system 是顶层字段,不在 messages 数组内。
             system: options.prompt.system,
-            messages: [{ role: "user", content: options.prompt.user }],
+            messages: [{ role: "user", content: userContent }],
           })
         : JSON.stringify({
             model: chosenModel,
@@ -108,7 +130,7 @@ export async function* streamReadingAiCompletion(options: {
             max_tokens: options.maxTokens,
             messages: [
               { role: "system", content: options.prompt.system },
-              { role: "user", content: options.prompt.user },
+              { role: "user", content: userContent },
             ],
           }),
       signal: options.signal,
