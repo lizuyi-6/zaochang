@@ -1,5 +1,19 @@
 # 造场项目账本
 
+## 2026-08-26(三)安卓壳+APK 分发上线(GitHub Actions outage 期间走本地手动部署)
+
+- 状态:**已上线**。commit `b94c96d` 推送 main 成功但未触发任何 Actions run——GitHub 全平台 Actions major outage(status API 实证:Actions component=major_outage;事故公告「database primary 故障,主从切换中」,起于 UTC 15:11,push 在其前 6 分钟)。按 runbook 应急路径改走**本地手动部署**,与 deploy.yml 逐步等价:
+  - checkout 锚点一致性:本地 HEAD=远程 main=`b94c96d`(gh api 证实),工作区干净(diff 仅本账本);
+  - `npm run build` exit 0;
+  - 迁移核对(check-migrations.mjs 需 REST token 而本地无 → 用 wrangler OAuth 等价执行):`wrangler d1 execute zaochang-db --remote --json "SELECT created_at FROM __drizzle_migrations … LIMIT 1"` 得生产水位 `1787478054485`,与 journal 最新(`0018_stale_speed_demon`, when=`1787478054485`)逐字节相等 → PASS,零新迁移;
+  - `npx wrangler deploy --config wrangler.prod.jsonc`(代理 per-command 注入):98 新资产上传(APK 含内),Current Version ID `b0cc0a26-30b2-4946-a102-5c4dc2de519b`,triggers apex+www。凭据为本次重登的 wrangler OAuth(zaherharris65@gmail.com,账号 ID 与 runbook §1 锚点一致)。
+- 生产实测(盒子 curl,DNS 干净):
+  - `/api/app-shell` → 200,no-store;manifest:`schemaVersion=1 / web.buildId="2026-08-26.2" / minShellVersionCode=1 / android.downloadUrl=https://aetherstudio.top/downloads/zaochang-1.0.0.apk / android.sha256=d011a998…f7a467dd`;
+  - `/downloads/zaochang-1.0.0.apk` → 200,`content-type: application/vnd.android.package-archive`,`cache-control: public, max-age=31536000, immutable`,nosniff;盒子下载后 sha256==`d011a998dd3202936923cbe5c5407d044967b817fe55a5bbb91bb503f7a467dd`,大小 663,446 —— 与签名构建产物/app-download.ts 常量三方一致;
+  - `/app` 页 → 200,HTML 含下载链接、sha256、「造场 App」标题。
+- 兼容门禁就此在生产生效:旧壳拿到 min>自身 versionCode 的清单会进原生升级页(fail-closed 分支此前未被生产触发过,逻辑由模拟器审查+代码路径覆盖,真机触发场景仍无端到端实例)。
+- 已知差异/风险:①本地 Node v24.13.1 vs CI 22.13(build/test 均通过,历史所有本地验证同为 v24,如实声明非同版本);②本次发布未经 CI release-gates 的远程复核,门禁靠本地等价五步(tsc/lint/npm test 99 通过/git diff --check/迁移核对——前四者在本轮(二)已全绿);③GitHub 恢复后若补跑 b94c96d 或后续 ledger commit 触发的 release-gates→deploy 为同码幂等重部署,无害。
+
 ## 2026-08-26 安卓壳(web-to-android)
 
 **结论:壳工程已就位、构建与模拟器运行时验证通过;未部署、未分发、release 签名未配置——不可投产。**
