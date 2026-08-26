@@ -410,24 +410,26 @@ export function ReadingAiDock(props: Props) {
 
         <footer className="reading-ai-foot">
           {hint && <p className="reading-ai-hint">{hint}</p>}
-          <div className="reading-ai-mode" role="group" aria-label="回答模式">
-            {(Object.keys(MODE_LABELS) as ReadingAiMode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={state.mode === m ? "on" : ""}
-                aria-pressed={state.mode === m}
-                title={MODE_HINTS[m]}
-                onClick={() => setReadingAiMode(m)}
-              >
-                {MODE_LABELS[m]}
+          <div className="reading-ai-toolbar">
+            <div className="reading-ai-mode" role="group" aria-label="回答模式">
+              {(Object.keys(MODE_LABELS) as ReadingAiMode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={state.mode === m ? "on" : ""}
+                  aria-pressed={state.mode === m}
+                  title={MODE_HINTS[m]}
+                  onClick={() => setReadingAiMode(m)}
+                >
+                  {MODE_LABELS[m]}
+                </button>
+              ))}
+            </div>
+            <div className="reading-ai-quick">
+              <button type="button" disabled={state.running || state.unconfigured} onClick={() => void runAction("summary", {})}>
+                本章小结
               </button>
-            ))}
-          </div>
-          <div className="reading-ai-quick">
-            <button type="button" disabled={state.running || state.unconfigured} onClick={() => void runAction("summary", {})}>
-              本章小结
-            </button>
+            </div>
           </div>
           <div className="reading-ai-ask">
             {image && (
@@ -439,27 +441,6 @@ export function ReadingAiDock(props: Props) {
               </div>
             )}
             <div className="reading-ai-ask-row">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                hidden
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) void attachImage(file);
-                }}
-              />
-              <button
-                type="button"
-                className="reading-ai-attach-btn"
-                disabled={state.running || state.unconfigured}
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="附加图片"
-                title="附加图片(也可直接粘贴截图)"
-              >
-                <ImagePlus size={15} />
-              </button>
               <textarea
                 value={question}
                 maxLength={500}
@@ -491,6 +472,26 @@ export function ReadingAiDock(props: Props) {
                 {state.running ? <Loader2 size={15} className="reading-ai-spin" /> : <Send size={15} />}
               </button>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void attachImage(file);
+              }}
+            />
+            <button
+              type="button"
+              className="reading-ai-attach-btn"
+              disabled={state.running || state.unconfigured}
+              onClick={() => fileInputRef.current?.click()}
+              title="附加图片(也可直接粘贴截图)"
+            >
+              <ImagePlus size={13} /> 附加图片
+            </button>
           </div>
         </footer>
       </div>
