@@ -21,6 +21,8 @@ const eslintConfig = defineConfig([
     // 未跟踪的 scratch 脚本与自动生成的 binding 类型声明，不参与 lint。
     ".tmp-preview-state/**",
     "worker-configuration.d.ts",
+    // 安卓壳工程（Gradle/Kotlin），不参与 web 侧 lint。
+    "android/**",
   ]),
   {
     // vinext 用原生 <img> + /_vinext/image 优化，不走 next/image，
