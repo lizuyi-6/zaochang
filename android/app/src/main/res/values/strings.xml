@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">造场</string>
+    <string name="loading">正在连接造场…</string>
+    <string name="error_title">无法连接造场</string>
+    <string name="error_detail_default">网络连接失败,请检查网络后重试。</string>
+    <string name="error_ssl">安全证书校验失败,已停止加载。</string>
+    <string name="button_retry">重试</string>
+    <string name="upgrade_title">造场已更新</string>
+    <string name="upgrade_detail">网站新版本需要更新后的应用才能使用。请安装新版应用,或先在浏览器中继续使用。</string>
+    <string name="button_open_browser">在浏览器中打开</string>
+    <string name="button_recheck">重新检测</string>
+    <string name="download_started">已开始下载</string>
+    <string name="no_external_app">没有可打开此链接的应用</string>
+</resources>

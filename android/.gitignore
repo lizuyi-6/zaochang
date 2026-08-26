@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# IDE
+.idea/
+*.iml
+
+# 本机 SDK 路径
+local.properties
+
+# 发布签名(绝不入库)
+keystore.properties
+*.jks
+*.keystore
+
+# 其他
+captures/
+.cxx/

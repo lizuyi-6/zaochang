@@ -1,5 +1,55 @@
 # 造场项目账本
 
+## 2026-08-26 安卓壳(web-to-android)
+
+**结论:壳工程已就位、构建与模拟器运行时验证通过;未部署、未分发、release 签名未配置——不可投产。**
+
+### 已做(附证据锚点)
+
+- 架构:远程 WebView 壳(方案 B)+ Mode 1 restart-to-latest。站点是 Workers SSR 非 PWA,TWA 不成立;无 JS↔原生桥需求,Capacitor 无必要。壳代码 `android/app/src/main/java/top/aetherstudio/zaochang/`。
+- Web 侧兼容契约端点 `app/api/app-shell/route.ts`(no-store JSON,schemaVersion=1,minShellVersionCode=1)。集成测试 `tests/rendered-html.test.mjs` 新增 "android app-shell compatibility manifest is no-store JSON with a shell version gate"。全套 `npm test`:**97 pass / 0 fail / 0 skipped / 0 todo,exit 0**。
+- 构建:`gradlew assembleDebug` 与 `assembleRelease lintVitalRelease` 均 BUILD SUCCESSFUL(app-debug.apk 899,567 字节;aapt badging:package=top.aetherstudio.zaochang versionCode=1,targetSdk 36,仅 INTERNET 权限)。工具链:AGP 9.2.0 内置 Kotlin(不应用外部 KGP,2.2.x 与 AGP 9 不兼容)、Gradle 9.4.1、JDK 21(Android Studio JBR)。
+- 模拟器运行时验证(Pixel 6 / API 35 镜像,载 app-debug.apk,连生产 https://aetherstudio.top):
+  - 冷启动:首页完整渲染(顶栏/hero/卡片/底部导航),edge-to-edge 内边距无遮挡;应用零崩溃零 ANR(dropbox 无本包记录)。
+  - 深链:`am start -d https://aetherstudio.top/bookshelf -n top.aetherstudio.zaochang/.MainActivity` → singleTask onNewIntent → 书架页完整渲染(「造场书架」+ Hello LLM 卡片)。`resolveSiteUrl` 主机白名单路径已实走。
+  - 返回键:第 1 次回书架→首页(WebView 历史),第 2 次历史耗尽退出回 launcher——无用户困死。
+  - 断网(有缓存):冷启动仍完整渲染首页(chromium HTTP cache 回退,LOAD_DEFAULT)。
+  - 断网(清数据无缓存):冷启动 25s 内进错误页「无法连接造场 / net::ERR_NAME_NOT_RESOLVED」;恢复网络点「重试」→ 首页恢复。
+- skill 审计脚本:`python scripts/audit_android_wrapper.py` → 2 条 medium,均裁定为 by-design(debugging 由 FLAG_DEBUGGABLE 门控;JS 必需 + 主机白名单),无 high/critical。
+- `git diff --check` exit 0。
+
+### 未做 / 缺口(阻断或待决策)
+
+- **未部署**:`app/api/app-shell` 路由未上生产(生产 fetch 404)。壳当前走「清单不可达→照常加载站点」兜底,**兼容性门禁在生产上尚未生效**——需要一次 web 部署 + 验证 `curl https://aetherstudio.top/api/app-shell` 返回清单。状态:**部分完成,部署前门禁不生效**。
+- **release 签名未配置**:`android/keystore.properties` 不存在,assembleRelease 产出未签名 APK,不可分发。需要用户决策密钥生成/托管。
+- **未分发**:无任何渠道(APK 未交到任何设备/商店)。
+- 真机未验:仅模拟器(x86_64/API 35)。真机 GPU/网络栈/厂商 WebView 行为未覆盖。
+- 设备上未验:登录持久化(cookie 落盘后冷启动登录态)、文件上传选择器、下载落盘、外链外抛(在模拟器上无对应 app 场景)、深链与其他浏览器的默认打开歧义(未做 assetlinks 验证,无法做)。
+- `android/local.properties`(gitignored)与 gradle wrapper dist junction 是本机特定,换机需重建(README 有说明)。
+
+### 本轮未跟踪目录说明
+
+`experiments/`、`mini_cpu/`、`scripts/builder/`、`scripts/import-local-hellocomputer.mjs`、`scripts/test-katex.mjs` 为会话开始前已存在的未跟踪文件,非本轮安卓工作产物。
+
+## 2026-08-26(二)APK 站内分发 + 发布密钥
+
+**结论:签名 APK 已产出并挂到站点 public/downloads,下载页/清单/测试链路本地全绿;尚未部署(未推 main)、未分发。**
+
+### 已做(附证据锚点)
+
+- 发布密钥:`keytool -genkeypair` RSA-2048/10950 天生成 `android/zaochang-release.jks`(PKCS12,store/key 口令同一随机值,均只落盘未回显)。**权威备份在盒子 `/etc/zaochang/zaochang-release.jks` + `keystore.properties`**(root:zaochang 640,2026-08-26 22:37 scp 落盘)。证书 SHA-256 指纹 `71:E2:E8:40:...:D9:FC:A3:59`。
+- 签名构建:`gradlew assembleRelease` BUILD SUCCESSFUL → `app-release.apk` 663,446 字节;`apksigner verify --verbose`:**v2 scheme true**、1 signer、DN/指纹与 keytool 一致;`zipalign -c 4` exit 0。
+- 站内托管:APK 拷贝为 `public/downloads/zaochang-1.0.0.apk`(sha256 `d011a998...f7a467dd`);`public/_headers` 加 `/downloads/*`(nosniff + immutable,文件名版本化)。
+- 单一事实源 `app/api/_lib/app-download.ts`(versionCode/versionName/fileName/sizeBytes/sha256),三方共用:`/api/app-shell` 清单 `android.downloadUrl`(GET 内以请求 origin 动态拼,修复过一次模块顶层引用 request 的运行时错误)、`/app` 下载页(新 `app/app/page.tsx` + globals.css 追加样式)、集成测试。
+- 测试(代理下 `npm test`,wrangler 直连 CF 下载会挂死——两次复现,挂在 `wrangler d1 execute`,netstat 见挂起连接 104.16.5.34:443):**tests 99 / pass 99 / fail 0 / skipped 0 / todo 0,exit 0**。新增 2 测试:①APK 下载字节级校验(200 + content-type + PK 魔数 + byteLength + sha256 与常量一致);②/app 页含下载链接与 sha256。原 manifest 测试扩展 downloadUrl/latestVersionCode 断言。
+- 门禁:`npm run lint` 0 errors(2 warnings 为既有 scripts/builder/core.mjs);`npx tsc --noEmit` exit 0;`git diff --check` exit 0。
+- 盒子分发形态取证(未改动任何生产配置):cloudflared 为 config-file 模式(tunnel `ddc84c25-2f91-4f68-81b2-66572cc06eb2`,ingress 仅 scanner→127.0.0.1:3311),`/root/.cloudflared/cert.pem` 在(可 `tunnel route dns` 加域名,无需 dashboard),nginx 1.28.3 在跑,磁盘 20G 空闲。加 `dl.aetherstudio.top` 可行,但属生产变更且与「盒子 scanner-only」决策相反,**待用户拍板**。
+
+### 未做 / 缺口
+
+- **未部署**:全部 web 侧改动(下载页/清单/APK 文件/_headers)未推 main;生产上 `/api/app-shell` 仍 404、`/downloads/*` 不存在、`/app` 404。待用户确认推送。
+- 盒子 `dl.aetherstudio.top` 未配置(方案已备,待拍板)。
+- 签名 APK 未在任何真机安装验证(仅上轮 debug 包的模拟器验证;release 包未装机)。
 ## 2026-08-26 「问 AI」面板:回答 markdown+KaTeX 渲染 + 提问附图(多模态)(已部署)
 
 - 状态:已上线。commit `eac2bd3` 推送 main(本机直连 GitHub 被重置,经系统代理 `127.0.0.1:6518` per-command `-c http.proxy` 推送,未改 git config);release-gates run 32868949150 与 deploy-production run 32869111018 双 success;生产 Worker Current Version ID `b2bf83d9-c01c-4b42-8779-b76dfc46595d`;部署前置迁移核对通过(journal 最新 0018,本轮零新迁移)。

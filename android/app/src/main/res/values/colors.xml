@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与站点 globals.css 的主题变量保持一致。 -->
+    <color name="paper">#F3F1EC</color>
+    <color name="ink">#171816</color>
+    <color name="muted">#73766F</color>
+    <color name="launcher_background">#F3F1EC</color>
+</resources>

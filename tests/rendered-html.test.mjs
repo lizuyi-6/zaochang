@@ -15,6 +15,7 @@ import { GALAXIES, PLANETS, PLANETS_BY_GALAXY } from "../app/galaxy/cosmic-atlas
 import { GALAXY_BUSINESS, GALAXY_PRODUCTS, PRODUCT_BY_PLANET } from "../app/galaxy/product-galaxy.ts";
 import { FOUNDER_DISPLAY_NAME, products as showcaseProducts } from "../app/lib/community-data.ts";
 import { githubConnectionPage } from "../app/api/auth/[provider]/start/github-connection-page.ts";
+import { APP_DOWNLOAD } from "../app/api/_lib/app-download.ts";
 import { resolvePublicAppOrigin } from "../app/lib/public-origin.ts";
 import { fetchWithTimeout } from "../app/lib/fetch-with-timeout.ts";
 import { GITHUB_CONNECTION_CSP } from "../app/lib/security-policy.ts";
@@ -1697,6 +1698,47 @@ test("production public origin is explicit, HTTPS-only, and fail-closed", () => 
     resolvePublicAppOrigin("http://127.0.0.1:3001", "production", "https://aetherstudio.top"),
     "https://aetherstudio.top",
   );
+});
+
+test("android app-shell compatibility manifest is no-store JSON with a shell version gate", async () => {
+  const response = await fetch(`${baseUrl}/api/app-shell`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+  const manifest = await response.json();
+  assert.equal(manifest.schemaVersion, 1);
+  assert.equal(manifest.web.mode, "remote");
+  assert.equal(manifest.web.minShellVersionCode, 1);
+  assert.equal(manifest.web.bridgeApiVersion, 0);
+  assert.equal(typeof manifest.web.buildId, "string");
+  assert.ok(manifest.web.buildId.length > 0);
+  assert.ok(manifest.web.url.startsWith("http"));
+  assert.equal(manifest.android.required, false);
+  assert.ok(manifest.android.downloadUrl.endsWith(`/${APP_DOWNLOAD.filePath}`));
+  assert.match(manifest.android.sha256, /^[0-9a-f]{64}$/);
+  assert.equal(manifest.android.latestVersionCode, APP_DOWNLOAD.versionCode);
+});
+
+test("android APK download serves the exact published bytes with the manifest's sha256", async () => {
+  const response = await fetch(`${baseUrl}/${APP_DOWNLOAD.filePath}`);
+  assert.equal(response.status, 200);
+  assert.match(
+    response.headers.get("content-type") ?? "",
+    /application\/vnd\.android\.package-archive|application\/octet-stream/,
+  );
+  const bytes = Buffer.from(await response.arrayBuffer());
+  assert.equal(bytes.byteLength, APP_DOWNLOAD.sizeBytes);
+  // APK 是 ZIP:文件头魔数 PK\x03\x04,防止误把 HTML 错误页当安装包。
+  assert.deepEqual([...bytes.subarray(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
+  assert.equal(createHash("sha256").update(bytes).digest("hex"), APP_DOWNLOAD.sha256);
+});
+
+test("/app download page links to the published APK", async () => {
+  const response = await fetch(`${baseUrl}/app`, { headers: { accept: "text/html" } });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, new RegExp(`href="/${APP_DOWNLOAD.filePath}"`));
+  assert.match(html, new RegExp(APP_DOWNLOAD.sha256));
+  assert.match(html, /造场 App/);
 });
 
 test("keeps sign-in outside the community shell", async () => {

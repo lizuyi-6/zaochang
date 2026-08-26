@@ -875,3 +875,18 @@ body:has(.reading-ai-panel.open) .reading-ai-rail { display: none; }
   .official-entry-transition { display: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
+
+/* ————— 安卓 App 下载页(/app)————— */
+.app-download { display: flex; justify-content: center; padding: 42px 20px 72px; width: 100%; }
+.app-download-panel { background: white; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 16px; margin-top: 18px; max-width: 560px; padding: 30px 28px; width: 100%; }
+.app-download-mark { color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.app-download-panel h1 { font-size: 26px; line-height: 1.2; margin: 0; }
+.app-download-intro { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 0; }
+.app-download-cta { height: 46px; font-size: 14px; justify-self: start; padding: 0 22px; }
+.app-download-facts { border-top: 1px solid var(--line); display: grid; gap: 8px; margin: 0; padding-top: 14px; }
+.app-download-facts div { display: grid; gap: 8px; grid-template-columns: 88px 1fr; }
+.app-download-facts dt { color: var(--muted); font-size: 11px; font-weight: 700; }
+.app-download-facts dd { font-size: 12px; margin: 0; word-break: break-all; }
+.app-download-hash { font-family: var(--font-geist-mono), monospace; font-size: 10px; }
+.app-download-steps { color: var(--ink); display: grid; font-size: 12px; gap: 8px; line-height: 1.65; margin: 0; padding-left: 18px; }
+.app-download-note { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.7; padding-top: 12px; }
