@@ -1,5 +1,12 @@
 # 造场项目账本
 
+## 2026-08-27(七)外链外抛实测通过 + 白名单设计勘误((六)中「github 会外抛」的假设有误)
+
+- **勘误**:(六)称「github.com 外链外抛未能实测触发」隐含假设 GitHub 登录应外抛——**该假设错误**。`AppShell.kt:18-23` 的 `INTERNAL_HOSTS` **有意**包含 `github.com` 与 `accounts.google.com`:OAuth 登录流留在壳内 WebView 是设计行为。实测(挂宿主代理 `settings put global http_proxy 10.0.2.2:6518` 使 github 可达后):点「使用 GitHub 登录」→ 连接页探测成功 → `location.replace` 跳 `github.com/login/oauth/authorize`(logcat sOUL 记录)→ GitHub 重定向 `github.com/login?...`(第二条 sOUL)→ **GitHub 登录页完整渲染在壳内**(截图 `gh-footer.png`,「Sign in to GitHub to continue to zaochang」)。
+- **外链外抛实测通过**(此前仅代码级,现补端到端):在壳内 GitHub 登录页点页脚「Terms」(→ `docs.github.com/site-policy/...`,非白名单主机):logcat `sOUL main=true url=https://docs.github.com/site-policy/github-terms/github-terms-of-service` → **焦点切到 `com.android.chrome…FirstRunActivity`(Chrome 接管前台,截图 `chrome-ejected.png`)**——`navigateInternal` 非白名单分支 → `openExternal`(ACTION_VIEW)真实触发。壳仍留在 GitHub 登录页(导航被 `return true` 吃掉,未丢上下文)。
+- 测试后现场已恢复:回到造场应用、`http_proxy` 清回 `:0`(dumpsys 焦点=MainActivity 实证)。
+- 走查状态更新:**匿名可达面+壳行为全部端到端覆盖完毕,零未验项**(除下条)。唯一剩余缺口=**登录态全流程**(需测试账号,见(六));另:壳内 GitHub 登录页已可触达,**若用户提供 GitHub 账号凭据即可把 GitHub 登录闭环也走完**(此前因网络不可达,现挂代理即可达)。
+
 ## 2026-08-27(六)部署后闭环走查收尾:v2 壳下载端到端实测 + 匿名可达面交互全绿
 
 - 承接(五)。部署后继续把走查目标(摸遍每个交互)收尾,本轮全部在生产实测:
