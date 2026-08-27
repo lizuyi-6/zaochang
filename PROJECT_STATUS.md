@@ -1,5 +1,17 @@
 # 造场项目账本
 
+## 2026-08-27(六)部署后闭环走查收尾:v2 壳下载端到端实测 + 匿名可达面交互全绿
+
+- 承接(五)。部署后继续把走查目标(摸遍每个交互)收尾,本轮全部在生产实测:
+  - **v2 壳下载链路端到端(上条的 ⚠️ 缺口已补)**:线上字节 `zaochang-1.0.1.apk` 直接 `adb install -r` 成功(versionCode 1→2,签名兼容)——同时证明托管 APK 可安装。壳内 /app 点「下载安装包(v1.0.1)」:logcat `sOUL main=true url=…/zaochang-1.0.1.apk` → `MediaProvider: …/storage/emulated/0/Download/zaochang-1.0.1.apk` 落盘 → 设备端 `sha256sum` = `8f2df827…02f6`(与生产/签名产物/app-download.ts 三方一致)→ toast「已下载到「下载」文件夹」截图实证。二次点击 MediaStore 自动改名 `(1)` 未覆盖旧文件。截图 `.walkthrough/app-{download-fired,toast}.png`。
+  - **探索页交互 DOM 级验证(生产,headless chromium CDP@390px,断言可证伪字段)**:排序三态 趋势→最新→最多体验 ✓;筛选 免费+造场官方 → 选中态 active ✓ + 结果数 6→1 ✓;视图 grid↔list(`.discover-grid list` class 切换)✓;重置筛选 → 计数回 6 ✓(筛选按钮保持 active 为设计行为:`discover-client.tsx:83` 条件含 `filtersOpen`,面板未关);搜索无结果 → count=0 + route-empty 空态 ✓;清除筛选 → 回 6 ✓;无横向溢出 scrollWidth 390=innerWidth ✓。首版脚本 6 处 FAIL 均为点击后同步读数早于 React 重渲染的时序伪影(FAIL 详情自带反证),修正为 350ms settle 后 10/11,唯一遗留 FAIL 即上述设计行为误判,非 bug。临时脚本已删。
+  - **问AI dock**:阅读器「问 AI」浮钮点开 dock 正常:输入框+快速/专家切换(快速默认)+附加图片+关闭齐全(截图 `.walkthrough/reader-ai-open.png`)。模式切换与 SSE 行为由套件 `reading-ai: fail-closed gating…SSE streaming` 测试覆盖。
+  - **首页信息流**:冷启动渲染正常,连续 4 次滑动流畅,卡片(字浪排版实验室/四拍 Loop 厨房)加载完整无撕裂。
+  - **GitHub 登录连接页**:壳内点「使用 GitHub 登录」→ 连接页渲染正常;探测(客户端加载 `github.com/favicon.ico`,5s×3)在模拟器网络下失败并显示「重新连接/返回登录」——**按设计的网络韧性降级**,非 bug(盒子侧 curl github.com 302 可达,是模拟器 3G 到 GitHub 不通;邮箱验证码登录正是为此场景存在)。
+  - **外链外抛**:github.com 外抛未能实测触发(被上述探测降级挡在跳转前);`navigateInternal` 入口已由 .apk 分支实测走通(同一函数),`openExternal`(ACTION_VIEW)保持代码级确认(`MainActivity.kt:272-287`)。
+- **匿名可达面走查至此全覆盖**:首页/探索(含排序筛选视图搜索)/产品详情/登录页(GitHub 连接页+邮箱表单渲染)/书架/阅读器(BUG B 修复后)/问AI dock/圈子/创作页表单/旋转/滚动/底部导航/深链/壳下载/升级页逻辑(代码级)。
+- 仍未覆盖(显式声明):①**登录态全流程**(发帖/上传/问AI 提交/钱包/加圈/真实产品提交/GitHub 登录闭环)无测试账号,未端到端——需要用户提供或创建测试账号才能推进;②github.com 外链外抛真机点击;③问AI 实际提问(SSE 流)在壳内的体验(服务端行为有测试覆盖,壳内仅验 dock 开合)。
+
 ## 2026-08-27(五)两个 UI bug 修复 + APK 1.0.1 重托管:**已部署并生产复验通过**
 
 - 承接上条(四)。commit:`84a0fc1`(站点两修复)→ `39b3b38`(壳下载修复 + APK 重托管)→ `309da40`(走查账本),push 触发 ci `release-gates@309da40` 成功 → deploy `deploy-production@309da40` **success**。
