@@ -645,6 +645,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* 正文容器:连续纸张,非 Card(无边框/圆角/阴影/卡片底)。章节页居中 840px(=媒体宽),两侧大量空气。 */
 .book-reader { display: grid; gap: 20px; min-width: 0; }
+/* 网格项默认 min-width:auto,宽内容(表格/代码)会按 min-content 把单栏撑出视口;
+   显式归零让子项可缩到列宽,宽元素改由自身 overflow-x 滚动(见 table/pre 规则)。 */
+.book-reader > * { min-width: 0; }
 .book-page-chapter .book-reader { margin: 0 auto; max-width: 840px; padding: 22px 0 40px; width: 100%; }
 
 /* 文本 measure:章节页直接子项收敛到 680px(左对齐,与媒体共享左边沿,媒体可向右突破)。 */
@@ -727,8 +730,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .book-reader .docs-body blockquote { background: #f4f2ee; border-left: 3px solid #c8c1b8; border-radius: 5px; color: #494642; font-family: var(--font-reader-serif); margin: 1.4em 0; padding: 16px 20px; }
 .book-reader .docs-body blockquote p { margin: 0 0 0.6em; }
 .book-reader .docs-body blockquote p:last-child { margin-bottom: 0; }
-/* 表格内文字(Sans 数据感,小于正文);横向可滚。 */
-.book-reader .docs-body table { font-family: var(--font-reader-sans); font-size: 13.5px; line-height: 1.6; }
+/* 表格内文字(Sans 数据感,小于正文);横向可滚。display:block + overflow-x:auto 让表格成为
+   横向滚动容器(自身 min-content 归零,不再撑爆阅读器单栏),窄屏内部滚动而非整页溢出。 */
+.book-reader .docs-body table { display: block; font-family: var(--font-reader-sans); font-size: 13.5px; line-height: 1.6; max-width: 100%; overflow-x: auto; }
 /* 分隔线更安静。 */
 .book-reader .docs-body hr { border: 0; border-top: 1px solid rgb(0 0 0 / 8%); margin: 2.4em 0; }
 /* 响应式:>=1440 完整三栏;1100~1439 隐右栏(中央+左栏);<1100 单栏堆叠(左栏去底色/静态)。 */

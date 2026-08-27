@@ -75,7 +75,7 @@ export function DiscoverClient() {
         <label className="inline-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="在探索页中搜索" /></label>
         <LayoutGroup>
           <div className="category-tabs">
-            {categories.map((item) => <button key={item} onClick={() => setCategory(item)} className={category === item ? "active" : ""}>{category === item && <motion.i layoutId="category-active" />}{item}</button>)}
+            {categories.map((item) => <button key={item} onClick={() => setCategory(item)} className={category === item ? "active" : ""}>{category === item && <motion.i layoutId="category-active" />}<span>{item}</span></button>)}
           </div>
         </LayoutGroup>
         <div className="discover-actions">
