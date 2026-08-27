@@ -1,5 +1,16 @@
 # 造场项目账本
 
+## 2026-08-27(四)安卓壳全交互走查:修两个站点 UI bug(本地已验证,**待部署**)
+
+- 状态:**修复已本地无头浏览器实测验证,但尚未推送/部署**——线上 App(载远程站)仍带这两个 bug,待用户批准 commit+push 后走 ci→deploy。
+- 走查范围(未登录可达面,模拟器 emulator-5554 载生产站):首页/探索/产品详情(标签+内嵌应用+喜欢/收藏/打赏登录门)/登录页/书架/阅读器/圈子/创作页(+)/旋转/滚动。
+- **BUG B|阅读器整页横向溢出(移动端每行文字被裁,需左右平移)**:根因=`.book-reader .docs-body table` 仅设字体、无 overflow 兜底,宽表格 min-content 把 `.docs-body`(网格项,`min-width:auto`)撑过阅读器栏→整页溢出。修复(`app/globals.css`):①表格 `display:block+max-width:100%+overflow-x:auto`(内部自滚,min-content 归零);②`.book-reader > *{min-width:0}`(网格防爆防御)。实测(playwright chromium CDP @390px,真实 dev server+真实章节):chapter01 `docScrollWidth 482→380`(≤innerWidth 390);von-neumann 宽表格章 `556→380`,表格 `sw:540/cw:348` 内部滚动;桌面 1280px `1270≤1280` 不破。截图 `.walkthrough/bug-b-{before,final,von3,desktop}.png`。
+- **BUG A|探索页激活分类 chip 渲染成空灰盒(文字不可见)**:根因=`discover-client.tsx` 把标签渲染成裸文本节点 `{item}`,而 `globals.css` 的 `.category-tabs button > *{z-index:2}` 只提升元素子节点,文本节点被 `<motion.i>` 灰 pill(`z-index:1;background:#dfddd7`)盖住。修复:`{item}` 包 `<span>` 使其吃到 z-index:2。实测 @390px:修复前"全部"chip 空灰盒,修复后文字正常显示。截图 `.walkthrough/bug-a-{before,after}.png`。
+- 回归:`npm test` 全套 **99 pass / 0 fail / 0 skipped / 0 todo,exit 0**(两处改动无副作用)。
+- 其余确认正常:底部导航客户端跳转可用;旋转(configChanges)状态保留不重载;`/studio/new` 未登录可填表单但提交 401→登录(设计如此,源码 `create-product-flow.tsx:53`);外链外抛由 `MainActivity.kt:272-287` 代码级确认(非白名单 https→openExternal)。
+- 未证实/未覆盖:①logcat 偶现 `Failed to fetch dynamically imported module circles-client-*.js`——出现在 3G 抖动期(同时刻 bookshelf 也 Failed to fetch),冷启动一致 bundle 下 circles 正常加载,判为模拟器 3G 瞬时网络,**非系统性 stale-chunk**(但未能从本机证伪该资源 404,因本机 DNS 被劫持);②登录态全流程(发帖/上传/问AI提交/钱包/加圈/真实提交)无测试账号,未端到端覆盖(见任务 #11);③外链外抛仅代码级确认,未真机点击实测(无可达外链+tap 偶偏)。
+- 临时诊断脚本 `scripts/_diag-overflow.mjs`/`_diag2.mjs`、截图目录 `.walkthrough/` 均为未跟踪临时产物,**不提交**,部署验证后清理。
+
 ## 2026-08-26(三)安卓壳+APK 分发上线(GitHub Actions outage 期间走本地手动部署)
 
 - 状态:**已上线**。commit `b94c96d` 推送 main 成功但未触发任何 Actions run——GitHub 全平台 Actions major outage(status API 实证:Actions component=major_outage;事故公告「database primary 故障,主从切换中」,起于 UTC 15:11,push 在其前 6 分钟)。按 runbook 应急路径改走**本地手动部署**,与 deploy.yml 逐步等价:
