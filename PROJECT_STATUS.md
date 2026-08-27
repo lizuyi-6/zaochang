@@ -1,5 +1,18 @@
 # 造场项目账本
 
+## 2026-08-27(五)两个 UI bug 修复 + APK 1.0.1 重托管:**已部署并生产复验通过**
+
+- 承接上条(四)。commit:`84a0fc1`(站点两修复)→ `39b3b38`(壳下载修复 + APK 重托管)→ `309da40`(走查账本),push 触发 ci `release-gates@309da40` 成功 → deploy `deploy-production@309da40` **success**。
+- **APK 重托管**:versionCode 1→2 / versionName 1.0.0→1.0.1(壳下载接管属 Mode 3 壳变更,按 app-download.ts 文档流程 bump)。`gradlew assembleRelease` exit 0;aapt badging 实证 `versionCode='2' versionName='1.0.1'`;apksigner v2 签名在位。新文件 `public/downloads/zaochang-1.0.1.apk`(664,682 B,sha256 `8f2df8272d76d1c06cd9ae4539cab1aa565c0babdc409c493c0ec57d998b02f6`),未覆盖旧文件;旧 1.0.0.apk(含下载 bug、无引用)已 `git rm` 移除。`app-download.ts` 全常量更新;`minShellVersionCode` 保持 1(下载修复纯壳侧,不动 web/壳兼容契约)。`npm test` **99 pass / 0 fail / 0 skipped / 0 todo,exit 0**(含 APK 字节级 sha256/size 校验)。
+- **生产实测(盒子 `--resolve` 到 CF 边缘 104.21.48.47,DNS 干净)**:
+  - `/api/app-shell` → `latestVersionCode:2 / latestVersionName:"1.0.1" / downloadUrl:…/zaochang-1.0.1.apk / sha256:8f2df827…02f6 / minShellVersionCode:1`;
+  - `/downloads/zaochang-1.0.1.apk` → 200,`content-type: application/vnd.android.package-archive`,`content-disposition: attachment`,`cache-control: …immutable`,nosniff;盒子下载后 sha256==`8f2df827…02f6`、大小 664,682 —— 与签名产物/app-download.ts 三方一致;
+  - 旧 `/downloads/zaochang-1.0.0.apk` → **404**(已移除,符合预期);
+  - `/app` 页 → 含 `zaochang-1.0.1.apk` 链接与 `8f2df827…` sha256 标记;
+  - 部署后 CSS 资产 `index-Dj0Xhshm.css` grep 命中全部修复标记:`.book-reader>*{min-width:0`、`.book-reader .docs-body table{…display:block;overflow-x:auto`、`.category-tabs button>*{z-index:2`。
+- **模拟器生产复验**(emulator-5554 装旧壳 versionCode 1,Mode 1 冷启动载最新站;截图 `.walkthrough/reverify-{discover,reader,reader-table}.png`):BUG A——「全部」激活 chip 文字清晰可见(深字灰 pill),非空灰盒;BUG B——von-neumann 宽表章文字全部在屏宽内可读,无横向裁切/无需平移,多处滚动位置均无整页溢出。**两修复在生产生效。**
+- 未覆盖:①下载接管修复本身(新壳 versionCode 2 的 MediaStore 落盘)未在真机重装新 APK 实测——模拟器仍跑旧壳,新壳的下载链路只在源码+签名构建层验证,真机安装 1.0.1 后的下载行为未端到端走;②登录态流程仍无测试账号(任务 #11 未动)。
+
 ## 2026-08-27(四)安卓壳全交互走查:修两个站点 UI bug(本地已验证,**待部署**)
 
 - 状态:**修复已本地无头浏览器实测验证,但尚未推送/部署**——线上 App(载远程站)仍带这两个 bug,待用户批准 commit+push 后走 ci→deploy。
