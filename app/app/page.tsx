@@ -17,7 +17,7 @@ export default function AppDownloadPage() {
           造场 App 是网站的安卓安装版:打开即进入完整的造场社区,账号与网站通用。
           网站内容更新无需重装 App,启动时自动保持最新。
         </p>
-        <a className="primary-action app-download-cta" href={`/${APP_DOWNLOAD.filePath}`} download={APP_DOWNLOAD.fileName}>
+        <a className="primary-action app-download-cta" href={`/${APP_DOWNLOAD.filePath}`}>
           下载安装包(v{APP_DOWNLOAD.versionName})
         </a>
         <dl className="app-download-facts">

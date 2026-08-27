@@ -3,8 +3,12 @@
   Cache-Control: public, max-age=31536000, immutable
 
 # APK downloads are version-stamped filenames — safe to cache immutably.
+# Content-Disposition: attachment — Android WebView ignores <a download> for same-origin
+# links and only honors the header (verified on API 35 emulator); desktop browsers
+# get a straight download instead of navigating.
 /downloads/*
   X-Content-Type-Options: nosniff
+  Content-Disposition: attachment
   Cache-Control: public, max-age=31536000, immutable
 
 # Product apps are intentionally framed only by the same Zaochang origin.

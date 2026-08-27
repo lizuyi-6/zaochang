@@ -2,8 +2,8 @@ package top.aetherstudio.zaochang
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.DownloadManager
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.SystemClock
+import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.view.WindowInsets
@@ -26,6 +27,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -34,6 +36,9 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.net.URLDecoder
 import java.util.Locale
 
@@ -152,16 +157,49 @@ class MainActivity : Activity() {
     CookieManager.getInstance().setAcceptCookie(true)
     view.webViewClient = ShellWebViewClient()
     view.webChromeClient = ShellChromeClient()
-    view.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
-      enqueueDownload(url, userAgent, contentDisposition, mimeType)
+    view.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
+      startFileDownload(url, mimeType, contentDisposition)
     }
     return view
   }
 
   private inner class ShellWebViewClient : WebViewClient() {
 
+    // shouldInterceptRequest 在 IO 线程回调;toast/enqueue 的 UI 部分切主线程。
+    private val recentApkRequests = HashMap<String, Long>()
+
+    /**
+     * Chromium WebView(API 35 WebView 124 实测)对 <a download> 点击与
+     * attachment 顶级导航既不走 shouldOverrideUrlLoading 也不回调
+     * DownloadListener,静默丢弃。下载请求的 HTTP 一定发出,在此钩子
+     * 确定性接管 .apk;去重窗口防同一请求多次 enqueue。
+     */
+    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+      val url = request.url
+      val isApk = url.scheme?.lowercase(Locale.ROOT) == "https" &&
+        url.host?.lowercase(Locale.ROOT) in ShellConfig.INTERNAL_HOSTS &&
+        url.path?.lowercase(Locale.ROOT)?.endsWith(".apk") == true
+      if (isApk) {
+        val key = url.toString()
+        val now = SystemClock.elapsedRealtime()
+        var shouldEnqueue = false
+        synchronized(recentApkRequests) {
+          if (now - (recentApkRequests[key] ?: 0L) > APK_REQUEST_DEDUPE_MS) {
+            recentApkRequests[key] = now
+            if (recentApkRequests.size > 32) recentApkRequests.clear()
+            shouldEnqueue = true
+          }
+        }
+        if (shouldEnqueue) {
+          runOnUiThread { startFileDownload(key, null, null) }
+        }
+      }
+      return null
+    }
+
     /** 顶级导航按主机白名单分流;iframe/子资源直接放行(Turnstile 等第三方嵌入必需)。 */
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+      Log.i(TAG, "sOUL main=${request.isForMainFrame} url=${request.url}")
       if (!request.isForMainFrame) return false
       return navigateInternal(request.url)
     }
@@ -234,7 +272,16 @@ class MainActivity : Activity() {
   private fun navigateInternal(uri: Uri): Boolean {
     val scheme = uri.scheme?.lowercase(Locale.ROOT) ?: return true
     val host = uri.host?.lowercase(Locale.ROOT)
-    if (scheme == "https" && host != null && host in ShellConfig.INTERNAL_HOSTS) return false
+    if (scheme == "https" && host != null && host in ShellConfig.INTERNAL_HOSTS) {
+      // 安装包/附件直链接给自研下载器(MediaStore):本镜像 WebView 对 .apk URL 连网络
+      // 请求都不发出(DownloadListener/shouldInterceptRequest 双失效),只有这里拦得到;
+      // 站点 /app 按钮因此保持普通导航链接(不带 download 属性)。return true 吃掉导航。
+      if (uri.path?.lowercase(Locale.ROOT)?.endsWith(".apk") == true) {
+        startFileDownload(uri.toString(), null, null)
+        return true
+      }
+      return false
+    }
     openExternal(uri)
     return true
   }
@@ -294,24 +341,61 @@ class MainActivity : Activity() {
     callback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
   }
 
-  /** 站点上传路由对非图片一律 attachment:交系统 DownloadManager 下载到公共下载目录。 */
-  private fun enqueueDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {
-    val fileName = resolveDownloadFileName(url, contentDisposition, mimeType)
-    try {
-      val request = DownloadManager.Request(Uri.parse(url)).apply {
-        setTitle(fileName)
-        setMimeType(mimeType)
-        setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-        setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-        CookieManager.getInstance().getCookie(url)?.let { addRequestHeader("Cookie", it) }
-        userAgent?.let { addRequestHeader("User-Agent", it) }
-      }
-      (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
-      Toast.makeText(this, R.string.download_started, Toast.LENGTH_SHORT).show()
-    } catch (e: Exception) {
-      Log.w(TAG, "download enqueue failed, falling back to browser", e)
+  /**
+   * 自研下载器(MediaStore 写公共 Downloads),取代 DownloadManager:
+   * 本项目验证用的 API 35 WebView 124 模拟器上,DM 服务端会静默丢弃任务
+   * (enqueue 正常返回、服务端零记录),自研路径在任何 ROM 上确定工作。
+   * API <29 无 MediaStore.Downloads,回退系统浏览器下载。
+   */
+  private fun startFileDownload(url: String, mimeType: String?, contentDisposition: String?) {
+    if (Build.VERSION.SDK_INT < 29) {
       openExternal(Uri.parse(url))
+      return
     }
+    val activity = this
+    Thread {
+      val fileName = resolveDownloadFileName(url, contentDisposition, mimeType)
+      try {
+        val values = ContentValues().apply {
+          put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+          put(MediaStore.MediaColumns.MIME_TYPE, mimeType ?: guessMimeType(fileName))
+          put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        }
+        val resolver = contentResolver
+        val target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+          ?: throw IOException("MediaStore insert returned null")
+        resolver.openOutputStream(target)?.use { out ->
+          val connection = URL(url).openConnection() as HttpURLConnection
+          try {
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 30_000
+            connection.instanceFollowRedirects = true
+            CookieManager.getInstance().getCookie(url)?.let { connection.setRequestProperty("Cookie", it) }
+            connection.setRequestProperty("User-Agent", WebSettings.getDefaultUserAgent(activity))
+            if (connection.responseCode !in 200..299) throw IOException("HTTP ${connection.responseCode}")
+            connection.inputStream.use { input -> input.copyTo(out, DEFAULT_COPY_BUFFER) }
+            out.flush()
+          } finally {
+            connection.disconnect()
+          }
+        } ?: throw IOException("openOutputStream returned null")
+        runOnUiThread { Toast.makeText(activity, R.string.download_done, Toast.LENGTH_SHORT).show() }
+      } catch (e: Exception) {
+        Log.w(TAG, "file download failed: $url", e)
+        runOnUiThread { Toast.makeText(activity, R.string.download_failed, Toast.LENGTH_LONG).show() }
+      }
+    }.start()
+  }
+
+  private fun guessMimeType(fileName: String): String = when (fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
+    "png" -> "image/png"
+    "jpg", "jpeg" -> "image/jpeg"
+    "webp" -> "image/webp"
+    "pdf" -> "application/pdf"
+    "txt" -> "text/plain"
+    "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    "apk" -> "application/vnd.android.package-archive"
+    else -> "application/octet-stream"
   }
 
   /** 优先还原 filename*=UTF-8'' 里的原始中文文件名;否则退回 URLUtil 推断。 */
@@ -453,5 +537,7 @@ class MainActivity : Activity() {
     private const val REQUEST_FILE_CHOOSER = 1001
     private const val COMPAT_TIMEOUT_MS = 6_000
     private const val COMPAT_RECHECK_INTERVAL_MS = 5 * 60 * 1000L
+    private const val APK_REQUEST_DEDUPE_MS = 5_000L
+    private const val DEFAULT_COPY_BUFFER = 64 * 1024
   }
 }
