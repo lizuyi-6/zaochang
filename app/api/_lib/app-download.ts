@@ -4,13 +4,13 @@
 // 重签名构建 → 替换 public/downloads/ 下的文件(文件名带版本,不覆盖旧文件)→
 // 更新此处全部常量。tests/rendered-html.test.mjs 会校验 sha256/大小与实际文件一致。
 export const APP_DOWNLOAD = {
-  versionCode: 1,
-  versionName: "1.0.0",
-  fileName: "zaochang-1.0.0.apk",
+  versionCode: 2,
+  versionName: "1.0.1",
+  fileName: "zaochang-1.0.1.apk",
   // 相对站点根的下载路径(不带前导斜杠,便于拼 origin)。
-  filePath: "downloads/zaochang-1.0.0.apk",
-  sizeBytes: 663446,
-  sha256: "d011a998dd3202936923cbe5c5407d044967b817fe55a5bbb91bb503f7a467dd",
+  filePath: "downloads/zaochang-1.0.1.apk",
+  sizeBytes: 664682,
+  sha256: "8f2df8272d76d1c06cd9ae4539cab1aa565c0babdc409c493c0ec57d998b02f6",
   // minSdk 26 = Android 8.0。
   minAndroid: "8.0",
 } as const;
