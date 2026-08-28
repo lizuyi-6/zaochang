@@ -1,5 +1,17 @@
 # 造场项目账本
 
+## 2026-08-28(五)全量缺陷审查 + 修复部署:6 代理深审 2.5 万行,P1×4/P2×24/P3×20+,迁移 0019 已应用,staging 独立库(已部署,生产复验通过)
+
+- **审查**:6 个并行子代理通读全部子系统(认证/OIDC 提供方/果子账本/Worker 管线/前端+AI 代理/安卓壳+脚本),头部发现全部人工复核后实施修复。审查前门禁基线全绿(tsc/99 测试/audit/漂移)——缺陷全部是门禁覆盖不到的语义问题。
+- **P1 修复**:①`safeReturnPath` 协议相对 URL 逃逸(`/..//evil.com` → `//evil.com` 经 /signin 返回链接外跳,源头加输出终检);②划词"解释/翻译"气泡在 Chrome/Edge/Firefox 桌面端整体失效(mousedown 清选区导致 selectionchange 先卸载气泡;改为容器 preventDefault + `user-select:none` + 使用气泡捕获的选区文本);③订单结算不写 `transactions` 行,卖家流水与余额脱节(内/外部结算批次各补一行,购买/结算两侧账目对称);④书籍内容生成器与产物不受版本控制(`scripts/builder/`、`mini_cpu/`、`experiments/`、`content/import-hellocomputer.sql` 入库;产物从被 gitignore 的 backups/ 迁出,重生成字节级一致)。
+- **P2 摘要**(24 项全修):账本——点赞结算补 `status='active'` CASE 守卫(此前唯一 fail-open 资金路径)、退款路径改 `assertWalletIntegrity`(不再静默按账本改写,上线前对账实证 0 漂移钱包)、隐藏帖评论区读写双封(路由校验 + `post_comments_visible_post_guard` 触发器)、`posts.likes_count` 死计数器激活/`comments_count` 触发器化并回填(迁移 **0019**)、feed/产品页双计消除。前端——galaxy `?planet=constructor` 原型链键砸死 RAF(`Object.hasOwn`)、"问 AI" ask 重试必 400(store 增加 `selection`/`question` 原始输入字段)、SSE `close()` 未处理 rejection、全部卡死按钮 try/finally、草稿存储守卫、docs PATCH 拒绝不存在父级(防孤儿提升到根)。Worker——请求体守卫覆盖 DELETE 且 chunked 流式限额、新增 `scheduled()` cron 每 6h 清理 7 张表的过期数据(授权请求/codes/tokens/payments/email codes/sessions)、CSP 注释如实声明 `'unsafe-inline'` 局限。安全——`assertSameOrigin` 接入全部 11 个写端点(www 域兼容)、外链封面与外链 demo 同规拒绝过审、`requestSecure` 生产 fail-closed(删除永不生效的 `cf.httpProtocol` 死分支)、邮箱验证码锁定改条件 UPDATE 原子占额、logout CSRF 防御 + 清瞬态 cookie。安卓——`doUpdateVisitedHistory` 对 30x 重定向落地重过主机白名单、下载失败清理 MediaStore 残留行、渲染进程崩溃恢复走完整门禁、AppShell 清单禁 302/缺字段 fail-closed。
+- **P3**:google 死代码移除(`/api/auth/google/*` 404)、常数时间比较、Turnstile 前置于地址限流、`jsonError` CHECK 映射收窄到钱包约束、钱包假"探索金"移除、`/api/payments` 限流、每日点赞上限对齐北京时间午夜(0019 同步重建 0003 触发器)、撤销点赞翻转事件状态、`check-migrations` 全量对账(修自指引用)、`build-all.mjs` 事务化+全字段转义+parentId 引号修复、脚本退出码/端口防串。
+- **迁移 0019**(`drizzle/0019_community_counter_triggers.sql`,纯触发器/回填,无表结构变更):部署前先对账(0 漂移)→ `d1 export` 备份(`backups/pre-0019-20260828.sql`,730KB)→ 应用 → 7 触发器落地、计数回填零错位 → `__drizzle_migrations` 回填(hash+journal 时间戳),账目 20/20。**部署后执行 comments_count 重归一化**(迁移落地到新代码上线之间旧版手动 +1 与触发器叠加,修正 1 个帖子)。
+- **staging 独立库**:新建 `zaochang-db-staging`(APAC),`wrangler.staging.jsonc` 已指向;20 迁移全量灌入,48 触发器与生产一致,账目 20/20 回填。新增 CI 门禁 `scripts/check-env-split.mjs`(staging/生产共库即红)。
+- **门禁与部署**:本地 105/105 集成测试(新增 6 个:安全 return_to/结算流水/隐藏帖联动/文档孤儿/外链封面/_headers 门禁)、tsc/lint/drift/audit 全绿、`compileDebugKotlin` 通过。commit `6e369b9` push → ci `release-gates@6e369b9`(33175314311)success → deploy `deploy-production`(33175432669)**success**,部署版本 2026-08-28T13:28:00Z。
+- **生产复验**(DoH 取真实边缘 IP 104.21.48.47 + `--resolve`,本机 DNS 被 VPN 劫持到 198.18.x.x 不可用):首页 200;`/signin?return_to=/..//evil.com` 线上返回链接坍缩为 `href="/"`(攻击向量失效),对照 `return_to=/feed` 原样保留无误杀;HSTS/CSP/XFO 头正常。
+- 未覆盖(显式声明):①CSP nonce 化待 vinext 支持 nonce 透传后再评估(当前 script-src 'unsafe-inline' 为已知局限,注释已声明);②`run_worker_first`(/product-apps、/downloads 走 worker 头分支)未启用,以新增 `_headers` 门禁测试兜底;③APK 未重发(本次 Kotlin 改动需 bump versionCode 3 才出包);④staging worker 下次部署需重灌 secrets(runbook §2),R2 仍与生产共享(可选后续拆分);⑤钱包页与结算流水的 UI 呈现、cron 首次触发(下一个 23 */6 时刻)待观察。
+
 ## 2026-08-28(八)匿名页边缘缓存:stale-while-revalidate + 命中 cache-control 钳制(已部署,生产复验通过)
 
 - **起因**:用户问「为什么当前网页缓存低」。线上实测(`--resolve` 到 CF 边缘 104.21.48.47)定位出三层原因,全部修复并部署验证。
