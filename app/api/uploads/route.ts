@@ -1,10 +1,14 @@
 import { jsonError, requireMember } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { storeScannedUpload } from "../_lib/upload-core";
+import { assertSameOrigin } from "../_lib/request-origin";
 
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     await enforceRateLimit(await rateLimitKey("upload", member.email), 30, 60 * 60);
     const form = await request.formData();
     const file = form.get("file");

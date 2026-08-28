@@ -900,7 +900,9 @@ export function GalaxyExperience() {
 
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("planet") as PlanetId | null;
-    if (requested && requested in PLANET_BY_ID) selectTarget(requested);
+    // Object.hasOwn:`in` 会命中 Object.prototype 键,"?planet=constructor" 一旦混过
+    // 校验,每帧取 PLANET_BY_ID[appliedTarget].visual 抛 TypeError,RAF 循环整体卡死。
+    if (requested && Object.hasOwn(PLANET_BY_ID, requested)) selectTarget(requested);
   }, [selectTarget]);
 
   const toggleFullscreen = useCallback(async () => {

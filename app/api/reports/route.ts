@@ -1,5 +1,6 @@
 import { database, jsonError, requireMember } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
+import { assertSameOrigin } from "../_lib/request-origin";
 
 const TARGET_TYPES = new Set(["post", "comment", "product", "profile", "circle"]);
 const REASONS = new Set(["spam", "harassment", "copyright", "privacy", "fraud", "other"]);
@@ -7,6 +8,9 @@ const REASONS = new Set(["spam", "harassment", "copyright", "privacy", "fraud", 
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     await enforceRateLimit(await rateLimitKey("content-report", member.email), 20, 24 * 60 * 60);
     const input = await request.json() as Record<string, unknown>;
     const targetType = String(input.targetType ?? "");

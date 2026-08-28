@@ -23,8 +23,10 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "zaochang-db",
-      "database_id": "d250a527-1e1e-4b7f-ac27-266c723581e3"
+      // staging 独立库(APAC):与生产彻底隔离。dev-login / 旧身份头的 fail-closed
+      // 门禁不再依赖 APP_ENV 单点——即便 staging 配置漂移,也伤不到生产数据。
+      "database_name": "zaochang-db-staging",
+      "database_id": "63f10fae-9667-4f98-9e50-fe58bb402a3c"
     }
   ],
   "r2_buckets": [
@@ -40,6 +42,11 @@
       "name": "EMAIL"
     }
   ],
+  // 过期数据清理(oauth 授权请求/codes/tokens/payments/email codes/auth_sessions):
+// 幂等 DELETE,worker/index.ts scheduled() 执行;每 6 小时一次,分钟位错开整点。
+  "triggers": {
+    "crons": ["23 */6 * * *"]
+  },
   "observability": {
     "enabled": true
   },

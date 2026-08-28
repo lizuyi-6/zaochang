@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   absoluteAppUrl,
   callbackUrl,
+  constantTimeEquals,
   createOAuthSession,
   ensureOAuthUser,
   isOAuthProvider,
@@ -29,16 +30,14 @@ export async function GET(request: Request, { params }: Params) {
   const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
   const state = query.get("state");
   const returnTo = safeReturnPath(cookieStore.get(OAUTH_RETURN_COOKIE)?.value);
-  if (!state || !expectedState || state !== expectedState || !state.startsWith(`${provider}.`)) return redirectError(request, "invalid_state");
+  if (!state || !expectedState || !constantTimeEquals(state, expectedState) || !state.startsWith(`${provider}.`)) return redirectError(request, "invalid_state");
   if (query.get("error")) return redirectError(request, "access_denied");
   const code = query.get("code");
   const config = providerConfig(provider);
   if (!config || !code) return redirectError(request, "not_configured");
 
   try {
-    const profile = provider === "google"
-      ? await fetchGoogleProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider))
-      : await fetchGitHubProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider));
+    const profile = await fetchGitHubProfile(code, config.clientId, config.clientSecret, callbackUrl(request, provider));
     const user = { displayName: profile.displayName, email: profile.email, fullName: profile.displayName };
     const invitationHash = cookieStore.get(OAUTH_INVITE_COOKIE)?.value ?? null;
     const canonicalUser = await ensureOAuthUser(user, provider, profile.providerId, profile.avatarUrl, invitationHash);
@@ -50,18 +49,6 @@ export async function GET(request: Request, { params }: Params) {
     console.error("OAuth callback failed", error);
     return redirectError(request, "provider_error");
   }
-}
-
-async function fetchGoogleProfile(code: string, clientId: string, clientSecret: string, redirectUri: string): Promise<OAuthProfile> {
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }) });
-  if (!tokenResponse.ok) throw new Error("Google token exchange failed");
-  const token = await tokenResponse.json() as { access_token?: string };
-  if (!token.access_token) throw new Error("Google access token missing");
-  const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", { headers: { authorization: `Bearer ${token.access_token}` } });
-  if (!profileResponse.ok) throw new Error("Google profile request failed");
-  const profile = await profileResponse.json() as { sub?: string; email?: string; email_verified?: boolean; name?: string; picture?: string };
-  if (!profile.sub || !profile.email || profile.email_verified === false) throw new Error("Google account has no verified email");
-  return { providerId: profile.sub, email: profile.email.toLowerCase(), displayName: profile.name || profile.email, avatarUrl: profile.picture || null };
 }
 
 async function fetchGitHubProfile(code: string, clientId: string, clientSecret: string, redirectUri: string): Promise<OAuthProfile> {

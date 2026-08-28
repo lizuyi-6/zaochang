@@ -22,6 +22,7 @@ export function CreateProductFlow() {
   const [coverError, setCoverError] = useState("");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [theme, setTheme] = useState("coral");
+  const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -38,7 +39,10 @@ export function CreateProductFlow() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("zaochang-product-draft", JSON.stringify({ title, description, category, pricingModel, price, demoUrl, imageUrl, theme }));
+    // try/catch:隐私模式/配额满会抛,不能让自动存草稿掀翻整个发布页(恢复路径已有同款守卫)。
+    try {
+      localStorage.setItem("zaochang-product-draft", JSON.stringify({ title, description, category, pricingModel, price, demoUrl, imageUrl, theme }));
+    } catch { /* 存不了就算了,草稿留在内存里 */ }
   }, [category, demoUrl, description, imageUrl, price, pricingModel, theme, title]);
 
   const next = () => {
@@ -48,14 +52,22 @@ export function CreateProductFlow() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    setSubmitError("");
     setSubmitting(true);
-    const response = await fetch("/api/products", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, description, category, pricingModel, price, demoUrl, imageUrl, coverTheme: theme }) });
-    if (response.status === 401) {
-      window.location.href = "/signin?return_to=%2Fstudio%2Fnew";
-      return;
+    // try/finally:断网/500 时也必须复位 submitting,否则发布按钮永久卡死。
+    try {
+      const response = await fetch("/api/products", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, description, category, pricingModel, price, demoUrl, imageUrl, coverTheme: theme }) });
+      if (response.status === 401) {
+        window.location.href = "/signin?return_to=%2Fstudio%2Fnew";
+        return;
+      }
+      if (response.ok) { localStorage.removeItem("zaochang-product-draft"); setSubmitted(true); return; }
+      setSubmitError("提交未成功，请重试");
+    } catch {
+      setSubmitError("网络异常，请检查连接后重试");
+    } finally {
+      setSubmitting(false);
     }
-    if (response.ok) { localStorage.removeItem("zaochang-product-draft"); setSubmitted(true); }
-    setSubmitting(false);
   };
 
   const uploadCover = async (file: File) => {
@@ -94,6 +106,7 @@ export function CreateProductFlow() {
           </motion.section>
         </AnimatePresence>
 
+        {submitError && <p className="cover-upload-error" role="alert">{submitError}</p>}
         <div className="create-flow-actions"><button type="button" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}><ArrowLeft size={16} /> 上一步</button>{step < 2 ? <button key="next-step" type="button" className="primary-action" onClick={next}>继续 <ArrowRight size={17} /></button> : <button key="submit-product" type="submit" className="primary-action" disabled={submitting}>{submitting ? "提交中" : "提交平台预审"}<Sparkles size={16} /></button>}</div>
       </form>
     </div>

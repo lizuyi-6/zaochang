@@ -537,7 +537,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -1575,11 +1575,13 @@ test("uses GitHub-only invite registration and keeps unconfigured providers fail
   const source = readFileSync(join(projectRoot, "app", "signin", "page.tsx"), "utf8");
   assert.match(source, /<a className="auth-provider github" href=\{loginHref\}>/);
   assert.match(source, /action="\/api\/auth\/github\/start" method="post"/);
-  for (const provider of ["google", "github"]) {
-    const response = await fetch(`${baseUrl}/api/auth/${provider}/start?return_to=%2Fwallet`, { redirect: "manual" });
-    assert.equal(response.status, 307);
-    assert.match(response.headers.get("location") ?? "", /\/signin\?error=not_configured&provider=/);
-  }
+  // google 登录入口已移除(死代码清理):/api/auth/google/start 必须 404,
+  // 不再伪装成"未配置的可用 provider"。
+  const googleStart = await fetch(`${baseUrl}/api/auth/google/start?return_to=%2Fwallet`, { redirect: "manual" });
+  assert.equal(googleStart.status, 404);
+  const githubUnconfigured = await fetch(`${baseUrl}/api/auth/github/start?return_to=%2Fwallet`, { redirect: "manual" });
+  assert.equal(githubUnconfigured.status, 307);
+  assert.match(githubUnconfigured.headers.get("location") ?? "", /\/signin\?error=not_configured&provider=/);
   const submitted = await fetch(`${baseUrl}/api/auth/github/start`, {
     method: "POST",
     body: new URLSearchParams({ return_to: "/wallet" }),
@@ -2200,7 +2202,12 @@ test("production rejects forged workspace identity headers unless explicitly tru
       ? githubStart.headers.getSetCookie()
       : [githubStart.headers.get("set-cookie") ?? ""];
     const stateCookie = setCookies.find((value) => value.startsWith("zaochang_oauth_state="));
-    assert.match(stateCookie ?? "", /; HttpOnly; Secure; SameSite=Lax/i);
+    // 生产 fail-closed:请求 URL 是 http、伪造的 x-forwarded-proto: https 不得把
+    // Cookie 标成 Secure(旧实现采信该头,可被用以制造 Secure 位翻转)。
+    // 真实生产中 Cloudflare 对 https 请求注入的 request.url 即为 https scheme,
+    // Secure 由 URL 协议决定,与此本地模拟场景(http 明文)相反。
+    assert.match(stateCookie ?? "", /; HttpOnly; SameSite=lax/i);
+    assert.doesNotMatch(stateCookie ?? "", /Secure/i);
     const cookieState = stateCookie?.match(/^zaochang_oauth_state=([^;]+)/)?.[1];
     const pageState = githubHtml.match(/[?&]state=([^&"\\]+)/)?.[1];
     assert.ok(cookieState);
@@ -4320,7 +4327,8 @@ test("dev-login: flag-gated simulated login issues a real working session", asyn
   const sessionRows = await queryLocalD1(`SELECT user_email, provider FROM auth_sessions WHERE token_hash = '${tokenHash}'`);
   assert.equal(sessionRows.length, 1);
   assert.equal(sessionRows[0].user_email, devEmail);
-  assert.equal(sessionRows[0].provider, "github");
+  // dev-login 模拟的是本地身份,会话审计里必须记 'email',不得冒充 github。
+  assert.equal(sessionRows[0].provider, "email");
 
   // 会话真实可用:带 cookie 打需登录端点,应越过 401 命中业务校验(400 invalid_product)
   const authed = await fetch(`${baseUrl}/api/products`, {
@@ -4330,6 +4338,195 @@ test("dev-login: flag-gated simulated login issues a real working session", asyn
   });
   assert.equal(authed.status, 400);
   assert.deepEqual(await authed.json(), { error: "invalid_product" });
+});
+
+test("safeReturnPath sinks never emit a protocol-relative escape", async () => {
+  // P1 复核用例:"/..//evil.com" 曾穿过 safeReturnPath(解析 origin 合法,输出坍缩为
+  // "//evil.com"),被 /signin 的返回链接原样渲染成站外跳板。
+  for (const payload of ["/..//evil.com", "//evil.com", "/\\evil.com"]) {
+    const response = await fetch(`${baseUrl}/signin?return_to=${encodeURIComponent(payload)}`, { headers: { accept: "text/html" } });
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.doesNotMatch(html, /href="\/\/evil\.com/);
+    // SSR 属性顺序是 <a href=... class="auth-back">,直接抽 href 值断言。
+    assert.equal(html.match(/<a href="([^"]*)" class="auth-back"/)?.[1], "/", `return_to=${payload} must collapse to "/"`);
+  }
+  // "/%2F%2Fevil.com"(字面百分号)是合法本地路径:路径中的 %2F 浏览器不当作分隔符,
+  // 原样放行即可,不落入"//"终检。
+  const encoded = await fetch(`${baseUrl}/signin?return_to=${encodeURIComponent("/%2F%2Fevil.com")}`, { headers: { accept: "text/html" } });
+  assert.equal((await encoded.text()).match(/<a href="([^"]*)" class="auth-back"/)?.[1], "/%2F%2Fevil.com");
+  const normal = await fetch(`${baseUrl}/signin?return_to=${encodeURIComponent("/feed?x=1#h")}`, { headers: { accept: "text/html" } });
+  assert.equal((await normal.text()).match(/<a href="([^"]*)" class="auth-back"/)?.[1], "/feed?x=1#h");
+});
+
+test("settlement writes a visible transactions row for the seller", async () => {
+  // P1 复核用例:订单结算此前只动账本分录与钱包,不写 transactions——卖家
+  // "最近流水"与余额脱节。购买侧两方都有流水,结算侧必须同样落行。
+  const ownerEmail = `settlement-tx-owner-${runId}@example.com`;
+  const ownerHeaders = authHeaders("结算流水作者", ownerEmail);
+  const created = await fetch(`${baseUrl}/api/products`, {
+    method: "POST",
+    headers: ownerHeaders,
+    body: JSON.stringify({ title: `结算流水作品 ${runId}`, description: "验证订单结算同时写入卖家可见流水。", category: "互动体验", coverTheme: "mint", pricingModel: "one_time", price: 3 }),
+  });
+  assert.equal(created.status, 201);
+  const productId = (await created.json()).product.id;
+  await reviewProduct(productId);
+  const buyerEmail = `settlement-tx-buyer-${runId}@example.com`;
+  const buyerHeaders = authHeaders("结算流水买家", buyerEmail);
+  await fetch(`${baseUrl}/api/community`, { headers: buyerHeaders });
+  await creditTestFruit(buyerEmail, 10, "settlement-tx-buyer");
+  await executeLocalD1(`UPDATE members SET joined_at = '2020-01-01 00:00:00' WHERE email = '${buyerEmail}'`);
+  const checkout = await fetch(`${baseUrl}/api/payments`, { method: "POST", headers: buyerHeaders, body: JSON.stringify({ action: "checkout", productId, idempotencyKey: `settlement_tx_${runId}` }) });
+  assert.equal(checkout.status, 200);
+  await executeLocalD1(`UPDATE product_orders SET available_at = '2020-01-01 00:00:00' WHERE product_id = ${productId} AND status = 'paid'`);
+  const settled = await (await fetch(`${baseUrl}/api/community`, { headers: ownerHeaders })).json();
+  assert.equal(settled.wallet.pendingBalance, 0);
+  assert.equal(settled.wallet.balance, 3);
+  const rows = await queryLocalD1(`SELECT delta, type, reference_id FROM transactions WHERE user_email = '${ownerEmail}' AND type = 'settlement'`);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].delta, 3);
+  assert.match(rows[0].reference_id, /^order:/);
+});
+
+test("hidden posts close their comment surface and counters stay consistent", async () => {
+  // P2 复核用例:帖子被管理员隐藏后,评论区此前仍可读可写;comments_count 此前
+  // 是非原子的裸 UPDATE 且隐藏评论后不减;posts.likes_count 此前是死计数器。
+  const authorHeaders = authHeaders("被隐藏帖作者", `hidden-post-author-${runId}@example.com`);
+  const posted = await fetch(`${baseUrl}/api/actions`, {
+    method: "POST",
+    headers: authorHeaders,
+    body: JSON.stringify({ action: "post", content: `待隐藏动态 ${runId}，内容用于评论区联动验证。` }),
+  });
+  assert.equal(posted.status, 201);
+  const postId = String((await posted.json()).post.id);
+
+  const commenterHeaders = authHeaders("评论用户", `hidden-post-commenter-${runId}@example.com`);
+  const before = await fetch(`${baseUrl}/api/comments`, {
+    method: "POST",
+    headers: commenterHeaders,
+    body: JSON.stringify({ targetType: "post", targetRef: postId, content: "隐藏前的可见评论" }),
+  });
+  assert.equal(before.status, 201);
+  let counts = await queryLocalD1(`SELECT comments_count AS n, likes_count AS likes FROM posts WHERE id = ${postId}`);
+  assert.equal(counts[0].n, 1);
+  const like = await fetch(`${baseUrl}/api/actions`, {
+    method: "POST",
+    headers: commenterHeaders,
+    body: JSON.stringify({ action: "toggle_action", kind: "like_post", targetRef: postId }),
+  });
+  assert.equal((await like.json()).active, true);
+  counts = await queryLocalD1(`SELECT likes_count AS likes FROM posts WHERE id = ${postId}`);
+  assert.equal(counts[0].likes, 1);
+  const unlike = await fetch(`${baseUrl}/api/actions`, {
+    method: "POST",
+    headers: commenterHeaders,
+    body: JSON.stringify({ action: "toggle_action", kind: "like_post", targetRef: postId }),
+  });
+  assert.equal((await unlike.json()).active, false);
+  counts = await queryLocalD1(`SELECT likes_count AS likes FROM posts WHERE id = ${postId}`);
+  assert.equal(counts[0].likes, 0);
+
+  const report = await fetch(`${baseUrl}/api/reports`, {
+    method: "POST",
+    headers: commenterHeaders,
+    body: JSON.stringify({ targetType: "post", targetRef: postId, reason: "spam", details: "测试举报：隐藏该动态。" }),
+  });
+  assert.equal(report.status, 201);
+  const adminHeaders = authHeaders("发布审核管理员", adminEmail);
+  const queue = await (await fetch(`${baseUrl}/api/admin/moderation`, { headers: adminHeaders })).json();
+  const queuedReport = queue.reports.find((item) => item.targetType === "post" && item.targetRef === postId);
+  assert.equal(typeof queuedReport?.id, "string");
+  const hide = await fetch(`${baseUrl}/api/admin/moderation`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ action: "hide_reported_content", targetRef: queuedReport.id }),
+  });
+  assert.equal(hide.status, 200);
+
+  const read = await fetch(`${baseUrl}/api/comments?targetType=post&targetRef=${encodeURIComponent(postId)}`, { headers: commenterHeaders });
+  assert.equal(read.status, 404);
+  const write = await fetch(`${baseUrl}/api/comments`, {
+    method: "POST",
+    headers: commenterHeaders,
+    body: JSON.stringify({ targetType: "post", targetRef: postId, content: "隐藏后不应再能评论" }),
+  });
+  assert.equal(write.status, 404);
+  // 单独隐藏一条评论(举报 comment 目标):count 递减触发器挂在 comments 表的
+  // moderation_status 翻转上,隐藏帖子本身不会动它。
+  const firstComment = (await (await before.json()).comment) ?? null;
+  assert.ok(firstComment?.id, "评论响应应含 comment.id");
+  const commentReport = await fetch(`${baseUrl}/api/reports`, {
+    method: "POST",
+    headers: commenterHeaders,
+    body: JSON.stringify({ targetType: "comment", targetRef: String(firstComment.id), reason: "spam", details: "测试举报：隐藏该评论。" }),
+  });
+  assert.equal(commentReport.status, 201);
+  const queueAfterHide = await (await fetch(`${baseUrl}/api/admin/moderation`, { headers: adminHeaders })).json();
+  const queuedCommentReport = queueAfterHide.reports.find((item) => item.targetType === "comment" && item.targetRef === String(firstComment.id));
+  assert.equal(typeof queuedCommentReport?.id, "string");
+  const hideComment = await fetch(`${baseUrl}/api/admin/moderation`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ action: "hide_reported_content", targetRef: queuedCommentReport.id }),
+  });
+  assert.equal(hideComment.status, 200);
+  counts = await queryLocalD1(`SELECT comments_count AS n FROM posts WHERE id = ${postId}`);
+  assert.equal(counts[0].n, 0, "隐藏评论必须同步递减 comments_count");
+});
+
+test("docs PATCH rejects a nonexistent parent instead of orphaning the doc to root", async () => {
+  // P2 复核用例:PATCH 不存在的 parentId 曾穿过防环游标被静默写入,
+  // 文档树随后把孤儿"提升到根"。
+  const docsRunId = crypto.randomUUID();
+  const created = await fetch(`${baseUrl}/api/docs`, {
+    method: "POST",
+    headers: authHeaders("造场创始人", adminEmail),
+    body: JSON.stringify({ title: `孤儿子级 ${docsRunId.slice(0, 8)}`, slug: `orphan-${docsRunId.slice(0, 8)}`, visibility: "public" }),
+  });
+  assert.equal(created.status, 201);
+  const doc = (await created.json()).doc;
+  const patch = await fetch(`${baseUrl}/api/docs`, {
+    method: "PATCH",
+    headers: authHeaders("造场创始人", adminEmail),
+    body: JSON.stringify({ id: doc.id, parentId: "doc:definitely-not-here" }),
+  });
+  assert.equal(patch.status, 404);
+  assert.deepEqual(await patch.json(), { error: "parent_not_found" });
+  const rows = await queryLocalD1(`SELECT parent_id AS parentId FROM docs WHERE id = '${doc.id}'`);
+  assert.equal(rows[0].parentId, null);
+});
+
+test("product approval refuses an external cover image like an external demo", async () => {
+  // P2 复核用例:外链封面曾可以过审——过审后图床可被原地替换(内容调包/追踪)。
+  const ownerHeaders = authHeaders("外链封面作者", `external-cover-${runId}@example.com`);
+  const created = await fetch(`${baseUrl}/api/products`, {
+    method: "POST",
+    headers: ownerHeaders,
+    body: JSON.stringify({ title: `外链封面作品 ${runId}`, description: "封面指向外部图床,审批必须与外链 demo 同规拒绝。", category: "互动体验", coverTheme: "blue", pricingModel: "free", imageUrl: "https://evil.example/cover.jpg" }),
+  });
+  assert.equal(created.status, 201);
+  const productId = (await created.json()).product.id;
+  const response = await fetch(`${baseUrl}/api/admin/moderation`, {
+    method: "PATCH",
+    headers: authHeaders("发布审核管理员", adminEmail),
+    body: JSON.stringify({ action: "approve_product", targetRef: String(productId), note: "尝试批准外链封面作品,应被拒绝。" }),
+  });
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: "external_demo_requires_immutable_package" });
+});
+
+test("published static asset headers file keeps product apps same-origin framed", () => {
+  // P2-O 门禁:生产环境 /product-apps/* 与 /downloads/* 由 Workers Assets 直接服务,
+  // worker 的安全头分支不会运行——public/_headers 是这些路径唯一的防线,受测试保护。
+  const headers = readFileSync(join(projectRoot, "public", "_headers"), "utf8");
+  const productApps = headers.slice(headers.indexOf("/product-apps/*"), headers.indexOf("/product-apps/wander"));
+  assert.match(productApps, /X-Content-Type-Options: nosniff/i);
+  assert.match(productApps, /X-Frame-Options: SAMEORIGIN/i);
+  assert.match(productApps, /frame-ancestors 'self'/i);
+  const downloads = headers.slice(headers.indexOf("/downloads/*"), headers.indexOf("/product-apps/*"));
+  assert.match(downloads, /X-Content-Type-Options: nosniff/i);
+  assert.match(downloads, /Content-Disposition: attachment/i);
 });
 
 // 最小 SSE 帧解析:把 Response 读成 {text, done}。按 "\n\n" 切帧,event/data 各取一行。

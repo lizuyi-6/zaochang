@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { database } from "../../../_lib/community";
 import { enforceRateLimit, RateLimitError, requestActorKey } from "../../../_lib/rate-limit";
 import {
+  constantTimeEquals,
   createOAuthSession,
   ensureEmailUser,
   hashToken,
@@ -66,10 +67,33 @@ export async function POST(request: Request) {
     .first<PendingCodeRow>();
 
   if (!row) return NextResponse.json({ error: "code_invalid" }, { status: 400 });
+  // 锁定前置:attempts 达标后该行彻底作死——正确码也不再放行(否则 5 次失败后
+  // 提交正确码仍能登录,锁定语义失效)。这里是快照读,并发正确码竞态的最坏结果
+  // 只是多放行一次消费,消费本身原子,攻击者没有正确码则此路径不可达。
   if (row.attempts >= MAX_ATTEMPTS) return NextResponse.json({ error: "code_locked" }, { status: 400 });
 
-  if ((await hashToken(code)) !== row.codeHash) {
-    await db.prepare(`UPDATE email_login_codes SET attempts = attempts + 1 WHERE id = ?`).bind(row.id).run();
+  if (constantTimeEquals(await hashToken(code), row.codeHash)) {
+    // 原子消费:并发同码提交只有一方 changes>0。
+    const consumed = await db
+      .prepare(`UPDATE email_login_codes SET consumed_at = CURRENT_TIMESTAMP WHERE id = ? AND consumed_at IS NULL`)
+      .bind(row.id)
+      .run();
+    if (Number(consumed.meta.changes ?? 0) === 0) {
+      return NextResponse.json({ error: "code_invalid" }, { status: 400 });
+    }
+  } else {
+    // 错误尝试计数本身就是闸门:条件 UPDATE(attempts < MAX_ATTEMPTS)原子占额,
+    // 并发下每个错误猜测恰好消耗一个名额,check-then-act 快照竞态无法超发猜测。
+    // (成功消费的码 attempts 多记 1 无影响——该行已终结。)
+    const bumped = await db
+      .prepare(`UPDATE email_login_codes SET attempts = attempts + 1 WHERE id = ? AND attempts < ?`)
+      .bind(row.id, MAX_ATTEMPTS)
+      .run();
+    if (Number(bumped.meta.changes ?? 0) === 0) {
+      return NextResponse.json({ error: "code_locked" }, { status: 400 });
+    }
+    // 与旧语义对齐:第 5 次错误尝试(attempts 达到上限)即报告 code_locked,
+    // 提示该码已作死;前 4 次报 code_invalid。
     const after = await db
       .prepare(`SELECT attempts FROM email_login_codes WHERE id = ?`)
       .bind(row.id)
@@ -78,15 +102,6 @@ export async function POST(request: Request) {
       { error: Number(after?.attempts ?? MAX_ATTEMPTS) >= MAX_ATTEMPTS ? "code_locked" : "code_invalid" },
       { status: 400 },
     );
-  }
-
-  // 原子消费:并发同码提交只有一方 changes>0。
-  const consumed = await db
-    .prepare(`UPDATE email_login_codes SET consumed_at = CURRENT_TIMESTAMP WHERE id = ? AND consumed_at IS NULL`)
-    .bind(row.id)
-    .run();
-  if (Number(consumed.meta.changes ?? 0) === 0) {
-    return NextResponse.json({ error: "code_invalid" }, { status: 400 });
   }
 
   let user;

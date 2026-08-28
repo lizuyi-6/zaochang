@@ -2,10 +2,10 @@ import { env } from "cloudflare:workers";
 import { cookies, headers } from "next/headers";
 import { resolvePublicAppOrigin } from "./lib/public-origin";
 
-export type OAuthProvider = "google" | "github";
+export type OAuthProvider = "github";
 // 会话签发可用的 provider:OAuth 登录走 OAuthProvider,邮箱验证码登录走 "email"。
 // (oauth_accounts/invitation_redemptions 的 CHECK 自 0018 起同样接受 'email';
-// 0001 时代的 "google" 仅作历史兼容保留,当前无 google 登录入口。)
+// "google" 曾在 0001 时代存在,登录入口已移除,DB CHECK 里的历史值保留不动。)
 export type SessionProvider = OAuthProvider | "email";
 
 export type SessionUser = {
@@ -39,7 +39,7 @@ export function providerConfig(provider: OAuthProvider): ProviderConfig | null {
 }
 
 export function isOAuthProvider(value: string): value is OAuthProvider {
-  return value === "google" || value === "github";
+  return value === "github";
 }
 
 export function turnstileConfig() {
@@ -54,7 +54,6 @@ export function turnstileSiteKey() {
 
 export function oauthProviderStatus() {
   return {
-    google: Boolean(providerConfig("google")),
     github: Boolean(providerConfig("github")),
   };
 }
@@ -83,10 +82,22 @@ export function safeReturnPath(value: string | null | undefined) {
     const url = new URL(value, "https://zaochang.local");
     if (url.origin !== "https://zaochang.local") return "/";
     if (url.pathname.startsWith("/api/auth/") || url.pathname === "/signin") return "/";
-    return `${url.pathname}${url.search}${url.hash}`;
+    const out = `${url.pathname}${url.search}${url.hash}`;
+    // 终检:dot-segment 坍缩可能把合法输入变成协议相对 URL("/..//x" → "//x"),
+    // 该返回值会被 <Link href> / new URL(path, origin) 重新解析而跳出站外。
+    if (out.startsWith("//") || out.startsWith("/\\")) return "/";
+    return out;
   } catch {
     return "/";
   }
+}
+
+// 常数时间比较:对齐 agent token 的时序标准(state/验证码哈希同为高熵认证值)。
+export function constantTimeEquals(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 export function randomToken(bytes = 32) {
@@ -230,9 +241,9 @@ export async function ensureOAuthUser(
     ).bind(provider, providerAccountId).first<{ email: string }>();
     if (!winner) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("oauth_registration_invitation_required")
-        || message.includes("invitation_not_available")
-        || message.includes("invitation_redemptions")) {
+      // 仅匹配两个邀请闸触发器的 RAISE 消息;宽泛的表名匹配会把
+      // invitation_redemptions 表上的 UNIQUE/FK 故障误报成 invitation_invalid。
+      if (message.includes("oauth_registration_invitation_required") || message.includes("invitation_not_available")) {
         throw new RegistrationInviteError("invitation_invalid");
       }
       throw error;
@@ -294,9 +305,7 @@ export async function ensureEmailUser(email: string, invitationHash: string | nu
     ).bind(email).first<{ email: string; displayName: string }>();
     if (!winner) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("oauth_registration_invitation_required")
-        || message.includes("invitation_not_available")
-        || message.includes("invitation_redemptions")) {
+      if (message.includes("oauth_registration_invitation_required") || message.includes("invitation_not_available")) {
         throw new RegistrationInviteError("invitation_invalid");
       }
       throw error;
@@ -334,14 +343,15 @@ export async function clearAuthCookie(secure: boolean) {
 }
 
 export async function requestSecure(request: Request) {
-  // 生产（Cloudflare Workers）用运行时注入的 cf.httpProtocol 判定协议：客户端不可伪造，
-  // 避免信任 x-forwarded-proto 被伪造 https 导致 Cookie 误标 Secure。
-  // 仅在 cf 未报告 https（本地 dev / 测试）时，回退到 URL 协议与 x-forwarded-proto，
-  // 以模拟反向代理终止 TLS 的场景（wrangler dev 不注入真实 cf.httpProtocol）。
-  const cf = (request as Request & { cf?: { httpProtocol?: string } }).cf;
-  if (cf?.httpProtocol === "https") return true;
+  // 生产(Workers)请求 URL 的 scheme 由平台按真实协议生成,https 请求必为 https:
+  // ——这是唯一可信依据(注意 cf.httpProtocol 是 "HTTP/2" 这类协议版本号,
+  // 与 https 与否无关,旧实现拿它判协议是永不生效的死分支)。
+  // x-forwarded-proto 客户端可伪造,仅在非生产环境(本地 dev 模拟反向代理终止
+  // TLS)参与判定;生产绝不采信,杜绝伪造 https 把 Cookie 误标 Secure。
+  if (new URL(request.url).protocol === "https:") return true;
+  if ((runtimeEnv().APP_ENV ?? "") === "production") return false;
   const requestHeaders = await headers();
-  return new URL(request.url).protocol === "https:" || requestHeaders.get("x-forwarded-proto") === "https";
+  return requestHeaders.get("x-forwarded-proto") === "https";
 }
 
 export class RegistrationInviteError extends Error {

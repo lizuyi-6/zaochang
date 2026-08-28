@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { products, type CommunityPost } from "../lib/community-data";
 
 type Comment = {
@@ -93,6 +93,9 @@ export function FeedClient() {
   const [roomComments, setRoomComments] = useState<Comment[]>([]);
   const [roomText, setRoomText] = useState("");
   const [sendingRoom, setSendingRoom] = useState(false);
+  // 评论/房间请求令牌:只允许最新一次请求写入结果(防快速切换时旧响应晚到覆盖)。
+  const commentsRequestSeqRef = useRef(0);
+  const roomRequestSeqRef = useRef(0);
   const [liveRoomStats, setLiveRoomStats] = useState<Record<string, number>>(
     {},
   );
@@ -161,33 +164,39 @@ export function FeedClient() {
     event.preventDefault();
     if (text.trim().length < 2) return;
     setSending(true);
-    const response = await fetch("/api/actions", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "post",
-        content: text,
-        imageUrl,
-        linkedProductRef,
-        postType,
-      }),
-    });
-    if (response.status === 401) {
-      window.location.assign("/signin?return_to=%2Ffeed");
-      return;
+    // try/finally:断网/500 时也必须复位 sending,否则发布按钮永久卡死。
+    try {
+      const response = await fetch("/api/actions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "post",
+          content: text,
+          imageUrl,
+          linkedProductRef,
+          postType,
+        }),
+      });
+      if (response.status === 401) {
+        window.location.assign("/signin?return_to=%2Ffeed");
+        return;
+      }
+      if (response.ok) {
+        const data = (await response.json()) as { post: Record<string, unknown> };
+        setPosts((current) => [hydratePost(data.post), ...current]);
+        setText("");
+        setImageUrl("");
+        setLinkedProductRef("");
+        setPostType("记录");
+        setExpanded(false);
+        setTool(null);
+        setNotice("动态已经发布");
+      } else setNotice("发布失败，请检查图片链接后重试");
+    } catch {
+      setNotice("网络异常，发布未成功，请重试");
+    } finally {
+      setSending(false);
     }
-    if (response.ok) {
-      const data = (await response.json()) as { post: Record<string, unknown> };
-      setPosts((current) => [hydratePost(data.post), ...current]);
-      setText("");
-      setImageUrl("");
-      setLinkedProductRef("");
-      setPostType("记录");
-      setExpanded(false);
-      setTool(null);
-      setNotice("动态已经发布");
-    } else setNotice("发布失败，请检查图片链接后重试");
-    setSending(false);
   };
 
   const toggleLike = async (post: CommunityPost) => {
@@ -206,6 +215,7 @@ export function FeedClient() {
     }
     if (!response.ok) return;
     const data = (await response.json()) as { active: boolean };
+    const wasLiked = liked.has(String(post.id));
     setLiked((current) => {
       const next = new Set(current);
       const key = String(post.id);
@@ -213,6 +223,12 @@ export function FeedClient() {
       else next.delete(key);
       return next;
     });
+    // 服务端 likes_count 已含本人的历史点赞;本地只在点赞状态翻转时 ±1,避免叠加双计。
+    if (data.active !== wasLiked) {
+      setPosts((current) => current.map((item) => (item.id === post.id
+        ? { ...item, likes: Math.max(0, item.likes + (data.active ? 1 : -1)) }
+        : item)));
+    }
   };
 
   const openComments = async (post: CommunityPost) => {
@@ -222,41 +238,60 @@ export function FeedClient() {
     }
     setCommentsOpen(post.id);
     setCommentText("");
-    const response = await fetch(
-      `/api/comments?targetType=post&targetRef=${encodeURIComponent(String(post.id))}`,
-      { cache: "no-store" },
-    );
-    if (response.ok) {
+    // 请求令牌:快速切换帖子时,晚到的旧响应不得覆盖当前打开帖子的评论区。
+    const requestSeq = ++commentsRequestSeqRef.current;
+    try {
+      const response = await fetch(
+        `/api/comments?targetType=post&targetRef=${encodeURIComponent(String(post.id))}`,
+        { cache: "no-store" },
+      );
+      if (response.status === 401) {
+        window.location.assign("/signin?return_to=%2Ffeed");
+        return;
+      }
+      if (!response.ok) return;
       const data = (await response.json()) as { comments: Comment[] };
+      if (requestSeq !== commentsRequestSeqRef.current) return;
       setComments((current) => ({
         ...current,
         [String(post.id)]: data.comments,
       }));
-    }
+      // 列表长度是权威评论数:对齐本地计数,渲染端不再叠加,消除双计。
+      setPosts((current) => current.map((item) => (item.id === post.id
+        ? { ...item, comments: Math.max(item.comments, data.comments.length) }
+        : item)));
+    } catch { /* 网络失败:面板保持打开,无评论列表 */ }
   };
 
   const sendComment = async (post: CommunityPost) => {
     if (commentText.trim().length < 2) return;
-    const response = await fetch("/api/comments", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        targetType: "post",
-        targetRef: String(post.id),
-        content: commentText,
-      }),
-    });
-    if (response.status === 401) {
-      window.location.assign("/signin?return_to=%2Ffeed");
-      return;
-    }
-    if (response.ok) {
-      const data = (await response.json()) as { comment: Comment };
-      setComments((current) => ({
-        ...current,
-        [String(post.id)]: [...(current[String(post.id)] ?? []), data.comment],
-      }));
-      setCommentText("");
+    try {
+      const response = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetType: "post",
+          targetRef: String(post.id),
+          content: commentText,
+        }),
+      });
+      if (response.status === 401) {
+        window.location.assign("/signin?return_to=%2Ffeed");
+        return;
+      }
+      if (response.ok) {
+        const data = (await response.json()) as { comment: Comment };
+        setComments((current) => ({
+          ...current,
+          [String(post.id)]: [...(current[String(post.id)] ?? []), data.comment],
+        }));
+        setPosts((current) => current.map((item) => (item.id === post.id
+          ? { ...item, comments: item.comments + 1 }
+          : item)));
+        setCommentText("");
+      }
+    } catch {
+      setNotice("网络异常，评论未发送，请重试");
     }
   };
 
@@ -281,37 +316,47 @@ export function FeedClient() {
   const enterRoom = async (topic: string) => {
     setActiveRoom(topic);
     setRoomText("");
-    const response = await fetch(
-      `/api/comments?targetType=live_room&targetRef=${encodeURIComponent(topic)}`,
-      { cache: "no-store" },
-    );
-    if (response.ok) {
+    // 请求令牌:快速切换房间时,晚到的旧响应不得覆盖当前房间的评论。
+    const requestSeq = ++roomRequestSeqRef.current;
+    try {
+      const response = await fetch(
+        `/api/comments?targetType=live_room&targetRef=${encodeURIComponent(topic)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) return;
       const data = (await response.json()) as { comments: Comment[] };
+      if (requestSeq !== roomRequestSeqRef.current) return;
       setRoomComments(data.comments);
-    }
+    } catch { /* 网络失败:房间保持打开 */ }
   };
   const sendRoomComment = async () => {
     if (!activeRoom || roomText.trim().length < 2) return;
     setSendingRoom(true);
-    const response = await fetch("/api/comments", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        targetType: "live_room",
-        targetRef: activeRoom,
-        content: roomText,
-      }),
-    });
-    if (response.status === 401) {
-      window.location.assign("/signin?return_to=%2Ffeed");
-      return;
+    // try/finally:断网时也必须复位 sendingRoom。
+    try {
+      const response = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetType: "live_room",
+          targetRef: activeRoom,
+          content: roomText,
+        }),
+      });
+      if (response.status === 401) {
+        window.location.assign("/signin?return_to=%2Ffeed");
+        return;
+      }
+      if (response.ok) {
+        const data = (await response.json()) as { comment: Comment };
+        setRoomComments((current) => [...current, data.comment]);
+        setRoomText("");
+      } else setNotice("讨论发送失败，请稍后重试");
+    } catch {
+      setNotice("网络异常，讨论未发送，请重试");
+    } finally {
+      setSendingRoom(false);
     }
-    if (response.ok) {
-      const data = (await response.json()) as { comment: Comment };
-      setRoomComments((current) => [...current, data.comment]);
-      setRoomText("");
-    } else setNotice("讨论发送失败，请稍后重试");
-    setSendingRoom(false);
   };
 
   return (
@@ -551,14 +596,14 @@ export function FeedClient() {
                           liked.has(String(post.id)) ? "currentColor" : "none"
                         }
                       />{" "}
-                      {post.likes + (liked.has(String(post.id)) ? 1 : 0)}
+                      {post.likes}
                     </button>
                     <button
                       className={commentsOpen === post.id ? "active" : ""}
                       onClick={() => openComments(post)}
                     >
                       <MessageCircle size={17} />{" "}
-                      {post.comments + (comments[String(post.id)]?.length ?? 0)}
+                      {post.comments}
                     </button>
                     <button onClick={() => share(post)}>
                       <ArrowUpRight size={17} /> 分享

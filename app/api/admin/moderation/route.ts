@@ -1,5 +1,6 @@
 import { adminAuditStatement, requireAdmin } from "../../_lib/admin";
 import { database, jsonError } from "../../_lib/community";
+import { assertSameOrigin } from "../../_lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,9 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const admin = await requireAdmin();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     const input = await request.json() as Record<string, unknown>;
     const action = String(input.action ?? "");
     const targetRef = String(input.targetRef ?? "").slice(0, 160);
@@ -41,9 +45,9 @@ export async function PATCH(request: Request) {
       const decision = action === "approve_product" ? "approved" : "rejected";
       const product = await db.prepare(
         `SELECT review_status AS reviewStatus, review_version AS reviewVersion,
-                review_note AS reviewNote, demo_url AS demoUrl
+                review_note AS reviewNote, demo_url AS demoUrl, image_url AS imageUrl
          FROM products WHERE id = ?`,
-      ).bind(productId).first<{ reviewStatus: string; reviewVersion: number; reviewNote: string; demoUrl: string | null }>();
+      ).bind(productId).first<{ reviewStatus: string; reviewVersion: number; reviewNote: string; demoUrl: string | null; imageUrl: string | null }>();
       if (!product) return Response.json({ error: "product_not_found" }, { status: 404 });
       if (product.reviewStatus !== "pending_review") {
         if (product.reviewStatus === decision && product.reviewNote === note) {
@@ -51,7 +55,10 @@ export async function PATCH(request: Request) {
         }
         return Response.json({ error: "product_review_already_decided" }, { status: 409 });
       }
-      if (decision === "approved" && product.demoUrl) {
+      // 与 demoUrl 同规:外链封面在过审后可被图床原地替换(内容调包)兼作追踪信标,
+      // 批准只接受站内上传(/api/uploads/...,扫描 clean 且归属校验在提交时完成)。
+      const externalCover = Boolean(product.imageUrl) && !product.imageUrl!.startsWith("/api/uploads/");
+      if (decision === "approved" && (product.demoUrl || externalCover)) {
         return Response.json({ error: "external_demo_requires_immutable_package" }, { status: 409 });
       }
       const decisionId = `product-review:${productId}:${product.reviewVersion}`;

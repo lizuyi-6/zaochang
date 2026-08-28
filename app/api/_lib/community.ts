@@ -80,7 +80,10 @@ export function jsonError(error: unknown) {
   }
 
   const message = error instanceof Error ? error.message : "Unexpected error";
-  if (message.includes("CHECK constraint failed")) {
+  // 仅钱包余额 CHECK 映射为 insufficient_balance;任意表的 CHECK 失败都报钱包
+  // 错误会让 409 语义失真、掩盖真实故障。
+  if (message.includes("CHECK constraint failed")
+    && (message.includes("wallet_balance_nonnegative") || message.includes("wallet_pending_nonnegative"))) {
     return Response.json({ error: "insufficient_balance" }, { status: 409 });
   }
   if (message.includes("UNIQUE constraint failed")) {

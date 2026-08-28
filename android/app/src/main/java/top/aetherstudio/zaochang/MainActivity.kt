@@ -61,11 +61,17 @@ class MainActivity : Activity() {
   private lateinit var upgradeOverlay: LinearLayout
 
   private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
-  private var hasLoadedContent = false
   private var upgradeVerdictSeen = false
   private var lastStartedUrl: String? = null
   private var pendingInitialUrl: String = ShellConfig.BASE_URL
   private var lastCompatCheckAt = 0L
+  // onDestroy 后 compat 检查线程的回调不再触碰已销毁的视图树。
+  @Volatile private var destroyed = false
+  // release 构建不落用户导航日志(logcat/bugreport 可读)。AGP9 默认不生成
+  // BuildConfig,复用 FLAG_DEBUGGABLE 判定。
+  private val isDebugBuild by lazy {
+    (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+  }
 
   // ————————————————————————— 生命周期 —————————————————————————
 
@@ -88,13 +94,24 @@ class MainActivity : Activity() {
     rebuildWebView()
     applyWindowInsets()
     resolveSiteUrl(intent)?.let { pendingInitialUrl = it }
+    // 兼容检查是网络往返(超时上限 6s):先显示 loading,别让用户盯着空白页。
+    show(loadingOverlay)
     checkShellCompatibility(initial = true)
+  }
+
+  override fun onDestroy() {
+    destroyed = true
+    super.onDestroy()
   }
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     resolveSiteUrl(intent)?.let { url ->
-      if (web.url == null) pendingInitialUrl = url else web.loadUrl(url)
+      when {
+        upgradeVerdictSeen -> Unit // 升级判定后不再加载"不兼容"站点(遮罩下不许有活页面)
+        web.url == null -> pendingInitialUrl = url
+        else -> web.loadUrl(url)
+      }
     }
   }
 
@@ -186,12 +203,15 @@ class MainActivity : Activity() {
         synchronized(recentApkRequests) {
           if (now - (recentApkRequests[key] ?: 0L) > APK_REQUEST_DEDUPE_MS) {
             recentApkRequests[key] = now
-            if (recentApkRequests.size > 32) recentApkRequests.clear()
+            // 淘汰最旧一条,而不是整表清空:clear 会把仍在 5s 窗口内的请求全部重开闸。
+            if (recentApkRequests.size > 32) {
+              recentApkRequests.minByOrNull { it.value }?.let { recentApkRequests.remove(it.key) }
+            }
             shouldEnqueue = true
           }
         }
         if (shouldEnqueue) {
-          runOnUiThread { startFileDownload(key, null, null) }
+          runOnUiThread { if (!destroyed) startFileDownload(key, null, null) }
         }
       }
       return null
@@ -199,9 +219,26 @@ class MainActivity : Activity() {
 
     /** 顶级导航按主机白名单分流;iframe/子资源直接放行(Turnstile 等第三方嵌入必需)。 */
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-      Log.i(TAG, "sOUL main=${request.isForMainFrame} url=${request.url}")
+      if (isDebugBuild) Log.i(TAG, "sOUL main=${request.isForMainFrame} url=${request.url}")
       if (!request.isForMainFrame) return false
       return navigateInternal(request.url)
+    }
+
+    /**
+     * 服务端 30x 重定向不回调 shouldOverrideUrlLoading:白名单主机(如 github.com
+     * release 资产)发出的重定向链会把任意终点直接落进特权 WebView。历史条目更新
+     * 是重定向落地后的确定性回调,在此对主文档重过主机闸,违规即弹回站点首页。
+     */
+    override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+      super.doUpdateVisitedHistory(view, url, isReload)
+      val uri = url?.let(Uri::parse) ?: return
+      val scheme = uri.scheme?.lowercase(Locale.ROOT)
+      val host = uri.host?.lowercase(Locale.ROOT)
+      val allowed = scheme == "https" && host != null && host in ShellConfig.INTERNAL_HOSTS
+      if (!allowed && !upgradeVerdictSeen) {
+        Log.w(TAG, "blocked non-allowlisted main document after redirect: $url")
+        web.loadUrl(ShellConfig.BASE_URL)
+      }
     }
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
@@ -210,30 +247,42 @@ class MainActivity : Activity() {
     }
 
     override fun onPageFinished(view: WebView, url: String) {
-      hasLoadedContent = true
       hide(loadingOverlay)
     }
 
     /** 仅主文档失败才进错误页;子资源失败由页面自身呈现。 */
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
       if (!request.isForMainFrame) return
-      hasLoadedContent = false
       showError(error.description?.toString().orEmpty().ifEmpty { getString(R.string.error_detail_default) })
     }
 
     /** 安全不变量:证书错误一律取消,绝不 proceed。 */
     override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
       handler.cancel()
-      showError(getString(R.string.error_ssl))
+      val mainFrame = view.url != null && error.url == view.url
+      if (mainFrame) {
+        showError(getString(R.string.error_ssl))
+      } else {
+        Log.w(TAG, "subresource TLS failure ignored: ${error.url}")
+      }
     }
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
       Log.w(TAG, "webview render process gone (crashed=${detail.didCrash()}); rebuilding")
-      hasLoadedContent = false
       runOnUiThread {
         rebuildWebView()
+        // 与加载门禁同规:升级判定后只显示升级页;恢复目标还要过主机闸
+        // (lastStartedUrl 可能是重定向落地的非白名单主机)。
+        if (upgradeVerdictSeen) {
+          show(upgradeOverlay)
+          return@runOnUiThread
+        }
         show(loadingOverlay)
-        web.loadUrl(lastStartedUrl ?: pendingInitialUrl)
+        val target = lastStartedUrl ?: pendingInitialUrl
+        val uri = Uri.parse(target)
+        val allowed = uri.scheme?.lowercase(Locale.ROOT) == "https" &&
+          uri.host?.lowercase(Locale.ROOT) in ShellConfig.INTERNAL_HOSTS
+        web.loadUrl(if (allowed) target else ShellConfig.BASE_URL)
       }
       return true
     }
@@ -355,14 +404,15 @@ class MainActivity : Activity() {
     val activity = this
     Thread {
       val fileName = resolveDownloadFileName(url, contentDisposition, mimeType)
+      val resolver = contentResolver
+      var target: Uri? = null
       try {
         val values = ContentValues().apply {
           put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
           put(MediaStore.MediaColumns.MIME_TYPE, mimeType ?: guessMimeType(fileName))
           put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
-        val resolver = contentResolver
-        val target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
           ?: throw IOException("MediaStore insert returned null")
         resolver.openOutputStream(target)?.use { out ->
           val connection = URL(url).openConnection() as HttpURLConnection
@@ -382,6 +432,8 @@ class MainActivity : Activity() {
         runOnUiThread { Toast.makeText(activity, R.string.download_done, Toast.LENGTH_SHORT).show() }
       } catch (e: Exception) {
         Log.w(TAG, "file download failed: $url", e)
+        // 清掉已建而未写完的 MediaStore 行:否则公共 Downloads 里会积累 0 字节/半截文件。
+        target?.let { resolver.delete(it, null, null) }
         runOnUiThread { Toast.makeText(activity, R.string.download_failed, Toast.LENGTH_LONG).show() }
       }
     }.start()
@@ -419,7 +471,8 @@ class MainActivity : Activity() {
     lastCompatCheckAt = SystemClock.elapsedRealtime()
     Thread {
       val manifest = AppShell.fetch(ShellConfig.BASE_URL, COMPAT_TIMEOUT_MS)
-      runOnUiThread { applyCompatibilityVerdict(manifest, initial) }
+      if (destroyed) return@Thread
+      runOnUiThread { if (!destroyed) applyCompatibilityVerdict(manifest, initial) }
     }.start()
   }
 
@@ -430,20 +483,24 @@ class MainActivity : Activity() {
         // 清单不可达 = 网络问题:首次启动照常加载站点。
         // 但若此前已明确判定不兼容,维持升级页(fail-closed,不用"网络失败"洗掉升级判定)。
         if (upgradeVerdictSeen) {
+          hide(loadingOverlay)
           show(upgradeOverlay)
         } else if (initial) {
           loadInitialUrl()
+        } else {
+          hide(loadingOverlay)
         }
       }
       manifest.minShellVersionCode > code ||
         (manifest.maxShellVersionCode != null && manifest.maxShellVersionCode < code) -> {
         upgradeVerdictSeen = true
+        hide(loadingOverlay)
         show(upgradeOverlay)
       }
       else -> {
         upgradeVerdictSeen = false
         hide(upgradeOverlay)
-        if (initial) loadInitialUrl()
+        if (initial) loadInitialUrl() else hide(loadingOverlay)
       }
     }
   }

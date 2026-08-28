@@ -1,6 +1,7 @@
 import { database, jsonError, optionalMember, requireMember } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { findProduct } from "../../lib/community-data";
+import { assertSameOrigin } from "../_lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,10 @@ export async function GET(request: Request) {
     if (targetType === "product" && !(await productIsPublic(targetRef))) {
       return Response.json({ error: "product_not_found" }, { status: 404 });
     }
+    // 帖子与产品同规:被隐藏的帖子,其评论区对读取一并关闭(写侧另有 DB 触发器兜底)。
+    if (targetType === "post" && !(await postIsVisible(targetRef))) {
+      return Response.json({ error: "post_not_found" }, { status: 404 });
+    }
     const result = await database().prepare(
       `SELECT id, owner_name AS ownerName, content, created_at AS createdAt
        FROM comments WHERE target_type = ? AND target_ref = ? AND moderation_status = 'visible'
@@ -32,6 +37,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     await enforceRateLimit(await rateLimitKey("comment", member.email), 60, 60 * 60);
     const input = await request.json() as Record<string, unknown>;
     const targetType = String(input.targetType ?? "").slice(0, 24);
@@ -46,7 +54,7 @@ export async function POST(request: Request) {
     if (targetType === "product" && !(await productIsPublic(targetRef))) {
       return Response.json({ error: "product_not_found" }, { status: 404 });
     }
-    if (targetType === "post" && !(await postExists(targetRef))) {
+    if (targetType === "post" && !(await postIsVisible(targetRef))) {
       return Response.json({ error: "post_not_found" }, { status: 404 });
     }
     const db = database();
@@ -61,12 +69,14 @@ export async function POST(request: Request) {
       if (error instanceof Error && error.message.includes("product_comment_product_not_approved")) {
         return Response.json({ error: "product_not_found" }, { status: 404 });
       }
+      // 隐藏帖评论闸(0019 触发器):POST 侧校验与触发器之间帖子被隐藏的竞态在这里落地。
+      if (error instanceof Error && error.message.includes("post_comment_post_not_visible")) {
+        return Response.json({ error: "post_not_found" }, { status: 404 });
+      }
       throw error;
     }
-    if (targetType === "post" && /^\d+$/.test(targetRef)) {
-      await db.prepare("UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?")
-        .bind(Number(targetRef)).run();
-    }
+    // comments_count 由 0019 触发器原子维护(此前是这里的一条独立 UPDATE,非原子
+    // 且无递减路径);应用层不再手写计数。
     return Response.json({ comment }, { status: 201 });
   } catch (error) {
     return jsonError(error);
@@ -83,8 +93,10 @@ async function productIsPublic(targetRef: string) {
   return Boolean(product);
 }
 
-async function postExists(targetRef: string) {
+async function postIsVisible(targetRef: string) {
   if (!/^\d+$/.test(targetRef)) return false;
-  const post = await database().prepare(`SELECT 1 AS found FROM posts WHERE id = ?`).bind(Number(targetRef)).first();
+  const post = await database().prepare(
+    `SELECT 1 AS found FROM posts WHERE id = ? AND moderation_status = 'visible'`,
+  ).bind(Number(targetRef)).first();
   return Boolean(post);
 }

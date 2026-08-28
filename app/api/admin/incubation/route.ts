@@ -1,5 +1,6 @@
 import { adminAuditStatement, requireAdmin } from "../../_lib/admin";
 import { database, jsonError } from "../../_lib/community";
+import { assertSameOrigin } from "../../_lib/request-origin";
 
 const STAGES = ["提交申请", "资料审核", "初步沟通", "项目评估", "确认合作", "产品定位", "原型设计", "开发测试", "上线准备", "进入银河"];
 
@@ -21,6 +22,9 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const admin = await requireAdmin();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     const input = await request.json() as Record<string, unknown>;
     const projectId = Number(input.projectId);
     const status = String(input.status ?? "");
@@ -40,7 +44,11 @@ export async function PATCH(request: Request) {
     ).bind(status, currentTask, assignedOwner, nextAction, waitingReason, progressPercent, projectId)];
     if (feedback) statements.push(db.prepare(`INSERT INTO incubation_feedback (project_id, author_email, kind, content) VALUES (?, ?, 'stage_update', ?)`).bind(projectId, admin.email, feedback));
     statements.push(adminAuditStatement(admin.email, "update_incubation", "incubation_project", String(projectId), JSON.stringify({ status, progressPercent })));
-    await db.batch(statements);
+    const results = await db.batch(statements);
+    // UPDATE 0 行(项目不存在)不得报成功、不得留审计:审计表必须只记真实发生的事。
+    if (Number(results[0]?.meta?.changes ?? 0) === 0) {
+      return Response.json({ error: "project_not_found" }, { status: 404 });
+    }
     return Response.json({ updated: true });
   } catch (error) {
     return jsonError(error);

@@ -840,7 +840,7 @@ body:has(.reading-ai-panel.open) .reading-ai-rail { display: none; }
 .reading-ai-spin { animation: reading-ai-rotate 0.9s linear infinite; }
 @keyframes reading-ai-rotate { to { transform: rotate(360deg); } }
 /* 划词气泡:选区上方浮出,ink 底白字(呼应 .action-toast 家族)。 */
-.reading-ai-bubble { background: var(--ink); border-radius: 6px; box-shadow: 0 8px 26px rgb(0 0 0 / 22%); display: flex; overflow: hidden; position: absolute; z-index: 80; }
+.reading-ai-bubble { background: var(--ink); border-radius: 6px; box-shadow: 0 8px 26px rgb(0 0 0 / 22%); display: flex; overflow: hidden; position: absolute; user-select: none; -webkit-user-select: none; z-index: 80; }
 .reading-ai-bubble button { background: none; border: 0; color: #f5f4f0; cursor: pointer; font-size: 12px; padding: 7px 13px; }
 .reading-ai-bubble button + button { border-left: 1px solid rgb(255 255 255 / 18%); }
 .reading-ai-bubble button:hover { background: rgb(255 255 255 / 10%); }

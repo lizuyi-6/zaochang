@@ -194,6 +194,9 @@ export function ReadingAiDock(props: Props) {
         kind,
         label: ACTION_LABELS[kind],
         quote: payload.selection ? payload.selection.slice(0, 120) : payload.question?.slice(0, 120),
+        // 完整原文单独留存:重试必须按原始输入重发,截断的 quote 只用于展示。
+        selection: payload.selection,
+        question: payload.question,
         image: payload.image,
       });
       if (!state.open) toggleReadingAi();
@@ -232,17 +235,19 @@ export function ReadingAiDock(props: Props) {
         const decoder = new TextDecoder();
         let buffer = "";
         let assembled = "";
+        // 帧分隔容错 CRLF:中间代理可能把 LF 归一成 CRLF,只认 "\n\n" 会整体丢帧。
+        const FRAME_SEPARATOR = /(?:\r?\n){2}/;
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          let frameEnd = buffer.indexOf("\n\n");
-          while (frameEnd >= 0) {
-            const frame = buffer.slice(0, frameEnd);
-            buffer = buffer.slice(frameEnd + 2);
-            frameEnd = buffer.indexOf("\n\n");
-            const eventLine = frame.split("\n").find((line) => line.startsWith("event:"));
-            const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
+          let split = FRAME_SEPARATOR.exec(buffer);
+          while (split) {
+            const frame = buffer.slice(0, split.index);
+            buffer = buffer.slice(split.index + split[0].length);
+            split = FRAME_SEPARATOR.exec(buffer);
+            const eventLine = frame.split(/\r?\n/).find((line) => line.startsWith("event:"));
+            const dataLine = frame.split(/\r?\n/).find((line) => line.startsWith("data:"));
             if (!eventLine || !dataLine) continue;
             const event = eventLine.slice(6).trim();
             let data: Record<string, unknown> = {};
@@ -301,7 +306,10 @@ export function ReadingAiDock(props: Props) {
 
   const handleSelectionAction = useCallback(
     (kind: ReadingAiAction) => {
-      const text = window.getSelection()?.toString().trim() ?? "";
+      // 使用气泡创建时捕获的选区文本(bubble.selection),不重读 live selection:
+      // 按下气泡按钮的 mousedown 默认行为会清除文档选区(Chrome/Edge/Firefox),
+      // 点击瞬间重读必得空串——划词功能因此在主流桌面浏览器上整体失效。
+      const text = bubble?.selection ?? "";
       if (text.length < 2) {
         setHint("先选中一段文字");
         dismissBubble();
@@ -311,7 +319,7 @@ export function ReadingAiDock(props: Props) {
       window.getSelection()?.removeAllRanges();
       void runAction(kind, { selection: text.slice(0, 2000) });
     },
-    [runAction, dismissBubble],
+    [bubble, runAction, dismissBubble],
   );
 
   const openPanel = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -374,8 +382,12 @@ export function ReadingAiDock(props: Props) {
                   className="reading-ai-item-retry"
                   onClick={() => {
                     removeReadingAiItem(item.id);
+                    // 重试按原始输入重发:ask 带完整问题(发 selection 会被路由以
+                    // missing_question 拒绝),划词类带完整选区。
                     if (item.kind === "summary") void runAction("summary", {});
-                    else if (item.quote) void runAction(item.kind, { selection: item.quote });
+                    else if (item.kind === "ask" && item.question) void runAction("ask", { question: item.question });
+                    else if (item.selection) void runAction(item.kind, { selection: item.selection });
+                    else setHint("原始输入已缺失，请重新发起");
                   }}
                   aria-label="重试"
                 >
@@ -497,7 +509,13 @@ export function ReadingAiDock(props: Props) {
       </div>
 
       {bubble && (
-        <div className="reading-ai-bubble" style={{ top: bubble.top, left: bubble.left }}>
+        <div
+          className="reading-ai-bubble"
+          style={{ top: bubble.top, left: bubble.left }}
+          // preventDefault:挡住按下按钮时浏览器清除文档选区的默认行为,
+          // 保住选区(selectionchange 不再把气泡卸载)。
+          onMouseDown={(event) => event.preventDefault()}
+        >
           <button type="button" onClick={() => handleSelectionAction("explain")}>解释</button>
           <button type="button" onClick={() => handleSelectionAction("translate")}>翻译</button>
         </div>
