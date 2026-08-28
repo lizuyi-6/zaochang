@@ -38,5 +38,7 @@ jobs:
         run: |
           npm run db:generate
           git diff --exit-code -- db/schema.ts drizzle
+      - name: Require staging/prod database separation
+        run: node scripts/check-env-split.mjs
       - name: Block high and critical production dependency findings
         run: npm audit --omit=dev --audit-level=high

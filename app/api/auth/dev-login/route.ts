@@ -43,7 +43,8 @@ export async function GET(request: Request) {
     initial: (displayName.trim()[0] || email[0] || "造").toUpperCase(),
   };
   await ensureMember(user);
-  const session = await createOAuthSession(user, "github");
+  // provider 记 "email"(模拟本地登录,与真实 GitHub 会话区分,不污染 provider 审计数据)。
+  const session = await createOAuthSession(user, "email");
   const destination = await setAuthCookies(session.token, safeReturnPath(query.get("return_to")), await requestSecure(request));
   return NextResponse.redirect(absoluteAppUrl(request, destination));
 }

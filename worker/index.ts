@@ -112,6 +112,10 @@ async function revalidateAnonPage(request: Request, env: Env, ctx: ExecutionCont
 const edgeCache: Cache = (caches as unknown as { default: Cache }).default;
 
 const worker = {
+  // wrangler.prod.jsonc triggers.crons 触发;本地 dev/测试不会触发,行为零变化。
+  async scheduled(_controller: unknown, env: Env): Promise<void> {
+    await purgeExpiredData(env);
+  },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const origin = resolvePublicAppOrigin(url.href, env.APP_ENV, env.PUBLIC_APP_ORIGIN);
@@ -217,16 +221,66 @@ const worker = {
 const MAX_REQUEST_BYTES = 11 * 1024 * 1024;
 
 async function prepareRequestBody(request: Request) {
-  if (!request.body || !["POST", "PUT", "PATCH"].includes(request.method)) return request;
+  // DELETE 也要盖住:founder 的 DELETE /api/docs 会 request.json(),不能留无上界入口。
+  if (!request.body || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return request;
   const contentLength = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
     return Response.json({ error: "request_too_large" }, { status: 413 });
   }
-  const body = await request.arrayBuffer();
-  if (body.byteLength > MAX_REQUEST_BYTES) {
-    return Response.json({ error: "request_too_large" }, { status: 413 });
+  if (Number.isFinite(contentLength) && contentLength > 0) {
+    // 快路径:有可信 content-length 的请求一次性缓冲后按既有行为重建。
+    const body = await request.arrayBuffer();
+    if (body.byteLength > MAX_REQUEST_BYTES) {
+      return Response.json({ error: "request_too_large" }, { status: 413 });
+    }
+    return new Request(request, { body });
+  }
+  // chunked/无长度:流式累计,超限即刻 413,不再把任意大小的 body 全量读进内存。
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_REQUEST_BYTES) {
+      await reader.cancel().catch(() => {});
+      return Response.json({ error: "request_too_large" }, { status: 413 });
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
   }
   return new Request(request, { body });
+}
+
+// P2-U:过期数据生命周期。全库此前除 api_rate_limits 外没有任何清理
+// (授权请求行/codes/tokens/payments/email codes/auth_sessions 只增不减)。
+// 由 wrangler crons 触发,全部为幂等 DELETE;漏跑一轮只影响存储增长,不影响正确性。
+async function purgeExpiredData(env: Env) {
+  if (!env.DB) return;
+  const db = env.DB;
+  const statements = [
+    db.prepare(`DELETE FROM oauth_provider_authorization_requests WHERE expires_at <= CURRENT_TIMESTAMP`),
+    db.prepare(`DELETE FROM oauth_provider_authorization_codes WHERE expires_at <= CURRENT_TIMESTAMP`),
+    db.prepare(`DELETE FROM oauth_provider_access_tokens WHERE expires_at <= CURRENT_TIMESTAMP AND revoked_at IS NULL`),
+    db.prepare(`DELETE FROM oauth_provider_refresh_tokens WHERE expires_at <= CURRENT_TIMESTAMP AND revoked_at IS NULL AND replaced_by_hash IS NULL`),
+    db.prepare(`DELETE FROM external_fruit_payments WHERE status IN ('expired', 'cancelled') AND expires_at <= datetime('now', '-7 days')`),
+    db.prepare(`DELETE FROM email_login_codes WHERE expires_at <= datetime('now', '-1 day') OR consumed_at IS NOT NULL`),
+    db.prepare(`DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP`),
+  ];
+  for (const statement of statements) {
+    // 逐条执行:某张表名在未来重构中不存在时,不影响其余清理(并让日志能定位)。
+    try {
+      await statement.run();
+    } catch (error) {
+      console.error("[cron-purge] statement failed:", error instanceof Error ? error.message : error);
+    }
+  }
 }
 
 function withSecurityHeaders(request: Request, response: Response, publicOrigin: string) {
@@ -250,6 +304,10 @@ function withSecurityHeaders(request: Request, response: Response, publicOrigin:
     const turnstileOrigins = signin ? " https://challenges.cloudflare.com" : "";
     headers.set("content-security-policy", githubConnection
       ? GITHUB_CONNECTION_CSP
+      // 已知局限:script-src 带 'unsafe-inline'(vinext 的 RSC 引导数据以内联脚本注入,
+      // 框架不支持 nonce),本 CSP 因此对脚本执行零防御。XSS 防线 = React 转义 +
+      // sanitize-html 白名单(markdown-katex.ts,链接协议/样式逐属性锁定)。升级路径:
+      // vinext 支持 nonce 透传后改为 'nonce-xxx' 并删除 'unsafe-inline'。
       : `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors ${frameAncestors}; form-action 'self'; script-src 'self' 'unsafe-inline'${turnstileOrigins}; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'${turnstileOrigins}; worker-src 'self' blob:`);
   }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });

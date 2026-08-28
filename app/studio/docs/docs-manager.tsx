@@ -147,24 +147,30 @@ export function DocsManager() {
 
   const save = async () => {
     setBusy(true);
-    const isEdit = draft.id !== null;
-    const response = await fetch("/api/docs", {
-      method: isEdit ? "PATCH" : "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ...(isEdit ? { id: draft.id } : {}),
-        title: draft.title, slug: draft.slug, parentId: draft.parentId || null,
-        visibility: draft.visibility, bodyMd: draft.bodyMd, isBook: draft.isBook,
-        coverHue: draft.coverHue, summary: draft.summary,
-        coverImage: draft.coverImage, bannerImage: draft.bannerImage,
-      }),
-    });
-    const result = await response.json().catch(() => ({})) as { error?: string };
-    setBusy(false);
-    if (!response.ok) { setNotice(`保存未生效:${mapError(result.error)}`); return; }
-    setNotice(isEdit ? "已更新。" : "已创建。");
-    cancelEdit();
-    await load();
+    // try/finally:断网/非 JSON 500 时也必须复位 busy,否则保存按钮永久卡死。
+    try {
+      const isEdit = draft.id !== null;
+      const response = await fetch("/api/docs", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(isEdit ? { id: draft.id } : {}),
+          title: draft.title, slug: draft.slug, parentId: draft.parentId || null,
+          visibility: draft.visibility, bodyMd: draft.bodyMd, isBook: draft.isBook,
+          coverHue: draft.coverHue, summary: draft.summary,
+          coverImage: draft.coverImage, bannerImage: draft.bannerImage,
+        }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) { setNotice(`保存未生效:${mapError(result.error)}`); return; }
+      setNotice(isEdit ? "已更新。" : "已创建。");
+      cancelEdit();
+      await load();
+    } catch {
+      setNotice("保存未生效:网络异常，请重试");
+    } finally {
+      setBusy(false);
+    }
   };
 
   // 上传封面/横幅(仅书)。走创始人专用 /api/docs/cover:ClamAV 扫描 clean 后

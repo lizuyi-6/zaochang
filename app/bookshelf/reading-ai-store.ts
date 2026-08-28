@@ -13,7 +13,9 @@ export type ReadingAiItem = {
   id: string;
   kind: ReadingAiAction;
   label: string;
-  quote?: string; // 选中文本摘录或用户提问,展示在答案上方
+  quote?: string; // 选中文本摘录或用户提问(截断),仅用于展示在答案上方
+  selection?: string; // 完整选中文本(≤2000,服务端上限),重试时原样重发
+  question?: string; // ask 的完整问题(≤500,服务端上限),重试时原样重发
   image?: string; // 提问附图的 data URL(仅内存,不持久化),展示缩略图
   text: string;
   status: "streaming" | "done" | "error";
@@ -103,13 +105,15 @@ export function toggleReadingAi(invoker?: HTMLElement | null) {
 
 let itemSeq = 0;
 
-export function startReadingAiItem(input: { kind: ReadingAiAction; label: string; quote?: string; image?: string; cachedText?: string }): ReadingAiItem {
+export function startReadingAiItem(input: { kind: ReadingAiAction; label: string; quote?: string; selection?: string; question?: string; image?: string; cachedText?: string }): ReadingAiItem {
   itemSeq += 1;
   const item: ReadingAiItem = {
     id: `ai-${Date.now()}-${itemSeq}`,
     kind: input.kind,
     label: input.label,
     quote: input.quote,
+    selection: input.selection,
+    question: input.question,
     image: input.image,
     text: input.cachedText ?? "",
     status: input.cachedText ? "done" : "streaming",

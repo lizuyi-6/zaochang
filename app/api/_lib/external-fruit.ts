@@ -90,15 +90,6 @@ async function assertWalletIntegrity(email: string, row: WalletRow | null | unde
   throw new ExternalFruitError("wallet_ledger_mismatch", 423);
 }
 
-async function reconcileWalletFromLedger(email: string) {
-  await database().prepare(
-    `UPDATE wallets SET
-       balance = COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'available'), 0),
-       pending_balance = COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0),
-       updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
-  ).bind(email, email, email).run();
-}
-
 async function paymentById(id: string) {
   return database().prepare(
     `SELECT p.id, p.client_id AS clientId, c.name AS clientName,
@@ -270,6 +261,11 @@ export async function decideExternalPayment(userEmail: string, paymentId: string
   const [payerWallet, merchantWallet] = await Promise.all([wallet(row.payerEmail), wallet(row.merchantEmail)]);
   await assertWalletIntegrity(row.payerEmail, payerWallet);
   await assertWalletIntegrity(row.merchantEmail, merchantWallet);
+  // 状态前置判定:非 active 钱包是 wallet_restricted,不该落到 CHECK 失败后被
+  // isBalanceError 误报成 insufficient_balance(错误码决定第三方客户端的重试策略)。
+  if (payerWallet?.status !== "active" || merchantWallet?.status !== "active") {
+    throw new ExternalFruitError("wallet_restricted", 423);
+  }
 
   const operationId = `external-purchase:${paymentId}`;
   const refundable = row.pricingModel === "one_time";
@@ -319,7 +315,11 @@ export async function decideExternalPayment(userEmail: string, paymentId: string
     if (errorIncludes(error, "external_payment_not_payable")) {
       const current = await paymentById(paymentId);
       if (current?.status === "paid") return { payment: publicPayment(current), replayed: true, returnUri: current.returnUri };
-      throw new ExternalFruitError("wallet_restricted", 423);
+      // JS 侧过期检查与批次之间过期竞态落在触发器上:按文档承诺回报 payment_expired。
+      if (current?.status === "pending" && current.expiresAt && Date.parse(`${current.expiresAt}Z`) <= Date.now()) {
+        throw new ExternalFruitError("payment_expired", 409);
+      }
+      throw new ExternalFruitError("payment_not_payable", 409);
     }
     if (isUniqueError(error)) {
       const current = await paymentById(paymentId);
@@ -348,7 +348,11 @@ export async function refundExternalPayment(identity: Pick<ExternalIdentity, "cl
   if (row.status !== "paid" || !row.purchaseOperationId || !row.refundableUntil || Date.parse(`${row.refundableUntil}Z`) <= Date.now()) {
     throw new ExternalFruitError("refund_window_closed", 409);
   }
-  await Promise.all([reconcileWalletFromLedger(row.payerEmail), reconcileWalletFromLedger(row.merchantEmail)]);
+  // 与购买路径同政策:钱包/账本漂移必须阻断留痕(assertWalletIntegrity),
+  // 不得静默按账本改写——那会把漂移信号抹掉,若账本本身是错的一方,错值反被扶正。
+  const [payerWalletRow, merchantWalletRow] = await Promise.all([wallet(row.payerEmail), wallet(row.merchantEmail)]);
+  await assertWalletIntegrity(row.payerEmail, payerWalletRow);
+  await assertWalletIntegrity(row.merchantEmail, merchantWalletRow);
   const replayKey = `external-refund:${identity.clientId}:${identity.userEmail}:${idempotencyKey}`;
   const prior = await db.prepare(
     `SELECT reference_id AS referenceId FROM fruit_operations WHERE idempotency_key = ?`,
@@ -432,6 +436,8 @@ export async function settleDueExternalFruit(merchantEmail: string) {
         ).bind(item.amount, item.amount, item.amount, merchantEmail),
         db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, merchantEmail, -item.amount),
         db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'available', ?)`).bind(operationId, merchantEmail, item.amount),
+        // 与支付侧对称:结算落一行可见流水(购买侧已有 external_purchase/external_sale_pending 两行)。
+        db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'external_settlement', '外部应用收入已结算', ?)`).bind(merchantEmail, item.amount, item.id),
         db.prepare(`UPDATE external_fruit_payments SET status = 'settled', settled_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'paid'`).bind(item.id),
       ]);
     } catch (error) {

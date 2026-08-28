@@ -92,13 +92,14 @@ export async function POST(request: Request) {
       image = parsed;
     }
 
-    const limits = READING_AI_ACTION_LIMITS[action];
-    await enforceRateLimit(await rateLimitKey(`ai-${action}`, member.email), limits.ratePerHour, 60 * 60);
-
     const found = await findInBook([bookSlug, ...path], member);
     // fail-closed:不区分"不存在/不可见/跨书",一律 404 不泄露存在性(同 page.tsx 语义)。
     if (!found) return Response.json({ error: "target_not_found" }, { status: 404 });
     if (found.doc.id === found.book.id) return Response.json({ error: "chapter_required" }, { status: 400 });
+
+    // 限流在目标校验之后:输错章节路径的 404 不应消耗用户每小时的真实提问额度。
+    const limits = READING_AI_ACTION_LIMITS[action];
+    await enforceRateLimit(await rateLimitKey(`ai-${action}`, member.email), limits.ratePerHour, 60 * 60);
 
     // 正文只从 DB 来:截断到上限 + 折叠 \r 与 3+ 连续换行(省 token,不改语义)。
     const rawBody = found.doc.bodyMd.replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim();
@@ -174,13 +175,15 @@ export async function POST(request: Request) {
             if (signal.aborted || request.signal.aborted) {
               /* 客户端断开/超时:消费者已不在,静默收尾 */
             } else if (error instanceof AiUpstreamError) {
-              controller.enqueue(sseFrame("error", { error: error.code }));
+              try { controller.enqueue(sseFrame("error", { error: error.code })); } catch { /* 流已被取消 */ }
             } else {
               console.error("[reading-ai] mid-stream failure:", error instanceof Error ? error.message : error);
-              controller.enqueue(sseFrame("error", { error: "ai_upstream_error" }));
+              try { controller.enqueue(sseFrame("error", { error: "ai_upstream_error" })); } catch { /* 流已被取消 */ }
             }
           }
-          controller.close();
+          // 客户端中断后流已 cancelled,close() 会抛 TypeError——不接住就是每次
+          // 中途关面板都产生一次 Worker 未处理 promise rejection。
+          try { controller.close(); } catch { /* 流已被取消,无需收尾 */ }
         })();
       },
     });

@@ -5,7 +5,6 @@ import {
   hashInvitationCode,
   invitationAvailable,
   isOAuthProvider,
-  oauthProviderStatus,
   providerConfig,
   randomToken,
   requestSecure,
@@ -27,7 +26,13 @@ export async function GET(request: Request, { params }: Params) {
 }
 
 export async function POST(request: Request, { params }: Params) {
-  const form = await request.formData();
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    // 畸形 multipart / 错误 content-type:与 email 路由对 request.json() 的守卫对齐,400 而非 500。
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
   const invitationCode = String(form.get("invitation_code") ?? "").trim().slice(0, 64) || null;
   const returnTo = String(form.get("return_to") ?? "");
   const turnstileToken = String(form.get("cf-turnstile-response") ?? "") || null;
@@ -80,36 +85,28 @@ async function startOAuth(request: Request, params: { provider: string }, invita
   const secure = await requestSecure(request);
   await setOAuthState(state, returnTo, secure, invitationHash);
   const redirectUri = callbackUrl(request, provider);
-  const authorizeUrl = new URL(provider === "google" ? "https://accounts.google.com/o/oauth2/v2/auth" : "https://github.com/login/oauth/authorize");
+  const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
   authorizeUrl.searchParams.set("client_id", config.clientId);
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("state", state);
-  authorizeUrl.searchParams.set("scope", provider === "google" ? "openid email profile" : "read:user user:email");
-  if (provider === "google") authorizeUrl.searchParams.set("access_type", "online");
-  if (provider === "github") {
-    return new NextResponse(githubConnectionPage(authorizeUrl, returnTo), {
-      status: 200,
-      headers: {
-        "cache-control": "no-store, max-age=0",
-        "content-security-policy": GITHUB_CONNECTION_CSP,
-        "content-type": "text/html; charset=utf-8",
-        "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
-        "referrer-policy": "no-referrer",
-        "x-content-type-options": "nosniff",
-        "x-frame-options": "DENY",
-      },
-    });
-  }
-  return oauthRedirect(request, authorizeUrl);
+  authorizeUrl.searchParams.set("scope", "read:user user:email");
+  return new NextResponse(githubConnectionPage(authorizeUrl, returnTo), {
+    status: 200,
+    headers: {
+      "cache-control": "no-store, max-age=0",
+      "content-security-policy": GITHUB_CONNECTION_CSP,
+      "content-type": "text/html; charset=utf-8",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+    },
+  });
 }
 
 function oauthRedirect(request: Request, url: URL) {
   // The sign-in form submits with POST. A 307 would replay that POST against
   // GitHub's authorize endpoint; 303 converts the next hop to the required GET.
   return NextResponse.redirect(url, request.method === "POST" ? 303 : 307);
-}
-
-export function generateStaticParams() {
-  return Object.keys(oauthProviderStatus()).map((provider) => ({ provider }));
 }

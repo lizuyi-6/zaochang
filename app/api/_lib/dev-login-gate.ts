@@ -22,7 +22,8 @@ export function normalizeDevLoginEmail(raw: string | null | undefined): string |
   if (!email) return DEV_LOGIN_DEFAULT_EMAIL;
   if (email.length > DEV_LOGIN_EMAIL_MAX) return null;
   const at = email.lastIndexOf("@");
-  if (at <= 0 || at === email.length - 1) return null;
+  // 只允许恰好一个 @:lastIndexOf 能挡 "a@" / "@b",但 "a@b@c" 需要首个 @ 与其重合才挡得住。
+  if (at <= 0 || at === email.length - 1 || email.indexOf("@") !== at) return null;
   if (/[^a-z0-9._+\-@]/.test(email)) return null;
   return email;
 }

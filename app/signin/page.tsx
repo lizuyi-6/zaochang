@@ -15,9 +15,8 @@ export default async function SignInPage({ searchParams }: PageProps) {
   const status = oauthProviderStatus();
   const turnstileKey = turnstileSiteKey();
   const error = Array.isArray(query.error) ? query.error[0] : query.error;
-  const provider = Array.isArray(query.provider) ? query.provider[0] : query.provider;
   const errorText = error === "not_configured"
-    ? `${provider === "github" ? "GitHub" : "Google"} 登录尚未配置，请先完成 OAuth 应用设置。`
+    ? "GitHub 登录尚未配置，请先完成 OAuth 应用设置。"
     : error === "access_denied"
       ? "你取消了授权，当前没有登录。"
       : error === "invalid_state"

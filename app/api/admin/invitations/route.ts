@@ -1,6 +1,7 @@
 import { adminAuditStatement, requireAdmin } from "../../_lib/admin";
 import { database, jsonError } from "../../_lib/community";
 import { hashInvitationCode } from "../../../oauth-session";
+import { assertSameOrigin } from "../../_lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     const input = await request.json() as Record<string, unknown>;
     const label = String(input.label ?? "").trim().slice(0, 80);
     const maxUses = Math.floor(Number(input.maxUses));
@@ -57,6 +61,9 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const admin = await requireAdmin();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     const input = await request.json() as Record<string, unknown>;
     const id = String(input.id ?? "").slice(0, 80);
     if (input.action !== "revoke" || !/^invite:[a-f0-9-]+$/.test(id)) {

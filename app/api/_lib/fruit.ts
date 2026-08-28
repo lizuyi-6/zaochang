@@ -119,16 +119,6 @@ async function assertWalletIntegrity(email: string, row: WalletRow | null | unde
   throw new FruitError("wallet_ledger_mismatch", 423);
 }
 
-async function reconcileWalletFromLedger(email: string) {
-  await database().prepare(
-    `UPDATE wallets SET
-       balance = COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'available'), 0),
-       pending_balance = COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0),
-       updated_at = CURRENT_TIMESTAMP
-     WHERE user_email = ?`,
-  ).bind(email, email, email).run();
-}
-
 async function product(productId: number) {
   return database().prepare(
     `SELECT id, title, owner_email AS ownerEmail, price,
@@ -223,10 +213,10 @@ export async function settleDueFruit(sellerEmail: string) {
   const rewardDue = await db.prepare(
     `SELECT r.id, r.amount FROM fruit_reward_events r
      WHERE r.recipient_email = ? AND r.status = 'granted'
-       AND r.created_at <= datetime('now', '-${FRUIT_POLICY.likeSettlementHours} hours')
+       AND r.created_at <= datetime('now', '-' || ? || ' hours')
        AND NOT EXISTS (SELECT 1 FROM fruit_operations o WHERE o.reference_type = 'reward_event' AND o.reference_id = r.id)
      ORDER BY r.created_at ASC LIMIT 50`,
-  ).bind(sellerEmail).all<{ id: string; amount: number }>();
+  ).bind(sellerEmail, String(FRUIT_POLICY.likeSettlementHours)).all<{ id: string; amount: number }>();
   for (const reward of rewardDue.results) {
     const operationId = `like-settlement:${reward.id}`;
     try {
@@ -236,7 +226,15 @@ export async function settleDueFruit(sellerEmail: string) {
            (id, kind, idempotency_key, target_email, amount, reference_type, reference_id, description)
            VALUES (?, 'like_reward_settlement', ?, ?, ?, 'reward_event', ?, '有效点赞奖励结算')`,
         ).bind(operationId, operationId, sellerEmail, reward.amount, reward.id),
-        db.prepare(`UPDATE wallets SET pending_balance = pending_balance - ?, balance = balance + ?, lifetime_earned = lifetime_earned + ?, updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`).bind(reward.amount, reward.amount, reward.amount, sellerEmail),
+        // 与订单结算同构的 CASE 守卫:钱包在读取与批次之间被置 review/frozen 时,
+        // ELSE -1 触发 CHECK 令整批原子失败——这里是唯一的资金路径,不许 fail-open。
+        db.prepare(
+          `UPDATE wallets SET
+             pending_balance = CASE WHEN status = 'active' THEN pending_balance - ? ELSE -1 END,
+             balance = CASE WHEN status = 'active' THEN balance + ? ELSE -1 END,
+             lifetime_earned = lifetime_earned + ?, updated_at = CURRENT_TIMESTAMP
+           WHERE user_email = ?`,
+        ).bind(reward.amount, reward.amount, reward.amount, sellerEmail),
         db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, sellerEmail, -reward.amount),
         db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'available', ?)`).bind(operationId, sellerEmail, reward.amount),
         db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'like_reward', '有效点赞奖励已结算', ?)`).bind(sellerEmail, reward.amount, reward.id),
@@ -276,6 +274,12 @@ export async function settleDueFruit(sellerEmail: string) {
           `INSERT INTO fruit_entries (operation_id, user_email, bucket, delta)
            VALUES (?, ?, 'available', ?)`,
         ).bind(operationId, sellerEmail, item.amount),
+        // 与购买侧对称:结算必须落一行可见流水,否则卖家"最近流水"与余额脱节
+        // (wallet 页与社区 feed 通知都以 transactions 为源)。
+        db.prepare(
+          `INSERT INTO transactions (user_email, delta, type, description, reference_id)
+           VALUES (?, ?, 'settlement', '作品收入已结算', ?)`,
+        ).bind(sellerEmail, item.amount, item.id),
         db.prepare(
           `UPDATE product_orders SET status = 'settled', settled_at = CURRENT_TIMESTAMP
            WHERE id = ? AND status = 'paid'`,
@@ -436,7 +440,11 @@ export async function refundProductOrder(userEmail: string, orderId: string, ide
   const refundable = current.refundableUntil && Date.parse(`${current.refundableUntil}Z`) > Date.now();
   if (!refundable) throw new FruitError("refund_window_closed", 409);
 
-  await Promise.all([reconcileWalletFromLedger(userEmail), reconcileWalletFromLedger(current.sellerEmail)]);
+  // 与购买路径同政策:钱包/账本漂移是高危事件,必须阻断并留痕,而不是静默改写。
+  // (reconcileWalletFromLedger 只保留给确实需要修复的显式运维场景,不再出现在资金路径上。)
+  const [buyerWallet, sellerWalletRow] = await Promise.all([wallet(userEmail), wallet(current.sellerEmail)]);
+  await assertWalletIntegrity(userEmail, buyerWallet);
+  await assertWalletIntegrity(current.sellerEmail, sellerWalletRow);
 
   const operationId = `refund:${crypto.randomUUID()}`;
   try {
@@ -586,7 +594,16 @@ export async function awardProductLike(recipientEmail: string, actorEmail: strin
     `SELECT status, amount, reason FROM fruit_reward_events
      WHERE actor_email = ? AND kind = 'product_like' AND target_type = 'product' AND target_ref = ?`,
   ).bind(actorEmail, targetRef).first<{ status: string; amount: number; reason: string }>();
-  if (existing) return { granted: existing.status === "granted", amount: existing.amount, reason: "already_processed" };
+  // 已有记录:granted 以奖励事件当前状态为准。取消点赞会把事件翻成 'suppressed'
+  // (CHECK 只允许 granted/suppressed,'reversed' 需要 rebuild 表,不值得)——
+  // 此前翻转缺失,重赞会谎报 granted:true 而实际不可能再发奖。
+  if (existing) {
+    return {
+      granted: existing.status === "granted",
+      amount: existing.status === "granted" ? existing.amount : 0,
+      reason: "already_processed",
+    };
+  }
   if (recipientEmail === actorEmail) return suppressLikeReward(recipientEmail, actorEmail, targetRef, "self_like", false);
 
   const [actor, recipient, counters] = await Promise.all([
@@ -597,8 +614,8 @@ export async function awardProductLike(recipientEmail: string, actorEmail: strin
     wallet(recipientEmail),
     db.prepare(
       `SELECT
-         SUM(CASE WHEN actor_email = ? AND status = 'granted' AND created_at >= date('now') THEN 1 ELSE 0 END) AS actorToday,
-         SUM(CASE WHEN recipient_email = ? AND status = 'granted' AND created_at >= date('now') THEN amount ELSE 0 END) AS recipientToday,
+         SUM(CASE WHEN actor_email = ? AND status = 'granted' AND created_at >= datetime('now', '+8 hours', 'start of day', '-8 hours') THEN 1 ELSE 0 END) AS actorToday,
+         SUM(CASE WHEN recipient_email = ? AND status = 'granted' AND created_at >= datetime('now', '+8 hours', 'start of day', '-8 hours') THEN amount ELSE 0 END) AS recipientToday,
          SUM(CASE WHEN actor_email = ? AND created_at >= datetime('now', '-60 seconds') THEN 1 ELSE 0 END) AS recent
        FROM fruit_reward_events`,
     ).bind(actorEmail, recipientEmail, actorEmail).first<{ actorToday: number; recipientToday: number; recent: number }>(),
@@ -685,6 +702,9 @@ export async function removeProductLike(recipientEmail: string, actorEmail: stri
       db.prepare(`UPDATE wallets SET pending_balance = pending_balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`).bind(reward.amount, recipientEmail),
       db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, recipientEmail, -reward.amount),
       db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, 0, 'like_reward_reversed', '点赞取消，待结算奖励已撤销', ?)`).bind(recipientEmail, reward.id),
+      // 事件状态翻成 'suppressed'(撤销语义;CHECK 不含 'reversed'):此后重赞的
+      // existing 检查返回 granted:false,结算/重复撤销触发器也被状态位再挡一层。
+      db.prepare(`UPDATE fruit_reward_events SET status = 'suppressed', reason = 'like_reward_reversed' WHERE id = ? AND status = 'granted'`).bind(reward.id),
     );
   }
   statements.push(db.prepare("DELETE FROM product_likes WHERE product_id = ? AND user_email = ?").bind(productId, actorEmail));

@@ -86,7 +86,12 @@ try {
   const shot = await send("Page.captureScreenshot", { format: "png" });
   writeFileSync(OUT, Buffer.from(shot.data, "base64"));
   console.log("saved:", OUT);
-} finally {
   chrome.kill();
   process.exit(0);
+} catch (error) {
+  console.error(error);
+  chrome.kill();
+  // 失败必须以非零退出:此前 finally{exit(0)} 把"没找到入口按钮/CDP 超时"全部
+  // 伪装成成功,CI 与人工都会被骗过。
+  process.exit(1);
 }

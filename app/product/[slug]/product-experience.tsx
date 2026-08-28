@@ -16,6 +16,8 @@ export function ProductExperience({ product }: { product: Product }) {
   const [accent, setAccent] = useState(product.accent);
   const [tab, setTab] = useState("体验");
   const [liked, setLiked] = useState(false);
+  // 本地点赞增量:服务端 likes_count 为基准,本组件只叠加本次会话的翻转量(渲染端不重复 +1)。
+  const [localLikeDelta, setLocalLikes] = useState(0);
   const [notice, setNotice] = useState("");
   const [soundOn, setSoundOn] = useState(true);
   const [followed, setFollowed] = useState(false);
@@ -50,15 +52,24 @@ export function ProductExperience({ product }: { product: Product }) {
   }, [product.id, product.ownerName, productRef]);
 
   const like = async () => {
-    const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "like", productId: product.id }) });
-    if (response.status === 401) {
-      router.push(`/signin?return_to=${encodeURIComponent(`/product/${product.slug ?? product.id}`)}`);
-      return;
-    }
-    if (response.ok) {
-      const data = await response.json() as { liked?: boolean; reward?: { reason?: string } };
-      setLiked(Boolean(data.liked));
-      if (data.reward?.reason === "showcase_product") setNotice(data.liked ? "喜欢已记录；预置作品不发行果子" : "已取消喜欢");
+    try {
+      const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "like", productId: product.id }) });
+      if (response.status === 401) {
+        router.push(`/signin?return_to=${encodeURIComponent(`/product/${product.slug ?? product.id}`)}`);
+        return;
+      }
+      if (response.ok) {
+        const data = await response.json() as { liked?: boolean; reward?: { reason?: string } };
+        const wasLiked = liked;
+        setLiked(Boolean(data.liked));
+        // 服务端计数已含本人的历史点赞;本地只在状态翻转时 ±1,渲染端不再叠加,消除双计。
+        if (Boolean(data.liked) !== wasLiked && typeof product.likes === "number") {
+          setLocalLikes((current) => Math.max(-1, Math.min(1, current + (data.liked ? 1 : -1))));
+        }
+        if (data.reward?.reason === "showcase_product") setNotice(data.liked ? "喜欢已记录；预置作品不发行果子" : "已取消喜欢");
+      }
+    } catch {
+      setNotice("网络异常，请稍后重试");
     }
   };
 
@@ -107,7 +118,7 @@ export function ProductExperience({ product }: { product: Product }) {
     <>
       <header className="product-detail-head">
         <div className="product-identity"><span className={`deep-avatar ${product.coverTheme}`}>{product.ownerInitial}</span><span><small>{product.category} / {product.release}</small><h1>{product.title}</h1><p>{product.description}</p><div>{product.tags.map((tag) => <span key={tag}>{tag}</span>)}</div></span></div>
-        <div className="product-head-stats"><span><Eye size={16} /><strong>{compactNumber(product.plays)}</strong><small>体验</small></span><span><Heart size={16} /><strong>{compactNumber(product.likes + (liked ? 1 : 0))}</strong><small>喜欢</small></span><button className={saved ? "liked" : ""} onClick={saveProduct} disabled={saved}><Bookmark size={18} fill={saved ? "currentColor" : "none"} /> {saved ? "已收藏" : "收藏"}</button><button className={liked ? "liked" : ""} onClick={like}><Heart size={18} fill={liked ? "currentColor" : "none"} /> {liked ? "已喜欢" : "喜欢"}</button></div>
+        <div className="product-head-stats"><span><Eye size={16} /><strong>{compactNumber(product.plays)}</strong><small>体验</small></span><span><Heart size={16} /><strong>{compactNumber(product.likes + localLikeDelta)}</strong><small>喜欢</small></span><button className={saved ? "liked" : ""} onClick={saveProduct} disabled={saved}><Bookmark size={18} fill={saved ? "currentColor" : "none"} /> {saved ? "已收藏" : "收藏"}</button><button className={liked ? "liked" : ""} onClick={like}><Heart size={18} fill={liked ? "currentColor" : "none"} /> {liked ? "已喜欢" : "喜欢"}</button></div>
       </header>
 
       <div className="product-tabs">{["体验", "关于", "版本记录", "讨论"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "讨论" ? `讨论 ${comments.length}` : item}</button>)}</div>

@@ -47,6 +47,11 @@
       "name": "EMAIL"
     }
   ],
+  // 过期数据清理(oauth 授权请求/codes/tokens/payments/email codes/auth_sessions):
+// 幂等 DELETE,worker/index.ts scheduled() 执行;每 6 小时一次,分钟位错开整点。
+  "triggers": {
+    "crons": ["23 */6 * * *"]
+  },
   "observability": {
     "enabled": true
   },

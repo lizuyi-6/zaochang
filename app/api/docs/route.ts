@@ -1,5 +1,6 @@
 import { requireDocEditor, requireFounder } from "../_lib/admin";
 import { database, jsonError } from "../_lib/community";
+import { assertSameOrigin } from "../_lib/request-origin";
 import { DOC_COLUMNS, normalizeSlug, normalizeVisibility } from "../_lib/docs";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +20,17 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const editor = await requireDocEditor();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     const input = await request.json() as Record<string, unknown>;
     const title = String(input.title ?? "").trim().slice(0, 120);
     const slug = normalizeSlug(String(input.slug ?? title));
     const visibility = normalizeVisibility(String(input.visibility ?? "private"));
     const parentId = input.parentId ? String(input.parentId) : null;
     const bodyMd = String(input.bodyMd ?? "").slice(0, 200_000);
-    const isBook = input.isBook ? 1 : 0;
+    // 严格布尔:truthiness 会把字符串 "false" 变成 1(错误建书);与 PATCH 对齐。
+    const isBook = input.isBook === true ? 1 : 0;
     const coverHue = Math.max(0, Math.min(360, Math.floor(Number(input.coverHue)) || 0));
     const summary = String(input.summary ?? "").trim().slice(0, 240);
     const coverImage = String(input.coverImage ?? "").trim().slice(0, 400);
@@ -58,6 +63,9 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     await requireDocEditor();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     const input = await request.json() as Record<string, unknown>;
     const id = String(input.id ?? "").slice(0, 80);
     if (!id) return Response.json({ error: "invalid_doc" }, { status: 400 });
@@ -72,6 +80,10 @@ export async function PATCH(request: Request) {
 
     if (parentId !== undefined && parentId !== null) {
       if (parentId === id) return Response.json({ error: "doc_cycle" }, { status: 409 });
+      // 父级必须真实存在:不存在的 parentId 会让防环游标立即断链、通过校验,
+      // 写入后 buildDocTree 把孤儿"提升到根",过期标签页即可静默重构公开文档树。
+      const parentExists = await database().prepare(`SELECT id FROM docs WHERE id = ?`).bind(parentId).first();
+      if (!parentExists) return Response.json({ error: "parent_not_found" }, { status: 404 });
       // 防环:新父级不能是自己的后代。
       let cursor: string | null = parentId;
       const seen = new Set<string>([id]);
@@ -94,7 +106,7 @@ export async function PATCH(request: Request) {
     if (bodyMd !== undefined) { sets.push("body_md = ?"); values.push(bodyMd); }
     if (parentId !== undefined) { sets.push("parent_id = ?"); values.push(parentId); }
     if (input.sortOrder !== undefined) { sets.push("sort_order = ?"); values.push(Math.floor(Number(input.sortOrder)) || 0); }
-    if (input.isBook !== undefined) { sets.push("is_book = ?"); values.push(input.isBook ? 1 : 0); }
+    if (input.isBook !== undefined) { sets.push("is_book = ?"); values.push(input.isBook === true ? 1 : 0); }
     if (input.coverHue !== undefined) { sets.push("cover_hue = ?"); values.push(Math.max(0, Math.min(360, Math.floor(Number(input.coverHue)) || 0))); }
     if (input.summary !== undefined) { sets.push("summary = ?"); values.push(String(input.summary).trim().slice(0, 240)); }
     if (input.coverImage !== undefined) { sets.push("cover_image = ?"); values.push(String(input.coverImage).trim().slice(0, 400)); }
@@ -119,6 +131,9 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     await requireFounder();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     const input = await request.json() as Record<string, unknown>;
     const id = String(input.id ?? "").slice(0, 80);
     if (!id) return Response.json({ error: "invalid_doc" }, { status: 400 });

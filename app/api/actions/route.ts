@@ -2,6 +2,7 @@ import { database, jsonError, requireMember } from "../_lib/community";
 import { awardProductLike, removeProductLike, tipProduct } from "../_lib/fruit";
 import { enforceRateLimit, rateLimitKey, requestActorKey } from "../_lib/rate-limit";
 import { findProduct } from "../../lib/community-data";
+import { assertSameOrigin } from "../_lib/request-origin";
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +32,9 @@ export async function POST(request: Request) {
     }
 
     const member = await requireMember();
+    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     await enforceRateLimit(await rateLimitKey("member-action", member.email), 180, 60 * 60);
 
     if (action === "like") {
@@ -64,7 +68,9 @@ export async function POST(request: Request) {
       if (!product) return Response.json({ error: "product_not_found" }, { status: 404 });
       if (existing) {
         const removed = await removeProductLike(product.ownerEmail, member.email, productId);
-        return Response.json({ liked: false, added: false, reward: removed.reward });
+        // 移除失败(如结算并发抢先 finalize,DELETE 在被中止的批次里)时 DB 里赞还在,
+        // 如实返回 liked:true,否则 UI 显示未赞而数据已赞。
+        return Response.json({ liked: !removed.removed, added: false, reward: removed.reward });
       }
       let insert;
       try {

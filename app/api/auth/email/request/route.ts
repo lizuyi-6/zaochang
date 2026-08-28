@@ -71,16 +71,9 @@ export async function POST(request: Request) {
     : null;
   const turnstileToken = typeof body["cf-turnstile-response"] === "string" ? body["cf-turnstile-response"] : null;
 
-  try {
-    await enforceRateLimit(await requestActorKey(request, "email-code-ip"), 10, 60 * 60);
-    await enforceRateLimit(await rateLimitKey("email-code-addr", email), 3, 15 * 60);
-  } catch (error) {
-    if (error instanceof RateLimitError) {
-      return NextResponse.json({ error: "rate_limited", retry_after: "15m" }, { status: 429, headers: { "retry-after": "900" } });
-    }
-    throw error;
-  }
-
+  // Turnstile 先于人机无关的地址限流:若顺序颠倒,攻击者用垃圾 token 刷请求
+  // (受每 IP 10/h 上界)仍会清空受害邮箱 15 分钟的发码额度,定向拒绝服务。
+  // 人机验证在前,垃圾请求无法消耗任何真实额度。
   const turnstile = turnstileConfig();
   if (turnstile) {
     const humanVerified = await verifyTurnstile(
@@ -90,6 +83,16 @@ export async function POST(request: Request) {
       request.headers.get("cf-connecting-ip") ?? undefined,
     );
     if (!humanVerified) return NextResponse.json({ error: "turnstile_invalid" }, { status: 400 });
+  }
+
+  try {
+    await enforceRateLimit(await requestActorKey(request, "email-code-ip"), 10, 60 * 60);
+    await enforceRateLimit(await rateLimitKey("email-code-addr", email), 3, 15 * 60);
+  } catch (error) {
+    if (error instanceof RateLimitError) {
+      return NextResponse.json({ error: "rate_limited", retry_after: "15m" }, { status: 429, headers: { "retry-after": "900" } });
+    }
+    throw error;
   }
 
   const invitationHash = invitationCode ? await hashInvitationCode(invitationCode) : null;

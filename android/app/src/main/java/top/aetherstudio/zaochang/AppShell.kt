@@ -1,6 +1,7 @@
 package top.aetherstudio.zaochang
 
 import org.json.JSONObject
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -48,16 +49,24 @@ object AppShell {
       connection.connectTimeout = timeoutMs
       connection.readTimeout = timeoutMs
       connection.useCaches = false
-      connection.instanceFollowRedirects = true
+      // 唯一可信源不允许 30x 把清单请求带到其它主机(instanceFollowRedirects=true
+      // 意味着"任何能被 aetherstudio.top 重定向到的 HTTPS 主机"都能出清单)。
+      connection.instanceFollowRedirects = false
       connection.setRequestProperty("accept", "application/json")
       try {
         if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
         val web = JSONObject(readBounded(connection)).optJSONObject("web") ?: return null
         val buildId = web.optString("buildId")
         if (buildId.isBlank()) return null
+        // minShellVersionCode 是 fail-closed 闸门的输入:缺失/非数值时宁可判"清单不可用"
+        // 交由调用方的不可达策略,也不能默认 1 把闸门打开(optInt 的默认值语义反了)。
+        val minCode = web.takeIf { it.has("minShellVersionCode") }
+          ?.takeIf { it.get("minShellVersionCode") is Int }
+          ?.getInt("minShellVersionCode")
+          ?: return null
         ShellManifest(
           webBuildId = buildId,
-          minShellVersionCode = web.optInt("minShellVersionCode", 1),
+          minShellVersionCode = minCode,
           maxShellVersionCode = if (web.isNull("maxShellVersionCode")) null else web.optInt("maxShellVersionCode"),
         )
       } finally {
@@ -68,7 +77,7 @@ object AppShell {
     }
   }
 
-  /** 有界读取,拒绝异常巨大的响应体。 */
+  /** 有界读取;超过上限视为清单异常(截断的 JSON 会解析失败,同样 fail-closed)。 */
   private fun readBounded(connection: HttpURLConnection): String {
     connection.inputStream.use { stream ->
       val buffer = ByteArray(MAX_MANIFEST_BYTES)
@@ -77,6 +86,9 @@ object AppShell {
         val n = stream.read(buffer, read, buffer.size - read)
         if (n < 0) break
         read += n
+      }
+      if (read == buffer.size && stream.read() != -1) {
+        throw IOException("manifest exceeds ${MAX_MANIFEST_BYTES} bytes")
       }
       return String(buffer, 0, read, Charsets.UTF_8)
     }

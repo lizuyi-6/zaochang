@@ -72,7 +72,7 @@ APK 托管在站点自身:`public/downloads/zaochang-<version>.apk`(文件名带
 2. SSL 错误永远 `handler.cancel()`;不放宽混合内容;`allowFileAccess`/`allowContentAccess`/定位全关。
 3. 无 `addJavascriptInterface`,无任何原生桥。
 4. WebView 调试仅 debuggable 构建开启;`allowBackup=false`(会话 cookie 不进云备份)。
-5. 唯一权限 `INTERNET`;文件选择走系统 SAF、下载走系统 DownloadManager(带会话 Cookie、还原中文文件名)。
+5. 唯一权限 `INTERNET`;文件选择走系统 SAF、下载走自研 MediaStore 下载器(公共 Downloads,带会话 Cookie、还原中文文件名;失败清理残留行)。
 6. 深链仅接受 `https://aetherstudio.top` / `www.aetherstudio.top`,进 Activity 前仍做主机校验。
 
 ## 构建命令

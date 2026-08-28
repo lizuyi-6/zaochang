@@ -1,4 +1,5 @@
 import { jsonError, requireMember } from "../_lib/community";
+import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { refundExternalPaymentForMember } from "../_lib/external-fruit";
 import { checkoutProduct, getFruitPaymentState, refundProductOrder } from "../_lib/fruit";
 
@@ -18,6 +19,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
+    // 唯一此前无限流的资金端点:结算/退款有 CHECK+幂等兜底,不会因此出错,
+    // 但无限流就是免费的 D1 写放大入口。20/h 与发帖同档。
+    await enforceRateLimit(await rateLimitKey("payments", member.email), 20, 60 * 60);
     const input = await request.json() as Record<string, unknown>;
     const action = String(input.action ?? "");
     const idempotencyKey = String(input.idempotencyKey ?? "");
