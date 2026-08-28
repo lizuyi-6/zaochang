@@ -1,5 +1,14 @@
 # 造场项目账本
 
+## 2026-08-29(六)第三本书《Hello System · 图解软件系统》发布:60 章生成器与产物入库,CI 部署 + 生产 D1 导书(已上线,生产复验通过)
+
+- 状态:已上线。commit `e52ef89`(生成器/SQL/脚本 14 文件)push → ci `release-gates@e52ef89`(33190710797)success → deploy `deploy-production`(33190819982)success;生产 D1 导入 `content/import-hellosystem.sql`——远端 import 端点拒收显式 `BEGIN TRANSACTION/COMMIT`(与本地 node:sqlite 用法冲突),剥去事务包裹后 `d1 execute --file` 写入 474 行,回读 79 节点(书根 public + 78 章节/目录)与本地 Miniflare 库一致。
+- 内容:《Hello System · 图解软件系统》60 章(6 部分 + 序言/序章 + 附录/后记),主线 Mini Campus 校园选课系统,图解面向对象、分层架构、Vue 响应式、关系范式、事务并发与全链路 HTTP 调用;`scripts/builder-system/`(core/part1-6/appendix/build-all)模块化生成器、`import-local-hellosystem.mjs` 本地挂载脚本、3 个 CDP 截图脚本一并入库。纯 `docs` 表数据,无 schema/迁移变更。
+- 门禁注记:CI `git diff --check` 跑在干净 checkout 上(diff 恒空),正文 Markdown 双空格硬换行的尾随空格不构成门禁风险(Hello Computer 先例同);新增 .mjs 脚本 eslint 0 错,tsc include 不含 .mjs。
+- 证据(视觉亲验,headless Chrome 直打生产):书架三书并排(Hello System 卡片 79 节,与 Hello LLM/Hello Computer 同列);`/bookshelf/hello-system` 书主页标题/摘要/左栏目录完整;`/bookshelf/hello-system/preface` 面包屑/正文/右栏目录正常,均 200。
+- 本轮改动可能引入的新风险:①生产导入失去显式事务原子性(端点限制),SQL 幂等(先删后插)可安全重跑,中途失败会短暂留下半本书状态,重跑即愈;②匿名边缘缓存 60s 内书架可能滞后,本轮验证已在窗口外;③书内 LaTeX/Mermaid 生产端与 Hello Computer 同渲染管线,本地 6 个代表章节已验,未逐节生产走查。
+- 未覆盖范围:深层章节(第 46/56 章等)生产端仅 HTTP 状态+标题验证,未逐张截图;登录态下的阅读进度/「问 AI」在新书上未实测(匿名链路已验)。
+
 ## 2026-08-28(五)全量缺陷审查 + 修复部署:6 代理深审 2.5 万行,P1×4/P2×24/P3×20+,迁移 0019 已应用,staging 独立库(已部署,生产复验通过)
 
 - **审查**:6 个并行子代理通读全部子系统(认证/OIDC 提供方/果子账本/Worker 管线/前端+AI 代理/安卓壳+脚本),头部发现全部人工复核后实施修复。审查前门禁基线全绿(tsc/99 测试/audit/漂移)——缺陷全部是门禁覆盖不到的语义问题。
