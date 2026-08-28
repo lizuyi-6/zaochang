@@ -1,5 +1,20 @@
 # 造场项目账本
 
+## 2026-08-28(八)匿名页边缘缓存:stale-while-revalidate + 命中 cache-control 钳制(已部署,生产复验通过)
+
+- **起因**:用户问「为什么当前网页缓存低」。线上实测(`--resolve` 到 CF 边缘 104.21.48.47)定位出三层原因,全部修复并部署验证。
+- **排查结论(改前)**:
+  1. **命中率结构性趋近 0**:匿名页边缘缓存 TTL 仅 60s 且 `caches.default` 按机房隔离,低流量下前后访客几乎不可能落进同一机房同一 60s 窗口——实测前一访客条目 `Age: 59` 命中一次后,紧接的下一请求就回 `miss`,每次都付完整 SSR(1.2-1.4s)。
+  2. **区域 Browser Cache TTL 改写(真 bug)**:缓存命中响应的 `cache-control` 是 `public, max-age=14400, s-maxage=60`,而源码写入的明确是 `max-age=0`(防匿名页本地副本在登录后被浏览器复用),且全仓库 git 历史从未有过 14400——是 CF 区域级 Browser Cache TTL(默认 4h)在命中路径改写。miss 路径(worker 自产响应)实测不受改写(`no-store` 原样到达)。
+  3. **caches.default 按 s-maxage 到期即驱逐**:`cache.match()` 在条目过期后直接返回空(实测),任何「过期后回旧内容」的 SWR 必须让存储条目的 s-maxage 活过 TTL。
+- **修复**(`worker/index.ts`,commit `a9b045a` + `7e1de27`):
+  - **SWR**:条目存储 `s-maxage=TTL+300`(边缘保留 360s),自带 `x-zc-anon-cached-at` 时间戳判龄;命中时 age<TTL 回 `hit`,TTL≤age<TTL+300 回 `stale` 并 `waitUntil` 后台重渲刷新(同 isolate 按 URL 去重,失败静默);超窗条目已被边缘驱逐,自然回源。
+  - **钳制**:命中/陈旧响应出 worker 前统一 `cache-control` 钳回 `public, max-age=0, s-maxage=60`,抵消区域设置改写;浏览器侧永不复用本地匿名副本的语义恢复。
+  - 语义取舍(有意):匿名页极端可滞后 TTL+300s(仅当源站持续故障时逼近上限);登录态(Cookie)请求照旧 100% 绕过。
+- **门禁与部署**:两轮 `npx tsc --noEmit` / `eslint` / `git diff --check` / `npm test` **99 pass / 0 fail / 0 skipped / 0 todo** 全绿;CI `release-gates`(33167836538、33168275001)与 `deploy-production`(33167929321、33168379504)全部 success。**第一轮部署后实测发现 SWR 不生效(存储 s-maxage=60 被边缘到期驱逐,t+76s 直接 miss)→ 第二个 commit 修正保留期 → 重部署**——「缓存命中路径无自动化测试覆盖,上线后 curl 手动验证」的既定流程真实拦住了一次缺陷。
+- **生产复验(同 URL 四连时序,TPE)**:`t0 miss ttfb 1.22s` → `t+1s hit ttfb 0.24s,cache-control: public, max-age=0, s-maxage=60`(钳制生效,不再出现 14400)→ `sleep 75s` 后 `t+76s stale Age:76 ttfb 0.30s`(过去这是 1.2s+ 的冷 miss,现在秒回旧页+后台重渲)→ `t+77s hit Age:0 ttfb 0.28s`(后台重渲已刷新条目)。
+- 未覆盖(显式声明):①>360s 超窗回源分支未实测(条目此时已被边缘驱逐,等价于普通 miss 路径,后者已验证);②区域 Browser Cache TTL 设置本身未在 CF 控制台改(钳制已在 worker 层抵消其影响;若想彻底根治可在控制台把该域名 Browser Cache TTL 设为 Respect Existing Headers,需 zone 设置权限,本轮未动);③静态资产(`/assets/*` immutable 一年、CF 边缘 MISS→HIT)本轮实测本就健康,未改动。
+
 ## 2026-08-27(七)外链外抛实测通过 + 白名单设计勘误((六)中「github 会外抛」的假设有误)
 
 - **勘误**:(六)称「github.com 外链外抛未能实测触发」隐含假设 GitHub 登录应外抛——**该假设错误**。`AppShell.kt:18-23` 的 `INTERNAL_HOSTS` **有意**包含 `github.com` 与 `accounts.google.com`:OAuth 登录流留在壳内 WebView 是设计行为。实测(挂宿主代理 `settings put global http_proxy 10.0.2.2:6518` 使 github 可达后):点「使用 GitHub 登录」→ 连接页探测成功 → `location.replace` 跳 `github.com/login/oauth/authorize`(logcat sOUL 记录)→ GitHub 重定向 `github.com/login?...`(第二条 sOUL)→ **GitHub 登录页完整渲染在壳内**(截图 `gh-footer.png`,「Sign in to GitHub to continue to zaochang」)。
