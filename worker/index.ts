@@ -54,6 +54,10 @@ interface ExecutionContext {
 // 无自动化测试覆盖,上线后用 curl 二连测 x-zc-anon-cache 头手动验证。
 const ANON_PAGE_CACHE_TTL_SECONDS = 60;
 const ANON_SERVE_STALE_WINDOW_SECONDS = 300;
+// 存储条目的边缘保留期 = TTL + stale 窗口:caches.default 按 s-maxage 到期即驱逐
+// (match 直接返回空,生产实测 60s 后拿不到条目,stale 无从谈起),所以必须让条目
+// 在边缘活过 TTL;新/陈旧由 x-zc-anon-cached-at 时间戳判定,超窗按未命中回源。
+const ANON_STORED_CACHE_CONTROL = `public, max-age=0, s-maxage=${ANON_PAGE_CACHE_TTL_SECONDS + ANON_SERVE_STALE_WINDOW_SECONDS}`;
 const ANON_CACHE_EXCLUDED_PREFIXES = [
   "/api/", "/oauth/", "/admin", "/founder", "/studio", "/wallet", "/notifications",
   "/signin", "/signout", "/callback", "/invite", "/product-apps/", "/_vinext/", "/.well-known/",
@@ -94,7 +98,7 @@ async function revalidateAnonPage(request: Request, env: Env, ctx: ExecutionCont
     if (!cacheable) return;
     const body = await secured.arrayBuffer();
     const storedHeaders = new Headers(secured.headers);
-    storedHeaders.set("cache-control", `public, max-age=0, s-maxage=${ANON_PAGE_CACHE_TTL_SECONDS}`);
+    storedHeaders.set("cache-control", ANON_STORED_CACHE_CONTROL);
     storedHeaders.set("x-zc-anon-cached-at", String(Math.floor(Date.now() / 1000)));
     await edgeCache.put(new Request(url.href, { method: "GET" }), new Response(body, { status: secured.status, headers: storedHeaders }));
   } catch {
@@ -198,8 +202,8 @@ const worker = {
       const body = await secured.arrayBuffer();
       const storedHeaders = new Headers(secured.headers);
       // max-age=0:浏览器不复用本地副本(防止匿名页在登录后仍被本地缓存命中);
-      // s-maxage:边缘共享缓存的生存时间。命中路径出 worker 前有同值钳制。
-      storedHeaders.set("cache-control", `public, max-age=0, s-maxage=${ANON_PAGE_CACHE_TTL_SECONDS}`);
+      // s-maxage 拉长到 TTL+stale 窗口:条目必须在边缘活过 TTL,SWR 才有旧的可回。
+      storedHeaders.set("cache-control", ANON_STORED_CACHE_CONTROL);
       storedHeaders.set("x-zc-anon-cached-at", String(Math.floor(Date.now() / 1000)));
       ctx.waitUntil(edgeCache.put(anonCacheKey, new Response(body, { status: secured.status, headers: storedHeaders })));
       const served = new Response(body, { status: secured.status, headers: new Headers(secured.headers) });
