@@ -1,5 +1,13 @@
 // scripts/builder-system/build-all.mjs
 // 《Hello System · 图解软件系统》全书编译总控脚本
+//
+// V1 Freeze 发布语义（自 V1 起冻结）：
+// - 全书共 78 个生成节点（1 书根 + 序言 + 序章 + 6 部分容器 + 60 章 + 8 附录 + 后记），
+//   不再设独立 Appendix 容器节点；所有 doc id / slug 视为稳定 API，禁止改动。
+// - 发布使用 INSERT ... ON CONFLICT(id) DO UPDATE（UPSERT）：更新正文字段，
+//   但绝不删除 docs 行，也绝不触碰 reading_progress 等以 doc id 关联的用户数据。
+// - 仅在内容相关字段实际变化时才推进 updated_at；created_at 永远保留首刊时间。
+// - 删除章节不属于正常发布路径；如未来确需删除，必须编写显式 migration。
 
 import fs from "node:fs";
 import path from "node:path";
@@ -44,13 +52,35 @@ if (emojiViolations === 0) {
   console.warn(`发现 ${emojiViolations} 处 Emoji 违规，建议清理。`);
 }
 
+// 质量自检 2: id / slug 唯一性，parent 引用完整性（防止断链与循环前置条件）
+{
+  const ids = new Set();
+  const slugByParent = new Set();
+  for (const doc of allDocs) {
+    if (ids.has(doc.id)) throw new Error(`重复 doc id: ${doc.id}`);
+    ids.add(doc.id);
+    const parentKey = String(doc.parentId).replace(/^'|'$/g, "");
+    const slugKey = `${parentKey}::${doc.slug}`;
+    if (slugByParent.has(slugKey)) throw new Error(`同一父节点下重复 slug: ${slugKey}`);
+    slugByParent.add(slugKey);
+  }
+  for (const doc of allDocs) {
+    const parentKey = String(doc.parentId).replace(/^'|'$/g, "");
+    if (parentKey !== "NULL" && !ids.has(parentKey)) {
+      throw new Error(`文档 ${doc.id} 的 parentId 不存在: ${parentKey}`);
+    }
+  }
+  console.log("质量自检通过: id/slug 唯一，parent 引用完整！");
+}
+
 let sql = `-- Hello System · 图解软件系统
 -- 从一次点击开始，理解一个完整软件系统如何运行
--- 全书 60 章、6 个顶层部分、序言、序章、附录与后记完整节点。
+-- V1 Freeze: 全书 78 个生成节点（书根 + 序言 + 序章 + 6 部分 + 60 章 + 8 附录 + 后记）。
+-- 本文件采用 UPSERT 语义：按稳定 doc id 更新正文，绝不删除 docs 行，
+-- 绝不清空 reading_progress 等用户阅读数据。created_at 保留首刊时间，
+-- updated_at 仅在内容字段实际变化时推进。
 
 BEGIN TRANSACTION;
-DELETE FROM reading_progress WHERE book_id LIKE 'doc:hello-system-%' OR book_id = 'doc:book-hello-system' OR last_chapter_id LIKE 'doc:hello-system-%' OR last_chapter_id = 'doc:book-hello-system';
-DELETE FROM docs WHERE id LIKE 'doc:hello-system-%' OR id = 'doc:book-hello-system';
 
 `;
 
@@ -58,9 +88,33 @@ for (const doc of allDocs) {
   const parentSql = doc.parentId === "NULL"
     ? "NULL"
     : `'${esc(String(doc.parentId).replace(/^'|'$/g, ""))}'`;
-  
+
   sql += `INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('${esc(doc.id)}', '${esc(doc.slug)}', ${parentSql}, '${esc(doc.title)}', '${esc(doc.bodyMd)}', '${esc(doc.visibility)}', '${esc(doc.authorEmail)}', ${doc.sortOrder}, ${doc.isBook}, ${doc.coverHue}, '${esc(doc.summary)}');
+VALUES ('${esc(doc.id)}', '${esc(doc.slug)}', ${parentSql}, '${esc(doc.title)}', '${esc(doc.bodyMd)}', '${esc(doc.visibility)}', '${esc(doc.authorEmail)}', ${doc.sortOrder}, ${doc.isBook}, ${doc.coverHue}, '${esc(doc.summary)}')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 `;
 }

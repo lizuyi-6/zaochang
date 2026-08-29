@@ -11,7 +11,7 @@ part2Docs.push({
   title: "第二部分: 页面开始变复杂 (13~24)",
   visibility: "public",
   authorEmail: "2251213429@qq.com",
-  sortOrder: 2,
+  sortOrder: 4,
   isBook: 0,
   coverHue: 215,
   summary: "",
@@ -47,10 +47,10 @@ part2Docs.push({
 flowchart LR
     HTML["HTML 字符流\n<div class='course'>...</div>"] --> Tokenizer["词法分析 (Tokenization)\n生成 StartTag, Characters, EndTag"]
     Tokenizer --> TreeBuilder["语法分析 (Tree Construction)\n维护节点父子包含关系栈"]
-    TreeBuilder --> DOMTree["DOM 树 (内存 C++ 节点树)\nDocument Object Model"]
+    TreeBuilder --> DOMTree["DOM 树 (文档对象模型)\nDocument Object Model"]
 \`\`\`
 
-最终在浏览器内存中建立的 **DOM 树（Document Object Model Tree）** 是一组相互关联的 C++ 原生对象：
+最终在浏览器内存中建立的 **DOM 树（Document Object Model Tree）**，是浏览器向 JavaScript 暴露的文档对象模型——一组相互关联、可被脚本读写的节点对象：
 
 \`\`\`text
                 [ Document ]
@@ -65,11 +65,13 @@ flowchart LR
              └── [ <button> "选课" ]
 \`\`\`
 
+需要说明的是：DOM 是 W3C/WHATWG 标准定义的接口模型，浏览器内部通常使用原生对象结构来实现它（例如 Chromium/Blink 大量采用 C++），但这属于浏览器的实现细节，并非 DOM 的定义本身。
+
 ---
 
 ## 2. 浏览器的经典渲染流水线（Rendering Pipeline）
 
-当 DOM 树与 CSS 规则树（CSSOM）构建完成后，浏览器开始执行完整的渲染流水线：
+当 DOM 树与 CSS 规则树（CSSOM）构建完成后，浏览器开始执行渲染工作。下面给出的是主流浏览器的**典型渲染模型**（不同浏览器引擎的内部流水线与优化策略并不完全一致）：
 
 \`\`\`mermaid
 flowchart TD
@@ -373,7 +375,7 @@ part2Docs.push({
 
 当用户快速切换下拉菜单中的选修课程时，系统会频繁发起异步查询。
 
-如果第一次请求耗时 800ms，第二次请求耗时 200ms，第二次请求的响应可能会先到达，随后第一次请求的旧数据返回并覆盖最新视图，造成严重的**竞态条件（Race Condition）**。
+如果第一次请求响应较慢而第二次较快（示例：分别耗时 800ms 与 200ms），第二次请求的响应可能会先到达，随后第一次请求的旧数据返回并覆盖最新视图，造成严重的**竞态条件（Race Condition）**。
 
 Vue 3 的 \`watch\` 提供了专用的清理回调 \`onCleanup\`：
 
@@ -422,8 +424,8 @@ Vue 3 的模板编译器在构建阶段（Build Time）对模板进行了深度�
 
 \`\`\`html
 <div class="card">
-  <h1>Mini Campus 选课系统</h1>       <!-- 静态节点 1: 绝对不变 -->
-  <p>固定选课规则说明...</p>           <!-- 静态节点 2: 绝对不变 -->
+  <h1>Mini Campus 选课系统</h1>       <!-- 静态节点 1: 固定不变 -->
+  <p>固定选课规则说明...</p>           <!-- 静态节点 2: 固定不变 -->
   <span :class="themeClass">{{ course.name }}</span> <!-- 动态节点: 仅 class 和 text 变化 -->
 </div>
 \`\`\`
@@ -439,8 +441,8 @@ export function render(_ctx, _cache) {
   return (_openBlock(), _createElementBlock("div", { class: "card" }, [
     _hoisted_1,
     _hoisted_2,
-    // 2. 补丁标记 (Patch Flag): 9 代表 TEXT + CLASS 动态绑定
-    _createElementVNode("span", { class: _ctx.themeClass }, _toDisplayString(_ctx.course.name), 9 /* TEXT, CLASS */)
+    // 2. 补丁标记 (Patch Flag): 3 代表 TEXT + CLASS 动态绑定
+    _createElementVNode("span", { class: _ctx.themeClass }, _toDisplayString(_ctx.course.name), 3 /* TEXT, CLASS */)
   ]))
 }
 \`\`\`
@@ -651,9 +653,9 @@ part2Docs.push({
 
 \`\`\`mermaid
 flowchart TD
-    Step1["1. 物理交互\n用户鼠标点击坐标 (X: 520, Y: 340)"] --> Step2["2. 操作系统与浏览器事件\n产生原生 PointerEvent / MouseEvent 实例"]
+    Step1["1. 用户交互\n用户在选课按钮上触发鼠标点击"] --> Step2["2. 操作系统与浏览器事件\n产生原生 PointerEvent / MouseEvent 实例"]
     Step2 --> Step3["3. Vue 事件绑定与响应式状态跃迁\nhandleClick 触发: isSubmitting.value = true"]
-    Step3 --> Step4["4. 内存业务对象构造\nconst payload = { courseId: 2048, timestamp: 1787932800 }"]
+    Step3 --> Step4["4. 内存业务对象构造\nconst payload = { courseId: 2048 }"]
     Step4 --> Step5["5. 序列化编码 (JSON.stringify)\n转换为纯文本字符串: '{\"courseId\":2048}'"]
     Step5 --> Step6["6. 网络协议栈编码\nUTF-8 字符流转换为二进制 TCP 载荷，装配 HTTP POST 报文头"]
 \`\`\`
@@ -666,7 +668,7 @@ flowchart TD
 
 但是，无论前端的响应式系统多么优雅，运行在浏览器内存中的 JavaScript 对象都是**瞬态的**——只要用户按一下 \`F5\` 刷新网页，所有的内存变量都会瞬间灰飞烟灭。
 
-数据要想获得永恒的生命，必须跨越网络，进入真正的持久化堡垒——数据库管理系统。
+数据要想获得超越单次会话的生命，必须跨越网络，进入真正的持久化堡垒——数据库管理系统。
 
 让我们进入第三部分：**数据需要一个真正的家 (25 ~ 37)**！
 `

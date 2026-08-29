@@ -1,10 +1,11 @@
 -- Hello System · 图解软件系统
 -- 从一次点击开始，理解一个完整软件系统如何运行
--- 全书 60 章、6 个顶层部分、序言、序章、附录与后记完整节点。
+-- V1 Freeze: 全书 78 个生成节点（书根 + 序言 + 序章 + 6 部分 + 60 章 + 8 附录 + 后记）。
+-- 本文件采用 UPSERT 语义：按稳定 doc id 更新正文，绝不删除 docs 行，
+-- 绝不清空 reading_progress 等用户阅读数据。created_at 保留首刊时间，
+-- updated_at 仅在内容字段实际变化时推进。
 
 BEGIN TRANSACTION;
-DELETE FROM reading_progress WHERE book_id LIKE 'doc:hello-system-%' OR book_id = 'doc:book-hello-system' OR last_chapter_id LIKE 'doc:hello-system-%' OR last_chapter_id = 'doc:book-hello-system';
-DELETE FROM docs WHERE id LIKE 'doc:hello-system-%' OR id = 'doc:book-hello-system';
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:book-hello-system', 'hello-system', NULL, 'Hello System · 图解软件系统', '# Hello System · 图解软件系统
@@ -112,7 +113,31 @@ ER 图、DDL、SQL 手册、概念速查与进阶路线"]
 - **第五部分：真实系统开始反抗 (47 ~ 55)** —— 探讨信任边界输入校验、异常传播与事务回滚、原子条件更新、幂等机制、WAL 预写日志与测试金字塔；
 - **第六部分：重新走完那几百毫秒 (56 ~ 60)** —— 端到端时序全景复盘，总结软件演进中的权衡取舍与跨技术栈通用心智模型；
 - **附录 (A ~ H) 与后记** —— 提供 Mini Campus 完整工程结构、规范化 ER 图、核心 SQL 手册、概念速查与计算机专业进阶路线图。
-', 'public', '2251213429@qq.com', 1, 1, 215, '从一次用户点击开始，理解一个完整软件系统如何运行——以校园选课系统 Mini Campus 为主线，图解面向对象、分层设计、前端响应式、关系数据模型与事务并发全链路。');
+', 'public', '2251213429@qq.com', 1, 1, 215, '从一次用户点击开始，理解一个完整软件系统如何运行——以校园选课系统 Mini Campus 为主线，图解面向对象、分层设计、前端响应式、关系数据模型与事务并发全链路。')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-preface', 'preface', 'doc:book-hello-system', '序言: 还原软件系统的本来面目', '# 序言: 还原软件系统的本来面目
@@ -146,7 +171,7 @@ $$\text{真实业务需求} \to \text{最自然的第一直觉} \to \text{小规
 
 我们不会把旧方案故意写得很蠢来衬托新技术。相反，我们会明确承认：**在特定的小规模场景下，过程式脚本、平铺变量、原生 DOM 操作以及简单大宽表都是极其高效且合理的方案**。
 
-只有当系统的规模、并发或可靠性要求发生了根本变化，旧方案的局限性暴露无遗时，新的设计思想（如复合类型、对象封装、声明式响应式、关系规范化、ACID 事务）才会作为解决具体瓶颈的必然选择而诞生。
+只有当系统的规模、并发或可靠性要求发生了根本变化，旧方案的局限性暴露无遗时，新的设计思想（如复合类型、对象封装、声明式响应式、关系规范化、ACID 事务）才会作为解决具体瓶颈的自然产物而诞生。
 
 ---
 
@@ -180,7 +205,31 @@ flowchart TD
 5. **Level E（操作系统与硬件环境）**：底层的物理与系统支持，例如操作系统页缓存、网络传输时延与存储介质特性。
 
 分清这五层边界，能够帮助你在未来面对 React、Svelte、Go、Rust、PostgreSQL 等全新技术栈时，迅速抽离出不变的本质，做到举一反三、触类旁通。
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
+', 'public', '2251213429@qq.com', 1, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-prologue', 'prologue', 'doc:book-hello-system', '序章: 一次点击', '# 序章: 一次点击
@@ -301,7 +350,31 @@ sequenceDiagram
 我们将亲历系统的扩张、数据的失控与规则的撞墙，亲手推导并重构系统，直到上述所有的机制作为解决真实工程矛盾的自然产物，从你的指尖诞生。
 
 现在，让我们退回到一切软件系统的起点，开启第一部分：**程序开始变大**。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
+', 'public', '2251213429@qq.com', 2, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-part-1', 'part-1', 'doc:book-hello-system', '第一部分: 程序开始变大 (01~12)', '# 第一部分: 程序开始变大 (01~12)
@@ -309,7 +382,31 @@ VALUES ('doc:hello-system-part-1', 'part-1', 'doc:book-hello-system', '第一部
 本部分聚焦于**单机内存程序的演化规律与面向对象架构的自然涌现**。
 
 我们将从最简单的几十行平铺脚本出发，亲历系统规模扩张带来的变量失控、数据撕裂与状态被肆意篡改的灾难。以此为契机，我们亲手推导并构建复合类型、自治对象、封装边界、里氏替换原则、多态动态分派以及经典后端三层架构（Controller-Service-Repository），建立起扎实的第一层软件心智模型。
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
+', 'public', '2251213429@qq.com', 3, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-01-why-architecture-matters', '01-why-architecture-matters', 'doc:hello-system-part-1', '第01章 从单行脚本到复杂系统：为什么我们需要架构？', '# 第01章 从单行脚本到复杂系统：为什么我们需要架构？
@@ -361,9 +458,9 @@ public class MiniEnroll {
 
 ---
 
-## 2. 状态空间爆炸：软件复杂度的数学本质
+## 2. 状态组合膨胀：一个帮助理解的简化模型
 
-然而，软件系统最残酷的现实在于：**需求永远在变化，规模永远在扩张。**
+然而，软件系统最棘手的现实在于：**需求永远在变化，规模永远在扩张。**
 
 随着业务的发展，教务处提出了新的需求：
 1. 不仅有一门课，现在全校有 500 门课同时开放选课；
@@ -372,17 +469,23 @@ public class MiniEnroll {
 4. 增加了重修退选保护：重修学生只占用特定配额；
 5. 增加了操作审计要求：每一次选课必须记录是谁在什么时间操作的。
 
-让我们从数学的角度审视这个变化过程。
+让我们用一个简化的组合模型来直观感受这个变化过程。
 
-一个软件系统的状态空间大小，取决于系统内独立变量的组合可能性。如果一个系统有 $n$ 个相互独立的布尔标志位或离散状态变量，系统的理论状态总数将达到：
+如果有 $n$ 个相互独立的布尔状态，仅理论组合数就可以达到：
 
 $$S = 2^n$$
 
-在最初的 20 行脚本中，$n \approx 2$（是否满员、用户输入动作），人类大脑可以轻松在大脑的工作记忆（Working Memory）中穷举所有的状态流转分支。
+这个简单模型只是帮助我们理解：状态组合为什么会快速膨胀。在最初的 20 行脚本中，需要同时关注的条件标志大约只有 2 个（是否满员、用户输入动作），人类大脑可以轻松在工作记忆（Working Memory）中穷举所有的状态流转分支。
 
-但是，当 $n$ 增加到 20 时，$2^{20} \approx 1,048,576$。没有任何一个人类工程师能够仅凭肉眼或直觉，预判一个包含 20 个自由变量的全局脚本在所有可能路径下的行为。
+但是，当需要同时跟踪的独立条件增加到 20 个时，理论组合数达到 $2^{20} \approx 1,048,576$。人类很难仅靠工作记忆穷举全部组合，也就难以仅凭直觉预判一个包含 20 个自由变量的全局脚本在所有可能路径下的行为。
 
-这就是**认知负荷超载（Cognitive Overload）**。
+需要强调的是，这只是一个教学简化模型。真实程序中：
+
+- 状态变量不一定是布尔量，一个整型或字符串变量的取值空间远大于 2；
+- 变量之间往往并不独立，许多理论上的组合在实际程序逻辑中根本无法到达；
+- 软件复杂度也不仅来自状态空间，还来自并发时序、外部故障、需求变更与认知沟通等多个维度。
+
+尽管如此，这个模型指出的趋势是真实的：**需要同时关心的自由状态越多，人脑越难穷举系统行为。** 这就是**认知负荷超载（Cognitive Overload）**。
 
 ---
 
@@ -463,8 +566,32 @@ flowchart TD
 - 在第 07 ~ 11 章中，我们将看到如何用**多态与接口契约**，消除冗长的类型分支并解耦系统依赖；
 - 在第 12 章中，我们将看到经典的**Controller-Service-Repository 三层架构**是如何自然成型的。
 
-此时你的心智模型应当明确：**架构不是用来炫技的花哨名词，而是在系统规模扩张时，人类唯一能够保护自身代码不被复杂度吞噬的理性防线。**
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
+此时你的心智模型应当明确：**架构不是用来炫技的花哨名词。架构与抽象，是在系统规模扩张时管理复杂度的重要工具之一。** 过程式模块化、函数式设计、抽象数据类型（ADT）等路线同样能够有效地管理复杂度；本书选择 OOP 与分层 Web 系统作为主线，是因为它在当前工业界企业应用中最为常见，并不意味着其他路线是错误的。
+', 'public', '2251213429@qq.com', 1, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-02-variables-out-of-control', '02-variables-out-of-control', 'doc:hello-system-part-1', '第02章 变量为什么开始失控？——从平铺变量到复合数据类型', '# 第02章 变量为什么开始失控？——从平铺变量到复合数据类型
@@ -481,14 +608,15 @@ int capacity = 100;
 int enrolled = 0;
 ```
 
-此时代码非常清爽。变量名直观反映了业务含义，内存中只有三个紧凑的基础变量：
+此时代码非常清爽。变量名直观反映了业务含义。从**源码语义模型**来看，Java 类型系统只知道这里存在三个互相独立的变量：
 
 ```text
-内存栈帧局部变量表：
-[ courseName ] ---> "计算机系统导论" (String 引用)
-[ capacity   ] ---> 100 (int 整数)
-[ enrolled   ] ---> 0   (int 整数)
+courseName : String = "计算机系统导论"
+capacity   : int    = 100
+enrolled   : int    = 0
 ```
+
+请注意：“这三个变量共同描述一门课程”这一层含义，此刻只存在于开发者脑中的命名约定里；语言本身并没有一个把三者捆绑成整体的值。（JVM/JIT 在运行时可能把变量映射到局部变量槽、寄存器，甚至通过优化将其消除，因此本书不讨论它们的具体物理布局。）
 
 我们必须明确承认：**这个设计在当前阶段没有任何毛病。**
 
@@ -516,7 +644,7 @@ int c2_enrolled = 0;
 
 答案是：**完全不存在。**
 
-在编译器看来，内存里只有 6 个孤立的变量：两个字符串引用和四个整型数字。所谓“`c1_name` 和 `c1_capacity` 属于同一门课程”，完全只是程序员依靠**命名规则（前缀 c1_）在脑海中建立的脆弱暗示**。
+在编译器眼中，这里只有 6 个孤立的变量：两个字符串引用和四个整型数字。所谓“`c1_name` 和 `c1_capacity` 属于同一门课程”，完全只是程序员依靠**命名规则（前缀 c1_）在脑海中建立的脆弱暗示**。
 
 编译器既不知道、也无法协助你保证这种关联关系。
 
@@ -731,7 +859,7 @@ courses.add(new CourseRecord("CS-102", "数据结构与算法", 80, 0));
 courses.sort((c1, c2) -> Integer.compare(c2.enrolled(), c1.enrolled()));
 ```
 
-当发生元素交换或传递时，**移动的是包含了该课程全部属性的整体引用**。《计算机系统导论》的名称、容量与已选人数永远被牢牢绑定在一起，彻底根除了数据撕裂的可能！
+当发生元素交换或传递时，**移动的是包含了该课程全部属性的整体引用**。《计算机系统导论》的名称、容量与已选人数被牢牢绑定在一起，从根本上消除了数据撕裂的可能！
 
 ---
 
@@ -782,7 +910,31 @@ c.capacity = 0;   // 灾难：容量变成了 0！
 2. **并行数组**：是过程式代码在缺乏抽象工具时的权宜之计，极易在排序与移动中发生数据撕裂；
 3. **复合数据类型（Record/Struct）**：提供了实体的结构聚合与整体引用能力；
 4. **聚合 $\neq$ 封装**：聚合解决了数据绑定问题，但状态的一致性保护需要更高级的面向对象抽象。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
+', 'public', '2251213429@qq.com', 2, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-03-data-and-behavior', '03-data-and-behavior', 'doc:hello-system-part-1', '第03章 数据与行为的割裂：为什么需要自治对象？', '# 第03章 数据与行为的割裂：为什么需要自治对象？
@@ -946,7 +1098,31 @@ struct Course {
 $$\text{Course}_{new} = \text{enroll}(\text{Course}_{old})$$
 
 无论哪种范式，其背后的核心思想是完全相通的：**绝不允许未经校验的外部代码破坏系统的合法状态。**
-', 'public', '2251213429@qq.com', 3, 0, 215, '');
+', 'public', '2251213429@qq.com', 3, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-04-classes-and-objects', '04-classes-and-objects', 'doc:hello-system-part-1', '第04章 类与对象：类型契约与运行时实例的脑内模型', '# 第04章 类与对象：类型契约与运行时实例的脑内模型
@@ -990,9 +1166,9 @@ flowchart TD
 请思考一个经典问题：
 如果在系统中实例化了 10,000 个 `Course` 对象，内存中会存在 10,000 份 `enroll()` 方法的代码吗？
 
-答案是：**绝对不会。**
+答案是：**不会。**
 
-无论创建多少个对象，`enroll()` 方法的编译后指令在内存中**永远只有一份**，存放在方法区/代码段中。
+无论创建多少个对象，`enroll()` 方法的编译后指令在内存中**只有一份**，存放在方法区/代码段中。
 
 当我们在 Java 中调用 `c1.enroll()` 时，编译器在底层实际上将该调用转换为了类似如下形式：
 
@@ -1031,7 +1207,31 @@ Course.enroll(this = c1);
 
 通过这个模型，你可以清晰看到：
 对象本身只在堆中占用存放其自身字段所需的极小空间，而类型所共享的方法逻辑与元数据则安全驻留在独立的元空间中。
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
+', 'public', '2251213429@qq.com', 4, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-05-encapsulation-and-invariants', '05-encapsulation-and-invariants', 'doc:hello-system-part-1', '第05章 封装与不变量：绝不让无效状态诞生', '# 第05章 封装与不变量：绝不让无效状态诞生
@@ -1087,7 +1287,7 @@ flowchart TD
 ```
 
 ### 阶段一：构造函数守卫（Construction Guard）
-确保对象从诞生的那一微秒开始，就处于绝对合法的健康状态。绝不允许一个非法对象在内存中成型。
+确保对象从诞生那一刻开始，就处于合法的健康状态。不允许一个非法对象在内存中成型。
 
 ### 阶段二：状态跃迁守卫（Transition Guard）
 对象的所有状态变化，必须由带有业务语义的方法驱动。方法内部必须前置判断该次跃迁是否会破坏不变量。
@@ -1119,7 +1319,31 @@ public class CourseTest {
 ```
 
 只有当你的类无论面对多么恶意的外部调用，都能自发保持内部状态的确定性与一致性时，你才算真正掌握了面向对象的核心灵魂——**封装**。
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
+', 'public', '2251213429@qq.com', 5, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-06-object-lifecycle-and-memory', '06-object-lifecycle-and-memory', 'doc:hello-system-part-1', '第06章 对象的生与死：作用域、生命周期与内存回收', '# 第06章 对象的生与死：作用域、生命周期与内存回收
@@ -1177,7 +1401,31 @@ flowchart TD
 1. 当前正在执行的线程栈帧中的局部变量与参数引用；
 2. 类中由 `static` 修饰的全局静态引用变量；
 3. JNI（Java Native Interface）本地代码持有的全局与局部指针。
-', 'public', '2251213429@qq.com', 6, 0, 215, '');
+', 'public', '2251213429@qq.com', 6, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-07-object-collaboration', '07-object-collaboration', 'doc:hello-system-part-1', '第07章 对象如何协同：关联、组合与职责划分', '# 第07章 对象如何协同：关联、组合与职责划分
@@ -1263,7 +1511,31 @@ public class Student {
     }
 }
 ```
-', 'public', '2251213429@qq.com', 7, 0, 215, '');
+', 'public', '2251213429@qq.com', 7, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-08-when-to-inherit', '08-when-to-inherit', 'doc:hello-system-part-1', '第08章 继承的诱惑与陷阱：里氏替换原则（LSP）', '# 第08章 继承的诱惑与陷阱：里氏替换原则（LSP）
@@ -1334,7 +1606,31 @@ public class LabCourse extends Course {
 在现代软件工程中，有一条广为人知的黄金准则：**优先使用对象组合，而非类继承。**
 
 继承建立了编译期的**强耦合白盒复用**，父类的任何内部改动都会直接穿透影响所有子类（脆弱基类问题）。而组合建立了运行期的**黑盒协作**，具有更高的灵活性与扩展性。
-', 'public', '2251213429@qq.com', 8, 0, 215, '');
+', 'public', '2251213429@qq.com', 8, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-09-polymorphism-and-dynamic-dispatch', '09-polymorphism-and-dynamic-dispatch', 'doc:hello-system-part-1', '第09章 多态与动态分派：消除冗长分支的优雅机制', '# 第09章 多态与动态分派：消除冗长分支的优雅机制
@@ -1414,12 +1710,36 @@ flowchart LR
     Ref["Course c (类型声明为 Course，实际指向 LabCourse 实例)"] --> Obj["LabCourse 堆对象"]
     Obj --> Klass["LabCourse 类元数据"]
     Klass --> VTable["LabCourse 虚方法表 (vtable)"]
-    VTable --> Slot["Slot 3: calculateTuitionFee 指针"]
+    VTable --> Slot["vtable 条目: calculateTuitionFee 方法指针"]
     Slot --> Code["指向 LabCourse.calculateTuitionFee() 实际字节码指令"]
 ```
 
-通过在编译期固定方法在虚方法表中的偏移量（Offset），运行时只需一次简单的指针寻址，即可在常数时间 $O(1)$ 内精准调用对应子类的实现，兼具了极高的灵活性与运行效率。
-', 'public', '2251213429@qq.com', 9, 0, 215, '');
+方法在虚方法表中的条目位置在类链接阶段确定，运行时只需一次查表寻址，即可在常数时间 $O(1)$ 内调用到对应子类的实现，兼具了极高的灵活性与运行效率。（不同 VM 的动态分派实现存在差异，例如 HotSpot 还大量使用内联缓存与即时编译去虚化优化，vtable 只是便于理解的经典模型。）
+', 'public', '2251213429@qq.com', 9, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-10-interfaces-and-contracts', '10-interfaces-and-contracts', 'doc:hello-system-part-1', '第10章 接口与依赖倒置（DIP）：面向契约设计', '# 第10章 接口与依赖倒置（DIP）：面向契约设计
@@ -1516,7 +1836,31 @@ public class MockNotificationSender implements NotificationSender {
 ```
 
 这样，测试可以在毫秒级完成，既不需要联网，也不会产生任何外部副作用。
-', 'public', '2251213429@qq.com', 10, 0, 215, '');
+', 'public', '2251213429@qq.com', 10, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-11-breaking-the-god-class', '11-breaking-the-god-class', 'doc:hello-system-part-1', '第11章 打破上帝类：单一职责原则（SRP）', '# 第11章 打破上帝类：单一职责原则（SRP）
@@ -1584,7 +1928,31 @@ flowchart LR
 ```
 
 每一个拆解后的小类都小巧玲珑，职责高度内聚，系统彻底恢复了健康与秩序。
-', 'public', '2251213429@qq.com', 11, 0, 215, '');
+', 'public', '2251213429@qq.com', 11, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-12-emergence-of-layers', '12-emergence-of-layers', 'doc:hello-system-part-1', '第12章 经典三层架构的诞生：Controller-Service-Repository', '# 第12章 经典三层架构的诞生：Controller-Service-Repository
@@ -1684,7 +2052,31 @@ public class EnrollmentController {
 至此，第一部分的探索圆满完成。我们拥有了干净、健壮且结构清晰的后端面向对象业务核心。
 
 接下来，我们将目光转向屏幕前的另一半世界——进入第二部分：**页面开始变复杂 (13 ~ 24)**，探索现代前端框架的诞生与运行机理！
-', 'public', '2251213429@qq.com', 12, 0, 215, '');
+', 'public', '2251213429@qq.com', 12, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-part-2', 'part-2', 'doc:book-hello-system', '第二部分: 页面开始变复杂 (13~24)', '# 第二部分: 页面开始变复杂 (13~24)
@@ -1692,7 +2084,31 @@ VALUES ('doc:hello-system-part-2', 'part-2', 'doc:book-hello-system', '第二部
 本部分聚焦于**现代 Web 前端框架的核心原理与演进逻辑**。
 
 我们将从浏览器的底层渲染流水线与原生 DOM 树出发，亲历命令式 DOM 操作在大型应用中导致的状态脱节灾难。我们将深入剖析声明式 UI（$UI = f(\text{state})$）、Vue 3 的 Proxy 响应式系统（依赖收集与派发更新）、计算属性缓存、编译期优化、单向数据流组件化以及全局状态树 Pinia，彻底打通前端“数据如何驱动界面”的心智模型。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
+', 'public', '2251213429@qq.com', 4, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-13-browser-and-dom', '13-browser-and-dom', 'doc:hello-system-part-2', '第13章 浏览器如何看待网页：DOM 树与渲染流水线', '# 第13章 浏览器如何看待网页：DOM 树与渲染流水线
@@ -1710,11 +2126,11 @@ flowchart LR
 生成 StartTag, Characters, EndTag"]
     Tokenizer --> TreeBuilder["语法分析 (Tree Construction)
 维护节点父子包含关系栈"]
-    TreeBuilder --> DOMTree["DOM 树 (内存 C++ 节点树)
+    TreeBuilder --> DOMTree["DOM 树 (文档对象模型)
 Document Object Model"]
 ```
 
-最终在浏览器内存中建立的 **DOM 树（Document Object Model Tree）** 是一组相互关联的 C++ 原生对象：
+最终在浏览器内存中建立的 **DOM 树（Document Object Model Tree）**，是浏览器向 JavaScript 暴露的文档对象模型——一组相互关联、可被脚本读写的节点对象：
 
 ```text
                 [ Document ]
@@ -1729,11 +2145,13 @@ Document Object Model"]
              └── [ <button> "选课" ]
 ```
 
+需要说明的是：DOM 是 W3C/WHATWG 标准定义的接口模型，浏览器内部通常使用原生对象结构来实现它（例如 Chromium/Blink 大量采用 C++），但这属于浏览器的实现细节，并非 DOM 的定义本身。
+
 ---
 
 ## 2. 浏览器的经典渲染流水线（Rendering Pipeline）
 
-当 DOM 树与 CSS 规则树（CSSOM）构建完成后，浏览器开始执行完整的渲染流水线：
+当 DOM 树与 CSS 规则树（CSSOM）构建完成后，浏览器开始执行渲染工作。下面给出的是主流浏览器的**典型渲染模型**（不同浏览器引擎的内部流水线与优化策略并不完全一致）：
 
 ```mermaid
 flowchart TD
@@ -1750,7 +2168,31 @@ flowchart TD
 1. **重排 / 回流（Reflow / Layout）**：当元素的几何尺寸（宽高、位置、边距）发生变化时，浏览器必须重新遍历渲染树，计算整棵树上相关节点的几何坐标。这是性能开销最大的操作之一；
 2. **重绘（Repaint）**：当仅有颜色、背景等不影响几何尺寸的外观发生变化时，浏览器跳过布局直接重新绘制；
 3. **强制同步布局（Forced Synchronous Layout）**：如果在 JavaScript 中频繁交替执行“写入 DOM”与“读取几何属性（如 `offsetHeight`）”，浏览器将被迫在每一帧内多次强制执行昂贵的重排，导致严重的页面掉帧卡顿（Layout Thrashing）。
-', 'public', '2251213429@qq.com', 13, 0, 215, '');
+', 'public', '2251213429@qq.com', 13, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-14-dom-chaos', '14-dom-chaos', 'doc:hello-system-part-2', '第14章 命令式 DOM 操作的失控：从 jQuery 到手动同步灾难', '# 第14章 命令式 DOM 操作的失控：从 jQuery 到手动同步灾难
@@ -1807,7 +2249,31 @@ flowchart TD
 只要任何一个分支少写了一句 `document.getElementById().innerText = ...`，用户就会看到极其怪异的画面：**按钮显示已满员置灰，但文本却依然显示 99/100**。
 
 核心矛盾暴露无遗：**真实的状态数据被碎片化地编码并散落在了成百上千个 HTML DOM 属性中，系统失去了唯一定义事实的中心源头。**
-', 'public', '2251213429@qq.com', 14, 0, 215, '');
+', 'public', '2251213429@qq.com', 14, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-15-state-driven-ui', '15-state-driven-ui', 'doc:hello-system-part-2', '第15章 声明式 UI：UI 是状态的纯函数 UI = f(state)', '# 第15章 声明式 UI：UI 是状态的纯函数 UI = f(state)
@@ -1858,7 +2324,31 @@ const vnode = {
 > **算法规范说明**：
 > 虚拟 DOM 的协调算法（Reconciliation / Diff）根据新旧虚拟 DOM 树的差异，推导出需要应用到真实 DOM 上的具体更新操作。
 > 需要明确：**这是一种工程上的高效启发式对比算法（通常采用同层比对与 Key 复用策略），并不暗示在数学意义上求解全局绝对最小编辑距离（Minimum Edit Distance）。**
-', 'public', '2251213429@qq.com', 15, 0, 215, '');
+', 'public', '2251213429@qq.com', 15, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-16-vue-reactivity', '16-vue-reactivity', 'doc:hello-system-part-2', '第16章 Vue 3 响应式核心：依赖收集与派发更新', '# 第16章 Vue 3 响应式核心：依赖收集与派发更新
@@ -1913,7 +2403,31 @@ targetMap (WeakMap)
 
 - **依赖收集（Track）**：当某个渲染函数或副作用函数执行时，它会被设置为全局的 `activeEffect`。当它读取 `state.enrolled` 时，触发 `get` 拦截，Vue 将当前 `activeEffect` 注册到对应属性的 `Set` 集合中；
 - **派发更新（Trigger）**：当执行 `state.enrolled = 2` 时，触发 `set` 拦截，Vue 立即从 `targetMap` 中取出该属性对应的所有 `Effect` 并依次重新执行，从而精准驱动组件视图重绘！
-', 'public', '2251213429@qq.com', 16, 0, 215, '');
+', 'public', '2251213429@qq.com', 16, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-17-computed-properties', '17-computed-properties', 'doc:hello-system-part-2', '第17章 computed 计算属性：脏值检查与惰性求值', '# 第17章 computed 计算属性：脏值检查与惰性求值
@@ -1960,7 +2474,31 @@ flowchart TD
 ```
 
 这种设计避免了昂贵的衍生数据计算在状态频繁变化时产生不必要的 CPU 浪费。
-', 'public', '2251213429@qq.com', 17, 0, 215, '');
+', 'public', '2251213429@qq.com', 17, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-18-watch-and-side-effects', '18-watch-and-side-effects', 'doc:hello-system-part-2', '第18章 watch 与副作用管理：何时触发外部世界？', '# 第18章 watch 与副作用管理：何时触发外部世界？
@@ -1981,7 +2519,7 @@ VALUES ('doc:hello-system-18-watch-and-side-effects', '18-watch-and-side-effects
 
 当用户快速切换下拉菜单中的选修课程时，系统会频繁发起异步查询。
 
-如果第一次请求耗时 800ms，第二次请求耗时 200ms，第二次请求的响应可能会先到达，随后第一次请求的旧数据返回并覆盖最新视图，造成严重的**竞态条件（Race Condition）**。
+如果第一次请求响应较慢而第二次较快（示例：分别耗时 800ms 与 200ms），第二次请求的响应可能会先到达，随后第一次请求的旧数据返回并覆盖最新视图，造成严重的**竞态条件（Race Condition）**。
 
 Vue 3 的 `watch` 提供了专用的清理回调 `onCleanup`：
 
@@ -2001,7 +2539,31 @@ watch(currentCourseId, (newId, oldId, onCleanup) => {
         });
 });
 ```
-', 'public', '2251213429@qq.com', 18, 0, 215, '');
+', 'public', '2251213429@qq.com', 18, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-19-templates-and-reactivity-compiler', '19-templates-and-reactivity-compiler', 'doc:hello-system-part-2', '第19章 模板编译：为什么 Vue 模板能被精准优化？', '# 第19章 模板编译：为什么 Vue 模板能被精准优化？
@@ -2018,8 +2580,8 @@ Vue 3 的模板编译器在构建阶段（Build Time）对模板进行了深度�
 
 ```html
 <div class="card">
-  <h1>Mini Campus 选课系统</h1>       <!-- 静态节点 1: 绝对不变 -->
-  <p>固定选课规则说明...</p>           <!-- 静态节点 2: 绝对不变 -->
+  <h1>Mini Campus 选课系统</h1>       <!-- 静态节点 1: 固定不变 -->
+  <p>固定选课规则说明...</p>           <!-- 静态节点 2: 固定不变 -->
   <span :class="themeClass">{{ course.name }}</span> <!-- 动态节点: 仅 class 和 text 变化 -->
 </div>
 ```
@@ -2035,14 +2597,38 @@ export function render(_ctx, _cache) {
   return (_openBlock(), _createElementBlock("div", { class: "card" }, [
     _hoisted_1,
     _hoisted_2,
-    // 2. 补丁标记 (Patch Flag): 9 代表 TEXT + CLASS 动态绑定
-    _createElementVNode("span", { class: _ctx.themeClass }, _toDisplayString(_ctx.course.name), 9 /* TEXT, CLASS */)
+    // 2. 补丁标记 (Patch Flag): 3 代表 TEXT + CLASS 动态绑定
+    _createElementVNode("span", { class: _ctx.themeClass }, _toDisplayString(_ctx.course.name), 3 /* TEXT, CLASS */)
   ]))
 }
 ```
 
 当数据发生改变时，Vue 的 Diff 算法通过 Block Tree **直接跳过所有静态节点，精准定位到带有 Patch Flag 的动态节点**，比对效率提升了一个数量级。
-', 'public', '2251213429@qq.com', 19, 0, 215, '');
+', 'public', '2251213429@qq.com', 19, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-20-components-and-props-emit', '20-components-and-props-emit', 'doc:hello-system-part-2', '第20章 组件化与单向数据流：Props Down, Events Up', '# 第20章 组件化与单向数据流：Props Down, Events Up
@@ -2072,7 +2658,31 @@ flowchart TD
 一旦发生数据错误，你无法确定到底是哪一个子组件在什么时机篡改了状态。
 
 单向数据流确保了：**谁拥有数据（Source of Truth），谁才拥有修改该数据的唯一权力。**
-', 'public', '2251213429@qq.com', 20, 0, 215, '');
+', 'public', '2251213429@qq.com', 20, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-21-component-lifecycle', '21-component-lifecycle', 'doc:hello-system-part-2', '第21章 组件生命周期与挂载时机', '# 第21章 组件生命周期与挂载时机
@@ -2113,7 +2723,31 @@ export default {
   }
 }
 ```
-', 'public', '2251213429@qq.com', 21, 0, 215, '');
+', 'public', '2251213429@qq.com', 21, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-22-form-binding-vmodel', '22-form-binding-vmodel', 'doc:hello-system-part-2', '第22章 双向绑定的表单真相：v-model 的语法糖展开', '# 第22章 双向绑定的表单真相：v-model 的语法糖展开
@@ -2142,7 +2776,31 @@ VALUES ('doc:hello-system-22-form-binding-vmodel', '22-form-binding-vmodel', 'do
 在处理中文、日文等需要输入法输入拼音的场景中，原生 `@input` 会在每一个拼音字符敲入时立即触发。
 
 Vue 内部通过监听 `compositionstart` 与 `compositionend` 原生事件，确保只有在用户选定汉字并完成组字后，才会最终更新响应式变量，避免了半成品拼音引发的高频无效查询。
-', 'public', '2251213429@qq.com', 22, 0, 215, '');
+', 'public', '2251213429@qq.com', 22, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-23-global-state-pinia', '23-global-state-pinia', 'doc:hello-system-part-2', '第23章 跨组件状态共享：Pinia 与全局状态树', '# 第23章 跨组件状态共享：Pinia 与全局状态树
@@ -2176,7 +2834,31 @@ flowchart LR
 ```
 
 任何深度的组件都可以直接通过 `useEnrollmentStore()` 访问全局状态并调用 Actions 方法，彻底解决了跨层级通信难题。
-', 'public', '2251213429@qq.com', 23, 0, 215, '');
+', 'public', '2251213429@qq.com', 23, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-24-client-data-metamorphosis', '24-client-data-metamorphosis', 'doc:hello-system-part-2', '第24章 前端数据形态的演变：从用户交互到网络报文', '# 第24章 前端数据形态的演变：从用户交互到网络报文
@@ -2187,13 +2869,13 @@ VALUES ('doc:hello-system-24-client-data-metamorphosis', '24-client-data-metamor
 
 ```mermaid
 flowchart TD
-    Step1["1. 物理交互
-用户鼠标点击坐标 (X: 520, Y: 340)"] --> Step2["2. 操作系统与浏览器事件
+    Step1["1. 用户交互
+用户在选课按钮上触发鼠标点击"] --> Step2["2. 操作系统与浏览器事件
 产生原生 PointerEvent / MouseEvent 实例"]
     Step2 --> Step3["3. Vue 事件绑定与响应式状态跃迁
 handleClick 触发: isSubmitting.value = true"]
     Step3 --> Step4["4. 内存业务对象构造
-const payload = { courseId: 2048, timestamp: 1787932800 }"]
+const payload = { courseId: 2048 }"]
     Step4 --> Step5["5. 序列化编码 (JSON.stringify)
 转换为纯文本字符串: ''{"courseId":2048}''"]
     Step5 --> Step6["6. 网络协议栈编码
@@ -2208,10 +2890,34 @@ UTF-8 字符流转换为二进制 TCP 载荷，装配 HTTP POST 报文头"]
 
 但是，无论前端的响应式系统多么优雅，运行在浏览器内存中的 JavaScript 对象都是**瞬态的**——只要用户按一下 `F5` 刷新网页，所有的内存变量都会瞬间灰飞烟灭。
 
-数据要想获得永恒的生命，必须跨越网络，进入真正的持久化堡垒——数据库管理系统。
+数据要想获得超越单次会话的生命，必须跨越网络，进入真正的持久化堡垒——数据库管理系统。
 
 让我们进入第三部分：**数据需要一个真正的家 (25 ~ 37)**！
-', 'public', '2251213429@qq.com', 24, 0, 215, '');
+', 'public', '2251213429@qq.com', 24, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-part-3', 'part-3', 'doc:book-hello-system', '第三部分: 数据需要一个真正的家 (25~37)', '# 第三部分: 数据需要一个真正的家 (25~37)
@@ -2219,7 +2925,31 @@ VALUES ('doc:hello-system-part-3', 'part-3', 'doc:book-hello-system', '第三部
 本部分聚焦于**关系数据库理论与现代存储引擎的底层基石**。
 
 我们将从 Excel 样式的大宽表出发，亲历插入、更新与删除三大异常灾难。我们将严密推导关系代数、候选键、函数依赖、Armstrong 公理系统以及 1NF $\to$ 2NF $\to$ 3NF $\to$ BCNF 的全流程无损规范化分解。随后，我们将深入 B+ 树索引的内部结构与 EXPLAIN 优化器原理，并最终建立起包含 ACID 事务、行级锁、WAL 预写日志与并发控制的坚固数据心智模型。
-', 'public', '2251213429@qq.com', 3, 0, 215, '');
+', 'public', '2251213429@qq.com', 5, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-25-big-wide-table', '25-big-wide-table', 'doc:hello-system-part-3', '第25章 单大宽表的诱惑与灾难：从 Excel 到数据库', '# 第25章 单大宽表的诱惑与灾难：从 Excel 到数据库
@@ -2264,7 +2994,31 @@ flowchart TD
 核心矛盾在于：**我们在同一张表里强行揉杂了多个不同生命周期的独立实体（学生、专业、课程、教师）。**
 
 要彻底根除这些异常，我们必须借助数学武器——**关系模型与规范化理论**。
-', 'public', '2251213429@qq.com', 25, 0, 215, '');
+', 'public', '2251213429@qq.com', 25, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-26-relational-model-foundations', '26-relational-model-foundations', 'doc:hello-system-part-3', '第26章 关系模型的数学美感：元组、属性与笛卡尔积', '# 第26章 关系模型的数学美感：元组、属性与笛卡尔积
@@ -2307,7 +3061,31 @@ Domain (域)       <--->  Data Type & Constraint (数据类型与取值范围)
 由于关系在数学上是一个**纯粹的集合（Set）**，它天然具备两大数学性质：
 1. **元素唯一性**：集合中绝不存在完全相同的重复元组；
 2. **无序性**：元组之间没有先后顺序之分，属性之间也没有左右顺序之分。
-', 'public', '2251213429@qq.com', 26, 0, 215, '');
+', 'public', '2251213429@qq.com', 26, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-27-keys-and-identity', '27-keys-and-identity', 'doc:hello-system-part-3', '第27章 主键与候选键：在数据的海洋中唯一定位', '# 第27章 主键与候选键：在数据的海洋中唯一定位
@@ -2347,10 +3125,36 @@ flowchart TD
 - **业务自然键**：`code`（如 `"CS-101"`），具有直观的业务含义；
 - **代理自增键**：`id`（如整数 `2048`），无实际业务语义。
 
-在现代系统工程中，推荐使用**不可变的整型代理主键（Surrogate Key）**：
-1. 业务代码（如课程编号）在学校教务改革时可能发生变更，如果使用自然键作为主键并在其他表中作为外键关联，级联修改代价极高；
-2. 紧凑的整型在 B+ 树索引中占用空间极小，大幅提高索引缓存命中率与查询比较效率。
-', 'public', '2251213429@qq.com', 27, 0, 215, '');
+在工程实践中，**不可变的整型代理主键（Surrogate Key）** 是一种非常常见的选择，本书的 Mini Campus 也采用它。它的优点包括：
+1. **与可变业务标识解耦**：业务代码（如课程编号）在学校教务改革时可能发生变更，如果使用自然键作为主键并在其他表中作为外键关联，级联修改代价极高；
+2. **长度固定且通常较紧凑**：整型键在索引中占用的空间通常小于变长业务字符串，外键引用也更方便。
+
+但这并不意味着“现代系统都应该使用整型代理键”。自然键、UUID、ULID 与各类分布式 ID 都有各自合理的使用场景（例如跨库合并、离线生成、分库分表）。主键选择对性能的实际影响，取决于键宽、索引结构、访问模式、数据规模、缓存与具体 DBMS 实现等综合因素，不存在脱离场景的普适结论。
+', 'public', '2251213429@qq.com', 27, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-28-foreign-keys-and-associations', '28-foreign-keys-and-associations', 'doc:hello-system-part-3', '第28章 外键与关联表：一堆孤立表如何连接？', '# 第28章 外键与关联表：一堆孤立表如何连接？
@@ -2391,8 +3195,32 @@ CREATE TABLE enrollments (
 );
 ```
 
-注意 `UNIQUE (student_id, course_id)` 复合唯一键：它在数据库底层物理级别捍卫了“杜绝重复选课”的业务不变量。
-', 'public', '2251213429@qq.com', 28, 0, 215, '');
+注意 `UNIQUE (student_id, course_id)` 复合唯一键：它在数据库约束层面捍卫了“杜绝重复选课”的业务不变量。
+', 'public', '2251213429@qq.com', 28, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-29-declarative-sql', '29-declarative-sql', 'doc:hello-system-part-3', '第29章 声明式 SQL：告诉数据库“要什么”，而非“怎么做”', '# 第29章 声明式 SQL：告诉数据库“要什么”，而非“怎么做”
@@ -2436,7 +3264,31 @@ flowchart LR
 ```
 
 优化器会根据索引统计信息、数据分布直方图与磁盘 I/O 成本，自动决定是走全表扫描还是走 B+ 树索引查找。程序员只需要关心业务逻辑的正确表达。
-', 'public', '2251213429@qq.com', 29, 0, 215, '');
+', 'public', '2251213429@qq.com', 29, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-30-inner-and-outer-joins', '30-inner-and-outer-joins', 'doc:hello-system-part-3', '第30章 JOIN 的本质：笛卡尔积上的条件过滤', '# 第30章 JOIN 的本质：笛卡尔积上的条件过滤
@@ -2483,7 +3335,31 @@ flowchart TD
 > 如果全校有 1000 名学生，其中 800 人选了课，200 人未选课。
 > - `SELECT count(*) FROM students INNER JOIN enrollments ON ...` $	o$ 结果必然等于选课记录总数；
 > - `SELECT count(DISTINCT students.id) FROM students LEFT JOIN enrollments ON ...` $	o$ 结果严格等于 **1000**。
-', 'public', '2251213429@qq.com', 30, 0, 215, '');
+', 'public', '2251213429@qq.com', 30, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-31-aggregation-and-group-by', '31-aggregation-and-group-by', 'doc:hello-system-part-3', '第31章 聚合与分组：GROUP BY 与 HAVING 的执行时序', '# 第31章 聚合与分组：GROUP BY 与 HAVING 的执行时序
@@ -2511,7 +3387,31 @@ flowchart TD
 根据上述时序图，`WHERE`（第 2 步）发生在 `GROUP BY` 与聚合计算（第 3~4 步）**之前**！
 
 在 `WHERE` 执行的时刻，数据还没有被分组，聚合值根本尚未诞生，因此在语法上直接禁止在 `WHERE` 子句中使用聚合函数。如果需要对聚合后的结果进行筛选，必须使用在第 5 步执行的 `HAVING` 子句。
-', 'public', '2251213429@qq.com', 31, 0, 215, '');
+', 'public', '2251213429@qq.com', 31, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-32-lossless-decomposition', '32-lossless-decomposition', 'doc:hello-system-part-3', '第32章 无损分解与函数依赖：拆分表的科学方法', '# 第32章 无损分解与函数依赖：拆分表的科学方法
@@ -2542,7 +3442,31 @@ flowchart TD
 > $$(U_1 \cap U_2) \to (U_1 - U_2) \in F^+ \quad \text{或} \quad (U_1 \cap U_2) \to (U_2 - U_1) \in F^+$$
 
 也就是说：**两张子表的公共属性集，必须至少是其中某一个子表的超键！** 只有这样，两表在重新 JOIN 时才绝不会出现多对多的交叉发散。
-', 'public', '2251213429@qq.com', 32, 0, 215, '');
+', 'public', '2251213429@qq.com', 32, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-33-functional-dependency-algebra', '33-functional-dependency-algebra', 'doc:hello-system-part-3', '第33章 函数依赖代数：Armstrong 公理系统', '# 第33章 函数依赖代数：Armstrong 公理系统
@@ -2572,7 +3496,31 @@ W. W. Armstrong 于 1974 年提出了一套严密的推理规则，被证明是*
 - **伪传递规则（Pseudo-transitivity）**：若 $X \to Y$ 且 $WY \to Z$，则 $WX \to Z$。
 
 利用属性闭包算法 $X^+$，我们可以在多项式时间内自动推导并验证任意候选键与超键。
-', 'public', '2251213429@qq.com', 33, 0, 215, '');
+', 'public', '2251213429@qq.com', 33, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-34-normalization-1nf-2nf-3nf-bcnf', '34-normalization-1nf-2nf-3nf-bcnf', 'doc:hello-system-part-3', '第34章 范式实战演进：1NF、2NF、3NF 到 BCNF 的全景推导', '# 第34章 范式实战演进：1NF、2NF、3NF 到 BCNF 的全景推导
@@ -2663,16 +3611,40 @@ EnrollmentInfo(
 > 关系模式 $R \in \text{1NF}$，对于 $R$ 上的每一个非平凡函数依赖 $X \to Y$，$X$ 都**必须是 $R$ 的超键**。
 
 BCNF 进一步消除了主属性对其他非键属性的依赖（3NF 允许右侧 $A$ 是主属性，而 BCNF 强制左侧 $X$ 必须是超键）。在绝大多数常规企业级建模中，达到 3NF/BCNF 即可保证极高的数据严密性与健壮性。
-', 'public', '2251213429@qq.com', 34, 0, 215, '');
+', 'public', '2251213429@qq.com', 34, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-35-bplus-tree-indexes', '35-bplus-tree-indexes', 'doc:hello-system-part-3', '第35章 B+ 树索引原理：从全表扫描到对数级查找', '# 第35章 B+ 树索引原理：从全表扫描到对数级查找
 
 ## 1. 为什么不能用二叉查找树或 Hash 表？
 
-当数据库表拥有 1000 万行记录时，如果我们执行 `SELECT * FROM courses WHERE code = ''CS-101''`：
-- **全表扫描（Full Table Scan）**：需要从头到尾读取 1000 万行数据，产生极大的磁盘 I/O 开销；
-- **为什么不用二叉平衡树（AVL/红黑树）**：二叉树每个节点只存一个键，树高可达 $\log_2(10^7) \approx 24$ 层。每次沿着指针访问子节点都可能是一次独立的随机磁盘 I/O；
+当数据库表记录达到千万级规模（教学示例：1000 万行）时，如果我们执行 `SELECT * FROM courses WHERE code = ''CS-101''`：
+- **全表扫描（Full Table Scan）**：需要从头到尾读取全部数据行，产生极大的 I/O 开销；
+- **为什么不用二叉平衡树（AVL/红黑树）**：二叉树每个节点只存一个键，扇出极低，同样数据量下树高明显更高（按 1000 万行的示例估算，$\log_2(10^7) \approx 24$ 层）。树越高，搜索路径上的跨页访问越多；如果页面访问未命中缓存，每次跨页都可能带来额外的存储 I/O；
 - **为什么不用 Hash 表**：Hash 索引无法高效支持范围查询（如 `WHERE capacity BETWEEN 60 AND 100`）与排序操作。
 
 ---
@@ -2705,7 +3677,7 @@ flowchart TD
 ```
 
 > **工程实现客观说明**：
-> 现实数据库中的 B+ 树通常因为较大的扇出（一页 16KB 可容纳上百个键）而保持较低高度（通常在 3~4 层左右）。但必须注意：**具体树高取决于页面大小、键长度、行记录规模以及页面填充率等综合因素。根节点通常很容易被 Buffer Pool 缓存，但并非关系模型或 B+ 树定义本身的硬性保证。**
+> 以 MySQL InnoDB 为例，其常见默认页面大小为 16 KiB（这是 InnoDB 的具体实现与可配置项，并非 B+ 树的定义）。较大的页面扇出使 B+ 树在工程实践中通常保持较低的树高（常见观察为 3~4 层左右）。但必须注意：**具体树高取决于页面大小、键长度、行记录规模以及页面填充率等综合因素，"3~4 层"只是常见情况而非固定规律。根节点与高层页面通常很容易被 Buffer Pool 缓存，因此"每层一次物理磁盘访问"并不成立——命中缓存的页面访问不会产生磁盘 I/O。**
 
 ---
 
@@ -2731,7 +3703,31 @@ EXPLAIN SELECT * FROM courses WHERE code = ''CS-101'';
 | type | possible_keys | key | rows | Extra |
 | :--- | :--- | :--- | :--- | :--- |
 | **const** | idx_courses_code | **idx_courses_code** | **1** | NULL (常数级精准命中) |
-', 'public', '2251213429@qq.com', 35, 0, 215, '');
+', 'public', '2251213429@qq.com', 35, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-36-acid-transactions', '36-acid-transactions', 'doc:hello-system-part-3', '第36章 事务与 ACID：在不确定的硬件世界中守护确定性', '# 第36章 事务与 ACID：在不确定的硬件世界中守护确定性
@@ -2743,28 +3739,56 @@ VALUES ('doc:hello-system-36-acid-transactions', '36-acid-transactions', 'doc:he
 - **原子性（Atomicity）**：事务中的所有操作要么全部成功持久化，要么全部回滚，绝不允许停留在半成品状态；
 - **一致性（Consistency）**：事务执行前后，数据库的完整性约束与业务不变量始终保持合法；
 - **隔离性（Isolation）**：并发执行的多个事务之间相互隔离，避免脏读、不可重复读等并发冲突；
-- **持久性（Durability）**：事务一旦成功提交（COMMIT），其产生的数据状态变更将永久保存在非易失介质中。
+- **持久性（Durability）**：在数据库所承诺的故障模型与持久化配置下，成功提交（COMMIT）的事务效果，应在系统崩溃恢复之后依然保留。
+
+需要准确理解持久性的边界：它并不意味着存储介质永远不会损坏、机房永远不会毁坏、数据永远不会被管理员误删，也不意味着在任意配置下 COMMIT 都代表同样强度的刷盘（fsync）保证。持久性是一个**以具体故障模型与配置为前提的承诺**，而不是“数据绝对永存”的物理定律。
 
 ---
 
 ## 2. 预写日志（Write-Ahead Logging, WAL）的精准心智模型
 
-如果每次事务提交都必须将修改后的整张数据页（如 16KB 数据页）同步写回磁盘数据文件，频繁的随机 I/O 将彻底拖垮数据库吞吐量。
+如果每次事务提交都必须将修改后的整张数据页（以 InnoDB 常见默认配置为例，一页 16 KiB）同步写回磁盘数据文件，频繁的随机 I/O 将严重拖垮数据库吞吐量。
 
-数据库通过 **WAL（预写日志）** 实现了极高的性能与可靠性平衡：
+数据库通过 **WAL（预写日志）** 实现了极高的性能与可靠性平衡。以下以 MySQL InnoDB 的重做日志（Redo Log）为例说明这一原则的落地方式：
 
 ```mermaid
 flowchart TD
-    Step1["1. 事务在内存 Buffer Pool 中修改数据页 (产生脏页 Dirty Page)"] --> Step2["2. 同时在内存中生成紧凑的物理重做日志记录 (Redo Log Record)"]
-    Step2 --> Step3["3. 事务提交 (COMMIT): 将顺序追加的 Redo Log 刷盘 (fsync)"]
+    Step1["1. 事务在内存 Buffer Pool 中修改数据页 (产生脏页 Dirty Page)"] --> Step2["2. 同时在内存中生成紧凑的重做日志记录 (Redo Log Record)"]
+    Step2 --> Step3["3. 事务提交 (COMMIT): 按配置要求将顺序追加的 Redo Log 持久化"]
     Step3 --> Step4["4. 内存脏页由后台检查点线程 (Checkpoint) 异步批量刷回磁盘数据文件"]
 ```
 
-> **WAL 核心规范与心智模型**：
-> 数据库**先在内存缓冲池中修改数据页并产生重做日志记录**。
-> WAL 的关键铁律是：**在内存中的脏数据页被持久化写入磁盘数据文件之前，其对应的重做日志必须先满足数据库要求的持久化条件（先日志后数据）。**
-> 事务 COMMIT 时的日志持久化行为还与具体 DBMS 参数（如 MySQL `innodb_flush_log_at_trx_commit`）配置密切相关。
-', 'public', '2251213429@qq.com', 36, 0, 215, '');
+> **WAL 核心原则与心智模型**：
+> 数据库**先在内存缓冲池中修改数据页并产生日志记录**。
+> WAL 的关键规则是：**在内存中的脏数据页被持久化写入磁盘数据文件之前，其对应的日志记录必须先满足数据库所要求的持久化级别（先日志，后数据页）。**
+> 事务 COMMIT 时的日志持久化行为与具体 DBMS 参数（如 MySQL `innodb_flush_log_at_trx_commit`）、组提交（Group Commit）、操作系统与存储栈密切相关，并非“每次 COMMIT 都必然立即单独执行一次 fsync”。
+>
+> 术语边界：WAL 是一种通用日志原则；InnoDB Redo Log 是它在 MySQL 中的一种具体实现；ARIES 是数据库恢复领域的经典算法框架。三者相关但不完全等同，不同数据库的 WAL 实现（如 PostgreSQL 的 WAL 记录格式）各有差异。
+', 'public', '2251213429@qq.com', 36, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-37-concurrency-and-locking', '37-concurrency-and-locking', 'doc:hello-system-part-3', '第37章 并发控制：行级锁、排他锁与幻读防范', '# 第37章 并发控制：行级锁、排他锁与幻读防范
@@ -2811,21 +3835,69 @@ INSERT INTO enrollments (student_id, course_id) VALUES (1001, 2048);
 COMMIT;
 ```
 
-排他锁确保了在当前事务提交前，其他并发事务尝试读取该行加锁时必须排队等待，从而绝对保证了并发安全性。
+排他锁确保在当前事务提交前，其他并发事务对同一行的加锁读取与更新必须排队等待，从而防止了本场景下的丢失更新。需要注意：不同 DBMS 对行锁、MVCC 与快照隔离的实现存在差异——**仅仅声明“使用了事务”或“数据库是 ACID 的”，并不足以推断并发行为，必须同时明确具体的隔离级别、数据库实现与访问模式**。
 
 在后续第五部分的第 51 章中，我们还将进一步探讨无需锁等待的高性能**原子条件更新**方案！
-', 'public', '2251213429@qq.com', 37, 0, 215, '');
+', 'public', '2251213429@qq.com', 37, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-part-4', 'part-4', 'doc:book-hello-system', '第四部分: 前端第一次遇见后端 (38~46)', '# 第四部分: 前端第一次遇见后端 (38~46)
 
 本部分聚焦于**跨越网络边界的前后端通信契约与对象边界划分**。
 
-我们将从套接字与网络分包的物理现实出发，深入解构 HTTP 报文结构与现代 RESTful 资源语义设计。随后，我们将以“李雷点击选课”为主线，完整追踪从 Vue `fetch()` 请求发起、跨语言 JSON 序列化、Spring WebMVC 请求分发，到 Controller、Service、Repository 以及 Entity/DTO/Value Object 对象的严格职责隔离。
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
+我们将从套接字与 TCP/IP 分层模型出发，深入解构 HTTP 报文结构与现代 RESTful 资源语义设计。随后，我们将以“李雷点击选课”为主线，完整追踪从 Vue `fetch()` 请求发起、跨语言 JSON 序列化、Spring WebMVC 请求分发，到 Controller、Service、Repository 以及 Entity/DTO/Value Object 对象的严格职责隔离。
+', 'public', '2251213429@qq.com', 6, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-38-networking-foundations-ip-tcp', '38-networking-foundations-ip-tcp', 'doc:hello-system-part-4', '第38章 网络协议的物理现实：从套接字到包交换', '# 第38章 网络协议的物理现实：从套接字到包交换
+VALUES ('doc:hello-system-38-networking-foundations-ip-tcp', '38-networking-foundations-ip-tcp', 'doc:hello-system-part-4', '第38章 机器之间如何通信：从 Socket 到 IP/TCP', '# 第38章 机器之间如何通信：从 Socket 到 IP/TCP
 
 ## 1. 跨越机器边界的鸿沟
 
@@ -2861,16 +3933,40 @@ flowchart TD
     App --> Transport --> Network --> Link
 ```
 
-- **套接字（Socket）**：操作系统向应用程序暴露的抽象通信端点，由 `(源 IP, 源端口, 目标 IP, 目标端口, 协议)` 五元组唯一定义；
+- **套接字（Socket）**：操作系统向应用程序暴露的抽象通信端点。一个已建立的 TCP 网络流通常可以使用（源 IP、源端口、目标 IP、目标端口、传输层协议）组成的五元组来区分；监听套接字、UDP 套接字等情形与该模型并不完全等价；
 - **流式传输的本质**：TCP 向上层应用提供的是一个**无边界的连续字节流（Byte Stream）**。应用层协议（如 HTTP）必须自行定义报文边界解析规则。
-', 'public', '2251213429@qq.com', 38, 0, 215, '');
+', 'public', '2251213429@qq.com', 38, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-39-http-message-anatomy', '39-http-message-anatomy', 'doc:hello-system-part-4', '第39章 HTTP 报文解构：请求行、头部与状态码', '# 第39章 HTTP 报文解构：请求行、头部与状态码
 
 ## 1. HTTP 请求报文的标准文本结构
 
-HTTP/1.1 是一种典型的基于 ASCII 文本的应用层协议。一次选课请求的真实报文结构如下：
+HTTP/1.1 的起始行（start-line）与头部字段（header fields）采用文本语法，因此非常适合直接展示与调试。一次选课请求的真实报文结构如下：
 
 ```http
 POST /api/enrollments HTTP/1.1
@@ -2891,6 +3987,8 @@ Authorization: Bearer eyJhbGciOi...
 3. **空行（CRLF, \r\n）**：协议规定的关键分隔符，用于告知接收方头部结束、正文开始；
 4. **请求体（Body）**：传输的具体业务载荷数据。
 
+> **边界说明**：说“HTTP/1.1 基于文本”仅指其起始行与头部字段的语法；HTTP 报文主体可以承载任意媒体类型与二进制数据（如图片、压缩包、Protobuf）。此外，HTTP 并非永远运行在 TCP 之上：HTTP/1.1 与 HTTP/2 通常运行于 TCP，而 HTTP/3 使用基于 UDP 的 QUIC 协议。
+
 ---
 
 ## 2. 常见 HTTP 状态码的精准语义分类
@@ -2907,8 +4005,32 @@ Authorization: Bearer eyJhbGciOi...
 | **403 Forbidden** | 拒绝访问 | 客户端已登录，但无权操作该资源（如学生尝试修改全校课表） |
 | **404 Not Found** | 未找到 | 目标资源不存在（如请求的 courseId 不在数据库中） |
 | **409 Conflict** | 业务冲突 | 发生业务规则冲突（如该课程名额已满，或学生已选过该课程） |
-| **500 Internal Error**| 服务端错误 | 后端服务器发生未捕获的运行时异常（如数据库连接中断） |
-', 'public', '2251213429@qq.com', 39, 0, 215, '');
+| **500 Internal Server Error** | 服务端错误 | 服务器遇到了意外情况，无法完成请求（未捕获异常只是产生 500 的常见原因之一，如数据库连接中断） |
+', 'public', '2251213429@qq.com', 39, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-40-json-serialization', '40-json-serialization', 'doc:hello-system-part-4', '第40章 跨语言的契约：JSON 序列化与反序列化', '# 第40章 跨语言的契约：JSON 序列化与反序列化
@@ -2934,12 +4056,36 @@ new EnrollRequest(2048)"]
 
 1. **JavaScript 64 位浮点数（IEEE 754）精度丢失**：
    - JavaScript 中的 `Number.MAX_SAFE_INTEGER` 为 $2^{53} - 1$（9007199254740991）；
-   - 如果 Java 后端使用 64 位自增长整型（`Long`）或雪花算法 ID（如 `1787932800123456789L`），当它以 JSON 数字格式传输给前端时，最后几位会被 JavaScript 自动截断为 0！
-   - **最佳实践**：超长整型 ID 在传输时必须序列化为**字符串类型（String）**。
+   - 如果 Java 后端使用 64 位自增长整型（`Long`）或雪花算法 ID（如 `1787932800123456789L`），当它以 JSON 数字格式传输给前端时，由于超过安全整数范围后 JavaScript `Number` 不能保证逐整数精确表示，反序列化后可能发生舍入，从而得到与后端原整数不同的值；
+   - **常见工程方案**：如果整数 ID 可能超过 $2^{53} - 1$ 并要求前端精确保持其值，通常将 ID 序列化为**字符串类型（String）**进行传输。
 2. **时区与日期格式标准化**：
    - 严禁传输本地时间字符串（如 `"2026-08-29 08:00:00"`，因为缺少时区信息）；
    - 推荐使用 ISO-8601 标准 UTC 格式字符串：`"2026-08-29T00:00:00.000Z"`。
-', 'public', '2251213429@qq.com', 40, 0, 215, '');
+', 'public', '2251213429@qq.com', 40, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-41-first-api-design', '41-first-api-design', 'doc:hello-system-part-4', '第41章 设计第一条 RESTful API：资源、动作与路径', '# 第41章 设计第一条 RESTful API：资源、动作与路径
@@ -2977,7 +4123,7 @@ DELETE        /api/enrollments/{id}  删除指定的选课记录 (退课)
   }
   ```
   > **安全设计注意**：
-  > 请求体中**严禁包含 `studentId`**！当前学生的身份必须由后端从经过加密签名的认证凭据（Token/Session）中安全解析，绝不信任前端传入的任意用户 ID。
+  > 请求体中**严禁包含 `studentId`**！当前学生的身份必须由后端从**可信的认证上下文**中解析——即由服务端验证过的认证凭据，例如签名 Token 或服务端 Session（以常见的 JWT 为例，它通常是经过**签名**以保证不可篡改，但载荷本身并未加密）。后端绝不信任前端传入的任意用户 ID。
 
 ### 成功响应（Response - 201 Created）：
 ```json
@@ -2992,7 +4138,31 @@ DELETE        /api/enrollments/{id}  删除指定的选课记录 (退课)
   }
 }
 ```
-', 'public', '2251213429@qq.com', 41, 0, 215, '');
+', 'public', '2251213429@qq.com', 41, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-42-clicking-enroll-frontend-backend-meet', '42-clicking-enroll-frontend-backend-meet', 'doc:hello-system-part-4', '第42章 点击选课：从 Vue fetch 到 Spring Controller', '# 第42章 点击选课：从 Vue fetch 到 Spring Controller
@@ -3058,7 +4228,31 @@ flowchart LR
     ReturnResp --> ViewResolver["HttpMessageConverter (Jackson 序列化)"]
     ViewResolver --> HTTPResp["HTTP 201 Created 响应报文"]
 ```
-', 'public', '2251213429@qq.com', 42, 0, 215, '');
+', 'public', '2251213429@qq.com', 42, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-43-controller-layer-responsibilities', '43-controller-layer-responsibilities', 'doc:hello-system-part-4', '第43章 表现层 Controller 的纯粹职责：防线还是中转站？', '# 第43章 表现层 Controller 的纯粹职责：防线还是中转站？
@@ -3100,12 +4294,36 @@ public class EnrollmentController {
 
 ---
 
-## 2. Controller 的三大绝对禁忌
+## 2. Controller 的三大设计禁忌
 
 1. **严禁在 Controller 中编写 SQL 或直接调用数据库连接**：这会导致表现层与底层数据库紧密耦合；
 2. **严禁在 Controller 中执行复杂的业务规则判定**（如“检查先修课是否及格”）：这会导致业务逻辑无法在其他入口（如批处理定时任务、MQ 消费者）中复用；
 3. **严禁直接向客户端返回数据库 Entity 实体对象**：这会导致底层数据库表结构直接暴露给公网。
-', 'public', '2251213429@qq.com', 43, 0, 215, '');
+', 'public', '2251213429@qq.com', 43, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-44-service-layer-domain-orchestration', '44-service-layer-domain-orchestration', 'doc:hello-system-part-4', '第44章 业务逻辑层 Service：用例编排与不变量守护', '# 第44章 业务逻辑层 Service：用例编排与不变量守护
@@ -3147,7 +4365,31 @@ public class EnrollmentService {
     }
 }
 ```
-', 'public', '2251213429@qq.com', 44, 0, 215, '');
+', 'public', '2251213429@qq.com', 44, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-45-repository-persistence-abstraction', '45-repository-persistence-abstraction', 'doc:hello-system-part-4', '第45章 持久化抽象 Repository：屏蔽 SQL 与对象映射', '# 第45章 持久化抽象 Repository：屏蔽 SQL 与对象映射
@@ -3167,7 +4409,31 @@ public interface CourseRepository {
 ```
 
 这种解耦使得在单元测试时，可以用内存 Map 轻松替代真实数据库，从而实现超快速的业务测试验证。
-', 'public', '2251213429@qq.com', 45, 0, 215, '');
+', 'public', '2251213429@qq.com', 45, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-46-entity-dto-vo-boundaries', '46-entity-dto-vo-boundaries', 'doc:hello-system-part-4', '第46章 对象边界隔离：Entity、DTO 与 Value Object 的分工', '# 第46章 对象边界隔离：Entity、DTO 与 Value Object 的分工
@@ -3219,7 +4485,31 @@ flowchart LR
 但是，真实世界的网络与服务器并不是一个平静的乌托邦。当面对恶意请求、系统崩溃断电、并发冲突与丢包重试时，系统将展现出怎样残酷的挑战？
 
 让我们进入第五部分：**真实系统开始反抗 (47 ~ 55)**！
-', 'public', '2251213429@qq.com', 46, 0, 215, '');
+', 'public', '2251213429@qq.com', 46, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-part-5', 'part-5', 'doc:book-hello-system', '第五部分: 真实系统开始反抗 (47~55)', '# 第五部分: 真实系统开始反抗 (47~55)
@@ -3227,7 +4517,31 @@ VALUES ('doc:hello-system-part-5', 'part-5', 'doc:book-hello-system', '第五部
 本部分聚焦于**分布式网络与企业级生产环境中的高可靠性与防御性设计**。
 
 真实世界的软件系统绝非运行在风平浪静的理想实验室内。我们将直面客户端恶意篡改、高并发争抢名额、网络丢包超时重试、服务器突然断电崩溃以及多环境部署差异等现实挑战。我们将深入推导信任边界校验、事务异常传播与回滚机制、防抖/节流/幂等性治理、原子条件更新、WAL 崩溃恢复算法、结构化日志可观测性与测试金字塔质量防护网。
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
+', 'public', '2251213429@qq.com', 7, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-47-defensive-validation', '47-defensive-validation', 'doc:hello-system-part-5', '第47章 信任边界：为什么服务器必须重新验证请求？', '# 第47章 信任边界：为什么服务器必须重新验证请求？
@@ -3297,7 +4611,31 @@ public record EnrollRequest(
 ## 4. 概念小贴士：这和“零信任（Zero Trust）”是一回事吗？
 
 > **说明**：这里讨论的是客户端与服务端之间的基础信任边界与输入验证。零信任架构（Zero Trust Architecture, 如 NIST SP 800-207 所定义）是一个更为广泛的企业安全战略体系，包含“持续验证、永不信任”的动态访问控制与微隔离。二者不应混淆。
-', 'public', '2251213429@qq.com', 47, 0, 215, '');
+', 'public', '2251213429@qq.com', 47, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-48-exceptions-and-transactions', '48-exceptions-and-transactions', 'doc:hello-system-part-5', '第48章 异常与事务回滚：当事情开始出错', '# 第48章 异常与事务回滚：当事情开始出错
@@ -3320,7 +4658,7 @@ flowchart TD
 
 ## 2. Spring 声明式事务（`@Transactional`）的回滚机制
 
-在 Spring 框架中，`@Transactional` 的底层是由 **AOP 动态代理（AOP Proxy）** 驱动的：
+在 Spring 框架**默认的代理模式（proxy-based transaction management）**下，`@Transactional` 由 **AOP 动态代理（AOP Proxy）** 驱动：
 
 ```mermaid
 flowchart TD
@@ -3333,9 +4671,33 @@ flowchart TD
 ```
 
 > **重要避坑指南**：
-> 1. Spring 的 `@Transactional` 默认**仅对 `RuntimeException` 和 `Error` 自动触发回滚**。若抛出检查型异常（如 `SQLException`），必须显式配置 `@Transactional(rollbackFor = Exception.class)`；
-> 2. **自调用陷阱**：在同一个类内部直接通过 `this.method()` 调用带有 `@Transactional` 的方法，会绕过 AOP 代理对象，导致事务注解完全失效！
-', 'public', '2251213429@qq.com', 48, 0, 215, '');
+> 1. Spring 的 `@Transactional` 默认**仅对 `RuntimeException` 和 `Error` 自动触发回滚**。若抛出检查型异常（如 `SQLException`），必须显式配置 `@Transactional(rollbackFor = Exception.class)`。需要注意：Spring 的数据访问组件（如 JdbcTemplate、JPA 仓储）通常会把底层 checked 的 SQL 异常转换为 `DataAccessException` 等 unchecked 异常，因此在实际工程中 checked 异常直接穿透到业务层的情况并不常见；
+> 2. **自调用陷阱**：在默认代理模式中，同一个类内部通过 `this.method()` 调用带有 `@Transactional` 的方法属于 self-invocation，调用不经过外部代理对象，事务拦截器因此不会重新生效。Spring 也存在其他配置与织入方式（如 AspectJ weaving），其行为与默认代理模式不同。
+', 'public', '2251213429@qq.com', 48, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-49-http-status-codes-and-errors', '49-http-status-codes-and-errors', 'doc:hello-system-part-5', '第49章 统一错误处理与 HTTP 语义映射', '# 第49章 统一错误处理与 HTTP 语义映射
@@ -3352,7 +4714,7 @@ VALUES ('doc:hello-system-49-http-status-codes-and-errors', '49-http-status-code
 
 ## 2. 全局异常处理器（`@RestControllerAdvice`）
 
-通过全局切面将业务异常统一映射为标准的 RFC 7807 错误响应结构：
+通过全局切面将业务异常统一映射为结构化的 JSON 错误响应。这种“机器可读的错误结构”思想与 Problem Details for HTTP APIs 一致——该规范最初由 RFC 7807 定义，当前版本为 RFC 9457。下面示例中的 `ErrorResponse` 是 Mini Campus 的自定义精简结构，并未完整实现 RFC 9457 的全部字段：
 
 ```java
 @RestControllerAdvice
@@ -3372,7 +4734,31 @@ public class GlobalExceptionHandler {
     }
 }
 ```
-', 'public', '2251213429@qq.com', 49, 0, 215, '');
+', 'public', '2251213429@qq.com', 49, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-50-idempotency-and-repeated-clicks', '50-idempotency-and-repeated-clicks', 'doc:hello-system-part-5', '第50章 如果用户连续点十次按钮呢？——防抖、节流与幂等性', '# 第50章 如果用户连续点十次按钮呢？——防抖、节流与幂等性
@@ -3426,7 +4812,31 @@ Content-Type: application/json
 1. 服务端收到请求后，先将 `Idempotency-Key` 存入具有原子性的去重存储（如 Redis 分布式锁或数据库唯一键表）；
 2. 若该 Key 已存在，直接返回上一次的处理结果或拒绝重复执行；
 3. 处理完成后缓存响应结果，确保无论重试多少次，最终都只产生一次选课流水。
-', 'public', '2251213429@qq.com', 50, 0, 215, '');
+', 'public', '2251213429@qq.com', 50, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-51-cas-and-optimistic-locking', '51-cas-and-optimistic-locking', 'doc:hello-system-part-5', '第51章 如果两个人争抢最后一个名额呢？——原子条件更新与乐观并发控制', '# 第51章 如果两个人争抢最后一个名额呢？——原子条件更新与乐观并发控制
@@ -3472,7 +4882,31 @@ public EnrollResult enroll(int studentId, int courseId) {
 > `UPDATE courses SET enrolled = ?, version = version + 1 WHERE id = ? AND version = ?;`
 > 若更新失败（影响行数为 0），应用层需捕获冲突并在循环中决定是否重试。
 > 在选课这种高争用计数器场景中，直接使用带业务约束（`enrolled < capacity`）的原子 Update 往往更加简洁、高效。
-', 'public', '2251213429@qq.com', 51, 0, 215, '');
+', 'public', '2251213429@qq.com', 51, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-52-wal-and-crash-recovery', '52-wal-and-crash-recovery', 'doc:hello-system-part-5', '第52章 如果服务器在写入时突然断电呢？——WAL 与崩溃恢复', '# 第52章 如果服务器在写入时突然断电呢？——WAL 与崩溃恢复
@@ -3491,20 +4925,44 @@ VALUES ('doc:hello-system-52-wal-and-crash-recovery', '52-wal-and-crash-recovery
 
 ## 2. 经典的 ARIES 崩溃恢复三大阶段
 
-数据库重启时，存储引擎依据 **WAL（预写重做日志与回滚日志）** 执行标准的 ARIES 恢复流程：
+数据库重启时，存储引擎依据 **WAL（预写日志）** 执行经典的 ARIES 恢复流程（ARIES 是数据库恢复领域的经典算法框架，其日志记录同时支持重做与回滚）：
 
 ```mermaid
 flowchart TD
     Crash["服务器突然断电崩溃并重启"] --> Phase1["1. 分析阶段 (Analysis Phase)
 从最近的检查点 (Checkpoint) 开始正向扫描日志，识别出崩溃发生时处于活跃状态的未提交事务列表 (Active Trx Table) 与脏页表"]
     Phase1 --> Phase2["2. 重做阶段 (Redo Phase - 重放历史)
-从最早的未落盘脏页日志序列号 (LSN) 开始，单向重放所有日志 (包含已提交与未提交事务的操作)，将数据页恢复到崩溃前最后一微秒的完全相同状态"]
+从最早的未落盘脏页日志序列号 (LSN) 开始，单向重放所有日志 (包含已提交与未提交事务的操作)，将数据页重放恢复至崩溃发生时的状态"]
     Phase2 --> Phase3["3. 回滚阶段 (Undo Phase - 撤销未竟事务)
 反向扫描日志，对崩溃前所有处于活跃状态但未 COMMIT 的事务执行 Undo 回滚操作，消除其对数据文件的部分写入"]
 ```
 
-通过 Redo（重放历史）与 Undo（撤销脏写），数据库在不稳定的物理硬件上实现了确定性的原子性与持久性保障。
-', 'public', '2251213429@qq.com', 52, 0, 215, '');
+通过 Redo（重放历史）与 Undo（撤销脏写），数据库在不稳定的物理硬件上实现了原子性与持久性保障。与第 36 章一致：持久性的含义是——**在数据库所承诺的故障模型与持久化配置下，成功提交事务的效果应在系统恢复后保留**，而不是“数据在任何灾难下都绝对永存”。
+', 'public', '2251213429@qq.com', 52, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-53-logging-and-observability', '53-logging-and-observability', 'doc:hello-system-part-5', '第53章 可观测性：从 println 到结构化日志与链路追踪', '# 第53章 可观测性：从 println 到结构化日志与链路追踪
@@ -3590,7 +5048,31 @@ public class RequestTracingFilter implements Filter {
    - 10:03:01.105 [INFO] Service 开始扣减名额...
    - 10:03:06.110 [ERROR] 捕获数据库异常: Deadlock found when trying to get lock; try restarting transaction
 4. 工程师在 30 秒内精准定位问题：并发更新顺序引发了数据库行锁死锁，并迅速安排针对性重试策略！
-', 'public', '2251213429@qq.com', 53, 0, 215, '');
+', 'public', '2251213429@qq.com', 53, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-54-environments-and-configuration', '54-environments-and-configuration', 'doc:hello-system-part-5', '第54章 环境与配置：开发、测试与生产的隔离之道', '# 第54章 环境与配置：开发、测试与生产的隔离之道
@@ -3648,8 +5130,34 @@ flowchart LR
 
 为了避免在 CI 测试中使用与生产完全不同的内存伪数据库（如 H2，它无法测试 MySQL 专有的事务并发锁行为），现代工程采用 **Testcontainers** 技术：
 
-在单元测试启动时，由代码自动拉起一个临时的真实 MySQL Docker 容器，测试完成后自动销毁，确保了测试环境与生产环境的 100% 行为一致性。
-', 'public', '2251213429@qq.com', 54, 0, 215, '');
+在**集成测试（Integration Test）**启动时（注意：拉起真实数据库容器的测试已不属于单元测试范畴），由代码自动拉起一个临时的真实 MySQL Docker 容器，测试完成后自动销毁。
+
+使用与生产相同数据库产品和接近版本的 Testcontainers，可以显著减少 H2 等替代数据库造成的语义差异，**但仍不能保证测试环境与生产环境完全一致**。生产差异仍可能来自：数据库小版本、参数配置、时区（timezone）、字符集与排序规则（charset / collation）、数据规模、存储设备、网络拓扑、主从/集群架构与操作系统等。
+', 'public', '2251213429@qq.com', 54, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-55-testing-pyramid', '55-testing-pyramid', 'doc:hello-system-part-5', '第55章 测试金字塔与质量保障：如何证明系统是正确的？', '# 第55章 测试金字塔与质量保障：如何证明系统是正确的？
@@ -3726,16 +5234,64 @@ class CourseRepositoryTest {
 - **SQL 语句语法错误/表字段拼错** $	o$ 由 **Repository 集成测试** 发现；
 - **前端按钮点击事件没有绑上** $	o$ 由 **E2E 浏览器测试** 发现。
 
-通过构筑全方位的自动化测试防护网，我们才能在频繁迭代与重构时，拥有交付高质量系统的绝对底气！
-', 'public', '2251213429@qq.com', 55, 0, 215, '');
+通过构筑全方位的自动化测试防护网，我们才能在频繁迭代与重构时，拥有交付高质量系统的坚实底气！
+', 'public', '2251213429@qq.com', 55, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-part-6', 'part-6', 'doc:book-hello-system', '第六部分: 重新走完那几百毫秒 (56~60)', '# 第六部分: 重新走完那几百毫秒 (56~60)
 
 本部分聚焦于**全书知识体系的大回环、全景闭环复盘与跨技术栈通用心智模型提炼**。
 
-我们将以学生李雷（studentId=1001）选修课程《计算机系统导论》（courseId=2048）为主线，全景展开全书最核心的旗舰章节——从控制流、跨层数据形态演变与状态机生命周期跃迁三重视角，彻底看透一次点击背后的系统齿轮。随后，我们将深入探讨架构权衡、反过度设计哲学、跨技术栈框架迁移能力，并最终回到那个看似平凡的“选课”按钮，完成对整个软件系统认知的终极升华。
-', 'public', '2251213429@qq.com', 6, 0, 215, '');
+我们将以学生李雷（studentId=1001）选修课程《计算机系统导论》（courseId=2048）为主线，全景展开全书最核心的旗舰章节——从控制流、跨层数据形态演变与状态机生命周期跃迁三重视角，彻底看透一次点击背后的系统齿轮。随后，我们将深入探讨架构权衡、反过度设计哲学、跨技术栈框架迁移能力，并最终回到那个看似平凡的“选课”按钮，完成对整个软件系统认知的闭环升华。
+', 'public', '2251213429@qq.com', 8, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-56-full-request-journey', '56-full-request-journey', 'doc:hello-system-part-6', '第56章 从浏览器到数据库：一次选课调用的全景复盘', '# 第56章 从浏览器到数据库：一次选课调用的全景复盘
@@ -3758,7 +5314,7 @@ sequenceDiagram
     actor User as 用户李雷
     participant DOM as 浏览器 DOM 树
     participant Vue as 前端 Vue 3 响应式上下文
-    participant Network as 网络协议栈 (HTTP / TCP)
+    participant Network as 网络协议栈 (HTTP over TCP)
     participant Ctrl as 后端 Controller (表现层)
     participant Svc as 后端 Service (业务逻辑层)
     participant Repo as 后端 Repository (持久化抽象)
@@ -3778,7 +5334,7 @@ sequenceDiagram
     DB-->>Repo: 12. 返回 0 (尚未选修)
     Svc->>Repo: 13. 调度原子扣减: incrementEnrolledIfAvailable(2048)
     Repo->>DB: 14. 执行 UPDATE courses SET enrolled = enrolled + 1 WHERE id = 2048 AND enrolled < capacity;
-    Note over DB: 15. B+ 树主键索引定位到 id=2048 所在数据页<br/>获取行级排他锁 (X Lock)，判定 99 < 100 满足条件<br/>在 Buffer Pool 中修改数据页 (enrolled 变为 100)<br/>生成物理重做日志写入 Redo Log Buffer
+    Note over DB: 15. B+ 树主键索引定位到 id=2048 所在数据页<br/>获取行级排他锁 (X Lock)，判定 99 < 100 满足条件<br/>在 Buffer Pool 中修改数据页 (enrolled 变为 100)<br/>生成重做日志记录写入 Redo Log Buffer
     DB-->>Repo: 16. 返回受影响行数 affected_rows = 1
     Repo-->>Svc: 17. 扣减名额成功确认
     Svc->>Repo: 18. 调度流水记录: save(new Enrollment(1001, 2048))
@@ -3786,7 +5342,7 @@ sequenceDiagram
     Note over DB: 20. 插入唯一索引 UK(student_id, course_id) 并写入 Undo/Redo 日志
     DB-->>Repo: 21. 插入成功，生成自增主键 enrollmentId = 9821
     Repo-->>Svc: 22. 流水落库成功
-    Note over Svc: 23. 业务方法正常结束退出<br/>AOP 代理拦截器调用 commit()<br/>数据库执行 COMMIT 操作并将 Redo Log 顺序持久化刷盘 (WAL 保证持久性)
+    Note over Svc: 23. 业务方法正常结束退出<br/>AOP 代理拦截器调用 commit()<br/>数据库执行 COMMIT，按持久化配置要求确保 Redo Log 达到相应持久化级别 (WAL 保障提交持久性)
     Svc-->>Ctrl: 24. 返回业务成功领域对象 EnrollResult.success()
     Note over Ctrl: 25. 将领域对象转换为 EnrollmentResponseDto<br/>包装为 HTTP 201 Created 响应实体
     Ctrl-->>Network: 26. Web 容器将响应 DTO 序列化为 JSON 字符串，写入 HTTP 响应流
@@ -3796,36 +5352,44 @@ sequenceDiagram
     DOM-->>User: 30. 浏览器渲染流水线完成绘制合成，用户看到“选课成功！当前已选: 100/100 (名额已满)”确定性反馈
 ```
 
+> **本示例的技术前提**：上图假设使用 HTTP/1.1 或 HTTP/2 over TCP（HTTP/3 则使用基于 UDP 的 QUIC）；数据库以 MySQL InnoDB 常见的持久化配置为例——提交时需要确保 Redo Log 达到配置所要求的持久化级别，具体刷盘时机还受 `innodb_flush_log_at_trx_commit`、组提交（Group Commit）、操作系统与存储栈的影响，并非“每次 COMMIT 都必然立即单独执行一次 fsync”。
+
 ---
 
 ## 3. 第二视角：跨层数据形态演变（Data Metamorphosis）
 
-数据形态透镜回答的核心问题是：**“同一个业务事实（李雷选修 2048 号课程），在跨越系统不同的物理与逻辑层次时，其表示形式经历了怎样的蜕变？”**
+数据形态透镜回答的核心问题是：**“同一个业务事实（李雷选修 2048 号课程），在跨越系统不同的层次与边界时，其表示形式经历了怎样的转换？”**
+
+我们从**用户交互事件**开始追踪（而不是从硬件电信号开始——那已经超出了软件系统的讨论边界）：
 
 ```mermaid
 flowchart TD
-    D1["1. 物理交互层
-鼠标微动开关触发电平信号，操作系统生成 PointerEvent 坐标 (X: 610, Y: 420)"]
+    D1["1. 用户交互事件
+浏览器向按钮派发 DOM click 事件对象"]
     D2["2. 浏览器内存状态
 JavaScript 响应式 Proxy 对象: course = reactive({ id: 2048, enrolled: 99 })"]
-    D3["3. 传输准备阶段
-序列化纯文本 JSON 字符串: ''{"courseId":2048}''"]
-    D4["4. 网络协议栈数据流
-按 UTF-8 编码的二进制字节流，封装进 TCP 数据段与 IP 数据包载荷"]
-    D5["5. 表现层对象绑定
+    D3["3. JS 请求对象
+内存普通对象: { courseId: 2048 }"]
+    D4["4. JSON 文本表示
+序列化纯文本: ''{"courseId":2048}''"]
+    D5["5. HTTP 报文载荷
+按 UTF-8 编码的字节流，作为 HTTP 请求体内容传输"]
+    D6["6. 表现层请求 DTO
 反序列化为 Java 强类型不可变对象: EnrollRequest[courseId=2048]"]
-    D6["6. 领域业务实体
+    D7["7. 领域业务值
 Java 领域聚合根实例: Course{id=2048, capacity=100, enrolled=99}"]
-    D7["7. 关系数据库表示
-SQL 预编译参数化语句: UPDATE courses SET enrolled=enrolled+1 WHERE id=?"]
-    D8["8. 存储引擎物理层
-InnoDB 数据页（16KB Page）上的二进制元组记录 + Redo Log 顺序追加物理日志帧"]
-    D9["9. 回传响应表现层
-Java 响应数据传输对象: EnrollmentResponseDto[enrollmentId=9821, status=''SUCCESS'']"]
-    D10["10. 浏览器最终呈现
+    D8["8. SQL 绑定参数
+预编译参数化语句: UPDATE courses SET enrolled=enrolled+1 WHERE id=? AND enrolled<capacity"]
+    D9["9. 关系状态
+存储引擎数据页上的关系元组记录 + Redo Log 缓冲区日志记录"]
+    D10["10. 响应 DTO 与 JSON
+EnrollmentResponseDto -> JSON 响应体"]
+    D11["11. 前端响应式状态
+course.enrolled = 100 (响应式更新)"]
+    D12["12. 渲染后的 DOM
 真实 HTML DOM 文本节点: TextNode(''已选: 100/100'')"]
 
-    D1 --> D2 --> D3 --> D4 --> D5 --> D6 --> D7 --> D8 --> D9 --> D10
+    D1 --> D2 --> D3 --> D4 --> D5 --> D6 --> D7 --> D8 --> D9 --> D10 --> D11 --> D12
 ```
 
 ---
@@ -3841,7 +5405,7 @@ Java 响应数据传输对象: EnrollmentResponseDto[enrollmentId=9821, status='
 | **课程实体名额** | `enrolled = 99` | 内存修改为 100 (持有行锁) | `enrolled = 100` (持久化落库) | 数据库行级排他锁 + 原子条件判断 (`enrolled < capacity`) |
 | **选课流水关联** | 不存在 | 准备插入临时行 | 唯一索引记录生成 (`id=9821`) | 数据库复合唯一约束 `UNIQUE(student_id, course_id)` |
 | **数据库事务** | 无活跃事务 | `Transaction Status: ACTIVE` | `Transaction Status: COMMITTED` | Spring `@Transactional` AOP 切面与底层连接事务管理 |
-| **持久化日志** | LSN: 1048500 | Redo Log 缓冲区追加日志条目 | Redo Log 完成物理落盘 (fsync) | 数据库预写日志（WAL）与崩溃恢复协议 |
+| **持久化日志** | 无新增日志记录 | Redo Log 缓冲区追加日志条目 | 日志达到配置所要求的持久化级别 | 数据库预写日志（WAL）与崩溃恢复协议 |
 
 ---
 
@@ -3850,15 +5414,39 @@ Java 响应数据传输对象: EnrollmentResponseDto[enrollmentId=9821, status='
 > **技术实现声明**：
 > 上述链路以现代工业界非常经典的 **Vue 3 + Spring Boot + MySQL (InnoDB)** 技术组合为例展示了一条典型的端到端全链路。
 > 在实际工程中，具体的细节会因技术选型不同而有所差异（例如前端换用 React/Svelte、后端换用 Go/Rust/Node.js、存储换用 PostgreSQL/Redis）。
-> 但请务必坚信：**无论具体技术栈如何更迭，控制流的分层流转、跨边界的数据格式转换、以及对并发一致性与状态确定性的追求，是所有软件系统永恒不变的底层逻辑。**
-', 'public', '2251213429@qq.com', 56, 0, 215, '');
+> 但值得记住的是：**无论具体技术栈如何更迭，控制流的分层流转、跨边界的数据格式转换、并发一致性与状态确定性等问题，会在大量软件系统中反复出现——它们是具有高迁移价值的设计维度。**
+', 'public', '2251213429@qq.com', 56, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-57-architectural-tradeoffs', '57-architectural-tradeoffs', 'doc:hello-system-part-6', '第57章 架构没有银弹：权衡的艺术', '# 第57章 架构没有银弹：权衡的艺术
 
-## 1. 软件工程第一定律：一切皆是权衡（Trade-offs）
+## 1. 一切皆是权衡（Trade-offs）
 
-计算机图灵奖得主 Fred Brooks 曾在著名论文 *No Silver Bullet* 中断言：**没有任何一项单一的技术或管理革新，能承诺在十年内将软件的生产率和可靠性提高一个数量级。**
+“一切皆是权衡”是工程师们在长期实践中总结出的经验共识（而非某条正式的学术定律）。计算机图灵奖得主 Fred Brooks 曾在著名论文 *No Silver Bullet* 中断言：**没有任何一项单一的技术或管理革新，能承诺在十年内将软件的生产率和可靠性提高一个数量级。**
 
 在软件架构的世界里，**根本不存在绝对完美的“最佳方案”，只存在针对特定场景的“最佳权衡”**：
 
@@ -3866,7 +5454,7 @@ VALUES ('doc:hello-system-57-architectural-tradeoffs', '57-architectural-tradeof
 flowchart LR
     subgraph Tradeoff1["权衡一：规范化 vs 查询性能"]
         T1A["高度规范化 (3NF/BCNF)
-彻底消灭数据冗余与更新异常
+消除数据冗余与更新异常
 代价: 复杂查询需要高频 JOIN，吞吐下降"] <==> T1B["反规范化 (冗余冗余字段/宽表)
 单表查询极快，吞吐极高
 代价: 写入时必须多处同步更新，存在不一致风险"]
@@ -3877,7 +5465,7 @@ flowchart LR
 flowchart LR
     subgraph Tradeoff2["权衡二：强一致性 vs 极致吞吐"]
         T2A["悲观锁 / 强事务 (ACID)
-绝对保证名额不超卖
+可靠防止名额超卖
 代价: 高并发下大量线程排队与锁等待"] <==> T2B["最终一致性 / 异步队列排队
 极高并发吞吐，瞬时响应
 代价: 业务逻辑复杂，需异步轮询与补偿退款"]
@@ -3885,7 +5473,31 @@ flowchart LR
 ```
 
 作为一名优秀的软件工程师，评价你的标准从来不是“知道多少时髦的名词”，而是**能否准确评估业务当前所处的阶段与规模，并做出最恰当的工程妥协**。
-', 'public', '2251213429@qq.com', 57, 0, 215, '');
+', 'public', '2251213429@qq.com', 57, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-58-anti-over-engineering', '58-anti-over-engineering', 'doc:hello-system-part-6', '第58章 警惕过度设计：从简单出发，伴随复杂度演进', '# 第58章 警惕过度设计：从简单出发，伴随复杂度演进
@@ -3914,10 +5526,34 @@ flowchart TD
 ```
 
 **优秀的架构是随着业务痛苦“自然生长”出来的，而不是预先臆想出来的。**
-', 'public', '2251213429@qq.com', 58, 0, 215, '');
+', 'public', '2251213429@qq.com', 58, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-59-after-frameworks-disappear', '59-after-frameworks-disappear', 'doc:hello-system-part-6', '第59章 框架消失以后：留在脑海中的永恒规律', '# 第59章 框架消失以后：留在脑海中的永恒规律
+VALUES ('doc:hello-system-59-after-frameworks-disappear', '59-after-frameworks-disappear', 'doc:hello-system-part-6', '第59章 框架消失以后：留在脑海中的核心问题', '# 第59章 框架消失以后：留在脑海中的核心问题
 
 ## 1. 一个思维实验：如果明天所有框架全部消失？
 
@@ -3929,29 +5565,31 @@ VALUES ('doc:hello-system-59-after-frameworks-disappear', '59-after-frameworks-d
 
 如果你记住的仅仅是 `v-model`、`@Transactional` 和 `SELECT ... JOIN` 的语法参数，那么面对一个全新的技术栈（如 React、Svelte、Go、Rust、PostgreSQL、Flutter），你将不得不再次经历痛苦的死记硬背。
 
-但如果你真正理解了隐藏在这些框架背后的**十二大永恒计算机系统底层规律**，你将拥有无视技术变迁的终极迁移能力：
+但如果你真正理解了隐藏在这些框架背后的**软件系统中反复出现的十二个核心问题**，你将拥有一种非常具有迁移价值的分析维度，在面对新技术栈时迅速定位“它正在解决哪一类问题”：
 
 ---
 
-## 2. 软件系统的十二大永恒支柱
+## 2. 软件系统中反复出现的十二个核心问题
 
 ```mermaid
 flowchart TD
-    subgraph Core["软件系统的 12 大永恒支柱"]
+    subgraph Core["软件系统反复出现的 12 个核心问题"]
         C1["1. 状态 (State) 与身份 (Identity)"]
         C2["2. 不变量 (Invariants) 与状态受控跃迁"]
         C3["3. 职责边界 (Boundaries) 与抽象契约 (Contracts)"]
-        C4["4. 声明式映射 (Declarative Mapping: UI = f(state))"]
-        C5["5. 跨边界表示转换 (Data Metamorphosis & Serialization)"]
-        C6["6. 关系数学模型 (Relational Foundations) 与规范化"]
-        C7["7. 索引树结构与多路扇出 (B+ Tree & Cost Optimizer)"]
-        C8["8. 事务原子性与持久化预写日志 (ACID & WAL / ARIES)"]
-        C9["9. 并发竞争控制 (Row Lock / Atomic Update / CAS / OCC)"]
-        C10["10. 信任边界防守与防御性输入验证 (Defensive Validation)"]
-        C11["11. 不可靠网络通信与幂等性保障 (Idempotency & Retries)"]
+        C4["4. 跨边界表示与序列化 (Representation & Serialization)"]
+        C5["5. 声明式状态映射 (Declarative Mapping: UI = f(state))"]
+        C6["6. 数据模型与规范化 (Data Modeling & Normalization)"]
+        C7["7. 持久化与日志 (Persistence & WAL)"]
+        C8["8. 并发竞争控制 (Concurrency Control)"]
+        C9["9. 故障与恢复 (Faults & Recovery)"]
+        C10["10. 信任边界与防御性输入验证 (Trust Boundary & Validation)"]
+        C11["11. 不可靠通信与幂等性保障 (Communication & Idempotency)"]
         C12["12. 系统可观测性与自动化分层测试防护 (Observability & Testing)"]
     end
 ```
+
+需要明确：这十二条**不是永恒的宇宙定律**，而是在大量软件系统中反复出现、被工程实践反复验证过的核心问题与设计维度。
 
 ---
 
@@ -3967,7 +5605,31 @@ flowchart TD
 | **跨网络通信幂等** | HTTP Header: `Idempotency-Key` | 幂等请求头拦截器 | gRPC 幂等元数据拦截 | 客户端去重缓存令牌 |
 
 你看，**语言和框架在变，但解决问题的思想从未改变。**
-', 'public', '2251213429@qq.com', 59, 0, 215, '');
+', 'public', '2251213429@qq.com', 59, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-60-click-again', '60-click-again', 'doc:hello-system-part-6', '第60章 现在，再点击一次“选课”', '# 第60章 现在，再点击一次“选课”
@@ -3997,7 +5659,7 @@ VALUES ('doc:hello-system-60-click-again', '60-click-again', 'doc:hello-system-p
 - **在浏览器端**：你清楚地知道，一次鼠标点击触发了 DOM 事件调度，Vue 3 的响应式代理拦截器捕获了交互意图，`isSubmitting` 状态的跃迁在微任务队列中触发了虚拟 DOM 补丁重绘，将按钮安全置灰；
 - **在网络边界**：你清楚地知道，内存对象被序列化为标准的 JSON 纯文本，封装进符合 RFC 9110 语义的 HTTP POST 报文，携带着安全认证凭证与幂等键跨越网络；
 - **在表现层与业务层**：你清楚地知道，Controller 从安全上下文中提取了真实的李雷身份，严防客户端伪造，并将请求分发给编排用例的 Service。Service 在 Spring `@Transactional` 的 AOP 代理下开启了数据库事务；
-- **在数据库存储引擎**：你清楚地知道，B+ 树主键索引快速定位到了数据页，行级排他锁与原子条件更新（`enrolled < capacity`）在微秒内完成了对超卖的终极阻截，修改后的脏页安睡在 Buffer Pool 中，而保证持久性的 Redo Log 已经顺序刷盘；
+- **在数据库存储引擎**：你清楚地知道，B+ 树主键索引快速定位到了数据页，行级排他锁与原子条件更新（`enrolled < capacity`）在数据库内可靠地防止了超卖，修改后的脏页安睡在 Buffer Pool 中，而保障持久性的 Redo Log 已按配置要求完成持久化；
 - **在回传链路**：你清楚地知道，HTTP 201 Created 响应报文回传浏览器，Promise 决议解冻了前端状态，响应式数据流自动驱动视图局部更新，将“选课成功”的确定性反馈呈现给用户。
 
 ---
@@ -4006,19 +5668,43 @@ VALUES ('doc:hello-system-60-click-again', '60-click-again', 'doc:hello-system-p
 
 计算机软件系统的真正魅力，从来不是记住几百个现成的 API 或快速拼凑出一个玩具项目。
 
-它的魅力在于：**我们通过层层抽象，将复杂、不可靠且混乱的物理现实，分解为一个个清晰、自治且可控的逻辑单元；同时，当系统在任何一个角落发生故障时，我们又拥有能够瞬间穿透所有抽象层、看清底层每一个齿轮如何咬合运转的深刻洞察力。**
+它的魅力在于：**我们通过层层抽象，将复杂、多变且充满不确定性的现实世界，分解为一个个清晰、自治且可控的逻辑单元；同时，当系统在任何一个角落发生故障时，我们又拥有能够穿透层层抽象、看清每个齿轮如何咬合运转的深刻洞察力。**
 
 希望《Hello System · 图解软件系统》能够帮助你在大学生涯乃至未来的工程师道路上，建立起这份坚不可摧、通透严谨的系统视角。
 
 愿你在未来的每一次代码架构与系统创造中，胸有成竹，行稳致远。
-', 'public', '2251213429@qq.com', 60, 0, 215, '');
+', 'public', '2251213429@qq.com', 60, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-appx-a-project-tree', 'appx-a-project-tree', 'doc:book-hello-system', '附录A: Mini Campus 完整工程架构与文件目录', '# 附录A: Mini Campus 完整工程架构与文件目录
 
 ## 1. 现代前后端分离典型目录结构
 
-本附录给出 Mini Campus 校园选课系统在工业界标准的工程目录骨架，供读者在实际项目开发中参考：
+本附录给出 Mini Campus 校园选课系统所采用的一种常见前后端分离工程组织方式，供读者在实际项目开发中参考。需要说明的是：Controller / Service / Repository 的目录划分并不存在唯一的行业标准，不同团队与框架会有不同的合理组织形态：
 
 ```text
 mini-campus/
@@ -4059,7 +5745,31 @@ mini-campus/
     │   └── CampusApplication.java
     └── pom.xml
 ```
-', 'public', '2251213429@qq.com', 61, 0, 215, '');
+', 'public', '2251213429@qq.com', 61, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-appx-b-er-and-ddl', 'appx-b-er-and-ddl', 'doc:book-hello-system', '附录B: 规范化 ER 图与完整 MySQL DDL', '# 附录B: 规范化 ER 图与完整 MySQL DDL
@@ -4162,7 +5872,56 @@ CREATE TABLE enrollments (
     CONSTRAINT uk_student_course UNIQUE (student_id, course_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
-', 'public', '2251213429@qq.com', 62, 0, 215, '');
+
+---
+
+## 3. 认证身份的外部边界说明
+
+读者可能会问：第 41 章的 HTTP API 使用了 `Authorization: Bearer <token>` 与“当前已认证学生”，为什么这张 ER 图里没有 `users` / `accounts` 表？
+
+**本书的 ER 图聚焦于 Mini Campus 的业务域。** 认证账户系统被视为独立的身份基础设施（Identity Infrastructure）：认证层负责验证凭据（签名 Token 或服务端 Session），验证通过后将安全主体（Security Principal）映射为业务域中的 `Student ID`，业务代码只消费这个已认证的学生身份。Token 并不是凭空直接变成 `studentId` 的——中间隔着认证层这座可信桥梁。
+
+```mermaid
+flowchart LR
+    subgraph Identity["身份基础设施 (本书范围之外)"]
+        Account["认证账户 / 凭据存储"]
+        Issuer["凭据签发与验证
+(签名 Token / Session)"]
+    end
+
+    subgraph Business["Mini Campus 业务域 (本 ER 图范围)"]
+        Student["students 表
+(业务学生实体)"]
+    end
+
+    Account --> Issuer
+    Issuer -->|"验证通过后映射为安全主体"| Student
+```
+', 'public', '2251213429@qq.com', 62, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-appx-c-core-sql', 'appx-c-core-sql', 'doc:book-hello-system', '附录C: 核心业务 SQL 手册与执行计划分析', '# 附录C: 核心业务 SQL 手册与执行计划分析
@@ -4204,7 +5963,31 @@ LEFT JOIN enrollments e ON c.id = e.course_id
 GROUP BY c.id, c.name, t.name, c.capacity
 ORDER BY fill_rate_percent DESC;
 ```
-', 'public', '2251213429@qq.com', 63, 0, 215, '');
+', 'public', '2251213429@qq.com', 63, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-appx-d-api-spec', 'appx-d-api-spec', 'doc:book-hello-system', '附录D: RESTful API 契约规范与 DTO 映射矩阵', '# 附录D: RESTful API 契约规范与 DTO 映射矩阵
@@ -4234,7 +6017,31 @@ VALUES ('doc:hello-system-appx-d-api-spec', 'appx-d-api-spec', 'doc:book-hello-s
   }
 }
 ```
-', 'public', '2251213429@qq.com', 64, 0, 215, '');
+', 'public', '2251213429@qq.com', 64, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-appx-e-concept-glossary', 'appx-e-concept-glossary', 'doc:book-hello-system', '附录E: 核心术语与心智模型速查字典', '# 附录E: 核心术语与心智模型速查字典
@@ -4245,29 +6052,77 @@ VALUES ('doc:hello-system-appx-e-concept-glossary', 'appx-e-concept-glossary', '
 - **单向数据流（One-Way Data Flow）**：前端组件化通信规范（Props 自顶向下传递，Events 向上抛出）；
 - **响应式代理（Reactivity Proxy）**：利用 ES6 Proxy 拦截属性读取（track 依赖收集）与写入（trigger 派发更新）；
 - **函数依赖（Functional Dependency）**：属性集 $X$ 的取值唯一确定属性集 $Y$ 的取值，记作 $X \to Y$；
-- **第三范式（3NF）**：消除了非主属性对候选键的部分依赖与传递依赖；
+- **第三范式（3NF）**：对于关系中每个非平凡函数依赖 $X \to A$，至少满足下列条件之一：$X$ 是超键，或 $A$ 是主属性（常见教学直觉：减少非主属性对候选键的不良传递依赖，正式推导见第34章）；
 - **ACID 事务**：原子性（Atomicity）、一致性（Consistency）、隔离性（Isolation）、持久性（Durability）；
-- **预写日志（WAL）**：在内存脏数据页刷盘前，必须先将对应的物理重做日志顺序写入磁盘持久化；
+- **预写日志（WAL）**：在内存脏数据页被持久化之前，必须先将对应的日志记录满足数据库所要求的持久化级别（先日志，后数据页）；
 - **幂等性（Idempotency）**：同一个操作执行多次与执行一次对系统产生的最终副作用完全一致。
-', 'public', '2251213429@qq.com', 65, 0, 215, '');
+', 'public', '2251213429@qq.com', 65, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appx-f-myths-faq', 'appx-f-myths-faq', 'doc:hello-system-part-5', '附录F: 计算机专业常见误区与踩坑 FAQ', '# 附录F: 计算机专业常见误区与踩坑 FAQ
+VALUES ('doc:hello-system-appx-f-myths-faq', 'appx-f-myths-faq', 'doc:book-hello-system', '附录F: 计算机专业常见误区与踩坑 FAQ', '# 附录F: 计算机专业常见误区与踩坑 FAQ
 
 ## 1. 常见技术误区与真相
 
 ### 误区 1：“使用了 `class` 关键字就是面向对象”
-> **真相**：面向对象的核心在于**封装与不变量守护**。如果一个类只有公有字段或无脑生成全部 Getter/Setter，它依然只是披着类外衣的过程式结构体（贫血模型）。
+> **真相**：面向对象常讨论的维度包括身份、状态、行为、封装、消息协作与多态；本书特别强调通过封装维护业务不变量。另外需要注意术语语境：**Anemic Domain Model（贫血领域模型）指的是——一个系统声称采用富领域模型，却把所有业务规则放在外部 Service 中，领域 Entity 只保留数据字段**。它是一种有特定语境的设计取舍，不等同于过程式编程，也不意味着所有数据类都应该拥有行为：DTO、ORM Entity、Persistence Model 本来就可能只有数据与访问器，它们并不因此“错误”。
 
 ### 误区 2：“有了数据库事务，并发就绝对不会超卖”
-> **真相**：事务的 ACID 默认隔离级别（如 Read Committed / Repeatable Read）并不能自动阻止应用层并发读取造成的“丢失更新”。必须配合**行级排他锁（`FOR UPDATE`）**或**带约束的原子条件更新（`WHERE enrolled < capacity`）**才能杜绝超卖。
+> **真相**：仅仅声明使用事务（ACID）并不足以推断并发行为——实际表现取决于具体隔离级别、DBMS 实现（锁 / MVCC / 快照隔离在不同数据库中行为不同）与访问模式。在 Mini Campus 的场景中，可靠的做法是：**带不变量守卫的原子条件更新（`UPDATE ... SET enrolled = enrolled + 1 WHERE id = ? AND enrolled < capacity`）+ `UNIQUE(student_id, course_id)` 唯一约束，并置于同一事务中**。是否还需要额外的行级排他锁，取决于所用数据库的隔离级别与实现。
 
 ### 误区 3：“HTTP POST 方法绝对不能实现幂等”
-> **真相**：HTTP 规范没有将 POST 定义为默认幂等方法，因此通用客户端不能假定任意 POST 请求都可以无条件安全重试。**但是，一个具体的后端 POST API 可以通过引入 `Idempotency-Key` 请求头、唯一业务流水号与去重表，完全实现具备幂等特性的安全重试。**
+> **真相**：HTTP 规范没有将 POST 定义为默认幂等方法，因此通用客户端不能假定任意 POST 请求都可以无条件安全重试。**但是，一个具体的后端 POST API 可以通过引入 `Idempotency-Key` 请求头、唯一业务流水号与去重表，实现具备幂等特性的安全重试。**
 
 ### 误区 4：“有索引的查询一定比没有索引快”
-> **真相**：在数据量极小（如只有几百行）或查询需要读取全表 80% 以上数据的场景下，优化器会认为全表顺序扫描的代价反而低于通过 B+ 树索引反复回表（Random I/O）的代价，此时索引不会被选用。
-', 'public', '2251213429@qq.com', 66, 0, 215, '');
+> **真相**：当查询需要访问表中较大比例的数据时，优化器可能判断顺序扫描的成本低于通过索引进行大量随机访问或回表（Random I/O）的成本，此时索引不会被选用。具体选择由统计信息、成本模型、缓存状态与查询形态共同决定，并不存在普适的固定比例阈值。
+', 'public', '2251213429@qq.com', 66, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-appx-g-recommended-roadmap', 'appx-g-recommended-roadmap', 'doc:book-hello-system', '附录G: 计算机专业推荐经典书单与进阶路线', '# 附录G: 计算机专业推荐经典书单与进阶路线
@@ -4300,20 +6155,68 @@ flowchart LR
 
     Y2 --> Y3 --> Y4
 ```
-', 'public', '2251213429@qq.com', 67, 0, 215, '');
+', 'public', '2251213429@qq.com', 67, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-appx-h-verification-checklist', 'appx-h-verification-checklist', 'doc:book-hello-system', '附录H: 生产环境全量发布与质量验收自检清单', '# 附录H: 生产环境全量发布与质量验收自检清单
 
 ## 1. 生产发布自检表
 
-- [x] **全书节点完整性**：79 个文档节点全部在位，目录层级无断链；
+- [x] **全书节点完整性**：78 个生成节点全部在位（书根 + 序言 + 序章 + 6 部分 + 60 章 + 8 附录 + 后记），目录层级无断链；
 - [x] **零装饰性 Emoji**：全书正文杜绝任何 AI 装饰性表情；
 - [x] **LaTeX / KaTeX 语法**：公式两端空格规范，反斜杠转义完整；
 - [x] **Mermaid 图表语法**：所有节点均有完整定义，无死循环引用；
-- [x] **技术口径严密性**：杜绝固定 320ms、物理扇区、假 OCC 与 Zero Trust 误用；
+- [x] **技术口径严密性**：杜绝伪精确耗时数字、物理扇区伪底层论、假 OCC 与 Zero Trust 误用；
 - [x] **SQL 事务隔离**：正文代码块内的 `COMMIT;` 与最外层部署 SQL 事务边界严格隔离。
-', 'public', '2251213429@qq.com', 68, 0, 215, '');
+', 'public', '2251213429@qq.com', 68, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-epilogue', 'epilogue', 'doc:book-hello-system', '后记: 写给未来的软件架构师', '# 后记: 写给未来的软件架构师
@@ -4328,11 +6231,35 @@ VALUES ('doc:hello-system-epilogue', 'epilogue', 'doc:book-hello-system', '后�
 
 **AI 可以帮你写出具体的代码片段，但它无法替你做出系统级的架构决策。**
 
-当线上系统发生死锁崩溃时，当网络抖动引发重复扣费时，当业务规模增长 100 倍导致数据库瘫痪时，能够从蛛丝马迹中瞬间洞察全链路矛盾、做出正确权衡取舍的，永远是那个在脑海中建立起完整软件系统图景的工程师。
+当线上系统发生死锁崩溃时，当网络抖动引发重复扣费时，当业务规模增长 100 倍导致数据库瘫痪时，能够从蛛丝马迹中迅速洞察全链路矛盾、做出正确权衡取舍的，往往是那个在脑海中建立起完整软件系统图景的工程师。
 
 希望《Hello System》不仅为你解答了大学课程中的疑惑，更能在你心中埋下一颗追求严谨、追求优雅、追求透彻理解的种子。
 
 恭喜你完成了整本书的学习。愿你在未来的软件创造之路上，乘风破浪，创造出真正属于你的精彩系统！
-', 'public', '2251213429@qq.com', 69, 0, 215, '');
+', 'public', '2251213429@qq.com', 69, 0, 215, '')
+ON CONFLICT(id) DO UPDATE SET
+  slug = excluded.slug,
+  parent_id = excluded.parent_id,
+  title = excluded.title,
+  body_md = excluded.body_md,
+  visibility = excluded.visibility,
+  author_email = excluded.author_email,
+  sort_order = excluded.sort_order,
+  is_book = excluded.is_book,
+  cover_hue = excluded.cover_hue,
+  summary = excluded.summary,
+  updated_at = CASE
+    WHEN docs.slug IS NOT excluded.slug
+      OR docs.parent_id IS NOT excluded.parent_id
+      OR docs.title IS NOT excluded.title
+      OR docs.body_md IS NOT excluded.body_md
+      OR docs.visibility IS NOT excluded.visibility
+      OR docs.sort_order IS NOT excluded.sort_order
+      OR docs.is_book IS NOT excluded.is_book
+      OR docs.cover_hue IS NOT excluded.cover_hue
+      OR docs.summary IS NOT excluded.summary
+    THEN CURRENT_TIMESTAMP
+    ELSE docs.updated_at
+  END;
 
 COMMIT;

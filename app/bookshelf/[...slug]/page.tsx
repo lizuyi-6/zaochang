@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ArrowLeft, ArrowRight, Bookmark, BookOpen, ChevronRight, FileText, Folder, Lock } from "lucide-react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   bookTree,
   currentMember,
@@ -79,7 +79,15 @@ export default async function BookPage({ params }: PageProps) {
   const member = await currentMember();
   // fail-closed:书不存在或对当前访问者不可见一律 404,不暴露其存在性。
   const found = await findInBook(slugs, member);
-  if (!found) notFound();
+  if (!found) {
+    // V1 Freeze 兼容重定向:附录F 曾错误挂载在第五部分之下,
+    // parent 修复后稳定 URL 为 /bookshelf/hello-system/appx-f-myths-faq。
+    // 旧层级 URL 永久 301 到新地址,不静默制造 404。
+    if (slugs.length === 3 && slugs[0] === "hello-system" && slugs[1] === "part-5" && slugs[2] === "appx-f-myths-faq") {
+      redirect("/bookshelf/hello-system/appx-f-myths-faq");
+    }
+    notFound();
+  }
 
   const { book, doc } = found;
   const tree = await bookTree(book, member);
