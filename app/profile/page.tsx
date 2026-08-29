@@ -7,11 +7,10 @@ import { getChatGPTUser } from "../chatgpt-auth";
 import { AnimatedNumber } from "../components/animated-number";
 import { ProductCard } from "../components/product-card";
 import { products as showcaseProducts, type Product } from "../lib/community-data";
+import { hydrateProductRow } from "../lib/product-hydrate";
 
 export const metadata: Metadata = { title: "创作者主页" };
 export const dynamic = "force-dynamic";
-
-const accents = { coral: "#ff5c3d", mint: "#b9ecc8", blue: "#92c6ef", yellow: "#f1ca51", ink: "#171816" } as const;
 
 export default async function ProfilePage() {
   const user = await getChatGPTUser();
@@ -30,10 +29,7 @@ export default async function ProfilePage() {
     db.prepare("SELECT COUNT(*) AS count FROM comments WHERE user_email = ?").bind(user.email).first<{ count: number }>(),
     db.prepare("SELECT COUNT(*) AS count FROM community_actions WHERE user_email = ? AND kind = 'join_circle'").bind(user.email).first<{ count: number }>(),
   ]);
-  const persistedWorks: Product[] = productResult.results.map((row) => {
-    const theme = (["coral", "mint", "blue", "yellow", "ink"].includes(String(row.coverTheme)) ? String(row.coverTheme) : "coral") as Product["coverTheme"];
-    return { id: Number(row.id), ownerName: String(row.ownerName), ownerInitial: name[0], title: String(row.title), description: String(row.description), longDescription: String(row.description), category: String(row.category), demoType: String(row.demoType), demoUrl: row.demoUrl ? String(row.demoUrl) : null, coverTheme: theme, price: Number(row.price), pricingModel: (["free", "one_time", "per_use"].includes(String(row.pricingModel)) ? String(row.pricingModel) : "free") as Product["pricingModel"], likes: Number(row.likes), plays: Number(row.plays), image: row.imageUrl ? String(row.imageUrl) : "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1600&q=88", accent: accents[theme], release: String(row.createdAt), tags: [String(row.category), "独立创作"] };
-  });
+  const persistedWorks: Product[] = productResult.results.map((row) => hydrateProductRow(row, { release: String(row.createdAt), tags: [String(row.category), "独立创作"], ownerInitial: name[0] }));
   const works = founder
     ? [...showcaseProducts.filter((product) => product.founderOwned), ...persistedWorks]
     : persistedWorks;

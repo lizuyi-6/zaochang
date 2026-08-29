@@ -4,11 +4,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
   bookTree,
+  buildPathByLeafSlug,
+  collectLeaves,
   currentMember,
   docBreadcrumbs,
   findInBook,
   getBookContinueReading,
   getChapterParagraph,
+  injectChapterHeadingIds,
   renderDocHtml,
   type DocNode,
   type DocRow,
@@ -37,19 +40,6 @@ import "@fontsource/noto-serif-sc/600.css";
 export const dynamic = "force-dynamic";
 
 type PageProps = { params: Promise<{ slug: string[] }> };
-
-// 拍平书的目录树为"叶子章节"序列(非分段容器),用于右侧进度 N/总。
-function collectLeaves(nodes: DocNode[]): DocNode[] {
-  const out: DocNode[] = [];
-  const walk = (ns: DocNode[]) => {
-    for (const n of ns) {
-      if (n.children.length > 0) walk(n.children);
-      else out.push(n);
-    }
-  };
-  walk(nodes);
-  return out;
-}
 
 function TocBranch({ nodes, base, activeId, depth = 0 }: { nodes: DocNode[]; base: string; activeId: string; depth?: number }) {
   if (nodes.length === 0) return null;
@@ -99,38 +89,16 @@ export default async function BookPage({ params }: PageProps) {
   const initialParagraph = member && !isCover ? await getChapterParagraph(member, book.id, doc.id) : null;
 
   // 正文 HTML:章节页给 h2/h3 注入稳定 id(ch-N),供右栏本章目录锚定 + scroll-spy。
-  // renderDocHtml 经 sanitize 后 h2/h3 为裸标签(无属性),正则替换安全;不动安全消毒配置。
-  // 书籍上下文:把 MkDocs 搬运来的 .md 相对链接重写成造场路由。pathByLeafSlug 从目录树
-  // 收集"叶子章节 slug → 书内完整路径",供 renderDocHtml 重写 NN-slug.md 形式链接。
-  const pathByLeafSlug = new Map<string, string>();
-  {
-    const walk = (nodes: DocNode[], prefix: string[]) => {
-      for (const n of nodes) {
-        const path = [...prefix, n.slug];
-        if (n.children.length > 0) walk(n.children, path);
-        else if (!pathByLeafSlug.has(n.slug)) pathByLeafSlug.set(n.slug, path.join("/"));
-      }
-    };
-    walk(tree, []);
-  }
-  const headings: { id: string; text: string; level: number }[] = [];
+  // 书籍上下文:把 MkDocs 搬运来的 .md 相对链接重写成造场路由(路径表从目录树收集)。
+  const pathByLeafSlug = buildPathByLeafSlug(tree);
   let bodyHtml = doc.bodyMd.trim().length > 0
     ? renderDocHtml(doc.bodyMd, { bookSlug: book.slug, pathByLeafSlug })
     : "";
+  const headings: { id: string; text: string; level: number }[] = [];
   if (!isCover && bodyHtml) {
-    let hi = 0;
-    bodyHtml = bodyHtml.replace(/<(h[23])>([\s\S]*?)<\/\1>/g, (m, tag: string, inner: string) => {
-      // inner 里 marked 转义过的实体需解码回纯文本,否则右栏目录把 & 显示成字面 &amp;。
-      // &amp; 必须最后解码,避免 &amp;lt; 这类被二次解码成 <。
-      const text = inner.replace(/<[^>]+>/g, "")
-        .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
-        .replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
-        .trim();
-      if (!text) return m;
-      const id = `ch-${hi++}`;
-      headings.push({ id, text, level: tag === "h2" ? 2 : 3 });
-      return `<${tag} id="${id}">${inner}</${tag}>`;
-    });
+    const injected = injectChapterHeadingIds(bodyHtml);
+    bodyHtml = injected.html;
+    headings.push(...injected.headings);
   }
 
   // 右栏章节进度:当前 doc 在叶子章节序列中的位置。

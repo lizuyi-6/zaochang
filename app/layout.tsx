@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { isAdminEmail, isFounderEmail } from "./api/_lib/access-control";
 import { database } from "./api/_lib/community";
+import { memberInitial } from "./lib/format";
 import { getChatGPTUser } from "./chatgpt-auth";
 import { SiteShell } from "./components/site-shell";
 import "./globals.css";
@@ -25,7 +26,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     ? {
         signedIn: true,
         displayName: user.displayName,
-        initial: (user.displayName.trim()[0] || "造").toUpperCase(),
+        initial: memberInitial(user.displayName),
         isAdmin: isAdminEmail(user.email),
         isFounder: isFounderEmail(user.email),
         memberNumber,
