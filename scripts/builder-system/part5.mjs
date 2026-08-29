@@ -1,201 +1,291 @@
 // scripts/builder-system/part5.mjs
-// 第五部分：真实系统开始反抗 (47 ~ 55)
-// 全量技术修订与规范化完整版本 (全 9 章高密度深度正文)
+// 《Hello System · 图解软件系统》第五部分：真实系统开始反抗 (第 47 ~ 55 章)（全量教材化深度扩写版本）
 
-export const part5Docs = [
-  {
-    id: "doc:hello-system-part-5",
-    slug: "part-5",
-    parentId: "'doc:book-hello-system'",
-    title: "第五部分 · 真实系统开始反抗",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 7,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: ""
-  },
-  {
-    id: "doc:hello-system-47-defensive-validation",
-    slug: "47-defensive-validation",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第47章 信任边界：为什么服务器必须重新验证请求？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 1,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第47章 信任边界：为什么服务器必须重新验证请求？
+const part5Docs = [];
 
-## 1. 客户端与服务端的信任边界
+// 顶层部分节点
+part5Docs.push({
+  id: "doc:hello-system-part-5",
+  slug: "part-5",
+  parentId: "'doc:book-hello-system'",
+  title: "第五部分: 真实系统开始反抗 (47~55)",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 5,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第五部分: 真实系统开始反抗 (47~55)
 
-在 Web 应用中，运行在用户浏览器上的前端界面处于不可信环境。攻击者或脚本可以完全绕过前端 UI 逻辑，直接向后端端点发送构造好的 HTTP 报文：
+本部分聚焦于**分布式网络与企业级生产环境中的高可靠性与防御性设计**。
 
-- 提交不合法的负数或格式错误的字段；
-- 尝试伪造其他用户的身份 ID；
-- 在请求体中附带未经授权的私有字段。
+真实世界的软件系统绝非运行在风平浪静的理想实验室内。我们将直面客户端恶意篡改、高并发争抢名额、网络丢包超时重试、服务器突然断电崩溃以及多环境部署差异等现实挑战。我们将深入推导信任边界校验、事务异常传播与回滚机制、防抖/节流/幂等性治理、原子条件更新、WAL 崩溃恢复算法、结构化日志可观测性与测试金字塔质量防护网。
+`
+});
 
-#### 核心原则：
-> **前端校验的主要目的在于提升正常用户的交互体验（即时反馈、减少不必要的网络往返），不能作为系统安全的授权依据。**
-> 后端服务处于系统的信任边界之内，必须对所有外部传入的数据执行严格的输入验证、身份认证与权限检查。
+// 第 47 章
+part5Docs.push({
+  id: "doc:hello-system-47-defensive-validation",
+  slug: "47-defensive-validation",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第47章 信任边界：为什么服务器必须重新验证请求？",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 47,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第47章 信任边界：为什么服务器必须重新验证请求？
+
+## 1. 客户端与服务端的信任边界（Trust Boundary）
+
+在 Web 应用中，运行在用户浏览器上的前端 JavaScript 代码处于**完全不可控的外部不安全环境**中。
+
+任何一个懂一点基础技术的用户，都可以打开浏览器的“开发者工具（F12）”，或者使用 Postman、curl 等命令行工具，完全绕过前端 UI 上的所有按钮置灰和表单校验逻辑，直接向后端端点发送恶意构造的 HTTP 报文：
+
+\`\`\`bash
+# 恶意攻击者直接用 curl 伪造请求，强行选修非法课程
+curl -X POST https://www.aetherstudio.top/api/enrollments \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer <stolen_token>" \\
+  -d '{"courseId": -9999}'
+\`\`\`
 
 \`\`\`mermaid
 flowchart LR
-    Browser["不可信客户端\n(前端表单校验: 仅用于优化用户体验)"] -->|跨越网络边界| Server["可信后端服务\n(执行鉴权、格式校验与不变量判定)"]
-    Server -->|合法操作| DB[(数据库持久化)]
+    subgraph Untrusted["不可信区域 (Untrusted Zone)"]
+        Browser["用户浏览器 / 爬虫脚本 / Postman"]
+    end
+
+    subgraph Boundary["信任边界 (Trust Boundary)"]
+        Gateway["API 网关 / 身份认证过滤器 / 参数校验切面"]
+    end
+
+    subgraph Trusted["可信受保护区域 (Protected Core)"]
+        Service["后端业务服务 (Service)"]
+        DB[("核心数据库")]
+    end
+
+    Browser -->|跨越公网发送请求| Gateway
+    Gateway -->|校验失败 (400/401/403)| Reject["直接拦截并拒绝"]
+    Gateway -->|校验通过| Service
+    Service --> DB
 \`\`\`
 
 ---
 
-## 2. 概念小贴士：这和“零信任（Zero Trust）”是一回事吗？
+## 2. 前端校验与后端校验的本质分工
 
-> **说明**：
-> 这里讨论的是**客户端与服务端之间的基础信任边界与输入验证**。
-> **零信任架构（Zero Trust Architecture, 如 NIST SP 800-207 所定义）** 是一个更为广泛的企业安全战略体系，其核心原则是“持续验证、永不隐式信任”，涵盖身份微隔离、网络分段、设备合规性持续评估等多维度安全机制，二者不应混淆。
-`
-  },
-  {
-    id: "doc:hello-system-48-exception-and-rollback",
-    slug: "48-exception-and-rollback",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第48章 如果程序运行到一半失败了呢？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 2,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第48章 如果程序运行到一半失败了呢？
-
-## 1. 异常传播与事务回滚机制
-
-当业务用例在执行过程中遇到错误时（如学生已被停课处分或数据库唯一键冲突），系统通过抛出异常中断当前流程：
-
-\`\`\`mermaid
-sequenceDiagram
-    autonumber
-    participant Ctrl as Controller
-    participant Svc as Service (@Transactional)
-    participant DB as 数据库事务
-
-    Ctrl->>Svc: enroll(studentId, courseId)
-    Note over Svc: 开启数据库事务 BEGIN
-    Svc->>DB: 扣减名额成功
-    Note over Svc: 业务规则校验失败，抛出 BusinessException!
-    Note over Svc: 事务管理器捕获未处理的运行时异常，发起 ROLLBACK
-    Svc->>DB: 发送 ROLLBACK 指令，撤销已执行的更新
-    Svc-->>Ctrl: 异常向上抛出
-    Note over Ctrl: 全局异常处理器 (@RestControllerAdvice) 捕获并封装为 409 JSON 响应
-\`\`\`
-
----
-
-## 2. Spring 声明式事务的回滚规则说明
-
-【以 Spring Framework 为例】：
-- 默认情况下，Spring 声明式事务（\`@Transactional\`）仅在遇到未捕获的 **\`RuntimeException\`** 和 **\`Error\`** 时自动触发事务回滚；
-- 对于受检异常（Checked Exception，继承自 \`Exception\`），默认**不会**触发回滚，除非显式指定 \`@Transactional(rollbackFor = Exception.class)\`；
-- 如果业务代码在内部用 \`try-catch\` 捕获并吞掉了异常，外部事务管理器将感知不到失败，事务可能依然被正常提交。
-`
-  },
-  {
-    id: "doc:hello-system-49-http-status-codes-in-action",
-    slug: "49-http-status-codes-in-action",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第49章 HTTP 200并不代表所有事情都成功",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 3,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第49章 HTTP 200并不代表所有事情都成功
-
-## 1. HTTP 状态码的语义化实践
-
-在 REST 风格 API 设计中，准确使用 HTTP 状态码有助于反向代理、API 网关、监控告警和客户端正确理解请求结果。
-
-| 状态码 | 标准定义 (RFC 9110) | Mini Campus 选课系统中的典型使用场景 |
+| 校验层级 | 核心目标与定位 | 典型场景 |
 | :--- | :--- | :--- |
-| **200 OK** | 请求已成功处理 | 成功查询课程列表或学生课表 |
-| **201 Created** | 资源已成功创建 | 成功创建一条新的选课记录 |
-| **204 No Content** | 请求成功，无响应体内容 | 成功退选课程或删除资源 |
-| **400 Bad Request** | 客户端请求报文存在语法或格式错误 | 请求 Body JSON 格式不合法或必填字段缺失 |
-| **401 Unauthorized** | 请求缺乏有效身份认证凭据 | 未携带 Token 或 Token 已失效 |
-| **403 Forbidden** | 服务器理解请求但拒绝授权访问 | 学生尝试调用管理员专用的批量导入接口 |
-| **404 Not Found** | 目标资源未找到 | 请求的课程 ID 在系统中不存在 |
-| **409 Conflict** | 请求与当前资源的状态发生冲突 | 选课时名额已满，或已选过该课程导致冲突 |
-| **422 Unprocessable** | 请求语法正确但包含语义错误 | 提交的选课学分超出学期上限约束 |
-| **500 Internal Error** | 服务器遇到未预料的情况导致无法完成请求 | 数据库网络断开等未捕获的系统内部故障 |
+| **前端校验（Client-side Validation）** | **优化用户体验（UX）**：在用户输入时提供毫秒级的即时视觉反馈，减少不必要的无效网络往返 | 检查手机号格式、必填项高亮、密码强度提示 |
+| **后端校验（Server-side Validation）** | **捍卫系统安全与数据完整性**：绝对不信任任何客户端输入，构筑不可逾越的安全底线 | 校验业务实体是否存在、权限范围审查、业务不变量判别 |
+
+---
+
+## 3. 声明式参数校验规范（Bean Validation / JSR-380）
+
+在 Java 后端中，我们使用标准的 Bean Validation 注解对 Request DTO 进行声明式约束：
+
+\`\`\`java
+public record EnrollRequest(
+    @NotNull(message = "课程 ID 不能为空")
+    @Positive(message = "课程 ID 必须为正整数")
+    Integer courseId
+) {}
+\`\`\`
+
+在 Controller 中通过 \`@Valid\` 注解激活校验，非法参数在进入业务 Service 之前将被框架自动拦截并返回 \`400 Bad Request\`。
+
+---
+
+## 4. 概念小贴士：这和“零信任（Zero Trust）”是一回事吗？
+
+> **说明**：这里讨论的是客户端与服务端之间的基础信任边界与输入验证。零信任架构（Zero Trust Architecture, 如 NIST SP 800-207 所定义）是一个更为广泛的企业安全战略体系，包含“持续验证、永不信任”的动态访问控制与微隔离。二者不应混淆。
 `
-  },
-  {
-    id: "doc:hello-system-50-idempotency-and-repeated-clicks",
-    slug: "50-idempotency-and-repeated-clicks",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第50章 如果用户连续点十次按钮呢？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 4,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第50章 如果用户连续点十次按钮呢？
+});
 
-## 1. 概念澄清：防抖、节流与幂等性
+// 第 48 章
+part5Docs.push({
+  id: "doc:hello-system-48-exceptions-and-transactions",
+  slug: "48-exceptions-and-transactions",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第48章 异常与事务回滚：当事情开始出错",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 48,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第48章 异常与事务回滚：当事情开始出错
 
-必须清晰区分前端交互控制与服务端幂等保证：
+## 1. 检查型异常与非检查型异常的哲学
 
-1. **防重复提交保护（In-Flight Guard）**：用户点击后立即将按钮置为禁用状态，防止用户在等待期间连续触发；
-2. **防抖（Debounce）**：在事件被触发后等待特定时间段，若期间再次触发则重新计时（常用于搜索输入框联想）；
-3. **节流（Throttle）**：在固定时间间隔内只允许执行一次处理（常用于滚动或窗口尺寸改变事件）；
-4. **服务端幂等性（Idempotency）**：同一个操作无论在服务端执行一次还是多次，对系统状态产生的最终影响均保持一致。
+在 Java 异常体系中，异常被划分为两大阵营：
 
 \`\`\`mermaid
 flowchart TD
-    subgraph ClientProtection ["客户端保护 (改善体验)"]
-        Click["用户频繁点击"] --> Guard["按钮 Disabled 状态控制"]
+    Throwable["Throwable"] --> Error["Error (严重系统错误，如 OutOfMemoryError)"]
+    Throwable --> Exception["Exception"]
+    Exception --> Checked["检查型异常 (Checked Exception, 如 IOException, SQLException)\n强制要求显式 try-catch 或 throws 声明"]
+    Exception --> RuntimeException["非检查型运行时异常 (Unchecked RuntimeException)\n例如: NullPointerException, BusinessException"]
+\`\`\`
+
+---
+
+## 2. Spring 声明式事务（\`@Transactional\`）的回滚机制
+
+在 Spring 框架中，\`@Transactional\` 的底层是由 **AOP 动态代理（AOP Proxy）** 驱动的：
+
+\`\`\`mermaid
+flowchart TD
+    Invoke["Controller 调用 Service 方法"] --> Proxy["TransactionInterceptor (事务拦截器切面)"]
+    Proxy --> Begin["1. 开启底层数据库连接事务 (setAutoCommit(false))"]
+    Begin --> Target["2. 执行目标业务方法 enrollmentService.enroll()"]
+    Target --> CheckEx{"业务执行过程中是否抛出异常 ?"}
+    CheckEx -->|正常无异常| Commit["3. 拦截器调用 transactionManager.commit() 提交事务"]
+    CheckEx -->|抛出 RuntimeException| Rollback["4. 捕获异常，调用 transactionManager.rollback() 执行回滚！"]
+\`\`\`
+
+> **重要避坑指南**：
+> 1. Spring 的 \`@Transactional\` 默认**仅对 \`RuntimeException\` 和 \`Error\` 自动触发回滚**。若抛出检查型异常（如 \`SQLException\`），必须显式配置 \`@Transactional(rollbackFor = Exception.class)\`；
+> 2. **自调用陷阱**：在同一个类内部直接通过 \`this.method()\` 调用带有 \`@Transactional\` 的方法，会绕过 AOP 代理对象，导致事务注解完全失效！
+`
+});
+
+// 第 49 章
+part5Docs.push({
+  id: "doc:hello-system-49-http-status-codes-and-errors",
+  slug: "49-http-status-codes-and-errors",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第49章 统一错误处理与 HTTP 语义映射",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 49,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第49章 统一错误处理与 HTTP 语义映射
+
+## 1. 为什么不能向前端直接抛出堆栈跟踪？
+
+当后端发生异常时，如果不加捕获，默认会向客户端返回一个包含数百行 Java 类名与代码行号的 \`500 Internal Server Error\` HTML 错误页。
+
+这具有极大的危害：
+1. **安全信息泄露**：向攻击者暴露了服务器内部的操作系统路径、类库版本与数据库表结构；
+2. **破坏前端解析**：前端原本期望接收 JSON，收到 HTML 页面后会导致前端 JavaScript JSON 解析抛出语法错误。
+
+---
+
+## 2. 全局异常处理器（\`@RestControllerAdvice\`）
+
+通过全局切面将业务异常统一映射为标准的 RFC 7807 错误响应结构：
+
+\`\`\`java
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse("BUSINESS_CONFLICT", e.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {
+        String msg = e.getBindingResult().getAllErrors().get(0).getDefaultMessage();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_ARGUMENT", msg));
+    }
+}
+\`\`\`
+`
+});
+
+// 第 50 章（严格区分 In-Flight Guard、Debounce、Throttle 与 Idempotency）
+part5Docs.push({
+  id: "doc:hello-system-50-idempotency-and-repeated-clicks",
+  slug: "50-idempotency-and-repeated-clicks",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第50章 如果用户连续点十次按钮呢？——防抖、节流与幂等性",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 50,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第50章 如果用户连续点十次按钮呢？——防抖、节流与幂等性
+
+## 1. 概念澄清：四大防御机制的精准辨析
+
+面对高频点击与重复请求，必须清晰区分四个不同层级的防御手段：
+
+\`\`\`mermaid
+flowchart TD
+    subgraph Frontend["前端交互层"]
+        Guard["1. 防重复提交保护 (In-Flight Guard)\n用户点击后立即将按钮置灰 (disabled)，并在网络请求完成 (Promise 决议) 前阻止一切二次点击"]
+        Debounce["2. 防抖 (Debounce)\n在事件被触发后等待 N 毫秒，若期间再次触发则重新计时 (常用于搜索输入框联想)"]
+        Throttle["3. 节流 (Throttle)\n在固定的时间窗口内，无论事件触发多少次，只允许执行一次处理 (常用于页面滚动监听)"]
     end
 
-    subgraph ServerIdempotency ["服务端幂等机制 (保障数据一致性)"]
-        Req["网络请求 (可能因超时发生重试)"] --> CheckToken{"携带 Idempotency-Key 检查"}
-        CheckToken -->|已处理过| CachedResp["直接返回上次成功结果 (不重复扣名额)"]
-        CheckToken -->|首次处理| Process["执行选课事务"]
+    subgraph Backend["后端协议与业务层"]
+        Idempotency["4. 服务端幂等性 (Idempotency)\n同一个请求不论在服务端执行 1 次还是连续重试 10 次，对系统状态产生的最终副作用完全相同"]
     end
 \`\`\`
 
 ---
 
-## 2. 为什么服务端必须具备幂等处理能力？
+## 2. 为什么仅靠前端按钮置灰远远不够？
 
-在不可靠的网络环境中，客户端发起选课后可能因网络抖动未收到响应。客户端或网关发起重试时，服务端若无幂等保护，可能导致重复扣费或状态异常。
+前端把按钮置灰（In-Flight Guard）只能防范普通用户的误触。
 
-通过引入 **Idempotency-Key** 或利用数据库业务唯一索引（\`UNIQUE(student_id, course_id)\`），系统能够确保重复提交不会导致非预期的副作用。
+在不可靠的现实网络中，当客户端发起 POST 请求后，由于网络抖动，服务端的响应未能按时返回，导致前端发生超时（Timeout）。
+
+此时客户端不知道服务端的选课操作到底是成功了还是失败了。如果客户端自动发起网络重试，就会导致同一个操作向服务端发送了两次！
+
+---
+
+## 3. 服务端幂等性（Idempotency Token）设计
+
+对于非幂等操作（如创建选课流水），客户端在发起请求前先获取或生成一个全局唯一的 **幂等令牌（\`Idempotency-Key\`）**：
+
+\`\`\`http
+POST /api/enrollments HTTP/1.1
+Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d
+Content-Type: application/json
+
+{"courseId": 2048}
+\`\`\`
+
+服务端处理流程：
+1. 服务端收到请求后，先将 \`Idempotency-Key\` 存入具有原子性的去重存储（如 Redis 分布式锁或数据库唯一键表）；
+2. 若该 Key 已存在，直接返回上一次的处理结果或拒绝重复执行；
+3. 处理完成后缓存响应结果，确保无论重试多少次，最终都只产生一次选课流水。
 `
-  },
-  {
-    id: "doc:hello-system-51-cas-and-optimistic-locking",
-    slug: "51-cas-and-optimistic-locking",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第51章 如果两个人争抢最后一个名额呢？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 5,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第51章 如果两个人争抢最后一个名额呢？
+});
+
+// 第 51 章（原子条件更新主线与 OCC 对比）
+part5Docs.push({
+  id: "doc:hello-system-51-cas-and-optimistic-locking",
+  slug: "51-cas-and-optimistic-locking",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第51章 如果两个人争抢最后一个名额呢？——原子条件更新与乐观并发控制",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 51,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第51章 如果两个人争抢最后一个名额呢？——原子条件更新与乐观并发控制
 
 ## 1. 高并发选课的原子条件更新
 
-在高并发场景下，使用行级排他锁（\`SELECT ... FOR UPDATE\`）可能在高争用时产生锁等待开销。
+在高并发场景下，使用行级排他锁（\`SELECT ... FOR UPDATE\`）可能在高争用时产生锁等待与排队开销。
 
-一种常用且高效的方案是利用数据库 Update 语句自身的行级原子性执行**条件更新**：
+一种常用且极高吞吐的方案是利用数据库 Update 语句自身的行级原子性执行**条件更新（Atomic Conditional Update）**：
 
 \`\`\`sql
--- 在同一事务中执行
+-- 在数据库引擎内部原子执行判别与递增
 UPDATE courses 
 SET enrolled = enrolled + 1 
 WHERE id = 2048 AND enrolled < capacity;
@@ -215,7 +305,7 @@ public EnrollResult enroll(int studentId, int courseId) {
         enrollmentRepository.insert(studentId, courseId);
         return EnrollResult.success();
     } catch (DuplicateKeyException e) {
-        throw new BusinessException("已选修该课程");
+        throw new BusinessException("您已选修该课程");
     }
 }
 \`\`\`
@@ -225,161 +315,295 @@ public EnrollResult enroll(int studentId, int courseId) {
 ## 2. 关于基于版本号的乐观并发控制（OCC）
 
 > **说明**：
-> 若采用标准的**基于版本号的乐观锁（Optimistic Locking）**，实体表中需包含 \`version\` 字段：
+> 若采用标准的**基于版本号的乐观并发控制（Optimistic Concurrency Control, OCC）**，实体表中需包含 \`version\` 字段：
 > \`UPDATE courses SET enrolled = ?, version = version + 1 WHERE id = ? AND version = ?;\`
-> 若更新失败（影响行数为 0），应用层需捕获冲突并决定是否重试。在简单的计数器扣减场景中，直接使用带业务条件（\`enrolled < capacity\`）的原子 Update 往往更为简洁有效。
+> 若更新失败（影响行数为 0），应用层需捕获冲突并在循环中决定是否重试。
+> 在选课这种高争用计数器场景中，直接使用带业务约束（\`enrolled < capacity\`）的原子 Update 往往更加简洁、高效。
 `
-  },
-  {
-    id: "doc:hello-system-52-wal-and-crash-recovery",
-    slug: "52-wal-and-crash-recovery",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第52章 如果系统重启，数据为什么还在？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 6,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第52章 如果系统重启，数据为什么还在？
+});
 
-## 1. 预写日志（WAL, Write-Ahead Logging）原理
+// 第 52 章（WAL 崩溃恢复与 ARIES 算法心智模型）
+part5Docs.push({
+  id: "doc:hello-system-52-wal-and-crash-recovery",
+  slug: "52-wal-and-crash-recovery",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第52章 如果服务器在写入时突然断电呢？——WAL 与崩溃恢复",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 52,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第52章 如果服务器在写入时突然断电呢？——WAL 与崩溃恢复
 
-在数据库管理系统中，若每次事务提交都将修改的数据页（通常为 16KB）同步写回磁盘的物理数据文件，将产生大量的随机 I/O，严重制约吞吐量。
+## 1. 缓冲池策略与数据持久化矛盾
 
-**WAL 原则** 规定：**数据页的修改可以在内存中进行，但在这些脏页（Dirty Page）被写入磁盘数据文件之前，相关的重做日志（Redo Log）必须先达到要求的持久化状态。**
+现代数据库为了实现每秒数万次的读写性能，采用 **STEAL + NO-FORCE** 缓冲池管理策略：
+- **NO-FORCE**：事务提交时，**不需要**强制将内存中的脏数据页刷回磁盘数据文件；
+- **STEAL**：未提交事务修改的脏页，在内存紧张时**允许**被后台线程提前刷入磁盘数据文件。
+
+这带来了两大崩溃风险：
+1. 事务已 COMMIT，但数据页尚在内存中未来得及刷盘，服务器断电导致数据丢失；
+2. 事务尚未 COMMIT，但其脏页已被提前刷入磁盘，服务器断电导致未完成的数据残留在数据文件中。
 
 ---
 
-## 2. 数据更新与恢复流程（以 MySQL InnoDB 为例）
+## 2. 经典的 ARIES 崩溃恢复三大阶段
+
+数据库重启时，存储引擎依据 **WAL（预写重做日志与回滚日志）** 执行标准的 ARIES 恢复流程：
 
 \`\`\`mermaid
 flowchart TD
-    Update["1. 事务修改内存 Buffer Pool 中的数据页"] --> Dirty["数据页变为脏页 (Dirty Page)"]
-    Update --> RedoLog["2. 生成 Redo Log 记录并写入日志缓冲区"]
-    Commit["3. 事务提交 COMMIT"] --> FlushLog["4. 根据配置刷盘 Redo Log (顺序 I/O)"]
-    FlushLog --> Ack["向客户端响应成功"]
-    
-    Dirty -.->|后续异步操作| Checkpoint["5. 检查点机制 (Checkpoint) 后台将脏页刷入数据文件"]
+    Crash["服务器突然断电崩溃并重启"] --> Phase1["1. 分析阶段 (Analysis Phase)\n从最近的检查点 (Checkpoint) 开始正向扫描日志，识别出崩溃发生时处于活跃状态的未提交事务列表 (Active Trx Table) 与脏页表"]
+    Phase1 --> Phase2["2. 重做阶段 (Redo Phase - 重放历史)\n从最早的未落盘脏页日志序列号 (LSN) 开始，单向重放所有日志 (包含已提交与未提交事务的操作)，将数据页恢复到崩溃前最后一微秒的完全相同状态"]
+    Phase2 --> Phase3["3. 回滚阶段 (Undo Phase - 撤销未竟事务)\n反向扫描日志，对崩溃前所有处于活跃状态但未 COMMIT 的事务执行 Undo 回滚操作，消除其对数据文件的部分写入"]
 \`\`\`
 
-#### 崩溃恢复（Crash Recovery）：
-若在步骤 5 发生前系统意外断电重启，数据库在启动时通过扫描 Redo Log，将已提交但尚未刷盘的数据页重新应用恢复，从而保障事务的**持久性（Durability）**。
+通过 Redo（重放历史）与 Undo（撤销脏写），数据库在不稳定的物理硬件上实现了确定性的原子性与持久性保障。
 `
-  },
-  {
-    id: "doc:hello-system-53-logging-and-observability",
-    slug: "53-logging-and-observability",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第53章 程序出错以后，我们怎么知道发生了什么？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 7,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第53章 程序出错以后，我们怎么知道发生了什么？
+});
 
-## 1. 可观察性与结构化日志
+// 第 53 章（大幅深度扩写：结构化日志、MDC、Request-ID 与真实排障演练）
+part5Docs.push({
+  id: "doc:hello-system-53-logging-and-observability",
+  slug: "53-logging-and-observability",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第53章 可观测性：从 println 到结构化日志与链路追踪",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 53,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第53章 可观测性：从 println 到结构化日志与链路追踪
 
-在生产环境中，简单的 \`System.out.println()\` 存在无法格式化、缺乏上下文与不易检索的缺陷。
+## 1. 为什么 \`System.out.println\` 在生产环境中是灾难？
 
-现代系统依赖**三大可观察性支柱**：
-- **日志（Logs）**：记录离散的事件详情；
-- **指标（Metrics）**：聚合统计系统的运行状态（如 QPS、错误率、CPU 占用）；
-- **追踪（Traces）**：记录跨服务调用的时序路径与耗时。
+许多初学者习惯在代码中到处写 \`System.out.println("选课成功: " + courseId)\` 来调试程序。
+
+但在高并发的企业级生产环境中，这种做法存在严重的缺陷：
+1. **同步阻塞 I/O**：\`System.out.println\` 内部带有一个全局锁（\`synchronized\`），多线程并发打印时会导致所有请求线程严重挂起等待；
+2. **缺乏日志级别控制**：无法在不修改代码的情况下动态关闭低优先级的调试日志；
+3. **缺乏结构化上下文**：没有时间戳、线程号、类名和请求关联 ID，数十个线程的输出交错在一起，根本无法分辨哪一行日志属于哪一次用户请求。
 
 ---
 
-## 2. 生产日志的最佳实践
+## 2. 现代可观测性的三大支柱（Three Pillars of Observability）
 
-1. **结构化输出（如 JSON 格式）**：便于日志收集系统（如 ELK、Loki）进行字段索引与解析；
-2. **链路追踪标识（Correlation ID / Trace ID）**：在请求入口生成唯一标识并贯穿调用链；
-3. **保护敏感信息（PII 脱敏）**：严禁在日志中打印明文密码、银行卡号与个人隐私数据。
+\`\`\`mermaid
+flowchart TD
+    subgraph Observability["现代系统可观测性三大支柱"]
+        Logs["1. 结构化日志 (Logs)\n离散的文本与结构化事件记录，记录'系统在何时发生了什么事情'"]
+        Metrics["2. 指标度量 (Metrics)\n聚合的数值统计时间序列，监控'系统当前的宏观健康状态' (如 QPS, CPU利用率, 99分位响应延迟)"]
+        Traces["3. 分布式链路追踪 (Traces)\n以 Trace ID 与 Span ID 记录单个请求跨越网关、微服务与数据库的完整调用拓扑与耗时"]
+    end
+\`\`\`
+
+---
+
+## 3. 请求关联追踪（Correlation ID / Request ID）实战
+
+为了在成千上万的并发日志中瞬间定位单次请求，我们在表现层入口拦截器中为每个 HTTP 请求生成唯一的 \`X-Request-ID\`，并将其注入日志框架的 **MDC（Mapped Diagnostic Context，基于 ThreadLocal）** 中：
+
+\`\`\`java
+public class RequestTracingFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) throws IOException, ServletException {
+        HttpServletRequest request = (HttpServletRequest) req;
+        String requestId = request.getHeader("X-Request-ID");
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString().replace("-", "");
+        }
+
+        // 存入当前线程的 MDC 上下文
+        MDC.put("requestId", requestId);
+        try {
+            chain.doFilter(req, res);
+        } finally {
+            MDC.clear(); // 线程池复用，必须彻底清理上下文
+        }
+    }
+}
+\`\`\`
+
+在输出 JSON 结构化日志时，所有该请求产生的日志都会自动附带该 ID：
 
 \`\`\`json
 {
-  "timestamp": "2026-08-28T10:00:00.120Z",
+  "timestamp": "2026-08-29T08:00:00.123Z",
   "level": "INFO",
-  "traceId": "req-9b1a-4c22",
-  "logger": "com.campus.service.EnrollmentService",
-  "event": "ENROLLMENT_SUCCESS",
-  "studentId": 1001,
-  "courseId": 2048
+  "thread": "http-nio-8080-exec-4",
+  "requestId": "9b1deb4d3b7d4bad",
+  "logger": "c.z.s.EnrollmentService",
+  "message": "执行选课操作",
+  "context": { "studentId": 1001, "courseId": 2048 }
 }
 \`\`\`
-`
-  },
-  {
-    id: "doc:hello-system-54-environment-isolation-12factor",
-    slug: "54-environment-isolation-12factor",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第54章 “在我的电脑上可以运行”为什么远远不够？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 8,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第54章 “在我的电脑上可以运行”为什么远远不够？
-
-## 1. 环境隔离与环境一致性
-
-软件从开发到上线通常经历多个独立环境：
-- **开发环境（DEV）**
-- **测试环境（TEST / QA）**
-- **预发布环境（STAGING）**
-- **生产环境（PROD）**
-
-> **关于测试数据库一致性的重要提示**：
-> 过去有些项目习惯在开发环境使用 SQLite 或 H2 内存数据库，而在生产环境使用 MySQL。这会导致部分方言特性、锁行为与事务隔离机制在测试中无法真实复现。
-> 现代工程实践推荐通过容器化工具（如 **Testcontainers**）在测试环境中使用与生产环境相同类型的真实数据库。
 
 ---
 
-## 2. 配置与代码分离（12-Factor 原则）
+## 4. 真实排障演练：30 秒精准定位线上死锁
 
-**Twelve-Factor App** 是一套构建现代可扩展应用的工程方法论。其核心要求之一是**将配置与代码严格分离**：
-- 数据库连接串、API 密钥与服务地址应通过环境变量或专用的配置中心（如 Spring Cloud Config、Consul）注入；
-- 严禁将敏感凭据硬编码在代码仓库中。
+### 故障现象：
+学生李雷反馈：“我在 10:03 分点击选课，页面一直转圈，最后提示选课失败！”
+
+### 排查过程：
+1. 运维工程师在前端监控系统中拿到李雷该次请求报错返回的 \`requestId = 9b1deb4d3b7d4bad\`；
+2. 在日志中心（如 Elasticsearch / Loki）输入查询条件：\`requestId: "9b1deb4d3b7d4bad"\`；
+3. 系统瞬间筛出该请求产生的全部 5 行日志：
+   - 10:03:01.100 [INFO] Controller 收到选课请求: studentId=1001, courseId=2048
+   - 10:03:01.105 [INFO] Service 开始扣减名额...
+   - 10:03:06.110 [ERROR] 捕获数据库异常: Deadlock found when trying to get lock; try restarting transaction
+4. 工程师在 30 秒内精准定位问题：并发更新顺序引发了数据库行锁死锁，并迅速安排针对性重试策略！
 `
-  },
-  {
-    id: "doc:hello-system-55-test-pyramid",
-    slug: "55-test-pyramid",
-    parentId: "'doc:hello-system-part-5'",
-    title: "第55章 怎样证明我们的代码还可以工作？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 9,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第55章 怎样证明我们的代码还可以工作？
+});
 
-## 1. 测试金字塔（The Test Pyramid）
+// 第 54 章（大幅深度扩写：多环境隔离、12-Factor、配置与密文管理、Testcontainers）
+part5Docs.push({
+  id: "doc:hello-system-54-environments-and-configuration",
+  slug: "54-environments-and-configuration",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第54章 环境与配置：开发、测试与生产的隔离之道",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 54,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第54章 环境与配置：开发、测试与生产的隔离之道
 
-测试金字塔是一种指导测试用例配比的经验模型：
+## 1. 为什么“在我的电脑上明明能跑”？
+
+在软件工程中，最著名的借口莫过于：“这行代码在我的笔记本上明明跑得好好的，怎么部署到生产服务器上就崩溃了？”
+
+深入分析底层，导致环境差异的根本原因通常包括：
+1. **操作系统与文件系统差异**：Windows 文件路径不区分大小写，而 Linux 服务器严格区分大小写；换行符差异（CRLF vs LF）；
+2. **时区与编码差异**：本地电脑使用 \`Asia/Shanghai\`，生产服务器容器默认为 \`UTC\`；本地数据库默认字符集为 \`GBK\`，生产为 \`utf8mb4\`；
+3. **隐式外部依赖与版本漂移**：本地安装了全局 MySQL 8.0.32，生产机上运行的是旧版 MySQL 5.7，导致某条窗口函数 SQL 语法报错；
+4. **硬编码配置**：把数据库密码写死在 Java 代码中。
+
+---
+
+## 2. 云原生 12-Factor 方法论与配置隔离
+
+现代软件工程严格遵循 **The Twelve-Factor App** 的配置原则：**将配置与代码严格分离（Store config in the environment）。**
+
+\`\`\`mermaid
+flowchart LR
+    Code["同一套不可变的应用构建镜像 / Jar 包\n(Single Immutable Artifact)"]
+    
+    EnvDev["开发环境 (.env.local)\n- 本地 SQLite / H2 内存库\n- DEBUG 日志级别"]
+    EnvTest["CI 测试环境 (GitHub Actions)\n- Testcontainers 临时 MySQL\n- 自动化测试覆盖"]
+    EnvProd["生产环境 (Cloudflare D1 / K8s Secret)\n- 生产级高可用数据库\n- 密文通过环境变量注入"]
+
+    Code --> EnvDev
+    Code --> EnvTest
+    Code --> EnvProd
+\`\`\`
+
+---
+
+## 3. 生产密文安全：严禁将密钥提交至版本控制库
+
+在真实工程中，数据库密码、JWT 签名私钥与第三方 API Token **绝对严禁直接写在 Git 跟踪的文件中**！
+
+### 规范做法：
+1. 建立 \`.env.example\` 模板文件提交至 Git（只包含变量名，不含真实密码）；
+2. 将 \`.env\` 加入 \`.gitignore\`；
+3. 在生产服务器中，通过环境变量（Environment Variables）或专用的密钥管理器（如 AWS Secrets Manager / Vault / Cloudflare Secrets）在容器启动时动态注入。
+
+---
+
+## 4. 可重现的集成测试环境：Testcontainers
+
+为了避免在 CI 测试中使用与生产完全不同的内存伪数据库（如 H2，它无法测试 MySQL 专有的事务并发锁行为），现代工程采用 **Testcontainers** 技术：
+
+在单元测试启动时，由代码自动拉起一个临时的真实 MySQL Docker 容器，测试完成后自动销毁，确保了测试环境与生产环境的 100% 行为一致性。
+`
+});
+
+// 第 55 章（大幅深度扩写：测试金字塔与测试奖杯，多层测试实践）
+part5Docs.push({
+  id: "doc:hello-system-55-testing-pyramid",
+  slug: "55-testing-pyramid",
+  parentId: "'doc:hello-system-part-5'",
+  title: "第55章 测试金字塔与质量保障：如何证明系统是正确的？",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 55,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第55章 测试金字塔与质量保障：如何证明系统是正确的？
+
+## 1. 测试金字塔（Testing Pyramid）与测试分层
+
+软件质量不是靠手工点点鼠标测出来的，而是由自动化的分层测试体系捍卫的：
 
 \`\`\`mermaid
 flowchart TD
-    E2E["端到端测试 (E2E Tests)\n数量较少，执行成本高，验证全链路真实交互"]
-    Integration["集成测试 (Integration Tests)\n验证 Controller -> Service -> Repository 跨组件协同"]
-    Unit["单元测试 (Unit Tests)\n数量最多，毫秒级快速反馈，覆盖核心业务规则与算法"]
+    E2E["1. 端到端测试 (E2E / UI Tests)\n- 模拟真实浏览器点击 (Playwright/Cypress)\n- 运行速度最慢 (秒级)，维护成本最高，数量最少"]
+    Integration["2. 集成测试 (Integration Tests)\n- 测试 Spring Controller API、Repository 与真实数据库交互\n- 运行速度较快 (百毫秒级)，确保组件装配正确"]
+    Unit["3. 单元测试 (Unit Tests)\n- 测试独立的实体业务逻辑 (Course.enroll()) 与纯算法\n- 运行速度极快 (毫秒级)，数量最多，覆盖度最高"]
 
-    E2E --> Integration
-    Integration --> Unit
+    E2E --> Integration --> Unit
 \`\`\`
 
 ---
 
-## 2. 多重质量保证体系
+## 2. 多层测试实战演练
 
-自动化测试并不是保证软件质量的唯一手段，工程实践中通常结合多种质量防线：
-- **单元测试与集成测试**：提供快速回归验证能力；
-- **静态代码分析与类型检查**：在编译前捕获潜在类型错误与代码异味；
-- **代码审查（Code Review）**：促进团队知识共享与架构规范落地；
-- **生产环境可观察性**：通过告警与指标及时发现线上异常。
+### 1. 单元测试（Unit Test）：毫秒级检验纯领域逻辑
+\`\`\`java
+@Test
+void course_should_not_exceed_capacity() {
+    Course course = new Course(2048, "CS-101", "系统导论", 1);
+    assertTrue(course.enroll());
+    assertFalse(course.enroll()); // 瞬间验证不变量
+}
+\`\`\`
+
+### 2. 控制器集成测试（API Test）：验证协议与状态码
+\`\`\`java
+@WebMvcTest(EnrollmentController.class)
+class EnrollmentControllerTest {
+    @Autowired private MockMvc mockMvc;
+
+    @Test
+    void should_return_400_when_course_id_is_negative() throws Exception {
+        mockMvc.perform(post("/api/enrollments")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"courseId\": -1}"))
+            .andExpect(status().isBadRequest());
+    }
+}
+\`\`\`
+
+### 3. 仓储层持久化集成测试（Repository Test）：验证真实 SQL
+\`\`\`java
+@DataJdbcTest
+class CourseRepositoryTest {
+    @Autowired private CourseRepository repository;
+
+    @Test
+    void should_atomically_increment_enrolled_count() {
+        int rows = repository.incrementIfAvailable(2048);
+        assertEquals(1, rows);
+    }
+}
+\`\`\`
+
+---
+
+## 3. 哪种测试发现什么 Bug？
+
+- **学生传了负数 courseId 报错** $\to$ 由 **API 参数校验测试** 在表现层发现；
+- **名额满了还能选进课** $\to$ 由 **领域单元测试** 发现；
+- **SQL 语句语法错误/表字段拼错** $\to$ 由 **Repository 集成测试** 发现；
+- **前端按钮点击事件没有绑上** $\to$ 由 **E2E 浏览器测试** 发现。
+
+通过构筑全方位的自动化测试防护网，我们才能在频繁迭代与重构时，拥有交付高质量系统的绝对底气！
 `
-  }
-];
+});
+
+export { part5Docs };
