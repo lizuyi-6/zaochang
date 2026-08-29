@@ -1,4 +1,4 @@
-import { requireMember } from "../../_lib/community";
+import { requireMember } from "../../_lib/access-control";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { decideAuthorization, oauthJsonError } from "../../_lib/oauth-provider";
 

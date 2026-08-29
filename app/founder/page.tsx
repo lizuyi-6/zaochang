@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ArrowUpRight, BadgeCheck, Boxes, FolderKanban, Orbit, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { isAdminEmail, requireFounder } from "../api/_lib/admin";
+import { isAdminEmail, requireFounder } from "../api/_lib/access-control";
 import { database } from "../api/_lib/community";
 import { FOUNDER_DISPLAY_NAME, products as showcaseProducts } from "../lib/community-data";
 

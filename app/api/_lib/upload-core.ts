@@ -15,6 +15,37 @@ export type StoredUpload = {
   url: string;
 };
 
+export type UploadOwnershipVerdict = "ok" | "not_owned" | "not_scanned";
+
+// R2 对象 + uploaded_files 行的双重复核(单一事实来源;此前 products 与 incubation
+// 路由各抄一份同款查询与四条件校验)。属主不匹配 → not_owned;扫描状态/对象元数据/
+// sha256/可见性/用途任一不符 → not_scanned。bucketMissing 单独返回:products 侧
+// 历史上按 not_owned 处理(403),incubation 侧显式 503——错误码/状态由调用方按
+// 业务语境映射,本函数只给判定。
+export async function verifyScannedUpload(args: {
+  key: string;
+  ownerEmail: string;
+  expectedPurpose: string;
+}): Promise<{ verdict: UploadOwnershipVerdict; bucketMissing: boolean }> {
+  const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
+  const object = bucket ? await bucket.head(args.key) : null;
+  const upload = await database().prepare(
+    `SELECT owner_email AS owner, visibility, purpose, scan_status AS scanStatus, sha256
+     FROM uploaded_files WHERE key = ?`,
+  ).bind(args.key).first<{ owner: string; visibility: string; purpose: string; scanStatus: string; sha256: string }>();
+  if (!object || !upload || upload.owner !== args.ownerEmail) {
+    return { verdict: "not_owned", bucketMissing: !bucket };
+  }
+  if (upload.scanStatus !== "clean"
+    || object.customMetadata?.scanStatus !== "clean"
+    || object.customMetadata?.sha256 !== upload.sha256
+    || upload.visibility !== "private"
+    || upload.purpose !== args.expectedPurpose) {
+    return { verdict: "not_scanned", bucketMissing: !bucket };
+  }
+  return { verdict: "ok", bucketMissing: !bucket };
+}
+
 export async function storeScannedUpload(args: {
   file: File;
   ownerEmail: string;

@@ -1,4 +1,5 @@
-import { jsonError, requireMember } from "../../_lib/community";
+import { requireMember } from "../../_lib/access-control";
+import { jsonError } from "../../_lib/community";
 import { findInBook } from "../../_lib/docs";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { AiNotConfiguredError, AiUpstreamError, getReadingAiConfig, streamReadingAiCompletion } from "../../_lib/reading-ai-provider";

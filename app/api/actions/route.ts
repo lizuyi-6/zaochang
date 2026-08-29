@@ -1,8 +1,8 @@
-import { database, jsonError, requireMember } from "../_lib/community";
+import { database, jsonError } from "../_lib/community";
 import { awardProductLike, removeProductLike, tipProduct } from "../_lib/fruit";
+import { guardWrite } from "../_lib/route-guards";
 import { enforceRateLimit, rateLimitKey, requestActorKey } from "../_lib/rate-limit";
 import { findProduct } from "../../lib/community-data";
-import { assertSameOrigin } from "../_lib/request-origin";
 
 export async function POST(request: Request) {
   try {
@@ -31,11 +31,13 @@ export async function POST(request: Request) {
       return Response.json({ recorded: true });
     }
 
-    const member = await requireMember();
-    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
-    const originError = assertSameOrigin(request);
-    if (originError) return originError;
-    await enforceRateLimit(await rateLimitKey("member-action", member.email), 180, 60 * 60);
+    const guarded = await guardWrite(request, {
+      member: "member",
+      sameOrigin: true,
+      rate: { bucket: "member-action", limit: 180, windowSeconds: 60 * 60 },
+    });
+    if (guarded instanceof Response) return guarded;
+    const member = guarded.member;
 
     if (action === "like") {
       const productId = Number(input.productId);

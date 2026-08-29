@@ -1,7 +1,7 @@
-import { isFounderEmail } from "../_lib/admin";
-import { database, ensureMember, jsonError, optionalMember } from "../_lib/community";
+import { isFounderEmail, optionalMember } from "../_lib/access-control";
+import { database, ensureMember, jsonError } from "../_lib/community";
 import { settleDueExternalFruit } from "../_lib/external-fruit";
-import { settleDueFruit } from "../_lib/fruit";
+import { getWalletOverview, settleDueFruit } from "../_lib/fruit";
 import { loadPublicCommunityState } from "../_lib/public-community";
 import { listRecentReading } from "../_lib/docs";
 
@@ -31,19 +31,7 @@ export async function GET() {
     let recentReading: unknown[] = [];
 
     if (member) {
-      wallet = await db
-        .prepare(
-          `SELECT balance, pending_balance AS pendingBalance,
-                  lifetime_earned AS lifetimeEarned, lifetime_spent AS lifetimeSpent,
-                  status,
-                  COALESCE((SELECT SUM(delta) FROM fruit_entries
-                            WHERE user_email = wallets.user_email AND bucket = 'available'), 0) AS ledgerBalance,
-                  COALESCE((SELECT SUM(delta) FROM fruit_entries
-                            WHERE user_email = wallets.user_email AND bucket = 'pending'), 0) AS ledgerPendingBalance
-           FROM wallets WHERE user_email = ?`,
-        )
-        .bind(member.email)
-        .first();
+      wallet = await getWalletOverview(member.email);
       transactions = (
         await db
           .prepare(

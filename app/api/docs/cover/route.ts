@@ -1,4 +1,5 @@
-import { auditAdminAction, requireFounder } from "../../_lib/admin";
+import { requireFounder } from "../../_lib/access-control";
+import { auditAdminAction } from "../../_lib/admin";
 import { database, jsonError } from "../../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { storeScannedUpload } from "../../_lib/upload-core";

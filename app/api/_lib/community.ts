@@ -1,6 +1,11 @@
 import { env } from "cloudflare:workers";
 import { getChatGPTUser, type ChatGPTUser } from "../../chatgpt-auth";
+// 错误语义(jsonError/AuthRequiredError)的事实来源在 errors.ts;此处 re-export
+// 让既有调用方 `import { jsonError } from "./community"` 继续可用,新代码请直引 errors.ts。
+import { AuthRequiredError, jsonError } from "./errors";
 import { AGENT_DISPLAY_NAME, AGENT_EMAIL } from "./agent-auth";
+
+export { jsonError };
 
 export type MemberIdentity = ChatGPTUser & { initial: string };
 
@@ -66,37 +71,4 @@ async function ensureAgentMember() {
      VALUES (?, ?, 0)
      ON CONFLICT(email) DO UPDATE SET display_name = excluded.display_name, member_number = 0`,
   ).bind(AGENT_EMAIL, AGENT_DISPLAY_NAME).run();
-}
-
-export function jsonError(error: unknown) {
-  if (error instanceof AuthRequiredError) {
-    return Response.json({ error: "auth_required" }, { status: 401 });
-  }
-
-  if (error && typeof error === "object" && "code" in error && "status" in error) {
-    const code = String((error as { code: unknown }).code);
-    const status = Number((error as { status: unknown }).status);
-    return Response.json({ error: code }, { status: Number.isInteger(status) ? status : 500 });
-  }
-
-  const message = error instanceof Error ? error.message : "Unexpected error";
-  // 仅钱包余额 CHECK 映射为 insufficient_balance;任意表的 CHECK 失败都报钱包
-  // 错误会让 409 语义失真、掩盖真实故障。
-  if (message.includes("CHECK constraint failed")
-    && (message.includes("wallet_balance_nonnegative") || message.includes("wallet_pending_nonnegative"))) {
-    return Response.json({ error: "insufficient_balance" }, { status: 409 });
-  }
-  if (message.includes("UNIQUE constraint failed")) {
-    return Response.json({ error: "already_completed" }, { status: 409 });
-  }
-  // 不把 error.message 原文返回客户端：它会泄露 D1 约束名/表结构等内部细节。
-  // 已识别的业务错误码在上方白名单；其余统一兜底为 server_error 并记录到服务端日志。
-  console.error("[jsonError] unhandled:", message);
-  return Response.json({ error: "server_error" }, { status: 500 });
-}
-
-class AuthRequiredError extends Error {
-  constructor() {
-    super("Sign in is required");
-  }
 }

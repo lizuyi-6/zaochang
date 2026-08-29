@@ -1,4 +1,4 @@
-import { ExternalFruitError, refundExternalPayment } from "../../../../../_lib/external-fruit";
+import { externalApiErrorResponse, refundExternalPayment } from "../../../../../_lib/external-fruit";
 import { oauthCorsHeaders, oauthJsonError, requireBearer } from "../../../../../_lib/oauth-provider";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -12,7 +12,8 @@ export async function POST(request: Request, context: RouteContext) {
     const result = await refundExternalPayment(identity, id, request.headers.get("idempotency-key") ?? "");
     return Response.json(result, { headers: oauthCorsHeaders() });
   } catch (error) {
-    if (error instanceof ExternalFruitError) return Response.json({ error: error.code }, { status: error.status, headers: oauthCorsHeaders() });
+    const mapped = externalApiErrorResponse(error);
+    if (mapped) return mapped;
     return oauthJsonError(error);
   }
 }

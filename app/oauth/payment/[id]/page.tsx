@@ -1,6 +1,7 @@
 import { ArrowRight, BadgeCheck, Coins, LockKeyhole, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { ensureMember, optionalMember } from "../../../api/_lib/community";
+import { optionalMember } from "../../../api/_lib/access-control";
+import { ensureMember } from "../../../api/_lib/community";
 import { ExternalFruitError, prepareExternalPaymentApproval } from "../../../api/_lib/external-fruit";
 
 type PageProps = { params: Promise<{ id: string }> };

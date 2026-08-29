@@ -1,6 +1,7 @@
 import sanitizeHtml from "sanitize-html";
 import { cache } from "react";
 import { renderMarkdownKatexHtml } from "@/app/lib/markdown-katex";
+import { canViewContent } from "./access-control";
 import { database, optionalMember, type MemberIdentity } from "./community";
 
 export type DocVisibility = "public" | "members" | "private";
@@ -171,10 +172,10 @@ export async function resolveBookRootSlug(rootSlug: string, member: MemberIdenti
   return row;
 }
 
-// 可见性规则:public 人人可见;members/private 需登录(后续可再细分创始人可见)。
+// 可见性规则(委托至 access-control.canViewContent 通用内容闸,语义不变):
+// public 人人可见;members/private 需登录(后续可再细分创始人可见)。
 export function canViewDoc(doc: DocRow, member: MemberIdentity | null): boolean {
-  if (doc.visibility === "public") return true;
-  return member !== null;
+  return canViewContent(doc, member);
 }
 
 // 只保留对当前访问者可见的文档,再组装成目录树。

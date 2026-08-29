@@ -1,4 +1,5 @@
-import { jsonError, requireMember } from "../_lib/community";
+import { requireMember } from "../_lib/access-control";
+import { jsonError } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { refundExternalPaymentForMember } from "../_lib/external-fruit";
 import { checkoutProduct, getFruitPaymentState, refundProductOrder } from "../_lib/fruit";

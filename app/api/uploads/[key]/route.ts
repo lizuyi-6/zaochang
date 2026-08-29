@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
-import { database, optionalMember } from "../../_lib/community";
+import { isAdminEmail, optionalMember } from "../../_lib/access-control";
+import { database } from "../../_lib/community";
 
 export async function GET(_request: Request, context: { params: Promise<{ key: string }> }) {
   const { key } = await context.params;
@@ -28,11 +29,11 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
   const visibility = record.visibility;
   if (visibility !== "public") {
     const member = await optionalMember();
-    const owner = member && record.owner === member.email;
-    const adminEmails = String((env as unknown as Record<string, string | undefined>).ZAOCHANG_ADMIN_EMAILS ?? "")
-      .split(",").map((email) => email.trim().toLowerCase()).filter(Boolean);
+    const owner = member !== null && record.owner === member.email;
     let reviewer = false;
     let approvedProductCover = false;
+    // 注意:此分支对匿名访客也要进入——approvedProductCover(已批准产品封面公开可见)
+    // 不依赖登录态;只有 reviewer 才需要 member。member 为 null 时 reviewer 恒 false。
     if (!owner && record.purpose === "product_cover") {
       const imageUrl = `/api/uploads/${encodeURIComponent(key)}`;
       const product = await database().prepare(
@@ -47,9 +48,7 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
         approvedVersion: number;
         reviewVersion: number;
       }>();
-      reviewer = Boolean(member)
-        && adminEmails.includes(member!.email.toLowerCase())
-        && product?.reviewStatus === "pending_review";
+      reviewer = member !== null && isAdminEmail(member.email) && product?.reviewStatus === "pending_review";
       approvedProductCover = product?.status === "published"
         && product.moderationStatus === "visible"
         && product.reviewStatus === "approved"
