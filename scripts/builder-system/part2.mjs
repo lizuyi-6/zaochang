@@ -1,617 +1,675 @@
 // scripts/builder-system/part2.mjs
-// 第二部分：页面开始变复杂 (13 ~ 24)
-// 全量技术修订与规范化完整版本 (全 12 章高密度深度正文)
+// 《Hello System · 图解软件系统》第二部分：页面开始变复杂 (第 13 ~ 24 章)（全量教材化深度扩写版本）
 
-export const part2Docs = [
-  {
-    id: "doc:hello-system-part-2",
-    slug: "part-2",
-    parentId: "'doc:book-hello-system'",
-    title: "第二部分 · 页面开始变复杂",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 4,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: ""
-  },
-  {
-    id: "doc:hello-system-13-html-css-dom",
-    slug: "13-html-css-dom",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第13章 网页最开始根本不需要框架",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 1,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第13章 网页最开始根本不需要框架
+const part2Docs = [];
 
-## 1. 最初情境：Web 标准三剑客
+// 顶层部分节点
+part2Docs.push({
+  id: "doc:hello-system-part-2",
+  slug: "part-2",
+  parentId: "'doc:book-hello-system'",
+  title: "第二部分: 页面开始变复杂 (13~24)",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 2,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第二部分: 页面开始变复杂 (13~24)
 
-在现代前端框架普及之前，Web 应用依靠三项基础技术构建：
-- **HTML（结构）**：使用标签定义文档的内容层级与语义；
-- **CSS（表现）**：定义元素的布局、颜色与字体等视觉样式；
-- **JavaScript（行为）**：通过浏览器提供的 API 实现事件监听与动态交互。
+本部分聚焦于**现代 Web 前端框架的核心原理与演进逻辑**。
 
-早期 Mini Campus 选课系统的一个最小页面如下：
-
-\`\`\`html
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <title>Mini Campus 选课系统</title>
-    <style>
-        .card { border: 1px solid #ddd; padding: 16px; width: 280px; border-radius: 6px; }
-        .disabled { color: #888; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>计算机系统导论</h2>
-        <p>剩余名额: <span id="remaining-count">1</span></p>
-        <button id="enroll-btn">选课</button>
-    </div>
-
-    <script>
-        let remaining = 1;
-        const btn = document.getElementById('enroll-btn');
-        const countSpan = document.getElementById('remaining-count');
-
-        btn.addEventListener('click', function() {
-            if (remaining > 0) {
-                remaining--;
-                countSpan.innerText = remaining;
-                if (remaining === 0) {
-                    btn.disabled = true;
-                    btn.innerText = '名额已满';
-                }
-            }
-        });
-    </script>
-</body>
-</html>
-\`\`\`
-
----
-
-## 2. 浏览器的渲染流程概览
-
-当浏览器加载 HTML 时，底层渲染引擎大致经历以下阶段：
-
-\`\`\`mermaid
-flowchart TD
-    HTML["HTML 字符流"] --> DOM["DOM 树 (Document Object Model)"]
-    CSS["CSS 字符流"] --> CSSOM["CSSOM 树 (CSS Object Model)"]
-    DOM --> RenderTree["渲染树 (Render Tree)"]
-    CSSOM --> RenderTree
-    RenderTree --> Layout["布局排版 (Layout / Reflow)\n计算盒模型的几何坐标与尺寸"]
-    Layout --> Paint["绘制 (Paint)\n生成绘制指令与图层"]
-    Paint --> Composite["图层合成 (Compositing)\n交付 GPU 最终显示"]
-\`\`\`
-
-> **注意**：
-> 现代浏览器的渲染流水线并非严格单向的一次性过程，而是随着异步资源加载、脚本执行与样式变化动态交替进行的。
-
-在简单交互场景下，原生 HTML/CSS/JS 具有零构建配置、无运行时框架体积开销的显著优势。
+我们将从浏览器的底层渲染流水线与原生 DOM 树出发，亲历命令式 DOM 操作在大型应用中导致的状态脱节灾难。我们将深入剖析声明式 UI（$UI = f(\\text{state})$）、Vue 3 的 Proxy 响应式系统（依赖收集与派发更新）、计算属性缓存、编译期优化、单向数据流组件化以及全局状态树 Pinia，彻底打通前端“数据如何驱动界面”的心智模型。
 `
-  },
-  {
-    id: "doc:hello-system-14-dom-manipulation-mess",
-    slug: "14-dom-manipulation-mess",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第14章 直接操作DOM为什么迟早会出问题？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 2,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第14章 直接操作DOM为什么迟早会出问题？
+});
 
-## 1. 复杂交互下的命令式 DOM 联动
+// 第 13 章
+part2Docs.push({
+  id: "doc:hello-system-13-browser-and-dom",
+  slug: "13-browser-and-dom",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第13章 浏览器如何看待网页：DOM 树与渲染流水线",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 13,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第13章 浏览器如何看待网页：DOM 树与渲染流水线
 
-随着功能扩展，选课页面增加了多个相互关联的 UI 区域：
-1. 课程卡片中的剩余名额与按钮状态；
-2. 顶部导航栏中的已选课程数量徽章；
-3. 右侧侧边栏中的已选课程清单与总学分统计；
-4. 筛选搜索框。
+## 1. 从纯文本到内存对象树：HTML 解析与 DOM
 
-如果使用原生 JavaScript 采用命令式（Imperative）方式逐一更新 DOM：
+当浏览器从网络中接收到一段 HTML 文本时，它并不能直接在屏幕上把文字显示出来。
 
-\`\`\`javascript
-function handleEnrollSuccess(course) {
-    // 1. 手动修改卡片内文本
-    const countEl = document.querySelector('#card-' + course.id + ' .count');
-    countEl.innerText = parseInt(countEl.innerText) - 1;
-
-    // 2. 手动修改按钮
-    const btn = document.querySelector('#card-' + course.id + ' button');
-    btn.disabled = true;
-    btn.innerText = '已选修';
-
-    // 3. 手动修改顶部徽章
-    const badge = document.getElementById('enrolled-badge');
-    badge.innerText = parseInt(badge.innerText) + 1;
-
-    // 4. 手动向侧边栏追加 DOM 节点
-    const list = document.getElementById('sidebar-list');
-    const item = document.createElement('li');
-    item.id = 'sidebar-item-' + course.id;
-    item.innerText = course.name;
-    list.appendChild(item);
-
-    // 5. 手动更新总学分
-    const creditEl = document.getElementById('total-credits');
-    creditEl.innerText = parseInt(creditEl.innerText) + course.credits;
-}
-\`\`\`
-
----
-
-## 2. 核心问题：状态分散在 DOM 中
+浏览器内核（如 Chromium 的 Blink 或 WebKit）必须经历以下严密的数据结构构建过程：
 
 \`\`\`mermaid
 flowchart LR
-    Event["选课事件触发"] -->|命令式逐一修改| DOM1["卡片剩余数字"]
-    Event -->|命令式逐一修改| DOM2["卡片按钮 disabled 属性"]
-    Event -->|命令式逐一修改| DOM3["顶部徽章计数"]
-    Event -->|命令式逐一修改| DOM4["侧边栏 li 列表"]
-    Event -->|命令式逐一修改| DOM5["总学分展示元素"]
+    HTML["HTML 字符流\n<div class='course'>...</div>"] --> Tokenizer["词法分析 (Tokenization)\n生成 StartTag, Characters, EndTag"]
+    Tokenizer --> TreeBuilder["语法分析 (Tree Construction)\n维护节点父子包含关系栈"]
+    TreeBuilder --> DOMTree["DOM 树 (内存 C++ 节点树)\nDocument Object Model"]
 \`\`\`
 
-在命令式编程模式下：
-1. **状态被隐式保存在 DOM 节点的文本与属性中**，缺乏单一明确的数据来源；
-2. **多处修改容易产生不一致**：如果在退课或搜索重置逻辑中漏改了某一个 DOM 节点，界面各处的显示将产生冲突；
-3. **事件与 DOM 呈现高度耦合的网状依赖**，维护成本随交互复杂度快速上升。
-`
-  },
-  {
-    id: "doc:hello-system-15-state-driven-ui",
-    slug: "15-state-driven-ui",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第15章 究竟应该让页面保存数据，还是让数据决定页面？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 3,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第15章 究竟应该让页面保存数据，还是让数据决定页面？
+最终在浏览器内存中建立的 **DOM 树（Document Object Model Tree）** 是一组相互关联的 C++ 原生对象：
 
-## 1. 范式转换：声明式（Declarative）编程
-
-为了解决命令式 DOM 操作的维护困境，现代前端引入了**声明式 UI（Declarative UI）**范式：
-
-> **开发者不再手动编写“如何操作 DOM”的每一步指令，而是维护一份纯内存状态（State），并声明“在特定状态下，UI 应该呈现出什么结构”。**
-
-#### 核心抽象公式：
-$$UI = f(State)$$
-
-\`\`\`mermaid
-flowchart LR
-    State["内存状态 State\n{ courses: [...], enrolledIds: [101] }"] -->|声明式映射 f(State)| UI["渲染后的真实页面 UI"]
+\`\`\`text
+                [ Document ]
+                     │
+                 [ <html> ]
+                     │
+                 [ <body> ]
+                     │
+            [ <div class="card"> ]
+             ├── [ <h1> "计算机系统导论" ]
+             ├── [ <p> "已选: 1/100" ]
+             └── [ <button> "选课" ]
 \`\`\`
 
 ---
 
-## 2. 声明式 UI 的实现机制说明
+## 2. 浏览器的经典渲染流水线（Rendering Pipeline）
 
-需要说明的是，**虚拟 DOM（Virtual DOM）只是实现声明式 UI 的常见手段之一，而非唯一途径**：
-- **React / Vue**：通过在内存中比对新旧虚拟 DOM 树（Diffing），计算出最小更新补丁（Patch）并批量应用到真实 DOM；
-- **Svelte / SolidJS**：通过编译期分析或细粒度响应式订阅，直接在状态改变时精准更新对应的真实 DOM 节点，不依赖虚拟 DOM。
-
-无论底层采用哪种技术，**以状态为中心（State-Driven）的心智模型**是现代前端开发的共同基石。
-`
-  },
-  {
-    id: "doc:hello-system-16-vue-reactivity-under-the-hood",
-    slug: "16-vue-reactivity-under-the-hood",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第16章 “数据变了，页面自己变”到底是什么意思？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 4,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第16章 “数据变了，页面自己变”到底是什么意思？
-
-## 1. Vue 3 响应式的核心机制
-
-Vue 3 的响应式系统围绕三个核心行为展开：
-1. **拦截属性访问与修改**：
-   - \`reactive()\` 主要使用 ES6 \`Proxy\` 拦截对象的读取（get）与写入（set）；
-   - \`ref()\` 使用带有 \`.value\` 访问器属性（getter/setter）的 RefImpl 对象；
-2. **依赖收集（Track）**：在执行副作用函数（如组件渲染函数）期间，若读取了响应式属性，系统将当前活跃的副作用函数（Effect）记录为该属性的依赖；
-3. **依赖触发（Trigger）**：当响应式属性被修改时，系统查找并重新执行该属性收集到的所有副作用函数。
+当 DOM 树与 CSS 规则树（CSSOM）构建完成后，浏览器开始执行完整的渲染流水线：
 
 \`\`\`mermaid
 flowchart TD
-    subgraph Read ["读取属性 (Track 阶段)"]
-        Render["渲染函数 / 副作用执行"] -->|读取 state.enrolled| ProxyGet["Proxy get() / Ref getter"]
-        ProxyGet --> Track["track: 记录当前 Effect 到依赖集合"]
-    end
-
-    subgraph Write ["修改属性 (Trigger 阶段)"]
-        UserAction["用户操作: state.enrolled++"] --> ProxySet["Proxy set() / Ref setter"]
-        ProxySet --> Trigger["trigger: 遍历执行所收集的 Effects"]
-        Trigger --> ReRender["组件重新渲染 / 更新视图"]
-    end
+    DOM["DOM 树 (结构)"] & CSSOM["CSSOM 树 (样式)"] --> RenderTree["1. 渲染树构建 (Render Tree)\n过滤掉 display:none 的不可见节点"]
+    RenderTree --> Layout["2. 布局计算 (Layout / Reflow)\n计算每个几何元素的绝对像素坐标 (X, Y, W, H)"]
+    Layout --> Paint["3. 绘制记录 (Paint)\n生成各图层的绘制指令列表 (边框、背景、文字)"]
+    Paint --> Composite["4. 栅格化与图层合成 (Raster & Composite)\n利用 GPU 将矢量指令光栅化为屏幕像素位图"]
 \`\`\`
 
----
+1. **重排 / 回流（Reflow / Layout）**：当元素的几何尺寸（宽高、位置、边距）发生变化时，浏览器必须重新遍历渲染树，计算整棵树上相关节点的几何坐标。这是性能开销最大的操作之一；
+2. **重绘（Repaint）**：当仅有颜色、背景等不影响几何尺寸的外观发生变化时，浏览器跳过布局直接重新绘制；
+3. **强制同步布局（Forced Synchronous Layout）**：如果在 JavaScript 中频繁交替执行“写入 DOM”与“读取几何属性（如 \`offsetHeight\`）”，浏览器将被迫在每一帧内多次强制执行昂贵的重排，导致严重的页面掉帧卡顿（Layout Thrashing）。
+`
+});
 
-## 2. 最小响应式原理代码示例
+// 第 14 章
+part2Docs.push({
+  id: "doc:hello-system-14-dom-chaos",
+  slug: "14-dom-chaos",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第14章 命令式 DOM 操作的失控：从 jQuery 到手动同步灾难",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 14,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第14章 命令式 DOM 操作的失控：从 jQuery 到手动同步灾难
+
+## 1. 命令式编程（Imperative Programming）的原生写法
+
+在现代前端框架诞生前，开发者使用原生 JavaScript 或 jQuery 直接操作 DOM 节点：
 
 \`\`\`javascript
-let activeEffect = null;
-const targetMap = new WeakMap();
+// 模拟一次选课点击事件
+document.getElementById("btn-enroll").addEventListener("click", function() {
+    // 1. 手动从 DOM 中抓取当前文本并解析出数字
+    let text = document.getElementById("enrolled-count").innerText;
+    let count = parseInt(text.split("/")[0].replace("已选: ", "").trim());
+    let capacity = 100;
 
-function track(target, key) {
-    if (!activeEffect) return;
-    let depsMap = targetMap.get(target);
-    if (!depsMap) targetMap.set(target, (depsMap = new Map()));
-    let dep = depsMap.get(key);
-    if (!dep) depsMap.set(key, (dep = new Set()));
-    dep.add(activeEffect);
-}
-
-function trigger(target, key) {
-    const depsMap = targetMap.get(target);
-    if (!depsMap) return;
-    const dep = depsMap.get(key);
-    if (dep) dep.forEach(effect => effect());
-}
-
-function reactive(obj) {
-    return new Proxy(obj, {
-        get(target, key, receiver) {
-            track(target, key);
-            return Reflect.get(target, key, receiver);
-        },
-        set(target, key, value, receiver) {
-            const result = Reflect.set(target, key, value, receiver);
-            trigger(target, key);
-            return result;
+    // 2. 判断业务条件
+    if (count < capacity) {
+        count++;
+        // 3. 手动修改数据展示 DOM
+        document.getElementById("enrolled-count").innerText = "已选: " + count + "/" + capacity;
+        // 4. 手动修改按钮状态
+        if (count >= capacity) {
+            document.getElementById("btn-enroll").setAttribute("disabled", "true");
+            document.getElementById("btn-enroll").innerText = "名额已满";
+            document.getElementById("status-badge").className = "badge badge-full";
         }
-    });
-}
-\`\`\`
-
----
-
-## 3. 本章小结
-
-1. 响应式系统通过拦截数据的读写操作，实现依赖自动收集与自动通知；
-2. Vue 3 中 \`reactive\` 使用 \`Proxy\`，\`ref\` 使用访问器属性，其上层统一遵循 track/trigger 响应式模型。
-`
-  },
-  {
-    id: "doc:hello-system-17-computed-and-caching",
-    slug: "17-computed-and-caching",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第17章 computed为什么不是一个普通函数？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 5,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第17章 computed为什么不是一个普通函数？
-
-## 1. 派生状态与缓存机制
-
-在选课系统中，已选总学分是由已选课程列表计算而来的**派生状态（Derived State）**。
-
-如果将其写为普通方法并在模板中多次调用：
-\`\`\`html
-<p>总学分: {{ calculateTotalCredits() }}</p>
-<p>总学分: {{ calculateTotalCredits() }}</p>
-\`\`\`
-只要组件因任何无关状态改变而重新渲染，普通方法都会被重复执行。
-
----
-
-## 2. computed 的工作原理
-
-\`computed()\` 创建一个具有**依赖追踪与缓存特性**的响应式引用：
-1. **自动追踪依赖**：\`computed\` 内部自动收集其所引用的响应式数据（如 \`enrolledCourses\`）；
-2. **基于依赖缓存**：只要所依赖的源数据未发生变化，多次访问 \`computed\` 属性会直接返回缓存值；
-3. **惰性失效**：当源数据变化时，将缓存标记为失效，在下一次被读取时才重新计算。
-
-\`\`\`mermaid
-flowchart TD
-    Access["访问 computed.value"] --> CheckDirty{"依赖源数据是否发生过变更?"}
-    CheckDirty -->|是| ReCalc["重新执行计算函数并更新缓存"]
-    CheckDirty -->|否| ReturnCache["直接返回缓存结果 (零计算开销)"]
-\`\`\`
-
-> **设计原则提示**：
-> \`computed\` 的计算函数应当设计为纯函数，避免在其中执行异步请求或修改其他状态等副作用操作。
-`
-  },
-  {
-    id: "doc:hello-system-18-watch-and-side-effects",
-    slug: "18-watch-and-side-effects",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第18章 watch到底应该什么时候使用？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 6,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第18章 watch到底应该什么时候使用？
-
-## 1. 纯计算与副作用（Side Effects）的区分
-
-- **\`computed\`**：适用于**纯派生数据**。根据状态生成新的数据，不修改外部环境；
-- **\`watch\` / \`watchEffect\`**：专门用于处理**副作用（Side Effects）**。当状态变化时，执行与外部系统的交互操作（如发起网络请求、修改 LocalStorage、手动操作 DOM 或设置定时器）。
-
-\`\`\`javascript
-import { ref, watch } from 'vue';
-
-const selectedCourseId = ref(null);
-const courseDetail = ref(null);
-
-// 状态变化时触发异步网络请求副作用
-watch(selectedCourseId, async (newId, oldId, onCleanup) => {
-    if (!newId) return;
-
-    let isCancelled = false;
-    onCleanup(() => {
-        isCancelled = true; // 处理并发或组件卸载时的清理逻辑
-    });
-
-    const res = await fetch(\`/api/courses/\${newId}\`);
-    const data = await res.json();
-    if (!isCancelled) {
-        courseDetail.value = data;
     }
 });
 \`\`\`
 
 ---
 
-## 2. 避免用 watch 替代 computed
+## 2. 状态同步灾难（State Synchronization Nightmare）
 
-初学者常会使用 \`watch\` 手动更新另一个 \`ref\` 来实现派生数据，这会增加不必要的状态管理开销并容易导致循环更新。对于纯数据推导，应优先使用 \`computed\`。
-`
-  },
-  {
-    id: "doc:hello-system-19-component-decomposition",
-    slug: "19-component-decomposition",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第19章 为什么页面最终必须被拆开？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 7,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第19章 为什么页面最终必须被拆开？
+上述代码在只有一个按钮的小页面里运行良好。
 
-## 1. 单巨石页面的维护瓶颈
+但如果页面需求发生变化：
+- 顶部导航栏增加了一个“全校已选总门数统计”；
+- 页面右侧增加了一个“我的选课小票预览”；
+- 增加了后台轮询更新（其他同学退选，名额空出）。
 
-当一个页面包含课程搜索、卡片网格、侧边栏、分页器与详情弹窗时，将所有模板、样式与状态都堆在单文件中会导致：
-- 状态变量命名空间混杂；
-- 单一功能逻辑难以独立复用与测试；
-- 团队多人协作容易产生代码冲突。
-
----
-
-## 2. 组件化（Component-Based Architecture）
-
-组件化将页面拆解为由树形结构组织的独立可复用单元：
+此时，只要课程人数发生改变，开发者必须**在所有可能引起数据变化的业务路径里，手动找到这 4 处 DOM 节点并逐一执行修改**！
 
 \`\`\`mermaid
 flowchart TD
-    App["App.vue (根组件)"]
-    Header["AppHeader.vue (顶部导航)"]
-    CourseList["CourseListView.vue (主内容区)"]
-    Card1["CourseCard.vue (课程卡片)"]
-    Card2["CourseCard.vue"]
-    Sidebar["EnrollmentSidebar.vue (已选侧边栏)"]
-
-    App --> Header
-    App --> CourseList
-    App --> Sidebar
-    CourseList --> Card1
-    CourseList --> Card2
+    StateChange["选课人数变化 (count++)"] --> Op1["手动修改 #enrolled-count 文本"]
+    StateChange --> Op2["手动修改 #btn-enroll disabled 属性"]
+    StateChange --> Op3["手动修改 #status-badge class 类名"]
+    StateChange --> Op4["手动修改 #nav-total-count 统计"]
+    StateChange --> Op5["手动更新 #drawer-cart 侧边栏列表"]
 \`\`\`
 
-每个组件封装了自身的结构、样式与局部交互逻辑，通过明确的接口与外部进行数据通信。
+只要任何一个分支少写了一句 \`document.getElementById().innerText = ...\`，用户就会看到极其怪异的画面：**按钮显示已满员置灰，但文本却依然显示 99/100**。
+
+核心矛盾暴露无遗：**真实的状态数据被碎片化地编码并散落在了成百上千个 HTML DOM 属性中，系统失去了唯一定义事实的中心源头。**
 `
-  },
-  {
-    id: "doc:hello-system-20-props-events-data-flow",
-    slug: "20-props-events-data-flow",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第20章 组件之间怎样传递信息？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 8,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第20章 组件之间怎样传递信息？
+});
 
-## 1. 单向数据流（One-Way Data Flow）模式
+// 第 15 章
+part2Docs.push({
+  id: "doc:hello-system-15-state-driven-ui",
+  slug: "15-state-driven-ui",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第15章 声明式 UI：UI 是状态的纯函数 UI = f(state)",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 15,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第15章 声明式 UI：UI 是状态的纯函数 UI = f(state)
 
-在父子组件通信中，**Props Down, Events Up** 是最基础且推荐的单向数据流模型：
-- **Props Down**：父组件向子组件单向传递只读属性；
-- **Events Up**：子组件通过触发自定义事件通知父组件发生状态变更意图。
+## 1. 概念革命：从“如何修改”到“应该长什么样”
+
+为了彻底消灭手动同步 DOM 的混乱，现代前端框架（React、Vue、Svelte）提出了一场深刻的心智模型革命——**声明式 UI（Declarative UI）**：
+
+$$\\text{UI} = f(\\text{state})$$
+
+- **开发者唯一的职责**：维护内存中纯粹的 JavaScript 数据状态（\`state\`），并使用模板声明视图与状态之间的映射函数（\`f\`）；
+- **框架的核心职责**：当 \`state\` 发生改变时，自动化地对比新旧视图结构，并将必要的差异高效应用到真实 DOM 上。
+
+\`\`\`html
+<!-- Vue 声明式模板示例 -->
+<template>
+  <div class="course-card">
+    <h3>{{ course.name }}</h3>
+    <p>已选人数: {{ course.enrolled }} / {{ course.capacity }}</p>
+    <button :disabled="isFull" @click="handleEnroll">
+      {{ isFull ? '名额已满' : '立即选课' }}
+    </button>
+  </div>
+</template>
+\`\`\`
+
+开发者在业务代码中**只需要执行 \`course.enrolled++\`**，所有依赖该数据的文本、按钮禁用状态、样式类名都由框架自动且精准地批量更新。
+
+---
+
+## 2. 虚拟 DOM（Virtual DOM）与协调算法的客观认识
+
+在以 Vue 和 React 为代表的框架实现中，**虚拟 DOM（Virtual DOM）** 扮演了重要的桥梁角色。
+
+虚拟 DOM 本质上是一个用纯 JavaScript 对象描述真实 DOM 树结构的轻量级数据表示：
+
+\`\`\`javascript
+const vnode = {
+    tag: 'div',
+    props: { class: 'course-card' },
+    children: [
+        { tag: 'p', children: '已选人数: 1/100' },
+        { tag: 'button', props: { disabled: false }, children: '立即选课' }
+    ]
+};
+\`\`\`
+
+> **算法规范说明**：
+> 虚拟 DOM 的协调算法（Reconciliation / Diff）根据新旧虚拟 DOM 树的差异，推导出需要应用到真实 DOM 上的具体更新操作。
+> 需要明确：**这是一种工程上的高效启发式对比算法（通常采用同层比对与 Key 复用策略），并不暗示在数学意义上求解全局绝对最小编辑距离（Minimum Edit Distance）。**
+`
+});
+
+// 第 16 章
+part2Docs.push({
+  id: "doc:hello-system-16-vue-reactivity",
+  slug: "16-vue-reactivity",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第16章 Vue 3 响应式核心：依赖收集与派发更新",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 16,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第16章 Vue 3 响应式核心：依赖收集与派发更新
+
+## 1. 响应式的核心命题
+
+请思考一个最朴素的 JavaScript 现象：
+
+\`\`\`javascript
+let enrolled = 1;
+let message = "当前已选: " + enrolled;
+console.log(message); // 输出: 当前已选: 1
+
+enrolled = 2;
+console.log(message); // 依然输出: 当前已选: 1！
+\`\`\`
+
+在标准 JavaScript 语法中，变量赋值是一个**瞬时动作**。修改 \`enrolled\` 的值，绝不会自动触发 \`message\` 的重新计算。
+
+Vue 3 响应式系统的全部使命，就是**建立一套自动化的“依赖追踪（Track）”与“派发更新（Trigger）”机制**。
+
+---
+
+## 2. 响应式基石：ES6 Proxy 拦截机制
+
+Vue 3 使用标准的 ES6 \`Proxy\` 对象对目标对象进行透明拦截包装：
 
 \`\`\`mermaid
 flowchart TD
-    Parent["父组件 (CourseListView)"]
-    Child["子组件 (CourseCard)"]
+    UserCode["用户代码: state.enrolled = 2"] --> ProxySet["Proxy set 陷阱 (Setter Trap)"]
+    ProxySet --> ReflectSet["Reflect.set(target, key, value) 写入底层对象"]
+    ProxySet --> Trigger["trigger(target, key) 派发更新: 通知所有订阅该属性的副作用函数重新执行"]
 
-    Parent -->|1. Props 传递只读数据 :course='item'| Child
-    Child -->|2. Emit 抛出事件 @enroll='handleEnroll'| Parent
+    ReadCode["渲染函数读取: state.enrolled"] --> ProxyGet["Proxy get 陷阱 (Getter Trap)"]
+    ProxyGet --> Track["track(target, key) 依赖收集: 记录当前正在执行的 activeEffect"]
+    ProxyGet --> ReflectGet["Reflect.get(target, key) 返回真实值"]
 \`\`\`
 
 ---
 
-## 2. Props 的单向绑定说明
+## 3. 依赖关系全局数据结构：\`targetMap\`
 
-在 Vue 规范中：
-- 子组件**严禁直接对接收到的 Prop 变量进行重新赋值**（如 \`props.course = newObj\`）；
-- 若 Prop 为对象或数组，直接修改其内部嵌套属性虽然在技术上可能影响父组件，但这破坏了单向数据流的可追踪性，属于不推荐的做法。
+Vue 3 内部维护了一个高度优化的三层桶结构，用于精确记录“谁依赖了哪个对象的哪个属性”：
+
+\`\`\`text
+targetMap (WeakMap)
+  └── [ target 对象 (例如 course) ] : (Map)
+        └── [ key 属性名 (例如 "enrolled") ] : (Set)
+              └── Effect 1: 组件渲染更新函数 RenderEffect
+              └── Effect 2: 计算属性 ComputedEffect
+\`\`\`
+
+- **依赖收集（Track）**：当某个渲染函数或副作用函数执行时，它会被设置为全局的 \`activeEffect\`。当它读取 \`state.enrolled\` 时，触发 \`get\` 拦截，Vue 将当前 \`activeEffect\` 注册到对应属性的 \`Set\` 集合中；
+- **派发更新（Trigger）**：当执行 \`state.enrolled = 2\` 时，触发 \`set\` 拦截，Vue 立即从 \`targetMap\` 中取出该属性对应的所有 \`Effect\` 并依次重新执行，从而精准驱动组件视图重绘！
+`
+});
+
+// 第 17 章
+part2Docs.push({
+  id: "doc:hello-system-17-computed-properties",
+  slug: "17-computed-properties",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第17章 computed 计算属性：脏值检查与惰性求值",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 17,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第17章 computed 计算属性：脏值检查与惰性求值
+
+## 1. 为什么不直接用普通方法？
+
+在 Vue 组件中，我们常常需要从原始状态衍生出新的展示数据（例如判断课程是否已满员）：
+
+\`\`\`javascript
+// 方案 A: 使用普通函数方法
+function isFullMethod() {
+    console.log("执行了方法计算");
+    return course.enrolled >= course.capacity;
+}
+
+// 方案 B: 使用 computed 计算属性
+const isFullComputed = computed(() => {
+    console.log("执行了 computed 计算");
+    return course.enrolled >= course.capacity;
+});
+\`\`\`
+
+如果模板中有 5 处引用了 \`isFull\`，或者组件因为其他完全无关的状态（例如输入框内容）发生重新渲染：
+- **普通方法**：每一次渲染都会**无条件重新执行 5 次**复杂计算；
+- **computed 计算属性**：只要其依赖的 \`course.enrolled\` 和 \`course.capacity\` 没有发生改变，它会直接返回**内存缓存结果**，计算逻辑一次都不会重复执行！
 
 ---
 
-## 3. 多种通信方式的适用场景
+## 2. 脏值检查（Dirty Flag）与惰性求值（Lazy Evaluation）
 
-除了 Props/Emit 之外，现代前端还提供了其他通信手段：
-- **provide / inject**：用于跨多层级的深层依赖传递；
-- **全局状态管理（如 Pinia）**：用于跨路由、多视图共享的应用级状态；
-- **组合式函数（Composables）**：用于在不同组件间复用有状态的业务逻辑。
-`
-  },
-  {
-    id: "doc:hello-system-21-component-lifecycle",
-    slug: "21-component-lifecycle",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第21章 组件什么时候出生？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 9,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第21章 组件什么时候出生？
-
-## 1. 组件的生命周期过程
-
-组件从被创建到最终销毁经历多个阶段：
+\`computed\` 内部通过一个布尔标志位 \`_dirty\` 实现高效的惰性求值：
 
 \`\`\`mermaid
-stateDiagram-v2
-    [*] --> Setup: 初始化阶段 (创建响应式状态与计算属性)
-    Setup --> Mounted: onMounted (DOM 节点挂载完成)
-    Mounted --> Updated: onUpdated (响应式数据改变触发重新渲染)
-    Mounted --> Unmounted: onUnmounted (组件销毁卸载)
-    Unmounted --> [*]
+flowchart TD
+    Init["初始化: _dirty = true, 缓存 _value = undefined"] --> FirstRead["第一次读取 computed 值"]
+    FirstRead --> Eval["_dirty 为 true: 触发求值计算, 更新 _value, 设 _dirty = false"]
+    Eval --> Return1["返回计算结果"]
+
+    SubRead["后续再次读取 computed 值"] --> CheckDirty{"_dirty 是否为 true ?"}
+    CheckDirty -->|否 (依赖未变)| Cache["直接返回缓存 _value, 零计算开销"]
+    CheckDirty -->|是 (依赖已变更)| Eval
+
+    DepChange["依赖发生变化: course.enrolled++"] --> TriggerComputed["触发 computed 内部调度器: 仅将 _dirty 设为 true, 暂不执行计算 (惰性)"]
+\`\`\`
+
+这种设计避免了昂贵的衍生数据计算在状态频繁变化时产生不必要的 CPU 浪费。
+`
+});
+
+// 第 18 章
+part2Docs.push({
+  id: "doc:hello-system-18-watch-and-side-effects",
+  slug: "18-watch-and-side-effects",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第18章 watch 与副作用管理：何时触发外部世界？",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 18,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第18章 watch 与副作用管理：何时触发外部世界？
+
+## 1. 明确区分：computed 与 watch 的边界
+
+初学者经常在什么时候用 \`computed\`、什么时候用 \`watch\` 之间产生混淆：
+
+| 维度 | \`computed\` 计算属性 | \`watch\` 侦听器 |
+| :--- | :--- | :--- |
+| **主要定位** | **纯粹的数据映射**：从现有响应式状态衍生出新的同步数据 | **执行副作用（Side Effects）**：当状态变化时，与外部非响应式世界交互 |
+| **返回值** | **必须有返回值**，对外暴露为只读的 Ref | **没有返回值**，用于执行动作（如发送网络请求、操作 localStorage） |
+| **异步支持** | 必须是同步纯函数，禁止在内部执行异步操作 | 天生支持在回调函数中编写异步 \`async/await\` 逻辑 |
+
+---
+
+## 2. 副作用清理：防范竞态条件（Race Condition）
+
+当用户快速切换下拉菜单中的选修课程时，系统会频繁发起异步查询。
+
+如果第一次请求耗时 800ms，第二次请求耗时 200ms，第二次请求的响应可能会先到达，随后第一次请求的旧数据返回并覆盖最新视图，造成严重的**竞态条件（Race Condition）**。
+
+Vue 3 的 \`watch\` 提供了专用的清理回调 \`onCleanup\`：
+
+\`\`\`javascript
+watch(currentCourseId, (newId, oldId, onCleanup) => {
+    const controller = new AbortController();
+    
+    // 注册清理回调：当下一次监听触发或组件卸载时自动执行
+    onCleanup(() => {
+        controller.abort(); // 立即取消上一次尚未完成的 HTTP 请求！
+    });
+
+    fetchCourseDetail(newId, { signal: controller.signal })
+        .then(data => { courseDetail.value = data; })
+        .catch(err => {
+            if (err.name !== 'AbortError') console.error(err);
+        });
+});
+\`\`\`
+`
+});
+
+// 第 19 章
+part2Docs.push({
+  id: "doc:hello-system-19-templates-and-reactivity-compiler",
+  slug: "19-templates-and-reactivity-compiler",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第19章 模板编译：为什么 Vue 模板能被精准优化？",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 19,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第19章 模板编译：为什么 Vue 模板能被精准优化？
+
+## 1. 纯运行时比对的瓶颈
+
+在纯运行时的虚拟 DOM 框架中，当组件更新时，框架必须递归遍历整棵虚拟 DOM 树上的所有节点。即使一个节点是完全静态的纯文字（如 \`<h1>选课中心</h1>\`），协调算法也必须遍历它并比对它的属性。
+
+---
+
+## 2. Vue 3 编译期优化：静态提升与补丁标记（Patch Flags）
+
+Vue 3 的模板编译器在构建阶段（Build Time）对模板进行了深度的静态结构分析：
+
+\`\`\`html
+<div class="card">
+  <h1>Mini Campus 选课系统</h1>       <!-- 静态节点 1: 绝对不变 -->
+  <p>固定选课规则说明...</p>           <!-- 静态节点 2: 绝对不变 -->
+  <span :class="themeClass">{{ course.name }}</span> <!-- 动态节点: 仅 class 和 text 变化 -->
+</div>
+\`\`\`
+
+编译后生成的渲染函数代码：
+
+\`\`\`javascript
+// 1. 静态提升 (Static Hoisting)：静态节点在内存中只创建一次，重复复用
+const _hoisted_1 = /*#__PURE__*/_createElementVNode("h1", null, "Mini Campus 选课系统", -1);
+const _hoisted_2 = /*#__PURE__*/_createElementVNode("p", null, "固定选课规则说明...", -1);
+
+export function render(_ctx, _cache) {
+  return (_openBlock(), _createElementBlock("div", { class: "card" }, [
+    _hoisted_1,
+    _hoisted_2,
+    // 2. 补丁标记 (Patch Flag): 9 代表 TEXT + CLASS 动态绑定
+    _createElementVNode("span", { class: _ctx.themeClass }, _toDisplayString(_ctx.course.name), 9 /* TEXT, CLASS */)
+  ]))
+}
+\`\`\`
+
+当数据发生改变时，Vue 的 Diff 算法通过 Block Tree **直接跳过所有静态节点，精准定位到带有 Patch Flag 的动态节点**，比对效率提升了一个数量级。
+`
+});
+
+// 第 20 章
+part2Docs.push({
+  id: "doc:hello-system-20-components-and-props-emit",
+  slug: "20-components-and-props-emit",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第20章 组件化与单向数据流：Props Down, Events Up",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 20,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第20章 组件化与单向数据流：Props Down, Events Up
+
+## 1. 单向数据流（One-Way Data Flow）黄金法则
+
+在组件化架构中，组件之间的数据流动必须遵守严格的单向约束：
+
+\`\`\`mermaid
+flowchart TD
+    Parent["父组件: CourseList.vue (拥有真实的课程数据列表)"]
+    Child["子组件: CourseCard.vue (专职单门课程卡片的展示与交互)"]
+
+    Parent -->|1. Props Down (只读传递数据)| Child
+    Child -->|2. Events Up (抛出业务事件 emit('enroll', id))| Parent
+\`\`\`
+
+- **Props Down**：父组件通过属性（Props）向子组件自顶向下传递数据；
+- **Events Up**：子组件通过自定义事件（Emit）向父组件通知交互意图，**绝不直接在子组件内部修改 Props 传入的数据**。
+
+---
+
+## 2. 为什么严禁在子组件内部直接修改 Props？
+
+如果允许子组件随意执行 \`props.course.enrolled++\`，当多个子组件同时引用同一份数据时，数据的修改来源将变得完全不可追踪。
+
+一旦发生数据错误，你无法确定到底是哪一个子组件在什么时机篡改了状态。
+
+单向数据流确保了：**谁拥有数据（Source of Truth），谁才拥有修改该数据的唯一权力。**
+`
+});
+
+// 第 21 章
+part2Docs.push({
+  id: "doc:hello-system-21-component-lifecycle",
+  slug: "21-component-lifecycle",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第21章 组件生命周期与挂载时机",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 21,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第21章 组件生命周期与挂载时机
+
+## 1. 组件生命周期全景
+
+一个 Vue 组件实例从创建到销毁，会经历确定的生命周期阶段：
+
+\`\`\`mermaid
+flowchart TD
+    Setup["1. setup() 执行 / 响应式状态初始化"] --> Mount["2. onMounted(): 真实 DOM 挂载完毕 (此时可安全进行 DOM 测量或发起首屏 API 请求)"]
+    Mount --> Update["3. onUpdated(): 响应式数据变化，完成 DOM 补丁重绘"]
+    Update --> Unmount["4. onUnmounted(): 组件从页面卸载销毁 (必须在此清理定时器与全局事件监听)"]
 \`\`\`
 
 ---
 
-## 2. 数据获取与资源清理
+## 2. 常见的内存泄漏陷阱
 
-1. **异步数据获取时机**：
-   - 可以在 \`onMounted()\` 中发起初始数据请求，此时 DOM 容器已就绪；
-   - 在支持服务端渲染（SSR）或使用路由导航守卫的架构中，数据也可在进入组件前由数据加载层完成预获取。
-2. **清理副作用防止内存泄漏**：
-   - 若在组件内注册了全局事件监听（如 \`window.addEventListener\`）或定时器（\`setInterval\`），必须在 \`onUnmounted()\` 中进行显式解绑与清理。
+在 \`onMounted\` 中注册了全局事件监听器或定时器，却忘记在 \`onUnmounted\` 中销毁，是导致前端单页应用（SPA）内存暴涨的最常见原因：
+
+\`\`\`javascript
+export default {
+  setup() {
+    let timerId = null;
+
+    onMounted(() => {
+      // 开启定时轮询最新名额
+      timerId = setInterval(() => {
+        fetchLatestCapacity();
+      }, 5000);
+    });
+
+    onUnmounted(() => {
+      // 严禁遗漏：离开页面时必须彻底清除定时器！
+      if (timerId) clearInterval(timerId);
+    });
+  }
+}
+\`\`\`
 `
-  },
-  {
-    id: "doc:hello-system-22-spa-and-client-routing",
-    slug: "22-spa-and-client-routing",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第22章 一个网站为什么能有很多“页面”？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 10,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第22章 一个网站为什么能有很多“页面”？
+});
 
-## 1. MPA 与 SPA 的架构差异
+// 第 22 章
+part2Docs.push({
+  id: "doc:hello-system-22-form-binding-vmodel",
+  slug: "22-form-binding-vmodel",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第22章 双向绑定的表单真相：v-model 的语法糖展开",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 22,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第22章 双向绑定的表单真相：v-model 的语法糖展开
 
-- **多页面应用（MPA, Multi-Page Application）**：每次页面跳转均向服务器请求全新的 HTML 文件，浏览器执行完整页面刷新；
-- **单页面应用（SPA, Single-Page Application）**：初始只加载单个 HTML 入口，后续的“页面切换”由客户端 JavaScript 动态替换视图组件完成，避免了全屏刷新。
+## 1. \`v-model\` 不是黑魔法
+
+很多初学者将 \`v-model\` 视为一种神奇的“底层双向通道”。
+
+实际上，\`v-model\` 本质上只是一个**单向数据绑定 + 事件监听的编译期语法糖（Syntax Sugar）**：
+
+\`\`\`html
+<!-- 开发者书写的语法糖 -->
+<input v-model="searchKeyword" />
+
+<!-- 编译器等价展开后的真实代码 -->
+<input 
+  :value="searchKeyword" 
+  @input="searchKeyword = $event.target.value" 
+/>
+\`\`\`
 
 ---
 
-## 2. 客户端路由（Client-Side Routing）原理
+## 2. 中文输入法（IME）的特殊处理
 
-客户端路由器（如 Vue Router）主要利用 **HTML5 History API** 实现无刷新导航：
+在处理中文、日文等需要输入法输入拼音的场景中，原生 \`@input\` 会在每一个拼音字符敲入时立即触发。
+
+Vue 内部通过监听 \`compositionstart\` 与 \`compositionend\` 原生事件，确保只有在用户选定汉字并完成组字后，才会最终更新响应式变量，避免了半成品拼音引发的高频无效查询。
+`
+});
+
+// 第 23 章
+part2Docs.push({
+  id: "doc:hello-system-23-global-state-pinia",
+  slug: "23-global-state-pinia",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第23章 跨组件状态共享：Pinia 与全局状态树",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 23,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第23章 跨组件状态共享：Pinia 与全局状态树
+
+## 1. 属性逐级透传（Prop Drilling）的痛苦
+
+当应用规模扩大到数十个组件时，如果顶级组件中的“当前登录学生信息（User Profile）”需要传递给位于组件树第 6 层的某个按钮组件，开发者不得不通过 Props 一层一层往下透传：
+
+\`\`\`text
+App -> MainLayout -> ContentArea -> CourseTabs -> CourseList -> CourseItem -> EnrollButton
+\`\`\`
+
+中间的 5 层组件根本不需要这些数据，却被迫充当了机械的传话筒。
+
+---
+
+## 2. 全局状态存储库（Pinia Store）架构
+
+Pinia 提供了全局中心化的状态管理模型：
 
 \`\`\`mermaid
 flowchart LR
-    UserNav["用户点击导航链接 /schedule"] --> Router["前端路由器拦截点击"]
-    Router --> HistoryAPI["调用 history.pushState() 更新浏览器地址栏 (无网络刷新)"]
-    Router --> ComponentSwap["根据路由配置动态渲染对应的视图组件"]
-\`\`\`
-
-- \`history.pushState()\` 和 \`history.replaceState()\` 允许在不重新加载页面的前提下修改浏览器地址栏；
-- 浏览器前进/后退时触发 \`popstate\` 事件，路由器捕获后同步更新对应的视图组件。
-`
-  },
-  {
-    id: "doc:hello-system-23-global-state-management",
-    slug: "23-global-state-management",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第23章 状态应该放在哪里？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 11,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第23章 状态应该放在哪里？
-
-## 1. 跨层级状态共享与 Pinia
-
-当系统中多个不具备直接父子关系的组件（如顶部用户信息与右侧购物车抽屉）都需要访问同一份数据时，若仅靠状态提升（Lifting State Up）和 Props 层层透传（Prop Drilling），会导致中间组件充斥无关参数。
-
-**Pinia** 是 Vue 官方推荐的状态管理库，其核心心智模型包括：
-- **Store**：支持按业务模块定义多个独立的 Store（如 \`useUserStore\`, \`useCourseStore\`）；
-- **State**：保存全局共享的响应式数据；
-- **Getters**：基于 State 的派生计算属性；
-- **Actions**：包含同步或异步的业务操作方法。
-
-\`\`\`mermaid
-flowchart TD
-    subgraph PiniaStore ["Pinia Store (useCourseStore)"]
-        State["state: { enrolledList: [] }"]
-        Actions["action: enroll(courseId)"]
+    subgraph Store["Pinia 全局 Store (useEnrollmentStore)"]
+        State["State: 响应式全局选课列表 & 用户 Token"]
+        Getters["Getters: 衍生计算 (已选总学分)"]
+        Actions["Actions: 业务用例方法 (executeEnroll(id))"]
     end
 
-    CompA["HeaderBadge.vue"] -->|读取已选数量| State
-    CompB["CourseCard.vue"] -->|触发选课操作| Actions
+    CompA["组件 A (导航栏)"] -->|读取| Getters
+    CompB["组件 B (选课按钮)"] -->|派发动作| Actions
 \`\`\`
 
-> **架构提示**：
-> Pinia 的 Store 实例与具体的 Vue 应用实例绑定，在服务端渲染（SSR）场景下会为每个请求创建独立的状态实例，避免不同用户之间的状态污染。
+任何深度的组件都可以直接通过 \`useEnrollmentStore()\` 访问全局状态并调用 Actions 方法，彻底解决了跨层级通信难题。
 `
-  },
-  {
-    id: "doc:hello-system-24-browser-data-vs-db-data",
-    slug: "24-browser-data-vs-db-data",
-    parentId: "'doc:hello-system-part-2'",
-    title: "第24章 浏览器里的数据不是数据库里的数据",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 12,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第24章 浏览器里的数据不是数据库里的数据
+});
 
-## 1. 数据形态的五层空间演变
+// 第 24 章
+part2Docs.push({
+  id: "doc:hello-system-24-client-data-metamorphosis",
+  slug: "24-client-data-metamorphosis",
+  parentId: "'doc:hello-system-part-2'",
+  title: "第24章 前端数据形态的演变：从用户交互到网络报文",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 24,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第24章 前端数据形态的演变：从用户交互到网络报文
 
-在理解完整的软件系统时，开发者需要清晰认识到数据在不同层次中的存在形式：
+## 1. 前端全流程数据形态流转
+
+在结束前端部分的探索前，让我们完整梳理一次点击在浏览器内存中的数据形态演变：
 
 \`\`\`mermaid
-flowchart LR
-    L1["1. DOM 树呈现\n(用户可见的视图文字)"] <--> L2["2. 浏览器 JS 内存\n(响应式 Proxy / Ref 对象)"]
-    L2 <-->|JSON 序列化与反序列化| L3["3. HTTP 报文内容\n(网络传输字节流)"]
-    L3 <-->|反序列化与映射| L4["4. 后端服务内存\n(Java 领域对象 / DTO)"]
-    L4 <-->|数据库引擎持久化| L5["5. 数据库存储介质\n(关系表 / 索引 / 磁盘页)"]
+flowchart TD
+    Step1["1. 物理交互\n用户鼠标点击坐标 (X: 520, Y: 340)"] --> Step2["2. 操作系统与浏览器事件\n产生原生 PointerEvent / MouseEvent 实例"]
+    Step2 --> Step3["3. Vue 事件绑定与响应式状态跃迁\nhandleClick 触发: isSubmitting.value = true"]
+    Step3 --> Step4["4. 内存业务对象构造\nconst payload = { courseId: 2048, timestamp: 1787932800 }"]
+    Step4 --> Step5["5. 序列化编码 (JSON.stringify)\n转换为纯文本字符串: '{\"courseId\":2048}'"]
+    Step5 --> Step6["6. 网络协议栈编码\nUTF-8 字符流转换为二进制 TCP 载荷，装配 HTTP POST 报文头"]
 \`\`\`
 
-- **瞬态数据（Transient Data）**：浏览器内存中的 JavaScript 变量和 DOM 结构属于瞬态数据，页面刷新或窗口关闭后即被销毁；
-- **持久数据（Persistent Data）**：经过网络协议传输至后端、最终写入数据库管理系统的数据，具备事务与持久性保障。
+---
 
-接下来，我们将深入数据持久化的核心领域——**第三部分：数据需要一个真正的家**。
+## 2. 走向持久化世界
+
+至此，我们已经看清了浏览器内部的数据生命周期。
+
+但是，无论前端的响应式系统多么优雅，运行在浏览器内存中的 JavaScript 对象都是**瞬态的**——只要用户按一下 \`F5\` 刷新网页，所有的内存变量都会瞬间灰飞烟灭。
+
+数据要想获得永恒的生命，必须跨越网络，进入真正的持久化堡垒——数据库管理系统。
+
+让我们进入第三部分：**数据需要一个真正的家 (25 ~ 37)**！
 `
-  }
-];
+});
+
+export { part2Docs };

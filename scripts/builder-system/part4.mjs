@@ -1,256 +1,337 @@
 // scripts/builder-system/part4.mjs
-// 第四部分：前端第一次遇见后端 (38 ~ 46)
-// 全量技术修订与规范化完整版本 (全 9 章高密度深度正文)
+// 《Hello System · 图解软件系统》第四部分：前端第一次遇见后端 (第 38 ~ 46 章)（全量教材化深度扩写版本）
 
-export const part4Docs = [
-  {
-    id: "doc:hello-system-part-4",
-    slug: "part-4",
-    parentId: "'doc:book-hello-system'",
-    title: "第四部分 · 前端第一次遇见后端",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 6,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: ""
-  },
-  {
-    id: "doc:hello-system-38-browser-cannot-touch-db-directly",
-    slug: "38-browser-cannot-touch-db-directly",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第38章 浏览器为什么不能直接操作数据库？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 1,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第38章 浏览器为什么不能直接操作数据库？
+const part4Docs = [];
 
-## 1. 为什么不能让客户端直接连接数据库？
+// 顶层部分节点
+part4Docs.push({
+  id: "doc:hello-system-part-4",
+  slug: "part-4",
+  parentId: "'doc:book-hello-system'",
+  title: "第四部分: 前端第一次遇见后端 (38~46)",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 4,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第四部分: 前端第一次遇见后端 (38~46)
 
-在初学 Web 开发时，有人可能会提出疑问：“既然前端运行 JavaScript，数据库支持网络连接，为什么不直接在前端编写数据库查询语句？”
+本部分聚焦于**跨越网络边界的前后端通信契约与对象边界划分**。
 
-如果在生产架构中允许客户端直连数据库，将面临以下严重的系统与安全风险：
-
-\`\`\`mermaid
-flowchart TD
-    Client["运行在用户终端的浏览器\n(不可信环境，代码对用户完全透明)"]
-    DB["核心数据库管理系统 (DBMS)"]
-
-    Client -->|1. 凭据泄露: 数据库连接账号与密码直接暴露在前端源码中| DB
-    Client -->|2. 越权与注入: 用户可通过修改客户端逻辑直接执行任意 SQL| DB
-    Client -->|3. 连接耗尽: 大量客户端同时直连将迅速耗尽数据库连接池资源| DB
-    Client -->|4. 业务逻辑旁路: 前端校验可被直接绕过，服务端无法统一执行业务规则| DB
-\`\`\`
-
----
-
-## 2. 后端服务的核心定位
-
-后端应用服务器作为系统的**信任边界守门人**与**业务仲裁中心**：
-1. **安全与权限控制**：集中保管数据库认证凭据，对所有外部请求执行身份鉴权与权限校验；
-2. **连接池复用**：通过内部连接池复用有限的数据库连接，支撑海量前端并发访问；
-3. **权威业务规则执行**：无论前端如何修改，所有核心业务不变量均由后端统一判定与持久化。
+我们将从套接字与网络分包的物理现实出发，深入解构 HTTP 报文结构与现代 RESTful 资源语义设计。随后，我们将以“李雷点击选课”为主线，完整追踪从 Vue \`fetch()\` 请求发起、跨语言 JSON 序列化、Spring WebMVC 请求分发，到 Controller、Service、Repository 以及 Entity/DTO/Value Object 对象的严格职责隔离。
 `
-  },
-  {
-    id: "doc:hello-system-39-http-protocol-agreement",
-    slug: "39-http-protocol-agreement",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第39章 HTTP到底帮我们约定了什么？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 2,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第39章 HTTP到底帮我们约定了什么？
+});
 
-## 1. HTTP 协议的核心定位（RFC 9110）
+// 第 38 章
+part4Docs.push({
+  id: "doc:hello-system-38-networking-foundations-ip-tcp",
+  slug: "38-networking-foundations-ip-tcp",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第38章 网络协议的物理现实：从套接字到包交换",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 38,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第38章 网络协议的物理现实：从套接字到包交换
 
-**超文本传输协议（HTTP）** 是一种定义在应用层的无状态请求/响应协议，用于在分布式超媒体系统中操作资源。
+## 1. 跨越机器边界的鸿沟
 
-- **HTTP/1.1**：基于纯文本格式组织报文（便于阅读与调试）；
-- **HTTP/2**：采用二进制分帧层，支持单个 TCP 连接上的多路复用（Multiplexing）；
-- **HTTP/3**：基于底层的 QUIC 协议（基于 UDP），解决了传输层的队头阻塞问题。
+在前面的章节中，无论是 Vue 前端还是 Java 后端，代码操作的都是**本机物理内存中的数据指针**。
 
-无论底层传输机制如何演进，HTTP 所表达的**资源操作语义（Methods, Status Codes, Headers）**保持一致。
-
----
-
-## 2. 报文结构示例（HTTP/1.1 文本表现）
-
-### 请求报文（Request）：
-\`\`\`http
-POST /api/enrollments HTTP/1.1
-Host: campus.example.edu
-Content-Type: application/json
-Authorization: Bearer <access_token>
-
-{"courseId": 2048}
-\`\`\`
-
-### 响应报文（Response）：
-\`\`\`http
-HTTP/1.1 201 Created
-Content-Type: application/json
-Content-Length: 48
-
-{"status":"SUCCESS","message":"选课成功"}
-\`\`\`
-
-> **关于“无状态”的准确理解**：
-> HTTP 协议的“无状态（Stateless）”是指服务器原则上无需保留跨请求的协议上下文即可理解单个请求的语义。这并不意味着应用层不能通过 Cookie、Session 或 Token 在业务层面维护用户会话状态。
-`
-  },
-  {
-    id: "doc:hello-system-40-json-the-lingua-franca",
-    slug: "40-json-the-lingua-franca",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第40章 JSON为什么总出现在前后端之间？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 3,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第40章 JSON为什么总出现在前后端之间？
-
-## 1. 跨异构语言的数据交换格式
-
-前端运行在 JavaScript 引擎中，后端服务可能采用 Java、Go 或 Python。它们在内存中的对象结构完全不同。
-
-**JSON（JavaScript Object Notation）** 是一种轻量级的纯文本数据交换格式，充当了跨语言的通用中介：
+然而，当用户的浏览器运行在客户端笔记本上，而服务端程序运行在千里之外的数据中心服务器上时，两台机器之间没有任何共享内存，唯一的连接纽带就是**不可靠的物理网络链路**。
 
 \`\`\`mermaid
 flowchart LR
-    JS["前端 JS 内存对象\n{ courseId: 2048 }"] -->|JSON.stringify() 序列化| JSONText["JSON 文本表示\n'{\"courseId\":2048}'"]
-    JSONText -->|UTF-8 编码为字节流| Net["HTTP 网络传输"]
-    Net --> ByteStream["后端接收字节流"]
-    ByteStream -->|JSON 解析库反序列化| JavaObj["Java 堆内存 DTO 对象\nEnrollRequestDto 实例"]
+    Client["客户端计算机\n(浏览器进程)"] <== "不可靠的物理网络\n(可能丢包、乱序、延迟、抖动)" ==> Server["服务端计算机\n(后端应用进程)"]
 \`\`\`
 
 ---
 
-## 2. 数据格式的多样性
+## 2. 经典 TCP/IP 分层模型
 
-需要说明的是，JSON 并非前后端通信的唯一选择：
-- **Protocol Buffers (Protobuf)**：二进制高效编码，广泛用于内部微服务 RPC；
-- **Form Data**：用于传统表单提交与文件上传；
-- **CBOR / MessagePack**：二进制 JSON 替代方案。
-
-在开放 Web API 中，JSON 因其人类可读性与良好的生态支持成为了最通用的选择。
-`
-  },
-  {
-    id: "doc:hello-system-41-the-first-real-api",
-    slug: "41-the-first-real-api",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第41章 第一条真正的API",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 4,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第41章 第一条真正的API
-
-## 1. 查询课程列表 API：GET /api/courses
-
-当用户打开选课页面时，前端通过 API 获取当前开放的课程列表：
+现代网络通信通过分层协议栈实现了对底层复杂物理传输的高效抽象：
 
 \`\`\`mermaid
-sequenceDiagram
-    autonumber
-    participant Frontend as 前端 (Vue 3)
-    participant Ctrl as CourseController
-    participant Svc as CourseService
-    participant Repo as CourseRepository
-    participant DB as MySQL 数据库
+flowchart TD
+    App["1. 应用层 (Application Layer: HTTP/1.1, HTTP/2, WebSocket)\n定义业务报文格式与交互语义 (如 GET, POST, JSON 载荷)"]
+    Transport["2. 传输层 (Transport Layer: TCP, UDP)\n提供端到端的进程级通信 (TCP 提供可靠字节流、三次握手、丢包重传与拥塞控制)"]
+    Network["3. 网络层 (Network Layer: IP)\n负责跨网络路由寻址与主机间数据包转发 (IP 地址)"]
+    Link["4. 数据链路与物理层 (Link & Physical Layer: Ethernet, Wi-Fi, 光纤)\n负责在相邻物理节点间传输二进制电信号与光脉冲"]
 
-    Frontend->>Ctrl: GET /api/courses
-    Ctrl->>Svc: listAvailableCourses()
-    Svc->>Repo: findAllActive()
-    Repo->>DB: SELECT id, code, name, capacity, enrolled FROM courses WHERE status = 'ACTIVE'
-    DB-->>Repo: 返回结果集
-    Repo-->>Svc: 映射为 List<Course> 领域实体
-    Svc-->>Ctrl: 转换为 List<CourseResponseDto>
-    Ctrl-->>Frontend: 返回 HTTP 200 OK (JSON 数组)
-    Note over Frontend: 前端更新响应式状态，渲染课程卡片
+    App --> Transport --> Network --> Link
 \`\`\`
+
+- **套接字（Socket）**：操作系统向应用程序暴露的抽象通信端点，由 \`(源 IP, 源端口, 目标 IP, 目标端口, 协议)\` 五元组唯一定义；
+- **流式传输的本质**：TCP 向上层应用提供的是一个**无边界的连续字节流（Byte Stream）**。应用层协议（如 HTTP）必须自行定义报文边界解析规则。
 `
-  },
+});
+
+// 第 39 章（删除手工未经计算的 Content-Length，聚焦纯粹语义）
+part4Docs.push({
+  id: "doc:hello-system-39-http-message-anatomy",
+  slug: "39-http-message-anatomy",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第39章 HTTP 报文解构：请求行、头部与状态码",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 39,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第39章 HTTP 报文解构：请求行、头部与状态码
+
+## 1. HTTP 请求报文的标准文本结构
+
+HTTP/1.1 是一种典型的基于 ASCII 文本的应用层协议。一次选课请求的真实报文结构如下：
+
+\`\`\`http
+POST /api/enrollments HTTP/1.1
+Host: www.aetherstudio.top
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+Content-Type: application/json; charset=utf-8
+Authorization: Bearer eyJhbGciOi...
+
+{"courseId":2048}
+\`\`\`
+
+### 报文核心要素拆解：
+1. **请求行（Request Line）**：
+   - **请求方法（Method）**：\`POST\`（表达在目标资源集合上创建新实体的业务意图）；
+   - **请求路径（Request URI）**：\`/api/enrollments\`；
+   - **协议版本（Protocol Version）**：\`HTTP/1.1\`。
+2. **请求头（Headers）**：包含主机名、客户端类型、载荷编码格式及认证凭证；
+3. **空行（CRLF, \\r\\n）**：协议规定的关键分隔符，用于告知接收方头部结束、正文开始；
+4. **请求体（Body）**：传输的具体业务载荷数据。
+
+---
+
+## 2. 常见 HTTP 状态码的精准语义分类
+
+服务端通过状态码向客户端传达请求的最终处理结果：
+
+| 状态码 | 英文名称 | 业务场景精准语义 |
+| :--- | :--- | :--- |
+| **200 OK** | 成功 | 请求处理成功，响应体包含目标数据 |
+| **201 Created** | 已创建 | 成功在服务器上创建了新资源（如选课成功生成了选课流水） |
+| **204 No Content** | 无内容 | 成功执行了操作（如退课成功），且无需向客户端返回任何数据体 |
+| **400 Bad Request** | 格式错误 | 客户端发送的 JSON 格式损坏或参数类型不匹配 |
+| **401 Unauthorized** | 未认证 | 客户端未携带身份凭据（Token/Cookie）或凭据已过期 |
+| **403 Forbidden** | 拒绝访问 | 客户端已登录，但无权操作该资源（如学生尝试修改全校课表） |
+| **404 Not Found** | 未找到 | 目标资源不存在（如请求的 courseId 不在数据库中） |
+| **409 Conflict** | 业务冲突 | 发生业务规则冲突（如该课程名额已满，或学生已选过该课程） |
+| **500 Internal Error**| 服务端错误 | 后端服务器发生未捕获的运行时异常（如数据库连接中断） |
+`
+});
+
+// 第 40 章
+part4Docs.push({
+  id: "doc:hello-system-40-json-serialization",
+  slug: "40-json-serialization",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第40章 跨语言的契约：JSON 序列化与反序列化",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 40,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第40章 跨语言的契约：JSON 序列化与反序列化
+
+## 1. 为什么选择 JSON？
+
+前端使用 JavaScript 语言，后端可能使用 Java、Go、Python 或 Rust。
+
+由于不同编程语言在内存中的对象结构与类型系统完全不同，两端无法直接传递内存指针，必须选择一种**语言无关的通用中立数据格式**：
+
+\`\`\`mermaid
+flowchart LR
+    JS["浏览器端 JavaScript 对象\n{ courseId: 2048 }"] -->|JSON.stringify()| JSON["跨平台纯文本 (JSON 字符串)\n'{\"courseId\":2048}'"]
+    JSON -->|Jackson / Gson 反序列化| Java["后端 Java 强类型对象 (DTO)\nnew EnrollRequest(2048)"]
+\`\`\`
+
+---
+
+## 2. 常见序列化陷阱：数值精度与时间格式
+
+1. **JavaScript 64 位浮点数（IEEE 754）精度丢失**：
+   - JavaScript 中的 \`Number.MAX_SAFE_INTEGER\` 为 $2^{53} - 1$（9007199254740991）；
+   - 如果 Java 后端使用 64 位自增长整型（\`Long\`）或雪花算法 ID（如 \`1787932800123456789L\`），当它以 JSON 数字格式传输给前端时，最后几位会被 JavaScript 自动截断为 0！
+   - **最佳实践**：超长整型 ID 在传输时必须序列化为**字符串类型（String）**。
+2. **时区与日期格式标准化**：
+   - 严禁传输本地时间字符串（如 \`"2026-08-29 08:00:00"\`，因为缺少时区信息）；
+   - 推荐使用 ISO-8601 标准 UTC 格式字符串：\`"2026-08-29T00:00:00.000Z"\`。
+`
+});
+
+// 第 41 章（Canonical Mini Campus 模式完全一致，移除无意义的 status 字段）
+part4Docs.push({
+  id: "doc:hello-system-41-first-api-design",
+  slug: "41-first-api-design",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第41章 设计第一条 RESTful API：资源、动作与路径",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 41,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第41章 设计第一条 RESTful API：资源、动作与路径
+
+## 1. RESTful 面向资源架构（Resource-Oriented Architecture）
+
+在初学者的 API 设计中，经常出现如下充满动词的 RPC 风格 URL：
+- \`POST /api/doEnrollCourse\`
+- \`GET /api/queryCourseList\`
+- \`POST /api/cancelStudentCourse\`
+
+REST 架构风格提倡：**URL 只定位“名词资源”，操作类型由标准的“HTTP Method 动词”表达**。
+
+\`\`\`text
+HTTP Method   URL 资源路径            业务语义
+GET           /api/courses           获取开放选课的课程列表
+GET           /api/courses/{id}      获取指定课程的详细信息
+POST          /api/enrollments       创建一条新的选课关联记录 (选课)
+DELETE        /api/enrollments/{id}  删除指定的选课记录 (退课)
+\`\`\`
+
+---
+
+## 2. 选课 API 契约的标准化定义
+
+根据 Mini Campus 的 Canonical 数据模型，选课 API 的规范契约如下：
+
+### 请求规范（Request）：
+- **URL**：\`POST /api/enrollments\`
+- **Headers**：\`Content-Type: application/json\`, \`Authorization: Bearer <token>\`
+- **Body**：
+  \`\`\`json
   {
-    id: "doc:hello-system-42-the-click-moment",
-    slug: "42-the-click-moment",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第42章 点击“选课”",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 5,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第42章 点击“选课”
+    "courseId": 2048
+  }
+  \`\`\`
+  > **安全设计注意**：
+  > 请求体中**严禁包含 \`studentId\`**！当前学生的身份必须由后端从经过加密签名的认证凭据（Token/Session）中安全解析，绝不信任前端传入的任意用户 ID。
 
-## 1. 提交选课请求：POST /api/enrollments
-
-前端触发选课交互时的调用示例：
-
-\`\`\`javascript
-async function handleEnroll(courseId) {
-    submitting.value = true;
-    try {
-        const response = await fetch('/api/enrollments', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': \`Bearer \${userToken.value}\`
-            },
-            // 注意：客户端只传递目标课程 ID，当前操作学生身份由服务端从 Token 中解析！
-            body: JSON.stringify({ courseId: courseId })
-        });
-        
-        if (response.status === 201) {
-            alert('选课成功！');
-        } else if (response.status === 409) {
-            alert('选课失败：名额已满或已选过该课程。');
-        }
-    } finally {
-        submitting.value = false;
-    }
+### 成功响应（Response - 201 Created）：
+\`\`\`json
+{
+  "code": "SUCCESS",
+  "message": "选课成功",
+  "data": {
+    "enrollmentId": 9821,
+    "courseId": 2048,
+    "courseName": "计算机系统导论",
+    "enrolledAt": "2026-08-29T08:00:00.000Z"
+  }
 }
 \`\`\`
 `
-  },
-  {
-    id: "doc:hello-system-43-skinny-controller",
-    slug: "43-skinny-controller",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第43章 Controller为什么不能自己完成一切？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 6,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第43章 Controller为什么不能自己完成一切？
+});
 
-## 1. 表现层的边界与“瘦 Controller”
+// 第 42 章
+part4Docs.push({
+  id: "doc:hello-system-42-clicking-enroll-frontend-backend-meet",
+  slug: "42-clicking-enroll-frontend-backend-meet",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第42章 点击选课：从 Vue fetch 到 Spring Controller",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 42,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第42章 点击选课：从 Vue fetch 到 Spring Controller
 
-在分层架构中，Controller 的职责是**处理传输与协议层面的适配**：
-- 解析 HTTP 请求头与请求体；
-- 执行参数基本格式清洗与校验（如 ID 是否为正整数）；
-- 从安全上下文中提取已认证用户身份；
-- 调用业务逻辑层，并将业务执行结果包装为对应的 HTTP 响应。
+## 1. 前端网络调用闭环
+
+让我们在 Vue 3 组件中实现真实的选课交互：
+
+\`\`\`javascript
+// CourseCard.vue
+import { ref } from 'vue';
+
+export default {
+  props: { course: Object },
+  setup(props, { emit }) {
+    const isSubmitting = ref(false);
+    const errorMessage = ref('');
+
+    async function handleEnrollClick() {
+      isSubmitting.value = true;
+      errorMessage.value = '';
+
+      try {
+        const response = await fetch('/api/enrollments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ courseId: props.course.id })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          emit('enrolled-success', result.data);
+        } else {
+          const errorData = await response.json();
+          errorMessage.value = errorData.message || '选课失败';
+        }
+      } catch (err) {
+        errorMessage.value = '网络异常，请检查连接';
+      } finally {
+        isSubmitting.value = false;
+      }
+    }
+
+    return { isSubmitting, errorMessage, handleEnrollClick };
+  }
+}
+\`\`\`
+
+---
+
+## 2. 后端表现层路由分发（Spring MVC DispatcherServlet）
+
+当该请求到达后端 Web 服务器后，Spring 框架的中心分发器将请求精准路由至控制器：
+
+\`\`\`mermaid
+flowchart LR
+    Req["HTTP POST /api/enrollments"] --> Dispatcher["DispatcherServlet (前端控制器)"]
+    Dispatcher --> Mapping["HandlerMapping (路由映射表)"]
+    Mapping --> TargetCtrl["EnrollmentController.enroll() 方法"]
+    TargetCtrl --> ReturnResp["ResponseEntity<EnrollResult>"]
+    ReturnResp --> ViewResolver["HttpMessageConverter (Jackson 序列化)"]
+    ViewResolver --> HTTPResp["HTTP 201 Created 响应报文"]
+\`\`\`
+`
+});
+
+// 第 43 章
+part4Docs.push({
+  id: "doc:hello-system-43-controller-layer-responsibilities",
+  slug: "43-controller-layer-responsibilities",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第43章 表现层 Controller 的纯粹职责：防线还是中转站？",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 43,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第43章 表现层 Controller 的纯粹职责：防线还是中转站？
+
+## 1. Controller 应该做什么？
+
+表现层控制器是整个后端系统的“守门人”。它的核心职责极为纯粹：
 
 \`\`\`java
 @RestController
 @RequestMapping("/api/enrollments")
 public class EnrollmentController {
+
     private final EnrollmentService enrollmentService;
 
     public EnrollmentController(EnrollmentService enrollmentService) {
@@ -258,147 +339,181 @@ public class EnrollmentController {
     }
 
     @PostMapping
-    public ResponseEntity<?> enroll(
-            @AuthenticationPrincipal AuthenticatedUser user,
-            @Valid @RequestBody EnrollRequestDto requestDto) {
-        
-        // 从认证上下文中获取当前学生 ID，防止前端伪造
-        int studentId = user.getStudentId();
-        
-        EnrollResult result = enrollmentService.enroll(studentId, requestDto.getCourseId());
-        
+    public ResponseEntity<ApiResponse<EnrollmentDto>> enroll(
+        @Valid @RequestBody EnrollRequest request,
+        @AuthenticationPrincipal AuthenticatedUser user // 从安全上下文获取认证学生
+    ) {
+        // 1. 调用业务用例
+        EnrollResult result = enrollmentService.enroll(user.getStudentId(), request.getCourseId());
+
+        // 2. 根据业务结果包装对应的 HTTP 状态码
         if (result.isSuccess()) {
-            return ResponseEntity.status(HttpStatus.CREATED).body(result);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(result.getEnrollmentDto()));
         } else {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(result);
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail(result.getErrorMessage()));
         }
     }
 }
 \`\`\`
 
-Controller **不应当包含核心业务规则，也不应当直接执行持久化查询**。
+---
+
+## 2. Controller 的三大绝对禁忌
+
+1. **严禁在 Controller 中编写 SQL 或直接调用数据库连接**：这会导致表现层与底层数据库紧密耦合；
+2. **严禁在 Controller 中执行复杂的业务规则判定**（如“检查先修课是否及格”）：这会导致业务逻辑无法在其他入口（如批处理定时任务、MQ 消费者）中复用；
+3. **严禁直接向客户端返回数据库 Entity 实体对象**：这会导致底层数据库表结构直接暴露给公网。
 `
-  },
-  {
-    id: "doc:hello-system-44-service-the-rule-sanctuary",
-    slug: "44-service-the-rule-sanctuary",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第44章 Service到底是什么？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 7,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第44章 Service到底是什么？
+});
 
-## 1. 业务用例编排与事务边界
+// 第 44 章
+part4Docs.push({
+  id: "doc:hello-system-44-service-layer-domain-orchestration",
+  slug: "44-service-layer-domain-orchestration",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第44章 业务逻辑层 Service：用例编排与不变量守护",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 44,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第44章 业务逻辑层 Service：用例编排与不变量守护
 
-**Service 层（应用服务层）** 承载具体的业务用例流程：
-1. **跨实体流程编排**：协调多个实体与数据访问对象完成用例；
-2. **事务边界控制**：定义事务的开启、提交与回滚范围（例如通过 Spring 的 \`@Transactional\` 注解）；
-3. **安全与审计集成**：记录业务操作流水。
+## 1. 业务用例的指挥官
+
+业务逻辑层（Service）不应该只是一个“简单的中转传话筒”，而是整个业务用例的**总编排者与事务一致性边界的捍卫者**：
 
 \`\`\`java
 @Service
 public class EnrollmentService {
+
     private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
 
-    public EnrollmentService(CourseRepository courseRepo, EnrollmentRepository enrollRepo) {
-        this.courseRepository = courseRepo;
-        this.enrollmentRepository = enrollRepo;
+    public EnrollmentService(CourseRepository courseRepository, EnrollmentRepository enrollmentRepository) {
+        this.courseRepository = courseRepository;
+        this.enrollmentRepository = enrollmentRepository;
     }
 
-    @Transactional
+    @Transactional // 声明事务边界：以下全部操作必须具备原子性
     public EnrollResult enroll(int studentId, int courseId) {
-        // 1. 执行原子条件更新尝试扣减名额
-        boolean updated = courseRepository.incrementEnrolledIfAvailable(courseId);
-        if (!updated) {
-            return EnrollResult.failure("名额已满或课程不存在");
+        // 1. 检查是否重复选课
+        if (enrollmentRepository.existsByStudentIdAndCourseId(studentId, courseId)) {
+            return EnrollResult.failure("您已选修过该课程，不可重复选课");
         }
 
-        // 2. 插入选课关联记录 (由数据库唯一键防止重复选课)
-        try {
-            enrollmentRepository.insertEnrollment(studentId, courseId);
-            return EnrollResult.success();
-        } catch (DuplicateKeyException e) {
-            // 触发事务回滚，还原扣减的名额
-            throw new BusinessException("不可重复选修同一门课程");
+        // 2. 执行原子条件更新扣减名额 (防范高并发超卖)
+        int updated = courseRepository.incrementEnrolledIfAvailable(courseId);
+        if (updated == 0) {
+            return EnrollResult.failure("课程名额已满");
         }
+
+        // 3. 插入选课流水记录
+        Enrollment enrollment = new Enrollment(studentId, courseId, LocalDateTime.now());
+        enrollmentRepository.save(enrollment);
+
+        return EnrollResult.success(enrollment);
     }
 }
 \`\`\`
 `
-  },
-  {
-    id: "doc:hello-system-45-repository-persistence-abstraction",
-    slug: "45-repository-persistence-abstraction",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第45章 Repository为什么存在？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 8,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第45章 Repository为什么存在？
+});
 
-## 1. 数据访问抽象的价值
+// 第 45 章
+part4Docs.push({
+  id: "doc:hello-system-45-repository-persistence-abstraction",
+  slug: "45-repository-persistence-abstraction",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第45章 持久化抽象 Repository：屏蔽 SQL 与对象映射",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 45,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第45章 持久化抽象 Repository：屏蔽 SQL 与对象映射
 
-**Repository（仓储层）** 为领域模型提供类似内存集合风格的数据访问接口，将上层业务与底层存储技术解耦：
+## 1. 仓储模式（Repository Pattern）的价值
+
+Repository 将数据库系统模拟成一个**运行在内存中的虚拟集合**。
+
+上层的业务 Service 只需要面向 Repository 接口调用 \`findById()\` 或 \`save()\`，完全不需要关心底层到底是通过原生 JDBC、MyBatis 动态 XML，还是 Spring Data JPA / Hibernate 执行的具体 SQL。
 
 \`\`\`java
 public interface CourseRepository {
     Optional<Course> findById(int id);
-    boolean incrementEnrolledIfAvailable(int courseId);
+    int incrementEnrolledIfAvailable(int courseId);
+    void save(Course course);
 }
 \`\`\`
 
-- **提升可测试性**：在编写 Service 单元测试时，可以使用内存实现快速验证业务逻辑，无需启动真实数据库；
-- **集中管理数据访问**：SQL 语句与数据映射规则收敛在仓储实现类中。
-
-> **架构认知提示**：
-> 仓储抽象能够隔离部分 SQL 细节，但并不能完全消除底层数据库的特性差异（抽象泄漏，Leaky Abstraction）。不同的数据库在事务隔离级别、方言语法和性能特性上仍存在客观差异。
+这种解耦使得在单元测试时，可以用内存 Map 轻松替代真实数据库，从而实现超快速的业务测试验证。
 `
-  },
-  {
-    id: "doc:hello-system-46-entity-dto-vo-boundary",
-    slug: "46-entity-dto-vo-boundary",
-    parentId: "'doc:hello-system-part-4'",
-    title: "第46章 为什么系统里有这么多“长得差不多”的对象？",
-    visibility: "public",
-    authorEmail: "2251213429@qq.com",
-    sortOrder: 9,
-    isBook: 0,
-    coverHue: 215,
-    summary: "",
-    bodyMd: `# 第46章 为什么系统里有这么多“长得差不多”的对象？
+});
 
-## 1. 统一术语体系与边界隔离
+// 第 46 章
+part4Docs.push({
+  id: "doc:hello-system-46-entity-dto-vo-boundaries",
+  slug: "46-entity-dto-vo-boundaries",
+  parentId: "'doc:hello-system-part-4'",
+  title: "第46章 对象边界隔离：Entity、DTO 与 Value Object 的分工",
+  visibility: "public",
+  authorEmail: "2251213429@qq.com",
+  sortOrder: 46,
+  isBook: 0,
+  coverHue: 215,
+  summary: "",
+  bodyMd: `# 第46章 对象边界隔离：Entity、DTO 与 Value Object 的分工
 
-在实际分层工程中，不同层次的对象承担着不同的职责：
+## 1. 为什么不能一个类走天下？
 
-\`\`\`mermaid
-flowchart LR
-    Client["客户端 (浏览器)"] <-->|Request / Response DTO| Ctrl["表现层 (Controller)"]
-    Ctrl <-->|领域实体 Entity / 值对象 Value Object| Svc["业务逻辑层 (Service)"]
-    Svc <-->|数据映射| DB[(数据库存储)]
-\`\`\`
+在许多新手项目中，经常出现“一个 \`Course\` 类从数据库表、Service 业务逻辑一路透传到前端 JSON 接口”的现象。
 
-- **领域实体（Entity）**：具有唯一业务标识（如 Course ID）并封装业务不变量的核心领域对象；
-- **数据传输对象（DTO, Data Transfer Object）**：
-  - **Request DTO**：封装客户端提交的请求载荷，用于输入校验；
-  - **Response DTO**：封装返回给客户端的数据，实现敏感数据脱敏（如隐藏密码哈希、内部配置等）；
-- **值对象（Value Object, DDD 语境）**：通过其包含的属性值来定义其等价性且无独立标识的不可变对象（如 \`Money\`, \`Address\`）。
+这种“偷懒”会带来极其危险的安全与维护漏洞：
+1. **过度暴露敏感字段（Over-Fetching）**：如果不小心在实体类中增加了 \`passwordHash\` 或内部审计字段，直接返回 Entity 会导致敏感数据泄露；
+2. **批量赋值漏洞（Mass Assignment Vulnerability）**：如果前端恶意在 JSON 里提交 \`{ "id": 2048, "enrolled": 0 }\`，直接将请求绑定到 Entity 可能会导致非法字段被恶意覆盖。
 
 ---
 
-## 2. 为什么不直接复用 Entity？
+## 2. 三类对象的严密职责划分
 
-若直接将与数据库表映射的 \`Student\` Entity 暴露给外部接口：
-1. **敏感信息泄露**：可能意外将 \`password_hash\` 或身份证号直接序列化返回给前端；
-2. **批量赋值安全漏洞（Mass Assignment Vulnerability）**：恶意用户可能在请求中夹带 \`role: "ADMIN"\` 等私有字段，若框架直接将 JSON 绑定到 Entity，将造成越权漏洞。
+\`\`\`mermaid
+flowchart LR
+    subgraph Client["网络与前端世界"]
+        ReqDTO["Request DTO (入参校验)"]
+        RespDTO["Response DTO (按需定制输出)"]
+    end
+
+    subgraph Domain["领域业务核心世界"]
+        VO["Value Object (值对象: 不可变业务量)\n例如: CourseCode, Money"]
+        Entity["Entity (实体: 拥有唯一生命周期 ID 与业务方法)\n例如: Course, Student"]
+    end
+
+    subgraph Storage["数据存储世界"]
+        PO["PO / Data Record (映射数据库表字段)"]
+    end
+
+    ReqDTO -->|转换为| Entity
+    Entity -->|包含| VO
+    Entity -->|转换为| RespDTO
+    Entity <==>|映射转换| PO
+\`\`\`
+
+| 对象类型 | 核心特征 | 典型应用场景 |
+| :--- | :--- | :--- |
+| **Entity（实体）** | 拥有跨生命周期的唯一主键 ID，通过业务方法改变内部状态 | \`Course\`, \`Student\`, \`Enrollment\` |
+| **Value Object（值对象）** | 没有独立 ID，完全由其属性值定义，具有严格的不可变性 | \`CourseCode\`, \`TuitionFee\` |
+| **DTO（数据传输对象）** | 纯扁平数据结构，无业务方法，专职网络序列化传输 | \`EnrollRequest\`, \`EnrollmentResponseDto\` |
+
+至此，前后端的标准协作通道已经完全打通。
+
+但是，真实世界的网络与服务器并不是一个平静的乌托邦。当面对恶意请求、系统崩溃断电、并发冲突与丢包重试时，系统将展现出怎样残酷的挑战？
+
+让我们进入第五部分：**真实系统开始反抗 (47 ~ 55)**！
 `
-  }
-];
+});
+
+export { part4Docs };

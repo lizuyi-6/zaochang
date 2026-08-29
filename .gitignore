@@ -50,3 +50,5 @@ next-env.d.ts
 
 # local wrangler preview state (demo session tokens, seeded D1, scripts)
 /.tmp-preview-state/
+/.tmp/
+/.walkthrough/

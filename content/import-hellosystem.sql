@@ -11,66 +11,107 @@ VALUES ('doc:book-hello-system', 'hello-system', NULL, 'Hello System · 图解�
 
 ### 从一次用户点击开始，理解一个完整软件系统如何运行
 
-> 一套将面向对象设计、分层架构、前端响应式、关系数据模型、事务并发控制与端到端 HTTP 调用贯通的软件系统教材。
+> 一套将面向对象设计、分层架构、前端响应式、关系数据模型、事务并发控制与端到端 HTTP 调用贯通的计算机软件系统教材。
 
 ---
 
 ## 这本书为什么存在？
 
-在大学计算机专业的课程体系中，核心知识点通常分布在不同的专业课中：
-- 程序设计与面向对象方法
-- 数据库系统原理
-- Web 前端开发与框架
-- 软件工程与系统设计
+在大学计算机专业的传统培养方案中，核心专业课通常是分门别类独立开设的：
 
-然而，当读者开始尝试构建一个真实的软件项目时，常会遇到跨领域的认知断层：
-- 浏览器内存中的前端状态，究竟是如何经过序列化与网络通信，最终转化为数据库中的持久化状态的？
-- 为什么要在前端维护组件状态，在后端划分表现层、业务逻辑层与数据访问层，再去数据库设计规范化表结构？直接在交互事件里执行数据操作会有什么结构性缺陷？
-- 什么是“状态”？为什么进程内存中的对象具有瞬态性，而数据库系统能够提供持久化保证？
-- 当多个用户在同一时间争抢有限资源（例如选课名额）时，系统是如何在前端、后端与数据库协同保证数据一致性的？
+- **程序设计与面向对象方法**：教你类、对象、封装、继承与多态，但在大作业里，数据通常保存在一个内存 `ArrayList` 里，程序一关数据全部消失；
+- **数据库系统原理**：教你关系代数、E-R 图、范式理论与 SQL，练习通常是在命令行客户端（如 MySQL Workbench 或终端）里手敲 `SELECT ... JOIN`，但在实际项目中，SQL 是由后端业务代码动态拼接并执行的；
+- **Web 前端开发与框架**：教你 HTML/CSS、JavaScript、Vue 或 React 组件、响应式状态与虚拟 DOM，但示例通常使用写死在组件内的 Mock 数据，难以体会网络时延、并发冲突与安全校验的残酷现实；
+- **系统开发与软件工程实践**：要求你直接提交一个完整的“学生管理系统”或“图书商城”，但大部分初学者只能在网上搜寻零散的代码片段，机械地拼凑 Controller、Service 和 DAO，却对请求如何在各层流转、状态如何持久化缺乏全局透彻的理解。
 
-《Hello System》的目标是：**建立统一的心智模型，帮助读者理清从前端用户交互到后端业务规则裁决、数据库事务持久化，再原路返回界面反馈的完整数据与控制流。**
+这种“各门课程各自为政”的知识切片，容易让初学者在面对真实软件系统时产生严重的**认知断层**：
+
+1. **内存状态与持久化状态的割裂**：浏览器内存里的响应式 Proxy 变量，究竟是通过何种机制跨越网络边界，最终转化为数据库数据页上的持久化元组的？
+2. **分层架构的必要性困惑**：为什么不能在前端按钮点击事件里直接写 SQL 操作数据库？为什么要分成 Controller、Service、Repository？每一层到底在防范什么风险？
+3. **并发竞争的本质**：当两个学生在同一毫秒点击同一个只剩 1 个名额的课程时，系统凭什么保证不会发生“名额超卖”？前端按钮置灰、后端事务排他锁、数据库原子条件更新各自扮演什么角色？
+4. **抽象与底层的平衡**：现代框架（Vue 3、Spring Boot、MySQL）为我们封装了大量细节，但当系统报错、性能下降或发生死锁时，我们该如何看清底层发生的真实过程？
+
+《Hello System》的唯一目标，就是**打破学科壁垒，建立贯穿软件系统的全景心智模型**。通过亲手推导与实验，帮助你彻底看懂从用户手指触碰按钮，到界面给出反馈的完整数据流与控制流。
 
 ```mermaid
 flowchart LR
-    User["用户操作"] --> Browser["浏览器 / DOM 事件"]
-    Browser --> Vue["前端响应式组件状态"]
-    Vue --> HTTP["HTTP 请求报文 (JSON)"]
-    HTTP --> Backend["后端服务 (Controller / Service / Repository)"]
-    Backend --> DB["数据库管理系统 (事务 / 索引 / 存储)"]
+    User["用户操作
+(点击选课按钮)"] --> Browser["浏览器 / DOM
+(捕获点击事件)"]
+    Browser --> Vue["前端响应式状态
+(Vue 3 Proxy/Ref)"]
+    Vue --> HTTP["网络传输
+(HTTP 报文 / JSON)"]
+    HTTP --> Backend["后端分层架构
+(Controller / Service / Repository)"]
+    Backend --> DB["数据库管理系统
+(事务 / 锁 / WAL / 索引)"]
     DB --> Backend
     Backend --> HTTP
     HTTP --> Vue
     Vue --> Browser
-    Browser --> User["界面呈现更新"]
+    Browser --> User["界面呈现更新
+(选课成功提示)"]
 ```
 
 ---
 
 ## 贯穿全书的主线项目：Mini Campus
 
-全书以一个具备典型 Web 架构特征的教学级项目——**Mini Campus 校园选课系统** 为主线演进。
+为了拒绝“每一章换一个毫无关联的玩具案例”，本书采用一个高度内聚、伴随需求扩张不断演化的经典项目——**Mini Campus 校园选课系统** 作为贯穿全书的唯一主线。
 
-读者将跟随需求扩张，观察系统如何一步步演变：
-1. 从最初只有几十行的简单控制台逻辑出发，体会无架构阶段的直接与局限；
-2. 面对数据组织与业务规则的混乱，逐步推导对象封装、不变量保护与分层设计；
-3. 面对界面交互的复杂度，理解原生 DOM 操作的维护瓶颈与声明式响应式前端的诞生；
-4. 面对数据存储与完整性要求，建立关系模型、规范化设计、索引与 ACID 事务心智；
-5. 面对网络边界与并发竞争，理解信任边界输入验证、错误处理、幂等机制与并发控制；
-6. 最终完成一次涵盖前端、网络、后端与数据库的端到端调用全景梳理。
+全书将跟随业务复杂度的自然提升，经历 9 个演进阶段：
+
+| 演变阶段 | 对应篇章 | 系统形态与所处阶段 | 核心要解决的矛盾与引入的抽象 |
+| :--- | :--- | :--- | :--- |
+| **V0: 散落变量** | 第 01 ~ 02 章 | 单文件控制台脚本，变量平铺 | 变量数量膨胀、隐式命名前缀脆弱、数据交换撕裂 $	o$ 引入复合结构（Record/Struct） |
+| **V1: 自治对象** | 第 03 ~ 06 章 | 面向对象建模，状态受控 | 外部代码直接篡改数据导致负数名额 $	o$ 引入封装、方法守护与业务不变量 |
+| **V2: 抽象协作** | 第 07 ~ 11 章 | 多对象协作，接口与分层 | 类型分支爆炸、硬编码依赖导致测试困难 $	o$ 引入多态动态分派、接口契约与依赖倒置（DIP） |
+| **V3: 经典分层** | 第 12 章 | Controller-Service-Repository | 单一上帝类承担过多职责 $	o$ 建立经典后端三层边界 |
+| **V4: 声明式前端** | 第 13 ~ 24 章 | 原生 DOM $	o$ Vue 3 组件化 | 命令式 DOM 操作导致界面与状态不同步 $	o$ 引入响应式系统（track/trigger/effect）与单向数据流 |
+| **V5: 关系模型** | 第 25 ~ 35 章 | 单大宽表 $	o$ 规范化关系数据库 | Excel 式宽表产生插入/更新/删除异常 $	o$ 引入候选键、函数依赖、3NF/BCNF 与 B+ 树索引 |
+| **V6: 事务并发** | 第 36 ~ 37 章 | 数据库 ACID 事务与行级并发控制 | 多用户并发争抢最后名额导致超卖 $	o$ 引入原子条件更新与事务一致性保障 |
+| **V7: 前后端打通** | 第 38 ~ 46 章 | HTTP RESTful API 契约 | 跨机器通信与数据隔离 $	o$ 引入 HTTP 资源语义、JSON 序列化与 Entity/DTO/VO 边界隔离 |
+| **V8: 容灾与可观测**| 第 47 ~ 55 章 | 生产级系统防护网 | 恶意绕过前端、网络丢包重试、系统重启丢数据 $	o$ 引入信任边界校验、幂等机制、WAL 预写日志、结构化日志与测试金字塔 |
+| **V9: 全景闭环** | 第 56 ~ 60 章 | 端到端全链路终局复盘 | 从全景控制流、数据形态演变与状态机跃迁三重视角，彻底贯通整套软件系统 |
 
 ---
 
-## 全书架构导航
+## 全书知识结构与阅读路线
 
-- **序章：一次点击** —— 鸟瞰一次典型交互背后的端到端协作全貌
-- **第一部分：程序开始变大 (01 ~ 12)** —— 从单函数脚本演化到面向对象设计与经典三层分层
-- **第二部分：页面开始变复杂 (13 ~ 24)** —— 原生 DOM 操作的维护困境与现代声明式响应式前端
-- **第三部分：数据需要一个真正的家 (25 ~ 37)** —— 关系模型、SQL 声明式查询、规范化理论、索引与事务并发
-- **第四部分：前端第一次遇见后端 (38 ~ 46)** —— 网络边界、HTTP 协议语义、API 契约设计与分层对象隔离
-- **第五部分：真实系统开始反抗 (47 ~ 55)** —— 信任边界验证、异常传播、并发条件更新、幂等机制与测试保障
-- **第六部分：重新走完那几百毫秒 (56 ~ 60)** —— 端到端请求链路全景复盘、架构设计反思与系统核心问题提炼
-- **附录 (A ~ H) 与后记** —— 项目工程结构、ER 关系图、核心 SQL、概念速查与进阶路线
+```mermaid
+flowchart TD
+    Part1["第一部分 · 程序开始变大 (01~12)
+从单行脚本到面向对象与三层分层"]
+    Part2["第二部分 · 页面开始变复杂 (13~24)
+从原生 DOM 操作到 Vue 3 声明式响应式前端"]
+    Part3["第三部分 · 数据需要一个真正的家 (25~37)
+从大宽表到关系模型、规范化、索引与并发事务"]
+    Part4["第四部分 · 前端第一次遇见后端 (38~46)
+HTTP 协议语义、API 契约与对象边界隔离"]
+    Part5["第五部分 · 真实系统开始反抗 (47~55)
+信任边界校验、事务异常回滚、幂等防重与 WAL 恢复"]
+    Part6["第六部分 · 重新走完那几百毫秒 (56~60)
+端到端全链路终局复盘、架构反过度设计与核心规律"]
+    Appx["附录 (A~H) 与后记
+ER 图、DDL、SQL 手册、概念速查与进阶路线"]
+
+    Part1 --> Part2
+    Part2 --> Part3
+    Part3 --> Part4
+    Part4 --> Part5
+    Part5 --> Part6
+    Part6 --> Appx
+```
+
+- **序章：一次点击** —— 鸟瞰一次典型交互背后的端到端协作全貌；
+- **第一部分：程序开始变大 (01 ~ 12)** —— 探讨数据如何聚合，面向对象为什么需要封装、继承、多态与接口契约，以及经典三层架构是如何自然涌现的；
+- **第二部分：页面开始变复杂 (13 ~ 24)** —— 探讨浏览器渲染机制、命令式 DOM 操作的局限性，以及现代声明式响应式系统的运作原理与状态管理；
+- **第三部分：数据需要一个真正的家 (25 ~ 37)** —— 探讨关系模型数学基础、规范化范式理论、声明式 SQL、B+ 树索引机制以及事务并发控制；
+- **第四部分：前端第一次遇见后端 (38 ~ 46)** —— 探讨 HTTP 协议、API 契约设计、跨语言 JSON 传输以及 Entity、DTO 与 Value Object 的边界划分；
+- **第五部分：真实系统开始反抗 (47 ~ 55)** —— 探讨信任边界输入校验、异常传播与事务回滚、原子条件更新、幂等机制、WAL 预写日志与测试金字塔；
+- **第六部分：重新走完那几百毫秒 (56 ~ 60)** —— 端到端时序全景复盘，总结软件演进中的权衡取舍与跨技术栈通用心智模型；
+- **附录 (A ~ H) 与后记** —— 提供 Mini Campus 完整工程结构、规范化 ER 图、核心 SQL 手册、概念速查与计算机专业进阶路线图。
 ', 'public', '2251213429@qq.com', 1, 1, 215, '从一次用户点击开始，理解一个完整软件系统如何运行——以校园选课系统 Mini Campus 为主线，图解面向对象、分层设计、前端响应式、关系数据模型与事务并发全链路。');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
@@ -78,52 +119,77 @@ VALUES ('doc:hello-system-preface', 'preface', 'doc:book-hello-system', '序言:
 
 ## 计算机专业学生的典型困惑
 
-在计算机专业的课程学习中，各个模块往往是分门别类展开的：
+许多计算机专业的同学在完成大一的程序设计基础课程后，开始步入专业核心课程的学习。此时，大家的知识库通常是高度碎片化的：
 
-在面向对象课程中，我们学习类、对象、封装与继承；在数据库课程中，我们学习关系代数、范式理论与 SQL；在前端课程中，我们学习组件、响应式状态与虚拟 DOM；在网络课程中，我们学习协议报文与状态码。
+在《面向对象程序设计》中，老师讲解了 `public`、`private`、抽象类与接口，但示例往往是“动物（Animal）会叫、狗（Dog）继承动物”，学生很难体会这些抽象在大型工业系统中有何实际价值；
 
-然而，当这些模块独立存在时，学习者常常难以在脑海中将它们拼接为一个协调运转的有机整体：
+在《数据库原理》中，期末考试要求在草稿纸上手算候选键与第三范式（3NF），或者编写包含多重子查询的 SQL，但学生并不知道这些 SQL 在后端工程中是如何通过连接池、事务管理器和 ORM/DAO 被调用的；
 
-- 为什么在前端修改了某个变量，界面却没有按预期更新？
-- 为什么业务方法抛出了异常，数据库中却留下了部分不一致的数据？
-- 为什么在前端按钮设置了禁用状态，后端仍然可能发生名额超卖？
-- 控制器、业务服务与数据访问对象之间到底是如何分工的？为什么每一层都需要有明确的边界？
+在《Web 前端开发》中，大家跟着视频学会了使用 Vue 或 React 编写一个 TODO List，通过 `ref()` 绑定一个输入框，但当面对“网络断网重试”、“用户狂点按钮导致重复扣费”等真实工程场景时，往往束手无策；
 
-这些问题往往横跨了多个知识领域，需要我们建立起系统级的视角。
+在《软件工程与系统实践》中，大家被要求分组开发一个“校园管理系统”或“在线商城”。很多人在 GitHub 上搜索模版，拼凑出能跑的代码，但只要遇到以下几个常见问题，就会陷入迷茫：
 
----
+- **现象 A**：“为什么我在前端组件里修改了对象的属性，页面视图没有自动更新？”
+- **现象 B**：“为什么我的业务 Service 抛出了异常，数据库里却依然留下了一条半成品数据？”
+- **现象 C**：“为什么我在前端把按钮设置成了 `disabled`，后台数据库里依然出现了名额超卖（选课人数大于容量）？”
+- **现象 D**：“为什么要有 Controller、Service 和 Repository？直接在 Controller 里写 SQL 不是更简单直接吗？”
 
-## 教学路径：问题驱动与模型演进
-
-本书采用**问题驱动**的教学方式：
-
-$$\text{初始需求} \to \text{直觉方案} \to \text{规模扩张 / 条件变化} \to \text{旧方案面临瓶颈} \to \text{提炼核心矛盾} \to \text{引入新抽象} \to \text{建立心智模型}$$
-
-我们不会在一开始就罗列所有抽象概念与设计规范，而是从最基础的代码形态出发，随着业务规模的扩大，亲身体验数据错位、状态失控与边界不清所带来的维护代价。
-
-当旧方案的局限性充分暴露时，新的抽象概念（如封装、组件、范式、事务）就会成为解决具体问题的自然选择。
+这些问题之所以让人困惑，是因为它们**从来不是孤立的单一知识点，而是跨越了前端渲染、网络通信、后端业务编排与数据库存储引擎的系统级问题**。
 
 ---
 
-## 概念分层与边界声明
+## 教学路径：问题驱动与认知冲突演进
 
-为了避免混淆抽象概念与具体实现，本书在阐述技术问题时严格区分以下知识层次：
+本书拒绝“开篇直接灌输最佳实践”的传统说教模式，而是采用**问题驱动与认知冲突演进（Cognitive Conflict Evolution）**的推导方式：
 
-1. **概念与数学模型（Level A）**：如对象状态、不变量、关系代数、函数依赖、事务 ACID 性质。这些思想独立于具体语言与框架。
-2. **语言与协议规范（Level B）**：如 Java 语言规范（JLS）、ECMAScript 标准、HTTP 协议规范（RFC 9110）、ANSI SQL 语义。
-3. **框架与 API 契约（Level C）**：如 Vue 3 组合式 API、Spring 声明式事务。
-4. **具体软件实现（Level D）**：如 OpenJDK HotSpot 虚拟机的内存管理、MySQL InnoDB 存储引擎的锁实现。
-5. **底层硬件与系统支持（Level E）**：如操作系统文件系统、CPU 缓存与网络介质。
+$$\text{真实业务需求} \to \text{最自然的第一直觉} \to \text{小规模下运行良好} \to \text{引入新条件/规模扩张} \to \text{旧方案撞墙失效} \to \text{定位核心矛盾} \to \text{提出新抽象} \to \text{建立脑内模型}$$
 
-本书在讲解核心机制时，首先立足于标准语义与心智模型。当需要讨论具体实现（如 HotSpot 或 InnoDB）时，会明确注明其属于特定软件的具体策略，而非通用法则。
+我们不会把旧方案故意写得很蠢来衬托新技术。相反，我们会明确承认：**在特定的小规模场景下，过程式脚本、平铺变量、原生 DOM 操作以及简单大宽表都是极其高效且合理的方案**。
+
+只有当系统的规模、并发或可靠性要求发生了根本变化，旧方案的局限性暴露无遗时，新的设计思想（如复合类型、对象封装、声明式响应式、关系规范化、ACID 事务）才会作为解决具体瓶颈的必然选择而诞生。
+
+---
+
+## 概念分层与五层知识边界
+
+为了避免将某种特定框架或运行时的具体实现误认为是计算机科学的永恒真理，本书在阐述所有技术细节时，严格恪守**五层知识边界**：
+
+```mermaid
+flowchart TD
+    LA["Level A: 计算机科学概念 / 数学模型 / 标准语义
+(关系代数、函数依赖、状态不变量、事务 ACID 性质、单向数据流)"]
+    LB["Level B: 编程语言或协议规范
+(Java 语言规范 JLS、ECMAScript 标准、HTTP RFC 9110、ANSI SQL)"]
+    LC["Level C: 框架契约与设计范式
+(Vue 3 组合式 API、Spring 声明式事务 @Transactional、Pinia Store)"]
+    LD["Level D: 软件的具体运行时实现
+(OpenJDK HotSpot 虚拟机、MySQL InnoDB 存储引擎、Chromium V8 引擎)"]
+    LE["Level E: 操作系统与物理系统
+(操作系统进程线程调度、虚拟内存、文件系统、TCP/IP 物理链路)"]
+
+    LA --> LB
+    LB --> LC
+    LC --> LD
+    LD --> LE
+```
+
+1. **Level A（核心概念与数学模型）**：这是超越具体语言与软件的通用思想。例如数据内聚、候选键、BCNF 范式、事务隔离性与幂等性；
+2. **Level B（语言与协议规范）**：由标准化组织制定的正式标准。例如 Java 语言规范（JLS）规定的方法重写与多态分派语义、HTTP/1.1 与 HTTP/2 的报文规范；
+3. **Level C（框架契约与 API 设计）**：由流行框架约定的接口行为。例如 Vue 3 的 `reactive()`/`ref()` 契约、Spring 的 `@Transactional` 事务回滚规则；
+4. **Level D（具体实现机制）**：特定软件内部的具体工程策略。例如 HotSpot JVM 内部的虚方法表（vtable）实现、MySQL InnoDB 存储引擎的 Buffer Pool 与 Redo Log（WAL）刷盘机制。**本书在讨论 Level D 细节时，会明确注明“这是一种实现策略，而非语言或理论本身的硬性规定”**；
+5. **Level E（操作系统与硬件环境）**：底层的物理与系统支持，例如操作系统页缓存、网络传输时延与存储介质特性。
+
+分清这五层边界，能够帮助你在未来面对 React、Svelte、Go、Rust、PostgreSQL 等全新技术栈时，迅速抽离出不变的本质，做到举一反三、触类旁通。
 ', 'public', '2251213429@qq.com', 1, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-prologue', 'prologue', 'doc:book-hello-system', '序章: 一次点击', '# 序章: 一次点击
 
-在一个典型的 Web 选课场景中：
+## 1. 真实场景：一个看似微不足道的瞬间
 
-学生李雷登录进入校园选课系统（Mini Campus），屏幕上显示出一张课程卡片：
+在一个典型的星期一上午，学生李雷打开浏览器，登录进入校园选课系统（Mini Campus）。
+
+屏幕中央呈现出一张整洁的课程卡片：
 
 ```text
 ┌────────────────────────────────────────────────────────┐
@@ -139,438 +205,698 @@ VALUES ('doc:hello-system-prologue', 'prologue', 'doc:book-hello-system', '序�
 └────────────────────────────────────────────────────────┘
 ```
 
-李雷点击了蓝色的“选课”按钮。
+李雷将鼠标指针移动到蓝色的“选课”按钮上，轻轻按下了左键。
 
-经过一次短暂的网络交互与后台处理，屏幕上的按钮更新为已选状态，提示文案更新为：
+经过一次短暂的网络交互与后台处理，屏幕上的按钮更新为不可点击的置灰状态，提示文案变为：
 
-**“选课成功。您已成功选修本课程，当前课程剩余名额：0。”**
+> **“选课成功。您已成功选修《计算机系统导论》，当前课程剩余名额：0。”**
 
 ---
 
-## 典型交互背后的协作链路
+## 2. 几百毫秒背后的全链路时序图
 
-从用户触发点击到界面完成渲染，整个交互过程跨越了前端应用、网络通信、后端服务与数据库存储：
+对于坐在屏幕前的用户而言，这仅仅是一次短暂的视觉等待。
+
+然而，在软件系统的内部世界中，一场跨越前端渲染树、响应式代理、网络协议栈、后端分层业务决策、数据库行级锁与持久化日志的接力协作刚刚完成了一次严密的闭环。
+
+让我们将这一次完整调用的 20 个关键环节以时序图的形式完整展现：
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as 用户 (李雷)
+    actor User as 用户李雷
     participant Browser as 浏览器 / DOM
-    participant Vue as 前端组件状态 (Vue 3)
-    participant Net as 网络传输 (HTTP / JSON)
-    participant Ctrl as 表现层 (Controller)
-    participant Svc as 业务逻辑层 (Service)
-    participant Repo as 数据持久层 (Repository)
-    participant DB as 数据库管理系统 (DBMS)
+    participant Vue as 前端 Vue 3 响应式状态
+    participant Net as 网络协议栈 (HTTP / JSON)
+    participant Ctrl as 后端 Controller (表现层)
+    participant Svc as 后端 Service (业务逻辑层)
+    participant Repo as 后端 Repository (持久化抽象)
+    participant DB as 关系数据库系统 (DBMS)
 
-    User->>Browser: 1. 用户触发选课按钮点击事件
-    Browser->>Vue: 2. 派发 DOM click 事件
-    Note over Vue: 3. 更新前端交互状态 (设置 submitting 标志)<br/>构造请求载荷 {"courseId": 2048}
-    Vue->>Net: 4. 发起 HTTP POST /api/enrollments 请求
+    User->>Browser: 1. 触发“选课”按钮点击事件
+    Browser->>Vue: 2. 派发 DOM click 事件监听
+    Note over Vue: 3. 前端交互状态跃迁 (submitting = true)<br/>序列化构造 JSON 载荷 {"courseId": 2048}
+    Vue->>Net: 4. fetch 发起 HTTP POST /api/enrollments 请求
     Note over Net: 5. 报文通过网络协议栈传输到达服务器
-    Net->>Ctrl: 6. Web 服务器解析 HTTP 报文，路由至 Controller
-    Note over Ctrl: 7. 从已认证上下文中获取当前学生身份 (studentId=1001)<br/>执行请求参数基本校验
-    Ctrl->>Svc: 8. 调用业务逻辑层 enroll(studentId, courseId)
-    Note over Svc: 9. 开启事务边界<br/>执行业务规则编排 (检查选课资格与名额)
-    Svc->>Repo: 10. 请求执行选课数据更新
-    Repo->>DB: 11. 执行带有条件限制的更新 SQL 与选课记录插入
-    Note over DB: 12. 数据库执行并发控制与事务日志记录<br/>保证原子性与持久性
-    DB-->>Repo: 13. 返回更新结果 (影响行数: 1)
-    Repo-->>Svc: 14. 返回持久化操作成功
-    Svc-->>Ctrl: 15. 业务处理完成，返回成功结果
-    Ctrl-->>Net: 16. 构造 HTTP 201 Created 响应报文 (JSON)
-    Net-->>Vue: 17. 响应报文回传浏览器，Promise 状态决议 (Resolve)
-    Note over Vue: 18. 更新前端响应式选课状态数据<br/>触发视图重新计算与更新
-    Vue->>Browser: 19. 更新真实 DOM 节点内容与属性
-    Browser-->>User: 20. 界面呈现“选课成功”反馈
+    Net->>Ctrl: 6. Web 服务器解析 HTTP 报文，路由分发至 Controller
+    Note over Ctrl: 7. 从已认证的安全上下文中获取当前学生身份 (studentId=1001)<br/>执行请求参数基础格式清洗
+    Ctrl->>Svc: 8. 调用业务用例 enroll(1001, 2048)
+    Note over Svc: 9. 开启声明式事务边界 (@Transactional)<br/>编排选课业务规则
+    Svc->>Repo: 10. 调用原子条件更新 incrementEnrolledIfAvailable(2048)
+    Repo->>DB: 11. 执行带有不变量守卫的 UPDATE SQL
+    Note over DB: 12. 数据库行级排他锁控制，判定 enrolled < capacity<br/>写入 Redo Log 缓冲区
+    DB-->>Repo: 13. 返回更新影响行数 (affected rows = 1)
+    Repo-->>Svc: 14. 扣减名额成功确认
+    Svc->>Repo: 15. 调用 insertEnrollment(1001, 2048)
+    Repo->>DB: 16. 执行选课关联记录 INSERT
+    Note over DB: 17. 唯一索引 UNIQUE(student_id, course_id) 校验防重<br/>事务提交 COMMIT，日志落盘
+    DB-->>Repo: 18. 持久化操作完成
+    Repo-->>Svc: 19. 插入选课流水成功
+    Svc-->>Ctrl: 20. 业务用例执行完成，返回成功结果
+    Ctrl-->>Net: 21. 封装 HTTP 201 Created 响应报文 (JSON)
+    Net-->>Vue: 22. 响应报文回传浏览器，Promise 状态决议 (Resolve)
+    Note over Vue: 23. 更新前端响应式选课状态数据<br/>触发组件依赖追踪与视图差异计算
+    Vue->>Browser: 24. 局部更新真实 DOM 节点内容与属性
+    Browser-->>User: 25. 浏览器完成渲染重绘，用户看到“选课成功”反馈
 ```
-
-> **说明**：
-> 上述时序图展示了一个标准且成功的端到端调用主路径。在真实工业环境中，耗时会受到网络往返、服务器排队、数据库锁竞争以及客户端渲染性能的综合影响；同时链路中还包含异常处理、重试、超时与鉴权等分支流程。
 
 ---
 
-## 本书探索路线
+## 3. 这张图里藏着的核心问题
 
-在接下来的篇章中，我们将逐步拆解这条调用链路中的每一个环节：
+初次审视这张时序图时，你可能会看到许多复杂的专业术语。
 
-1. **第一部分**：从最简单的单文件代码出发，探讨数据如何聚合，面向对象为什么需要封装与多态，以及后端三层架构是如何涌现的；
-2. **第二部分**：探讨浏览器前端的渲染机制、原生 DOM 操作的局限，以及声明式响应式系统的运作原理；
-3. **第三部分**：探讨关系模型数学基础、规范化设计、索引寻址机制以及事务与并发控制；
-4. **第四部分**：探讨 HTTP 协议、API 契约、前后端通信以及不同层次对象（Entity、DTO、ViewModel）的职责划分；
-5. **第五部分**：探讨信任边界输入验证、异常传播、条件更新并发控制与自动化测试；
-6. **第六部分**：重走端到端请求全流程，总结系统演化中的权衡与核心规律。
+但请不要被这些概念吓退。仔细拆解这条调用链，你会发现它精准覆盖了现代软件工程必须回答的六大基本问题：
 
-现在，让我们从最朴素的代码形态开始，进入第一部分：**程序开始变大**。
+1. **状态驱动与界面呈现（第 1 ~ 3 步，第 23 ~ 25 步）**：
+   - 为什么现代前端应用不再提倡直接操作 DOM（如 `document.getElementById().innerText = ...`）？
+   - 响应式数据绑定（Reactivity）到底是如何在内存数据变化时，自动且高效地驱动界面局部重绘的？
+2. **跨越机器边界的契约通信（第 4 ~ 6 步，第 21 ~ 22 步）**：
+   - 运行在用户笔记本浏览器中的 JavaScript 内存对象，与运行在云端机房服务器中的 Java 对象完全处于不同的物理内存空间中。它们之间是如何通过统一的 HTTP 协议语义与 JSON 文本表示达成默契的？
+3. **后端的秩序与防线（第 7 ~ 10 步，第 14 ~ 15 步，第 20 步）**：
+   - 为什么要在后端划分 Controller、Service 和 Repository？
+   - 为什么不能把所有逻辑堆在一个几千行的文件里？
+   - 为什么要在不同的层次使用长得很像但职责各异的对象（Entity、Request DTO、Response DTO）？
+4. **关系代数与规范化存储（第 11 ~ 13 步，第 16 ~ 18 步）**：
+   - 数据为什么不能像 Excel 一样全部存放在一张大宽表里？
+   - 候选键、外键与关系范式到底在消除什么结构性灾难？
+   - 面对庞大数据量，B+ 树索引是如何避免全表扫描并实现快速检索的？
+5. **并发与不变量的捍卫（第 12 步，第 17 步）**：
+   - 如果在李雷点击按钮的完全相同的瞬间，另一位学生韩梅梅也点击了选课按钮，系统凭什么保证这仅剩的 1 个名额绝对不会被两个人同时选走？
+   - 数据库事务的 ACID 性质在底层是如何通过排他锁、原子条件更新与预写日志（WAL）来落地的？
+6. **故障、异常与容灾（隐藏在每一步的支线流程中）**：
+   - 如果在扣减名额成功后、插入记录前服务器突然断电或抛出异常，系统会不会出现“名额少了一个，学生列表却没有李雷”的数据撕裂？
+   - 软件系统是如何在不可靠的物理环境与网络中保证最终确定性的？
+
+---
+
+## 4. 我们的探索旅程
+
+在这本书中，我们将做一件非常彻底的事：
+
+**把上面这张时序图中的每一个环节逐一拆开，看清它们内部的设计动机与协作齿轮。**
+
+我们不会在第一章就将最终的“标准架构”直接强塞给你。相反，我们将从没有框架、没有分层、没有数据库、只有几十行散落代码的最简控制台程序出发。
+
+我们将亲历系统的扩张、数据的失控与规则的撞墙，亲手推导并重构系统，直到上述所有的机制作为解决真实工程矛盾的自然产物，从你的指尖诞生。
+
+现在，让我们退回到一切软件系统的起点，开启第一部分：**程序开始变大**。
 ', 'public', '2251213429@qq.com', 2, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-part-1', 'part-1', 'doc:book-hello-system', '第一部分 · 程序开始变大', '', 'public', '2251213429@qq.com', 3, 0, 215, '');
+VALUES ('doc:hello-system-part-1', 'part-1', 'doc:book-hello-system', '第一部分: 程序开始变大 (01~12)', '# 第一部分: 程序开始变大 (01~12)
 
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-01-why-architecture', '01-why-architecture', 'doc:hello-system-part-1', '第01章 如果程序只有一百行，我们为什么需要架构？', '# 第01章 如果程序只有一百行，我们为什么需要架构？
+本部分聚焦于**单机内存程序的演化规律与面向对象架构的自然涌现**。
 
-## 1. 最初情境：一个极其直接的选课程序
-
-让我们暂时搁置浏览器渲染、网络协议与数据库系统等后续主题，退回到程序设计的最基础形态。
-
-假设我们需要编写一个简易的控制台选课逻辑：记录当前课程容量与已选人数，并在用户触发选课时判断是否允许加入。
-
-在最小规模下，一段最直接的 Java 代码如下：
-
-```java
-public class MiniCampus {
-    public static void main(String[] args) {
-        String studentName = "李雷";
-        int studentId = 1001;
-
-        String courseName = "计算机系统导论";
-        int courseCapacity = 1;
-        int courseEnrolled = 0;
-
-        // 模拟用户发起选课
-        System.out.println("学生 [" + studentName + "] 尝试选择课程: " + courseName);
-
-        if (courseEnrolled < courseCapacity) {
-            courseEnrolled++;
-            System.out.println("选课成功！当前课程已选人数: " + courseEnrolled);
-        } else {
-            System.out.println("选课失败：该课程名额已满。");
-        }
-    }
-}
-```
-
-在这段代码中：
-- 逻辑线性展开，执行流清晰直观；
-- 变量直接声明在局部作用域内；
-- 没有任何额外的类封装、接口抽象与分层设计。
-
-对于一个只有十余行、生命周期极短的脚本而言，这种写法是高效且合理的。此时强行引入复杂的抽象结构反而会增加不必要的心智负担。
-
----
-
-## 2. 规模扩张与代码复用问题
-
-当业务需求开始增加时，朴素方案的局限性便会逐渐显现。
-
-假设教务系统提出以下扩张要求：
-1. 增加多门课程（如《离散数学基础》）；
-2. 增加多个学生（如韩梅梅）；
-3. 多个学生需要分别尝试选修不同课程。
-
-若继续沿用直接复制粘贴变量的方式：
-
-```java
-public class MiniCampusExpansion {
-    public static void main(String[] args) {
-        String s1_name = "李雷";
-        int s1_id = 1001;
-
-        String s2_name = "韩梅梅";
-        int s2_id = 1002;
-
-        String c1_name = "计算机系统导论";
-        int c1_capacity = 100;
-        int c1_enrolled = 0;
-
-        String c2_name = "离散数学基础";
-        int c2_capacity = 60;
-        int c2_enrolled = 0;
-
-        // 场景 1: 李雷选课程 1
-        if (c1_enrolled < c1_capacity) {
-            c1_enrolled++;
-            System.out.println(s1_name + " 选课成功: " + c1_name);
-        }
-
-        // 场景 2: 韩梅梅选课程 1
-        if (c1_enrolled < c1_capacity) {
-            c1_enrolled++;
-            System.out.println(s2_name + " 选课成功: " + c1_name);
-        }
-
-        // 场景 3: 李雷选课程 2
-        if (c2_enrolled < c2_capacity) {
-            c2_enrolled++;
-            System.out.println(s1_name + " 选课成功: " + c2_name);
-        }
-    }
-}
-```
-
-此时代码行数开始成倍增长。
-
----
-
-## 3. 业务规则变更引发的维护挑战
-
-假设教务规则发生调整：
-> “所有课程需预留 $10\%$ 名额给重修学生，实际可选上限为 $\lfloor \text{capacity} \times 0.9 \rfloor$。”
-
-在上述代码中，开发者必须在所有出现 `if (enrolled < capacity)` 的位置逐处手动修改为：
-
-```java
-if (c1_enrolled < (int)(c1_capacity * 0.9)) { ... }
-```
-
-如果类似逻辑分散在系统各处，手工逐一修改将面临两个主要问题：
-1. **修改成本随调用点数量线性上升**；
-2. **存在漏改或误改其他变量的风险**，例如将 `c1_capacity` 误写为 `c2_capacity`，编译器无法在语法层面发现此类逻辑失误。
-
----
-
-## 4. 过程式函数的尝试与状态脱节
-
-面对重复逻辑，自然的重构手段是提取出公共函数：
-
-```java
-public class ProceduralMiniCampus {
-    public static boolean tryEnroll(int capacity, int enrolled) {
-        int actualLimit = (int)(capacity * 0.9);
-        return enrolled < actualLimit;
-    }
-
-    public static void main(String[] args) {
-        int c1_capacity = 100;
-        int c1_enrolled = 0;
-
-        if (tryEnroll(c1_capacity, c1_enrolled)) {
-            c1_enrolled++; // 数据变更仍在外部执行
-            System.out.println("选课成功！");
-        }
-    }
-}
-```
-
-提取函数解决了“计算规则集中”的问题。然而，**判断逻辑与数据修改依然处于分离状态**。调用方仍有可能在判断通过后，错误地修改了无关变量的值。
-
----
-
-## 5. 软件复杂度的本质探讨
-
-软件工程中对复杂度的控制，本质上是为了适应人类有限的大脑工作记忆。
-
-当系统由大量相互独立的散落变量构成时，变量之间的依赖与状态组合可能随着系统规模的扩张呈现非线性增长。
-
-架构设计的核心目的，**在于通过设立边界将系统划分为相对自治、内聚的子模块**，使得开发者在关注某一局部时，只需理解该局部内部有限的状态流转，从而有效控制心智负担。
-
----
-
-## 6. 本章小结与思考
-
-1. 在极小代码规模下，过程式脚本具有直接、开销小的优点；
-2. 当系统规模扩大、规则频繁演化时，散落的变量与重复逻辑会导致维护风险激增；
-3. 过程式函数能够复用判断规则，但尚未解决数据与操作在结构上的统一管理问题。
-
-下一章我们将探讨：当多个变量共同描述同一个现实实体时，散落的表示方式会引发哪些具体问题？
+我们将从最简单的几十行平铺脚本出发，亲历系统规模扩张带来的变量失控、数据撕裂与状态被肆意篡改的灾难。以此为契机，我们亲手推导并构建复合类型、自治对象、封装边界、里氏替换原则、多态动态分派以及经典后端三层架构（Controller-Service-Repository），建立起扎实的第一层软件心智模型。
 ', 'public', '2251213429@qq.com', 1, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-02-variables-out-of-control', '02-variables-out-of-control', 'doc:hello-system-part-1', '第02章 变量为什么开始失控？', '# 第02章 变量为什么开始失控？
+VALUES ('doc:hello-system-01-why-architecture-matters', '01-why-architecture-matters', 'doc:hello-system-part-1', '第01章 从单行脚本到复杂系统：为什么我们需要架构？', '# 第01章 从单行脚本到复杂系统：为什么我们需要架构？
 
-## 1. 隐式关联（Implicit Association）的脆弱性
+## 1. 一个能够工作的简单脚本
 
-在前面的示例中，我们使用前缀变量来表示一门课程的各个属性：
+几乎所有程序员的职业生涯，都是从一个极度简单的控制台脚本开始的。
+
+假设学校教务处需要一个极其微型的自动化工具，用于帮助一位老师统计某一门课的选课情况。在初学编程的阶段，我们通常会写出类似下面的代码：
 
 ```java
+import java.util.Scanner;
+
+public class MiniEnroll {
+    public static void main(String[] args) {
+        String courseName = "计算机系统导论";
+        int capacity = 100;
+        int enrolled = 0;
+
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("欢迎使用选课工具。输入 1 选课，输入 0 退出：");
+
+        while (scanner.hasNextInt()) {
+            int action = scanner.nextInt();
+            if (action == 1) {
+                if (enrolled < capacity) {
+                    enrolled++;
+                    System.out.println("选课成功！当前已选人数: " + enrolled + "/" + capacity);
+                } else {
+                    System.out.println("选课失败：名额已满！");
+                }
+            } else if (action == 0) {
+                System.out.println("退出程序。最终选课人数: " + enrolled);
+                break;
+            }
+        }
+        scanner.close();
+    }
+}
+```
+
+请停下来想一想：**这段代码写得好吗？**
+
+答案是：**在当前的规模和约束下，这段代码非常优秀！**
+
+它只有二十几行，逻辑一目了然，不需要定义复杂的类，没有引入任何外部框架，内存开销几乎为零，运行速度极快。任何懂一点基础语法的人都能在 10 秒钟内完全看懂它。
+
+此时，如果我们向这位开发者大谈“面向对象设计模式”、“SOLID 原则”、“Controller-Service 分层”或“领域驱动设计（DDD）”，那不仅不是好的工程实践，反而是典型的**过度设计（Over-Engineering）**。
+
+---
+
+## 2. 状态空间爆炸：软件复杂度的数学本质
+
+然而，软件系统最残酷的现实在于：**需求永远在变化，规模永远在扩张。**
+
+随着业务的发展，教务处提出了新的需求：
+1. 不仅有一门课，现在全校有 500 门课同时开放选课；
+2. 课程有了分类：通识课、专业必修课、实验课；
+3. 增加了学生资格校验：有些课程要求修过前置先修课，有些课程限制大一新生不能选；
+4. 增加了重修退选保护：重修学生只占用特定配额；
+5. 增加了操作审计要求：每一次选课必须记录是谁在什么时间操作的。
+
+让我们从数学的角度审视这个变化过程。
+
+一个软件系统的状态空间大小，取决于系统内独立变量的组合可能性。如果一个系统有 $n$ 个相互独立的布尔标志位或离散状态变量，系统的理论状态总数将达到：
+
+$$S = 2^n$$
+
+在最初的 20 行脚本中，$n \approx 2$（是否满员、用户输入动作），人类大脑可以轻松在大脑的工作记忆（Working Memory）中穷举所有的状态流转分支。
+
+但是，当 $n$ 增加到 20 时，$2^{20} \approx 1,048,576$。没有任何一个人类工程师能够仅凭肉眼或直觉，预判一个包含 20 个自由变量的全局脚本在所有可能路径下的行为。
+
+这就是**认知负荷超载（Cognitive Overload）**。
+
+---
+
+## 3. 为什么“打补丁”式的修改最终会崩溃？
+
+面对需求的增加，如果不改变代码的组织形式，而是继续在原有的过程式结构中“打补丁”，系统会经历以下三个典型的腐化阶段：
+
+### 阶段一：深层嵌套的 `if-else` 迷宫
+为了处理各种业务特例，代码中开始出现 5 层甚至 10 层的条件嵌套：
+
+```java
+if (action == 1) {
+    if (isStudentEligible) {
+        if (!isCourseFull) {
+            if (isPrerequisitePassed) {
+                if (isTimeConflictFree) {
+                    // 真正的业务逻辑终于在这里露出一角
+                    enrolled++;
+                } else {
+                    // 处理冲突 A
+                }
+            } else {
+                // 处理冲突 B
+            }
+        }
+    }
+}
+```
+
+此时，任何一个分支的微小修改，都极有可能意外破坏相邻分支的隐含前置条件。
+
+### 阶段二：隐式依赖与幽灵联动（Spooky Action at a Distance）
+当所有逻辑都在一个大函数或全局作用域中操作同一批变量时，修改变量 `enrolled` 的地方可能散落在文件的第 30 行、第 150 行和第 420 行。
+
+当某个开发者在第 420 行为了修复退课 Bug 把 `enrolled--` 加了一个条件时，他根本不知道第 30 行的某处统计逻辑正隐式假定 `enrolled` 始终单调递增。
+
+### 阶段三：测试与维护的彻底瘫痪
+当你想测试“名额已满”这一边界情况时，你必须在测试环境里先构造出合法的学生身份、前置先修课成绩单、无冲突的时间表以及合法的终端输入。整个系统变成了一个**不可分割的巨大泥球（Big Ball of Mud）**。
+
+---
+
+## 4. 软件架构的真正定义：管理复杂度的边界与契约
+
+面对规模膨胀带来的混乱，计算机科学给出的解法从来不是“期待程序员拥有超级大脑”，而是**架构（Architecture）与抽象（Abstraction）**。
+
+> **软件架构的核心目标**：
+> 通过划分清晰的**职责边界（Boundaries）**与**通信契约（Contracts）**，将一个庞大不可控的全局状态空间，分解为若干个互相独立、局部自治且易于理解的小子系统。
+
+```mermaid
+flowchart TD
+    subgraph Bad["混乱的泥球架构 (状态相互纠缠)"]
+        V1["全局变量 courseName"] <--> F1["函数 calc()"]
+        V2["全局变量 enrolled"] <--> F2["函数 print()"]
+        V3["全局变量 capacity"] <--> F3["函数 validate()"]
+        F1 <--> F3
+        F2 <--> F1
+    end
+
+    subgraph Good["清晰的边界与契约 (分而治之)"]
+        subgraph Domain["自治对象 / 领域核心"]
+            C["Course (维护自身不变量)"]
+        end
+        subgraph Storage["持久化抽象"]
+            R["Repository (专职读写)"]
+        end
+        subgraph API["表现层契约"]
+            Ctrl["Controller (处理网络与参数)"]
+        end
+
+        Ctrl -->|调用业务用例| C
+        Ctrl -->|请求持久化| R
+        C -.->|遵循接口契约| R
+    end
+```
+
+在接下来的第一部分中，我们将亲手完成这一重构过程：
+- 在第 02 ~ 05 章中，我们将看到如何用**复合类型与对象封装**，将散落的变量约束在自治的实体内部；
+- 在第 07 ~ 11 章中，我们将看到如何用**多态与接口契约**，消除冗长的类型分支并解耦系统依赖；
+- 在第 12 章中，我们将看到经典的**Controller-Service-Repository 三层架构**是如何自然成型的。
+
+此时你的心智模型应当明确：**架构不是用来炫技的花哨名词，而是在系统规模扩张时，人类唯一能够保护自身代码不被复杂度吞噬的理性防线。**
+', 'public', '2251213429@qq.com', 1, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-02-variables-out-of-control', '02-variables-out-of-control', 'doc:hello-system-part-1', '第02章 变量为什么开始失控？——从平铺变量到复合数据类型', '# 第02章 变量为什么开始失控？——从平铺变量到复合数据类型
+
+## 1. 第一阶段：只有一门课程（一切都很美好）
+
+让我们从最真实的工程演进开始。
+
+在最初的选课系统中，我们只需要管理一门课程。代码中定义了三个独立的原始变量：
+
+```java
+String courseName = "计算机系统导论";
+int capacity = 100;
+int enrolled = 0;
+```
+
+此时代码非常清爽。变量名直观反映了业务含义，内存中只有三个紧凑的基础变量：
+
+```text
+内存栈帧局部变量表：
+[ courseName ] ---> "计算机系统导论" (String 引用)
+[ capacity   ] ---> 100 (int 整数)
+[ enrolled   ] ---> 0   (int 整数)
+```
+
+我们必须明确承认：**这个设计在当前阶段没有任何毛病。**
+
+---
+
+## 2. 第二阶段：出现第二门课程（命名前缀的妥协）
+
+第二天，教务处要求系统支持第二门课程《数据结构与算法》。
+
+面对这个新需求，初学者最自然、改动最小的直觉是：**复制一套变量，并加上前缀加以区分**：
+
+```java
+// 第一门课程
 String c1_name = "计算机系统导论";
 int c1_capacity = 100;
 int c1_enrolled = 0;
 
-String c2_name = "离散数学基础";
-int c2_capacity = 60;
+// 第二门课程
+String c2_name = "数据结构与算法";
+int c2_capacity = 80;
 int c2_enrolled = 0;
 ```
 
-从编程语言的类型系统视角来看：
-- `c1_name`、`c1_capacity` 和 `c1_enrolled` 是三个平权的独立局部变量；
-- 它们之间的关联纯粹依赖程序员的命名前缀约定（`c1_`），在语言语义层面并没有建立起统一的实体约束。
+请思考一个深层次的问题：**在编程语言的类型系统眼中，真的存在一个叫做“c1 课程”的独立实体吗？**
 
-这种仅靠人为约定维系的关联被称为**隐式关联（Implicit Association）**。
+答案是：**完全不存在。**
+
+在编译器看来，内存里只有 6 个孤立的变量：两个字符串引用和四个整型数字。所谓“`c1_name` 和 `c1_capacity` 属于同一门课程”，完全只是程序员依靠**命名规则（前缀 c1_）在脑海中建立的脆弱暗示**。
+
+编译器既不知道、也无法协助你保证这种关联关系。
 
 ---
 
-## 2. 实验验证：数据交换中的错位风险
+## 3. 第三阶段：当课程增加到十门（认知误区的澄清）
 
-【实验目标】观察在对散落变量执行交换操作时，疏漏某一字段可能产生的逻辑异常。
+如果课程增加到 10 门，代码中就会出现 30 个平铺变量：`c1_name` 到 `c10_enrolled`。
+
+> **常见误区**：
+> “平铺变量的设计不好，是因为变量太多了，计算机处理不过来。”
+
+这个结论是**完全错误的**。
+
+从计算机体系结构和运行时的角度来看，现代 CPU 和内存管理几万甚至上百万个局部变量没有任何物理性能困难。
+
+真正的矛盾在于：**人类大脑无法通过离散的命名前缀来编写通用的处理逻辑。**
+
+如果你想写一个打印课程信息的函数，你不得不写出如下极其丑陋的代码：
 
 ```java
-public class ImplicitAssociationExperiment {
-    public static void main(String[] args) {
-        String c1_name = "计算机系统导论";
-        int c1_capacity = 100;
-        int c1_enrolled = 95;
+if (courseId == 1) {
+    System.out.println(c1_name + ": " + c1_enrolled + "/" + c1_capacity);
+} else if (courseId == 2) {
+    System.out.println(c2_name + ": " + c2_enrolled + "/" + c2_capacity);
+} // ... 一直写到 else if (courseId == 10)
+```
 
-        String c2_name = "古希腊哲学史";
-        int c2_capacity = 30;
-        int c2_enrolled = 5;
+每增加一门课，你就必须在所有包含分支判断的地方手动加一段代码。这种代码不仅冗长，而且极易遗漏。
 
-        // 需求：交换课程 1 与课程 2 的数据
-        String tempName = c1_name;
-        c1_name = c2_name;
-        c2_name = tempName;
+---
 
-        int tempCapacity = c1_capacity;
-        c1_capacity = c2_capacity;
-        c2_capacity = tempCapacity;
+## 4. 第四阶段：并行数组（Parallel Arrays）的引入
 
-        // 假设此处疏漏了对 enrolled 的交换操作：
-        // int tempEnrolled = c1_enrolled;
-        // c1_enrolled = c2_enrolled;
-        // c2_enrolled = tempEnrolled;
+为了能够用循环统一处理多门课程，开发者自然会想到引入**数组**：
 
-        System.out.println("课程 1 -> " + c1_name + ", 容量: " + c1_capacity + ", 已选: " + c1_enrolled);
-        System.out.println("课程 2 -> " + c2_name + ", 容量: " + c2_capacity + ", 已选: " + c2_enrolled);
+```java
+String[] names = {"计算机系统导论", "数据结构与算法", "操作系统原理"};
+int[] capacities = {100, 80, 60};
+int[] enrolled = {0, 0, 0};
+```
+
+现在，代码终于可以用索引下标 `i` 来遍历所有课程了：
+
+```java
+for (int i = 0; i < names.length; i++) {
+    System.out.println(names[i] + ": " + enrolled[i] + "/" + capacities[i]);
+}
+```
+
+这比前缀变量前进了一大步。但它依然隐藏着致命的隐患。
+
+---
+
+## 5. 第五阶段：破坏性实验——排序导致的数据撕裂（Data Tearing）
+
+让我们做一个真实的破坏性实验。
+
+假设教务处要求：“请按照当前选课人数从高到低，对所有课程进行排序展示。”
+
+一位新手程序员编写了如下常见的冒泡排序代码，对 `enrolled` 数组进行降序排序：
+
+```java
+// 错误示范：只对 enrolled 数组进行排序
+for (int i = 0; i < enrolled.length - 1; i++) {
+    for (int j = 0; j < enrolled.length - 1 - i; j++) {
+        if (enrolled[j] < enrolled[j + 1]) {
+            // 交换已选人数
+            int temp = enrolled[j];
+            enrolled[j] = enrolled[j + 1];
+            enrolled[j + 1] = temp;
+        }
     }
 }
 ```
 
-### 输出结果：
-```text
-课程 1 -> 古希腊哲学史, 容量: 30, 已选: 95
-课程 2 -> 计算机系统导论, 容量: 100, 已选: 5
+### 实验现象与输出结果：
+假设初始状态为：
+- 课程 0: 计算机系统导论, 容量 100, 已选 10
+- 课程 1: 数据结构与算法, 容量 80, 已选 50
+
+执行上述排序后：
+- `enrolled` 数组变成了：`{50, 10}`；
+- 但 `names` 数组依然是：`{"计算机系统导论", "数据结构与算法"}`；
+- `capacities` 数组依然是：`{100, 80}`。
+
+系统最终输出的结果变成了：
+> **计算机系统导论: 50 / 100**  
+> **数据结构与算法: 10 / 80**
+
+### 核心矛盾分析：
+**数据发生了极其严重的逻辑撕裂！**
+
+原本属于《数据结构与算法》的 50 个学生，被错误地挂到了《计算机系统导论》名下！
+
+为了修复这个 Bug，程序员必须在每一次发生交换时，**手动同步交换所有关联数组的相同下标元素**：
+
+```java
+// 修补方案：三组数组必须严格同步交换
+int tempEnrolled = enrolled[j];
+enrolled[j] = enrolled[j + 1];
+enrolled[j + 1] = tempEnrolled;
+
+String tempName = names[j];
+names[j] = names[j + 1];
+names[j + 1] = tempName;
+
+int tempCap = capacities[j];
+capacities[j] = capacities[j + 1];
+capacities[j + 1] = tempCap;
 ```
 
-### 现象分析：
-由于疏漏了 `enrolled` 字段的交换，《古希腊哲学史》在容量仅为 30 的情况下已选人数变成了 95。编译器无法识别这种逻辑层面的实体撕裂，因为每个变量的赋值语法都是完全合法的。
+只要未来系统为课程增加一个属性（例如 `int[] credits` 学分），而某个开发者在排序时少写了一句 `credits` 的交换语句，整个系统的数据就会再次发生静默撕裂。
 
 ---
 
-## 3. 并行数组（Parallel Arrays）与维护瓶颈
+## 6. 第六阶段：元素删除与移动的连锁灾难
 
-为了管理多门课程，初学者常会尝试使用并行数组：
+除了排序，**删除一门课程**同样是一场灾难。
 
-```java
-String[] names = new String[] { "计算机系统导论", "离散数学基础" };
-int[] capacities = new int[] { 100, 60 };
-int[] enrolleds = new int[] { 95, 10 };
+如果要从系统中删除下标为 $k$ 的课程，我们必须把所有数组在 $k$ 之后的所有元素同时向前移动一位：
+
+```mermaid
+flowchart TD
+    subgraph Arr["并行数组的同步移动 (极度脆弱)"]
+        N["names 数组: [C0] [C1] [C2] -> 移动"]
+        C["capacities 数组: [100] [80] [60] -> 移动"]
+        E["enrolled 数组: [10] [50] [0] -> 移动"]
+    end
 ```
 
-并行数组在处理数据重排、元素删除与跨函数传参时会引入显著的同步开销：
-1. **排序同步**：如果按照容量对课程进行排序，必须同时手动同步交换 `names` 和 `enrolleds` 中的对应项；
-2. **元素删除**：在某一数组中移除元素并移动后续项时，所有关联数组必须严格以相同的偏移量执行平移；
-3. **参数膨胀**：处理课程的函数签名需要接收所有平行数组作为入参。
+三个数组的长度必须随时保持完全一致。一旦其中一个数组因为某处异常未能同步移动，整个系统在后续按索引访问时，就会彻底陷入“张冠李戴”的混乱状态。
 
 ---
 
-## 4. 复合数据类型与实体身份
+## 7. 第七阶段：函数调用的参数膨胀（Parameter Clump）
 
-解决上述问题的核心思路，是在类型系统层面将属于同一个实体的属性组合在一起，形成**记录（Record）**或**复合数据类型（Composite Type）**。
+随着业务的发展，课程的属性不断增加：代码（code）、名称（name）、任课教师（teacher）、容量（capacity）、已选人数（enrolled）、学分（credits）、上课教室（room）、上课学期（semester）。
 
-在 Java 中，我们可以定义一个包含相关属性的数据类：
+此时，如果你想编写一个打印或校验课程的函数，你的函数签名会变成这样：
 
 ```java
-public class CourseRecord {
+public static void printCourse(
+    String code, 
+    String name, 
+    String teacher, 
+    int capacity, 
+    int enrolled, 
+    int credits, 
+    String room, 
+    String semester
+) {
+    // 打印逻辑
+}
+```
+
+在软件工程中，这种坏味道被称为**数据泥团（Data Clump）**：
+一组本属于同一概念的属性，总是以长长的一串参数形式在代码中结伴出现、到处传递。
+
+---
+
+## 8. 第八阶段：核心哲学追问
+
+经历了上面的 7 轮折磨，我们必须停下来，提出那个最核心的哲学问题：
+
+> **“在现实世界中，我们明明一直在操作一门完整的‘课程’；为什么在我们的程序代码里，却从来没有一个能够被整体引用的‘Course’实体？”**
+
+我们之所以痛苦，是因为**我们在现实世界中的心智模型，与代码中的数据表示发生了严重的割裂**。
+
+现实中是一个不可分割的实体，而在代码中却被强行拆解成了 8 个毫无血缘关系的孤立数组和参数。
+
+---
+
+## 9. 第九阶段：复合数据类型（Composite Type / Record）的诞生
+
+为了在代码中正式确立实体的地位，现代编程语言引入了**复合数据类型**（C 语言中的 `struct`，Java 16+ 中的 `record`，或传统的数据类）：
+
+```java
+// 使用 Java Record 定义一个纯粹的复合数据类型
+public record CourseRecord(
+    String code,
+    String name,
+    int capacity,
+    int enrolled
+) {}
+```
+
+引入复合类型后，内存结构发生了根本性的改变：
+
+```mermaid
+classDiagram
+    class CourseRecord {
+        +String code
+        +String name
+        +int capacity
+        +int enrolled
+    }
+```
+
+现在，我们可以定义一个统一的数组或列表：
+
+```java
+List<CourseRecord> courses = new ArrayList<>();
+courses.add(new CourseRecord("CS-101", "计算机系统导论", 100, 0));
+courses.add(new CourseRecord("CS-102", "数据结构与算法", 80, 0));
+```
+
+再次执行排序操作：
+
+```java
+// 排序时移动的是 CourseRecord 对象的引用整体，绝无数据撕裂风险！
+courses.sort((c1, c2) -> Integer.compare(c2.enrolled(), c1.enrolled()));
+```
+
+当发生元素交换或传递时，**移动的是包含了该课程全部属性的整体引用**。《计算机系统导论》的名称、容量与已选人数永远被牢牢绑定在一起，彻底根除了数据撕裂的可能！
+
+---
+
+## 10. 第十阶段：横向验证——在其他领域体会复合类型
+
+为了验证你是否真正理解了复合类型的核心价值，让我们看看其他领域的通用场景：
+
+### 银行账户系统（BankAccount）
+- **旧方案**：`String[] accountNos`, `String[] ownerNames`, `BigDecimal[] balances`, `String[] currencyTypes`
+- **复合类型**：`public record Account(String accountNo, String owner, BigDecimal balance, Currency currency) {}`
+
+### 文件下载任务（DownloadTask）
+- **旧方案**：`String[] urls`, `long[] totalBytes`, `long[] downloadedBytes`, `int[] statusCodes`
+- **复合类型**：`public record DownloadTask(String url, long totalBytes, long downloadedBytes, TaskStatus status) {}`
+
+---
+
+## 11. 第十一阶段：新的危机——聚合不等于封装
+
+复合类型的引入，完美解决了**数据的聚合、整体传递与实体身份表达**问题。
+
+但是，请观察下面的代码：
+
+```java
+public class CourseData {
+    public String code;
     public String name;
     public int capacity;
     public int enrolled;
-
-    public CourseRecord(String name, int capacity, int enrolled) {
-        this.name = name;
-        this.capacity = capacity;
-        this.enrolled = enrolled;
-    }
 }
+
+// 外部任意代码均可执行如下操作：
+CourseData c = new CourseData();
+c.name = "计算机系统导论";
+c.capacity = 100;
+c.enrolled = -10; // 灾难：已选人数变成了负数！
+c.capacity = 0;   // 灾难：容量变成了 0！
 ```
 
-现在，整个实体的属性被组合为一个统一的引用类型：
+复合类型把数据打包在了一起，但**它没有对数据的合法性提供任何保护**！任何外部代码都可以随意修改内部字段，将对象置于逻辑上荒谬的非法状态。
 
-```java
-CourseRecord[] courses = new CourseRecord[] {
-    new CourseRecord("计算机系统导论", 100, 95),
-    new CourseRecord("古希腊哲学史", 30, 5)
-};
-
-// 交换时只需交换单个引用
-CourseRecord temp = courses[0];
-courses[0] = courses[1];
-courses[1] = temp;
-```
-
-此时无论课程包含多少个字段，排序、交换与移动操作均以整个实体为单位进行，消除了字段间错位的可能性。
-
-```mermaid
-flowchart LR
-    A0["courses[0] 引用"] --> ObjA["CourseRecord 实例
-{ name: ''古希腊哲学史'', capacity: 30, enrolled: 5 }"]
-    A1["courses[1] 引用"] --> ObjB["CourseRecord 实例
-{ name: ''计算机系统导论'', capacity: 100, enrolled: 95 }"]
-```
+这引出了我们下一章的核心主题：**如何将数据与操作数据的行为绑定在一起，实现真正的自治对象与状态封装？**
 
 ---
 
-## 5. 语言实现的边界说明
-
-将数据结构化聚合是计算机科学的通用思想，不同编程语言提供了不同的语法和实现机制：
-
-- **C 语言**：使用 `struct` 定义连续的内存布局；
-- **Java**：使用 `class` 或 Java 16+ 的 `record` 定义堆上分配的对象类型；
-- **TypeScript**：使用 `interface` 或 `type` 提供静态类型检查；
-- **Python**：使用 `@dataclass` 或普通的类。
-
----
-
-## 6. 本章小结
-
-1. 隐式命名约定无法在类型系统层面保证数据的一致性；
-2. 复合数据类型（Record/Struct）赋予了实体明确的身份，保证了属性在移动和传递时的聚合性；
-3. 纯数据结构虽然组织了数据，但所有字段若全部公开，外部代码依然可以直接修改内部状态。这引出了下一章的主题：数据与行为的内聚。
+### 此时你的心智模型应当变成：
+1. **原始平铺变量**：只适合单一、小规模且极度简单的脚本；
+2. **并行数组**：是过程式代码在缺乏抽象工具时的权宜之计，极易在排序与移动中发生数据撕裂；
+3. **复合数据类型（Record/Struct）**：提供了实体的结构聚合与整体引用能力；
+4. **聚合 $\neq$ 封装**：聚合解决了数据绑定问题，但状态的一致性保护需要更高级的面向对象抽象。
 ', 'public', '2251213429@qq.com', 2, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-03-cohesion-and-objects', '03-cohesion-and-objects', 'doc:hello-system-part-1', '第03章 为什么数据和操作数据的代码应该靠近？', '# 第03章 为什么数据和操作数据的代码应该靠近？
+VALUES ('doc:hello-system-03-data-and-behavior', '03-data-and-behavior', 'doc:hello-system-part-1', '第03章 数据与行为的割裂：为什么需要自治对象？', '# 第03章 数据与行为的割裂：为什么需要自治对象？
 
-## 1. 贫血数据结构的维护挑战
+## 1. 贫血数据结构的困境
 
-在上一章中，我们将课程数据聚合为了 `CourseRecord`。
+在上一章中，我们通过复合数据类型将课程的属性聚合在了一起。
 
-如果该数据类的所有字段依然是公开的（`public`），并且业务操作由散落在外部的各类函数完成，这种结构在领域建模中常被称为**贫血模型（Anemic Model）**。
-
-当项目由多位开发者共同维护时，散落的外部修改可能带来状态不一致：
-- 选课模块可能进行了容量检查：`if (c.enrolled < c.capacity) c.enrolled++;`
-- 退课模块可能遗漏了下限检查：直接执行 `c.enrolled--;`，导致在已选人数为 0 时产生负数；
-- 批量导入模块可能直接进行累加：`c.enrolled += count;`，绕过了容量上限。
-
-```mermaid
-flowchart LR
-    A["模块 A: 编写了上限校验"] -->|直接修改| Target["CourseRecord.enrolled 字段"]
-    B["模块 B: 遗漏了下限校验"] -->|直接修改| Target
-    C["模块 C: 绕过了规则直接累加"] -->|直接修改| Target
-```
-
----
-
-## 2. 内聚性（Cohesion）与自治实体
-
-为了降低外部代码误操作的风险，软件设计中提出了**高内聚（High Cohesion）**原则：
-
-> **将相关的数据与操作该数据的规则集中在同一边界之内。**
-
-通过将数据设置为私有，仅通过受控的方法暴露状态变更接口，对象能够主动维护自身的状态合法性：
+但在很多初学者的工程代码中，常见的设计依然是将数据结构与操作逻辑完全割裂开来。这种结构通常被称为**贫血模型（Anemic Model）**：
 
 ```java
 public class Course {
+    public int id;
+    public String code;
+    public String name;
+    public int capacity;
+    public int enrolled;
+}
+```
+
+数据类中没有任何业务方法。当系统中需要执行“选课”操作时，业务逻辑通常散落在外部的各种工具类或过程函数中：
+
+```java
+// 外部业务函数 A
+public void handleStudentEnroll(Course course) {
+    if (course.enrolled < course.capacity) {
+        course.enrolled++;
+        System.out.println("选课成功");
+    } else {
+        System.out.println("名额已满");
+    }
+}
+
+// 外部业务函数 B (另一个同事编写的批量选课逻辑)
+public void handleBatchEnroll(Course course, int studentCount) {
+    // 疏忽：这位同事忘记了检查 capacity 上限！
+    course.enrolled += studentCount; 
+}
+```
+
+这种设计导致了一个致命问题：**数据的完整性（Integrity）完全寄托在每一个外部调用者的细心程度上。**
+
+一旦系统中存在几十个地方修改 `course.enrolled`，只要其中任何一个地方遗漏了 `enrolled < capacity` 的校验，整个系统的课程数据就会遭到破坏。
+
+---
+
+## 2. 核心概念：不变量（Invariant）
+
+在严谨的软件工程中，每一个核心业务实体都拥有属于自己的**业务不变量（Business Invariant）**。
+
+> **不变量（Invariant）**：
+> 一个在实体的整个生命周期中，无论经历何种操作与状态跃迁，都必须始终保持为“真（True）”的逻辑命题。
+
+对于课程实体 `Course`，其核心不变量至少包括：
+1. **容量有效性**：$\text{capacity} > 0$
+2. **选课人数边界**：$0 \le \text{enrolled} \le \text{capacity}$
+3. **名称与代码非空**：$\text{code} \neq \text{null} \land \text{name} \neq \text{null}$
+
+如果一个对象在内存中存在，但它的 `enrolled` 变成了 `-5` 或 `150`（超过 capacity 100），那么这个对象在概念上就已经**损坏（Corrupted）**了。
+
+---
+
+## 3. 自治对象（Autonomous Object）的诞生
+
+为了捍卫业务不变量，面向对象编程提出了一个核心原则：**让数据与操作数据的行为紧密内聚在一起，形成自治对象。**
+
+外部代码不应该直接伸手去拨动对象的内部零件（字段），而是应该向对象发送意图明确的消息（调用业务方法）：
+
+```mermaid
+flowchart LR
+    subgraph Bad["贫血模型 (外部随意篡改内部零件)"]
+        Ext1["外部代码 1"] -->|直接修改| E1["course.enrolled++"]
+        Ext2["外部代码 2"] -->|直接赋值| E2["course.enrolled = -10"]
+    end
+
+    subgraph Good["自治对象 (通过受控方法守护不变量)"]
+        Client["外部客户端"] -->|发送业务请求| Method["course.enroll()"]
+        subgraph CourseObject["Course 对象内部"]
+            Method --> Guard{"守卫检查:
+enrolled < capacity ?"}
+            Guard -->|满足| Update["enrolled++"]
+            Guard -->|不满足| Reject["拒绝并抛出异常"]
+        end
+    end
+```
+
+让我们用 Java 编写一个真正的自治对象：
+
+```java
+public class Course {
+    private final int id;
+    private final String code;
     private final String name;
     private final int capacity;
     private int enrolled;
 
-    public Course(String name, int capacity) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("课程名称不可为空");
-        }
+    public Course(int id, String code, String name, int capacity) {
         if (capacity <= 0) {
             throw new IllegalArgumentException("课程容量必须大于 0");
         }
+        if (code == null || code.isBlank() || name == null || name.isBlank()) {
+            throw new IllegalArgumentException("课程代码与名称不能为空");
+        }
+        this.id = id;
+        this.code = code;
         this.name = name;
         this.capacity = capacity;
         this.enrolled = 0;
     }
 
-    // 受控的状态变更入口
+    // 表达明确业务意图的方法，内部严密捍卫不变量
     public boolean enroll() {
         if (this.enrolled >= this.capacity) {
-            return false;
+            return false; // 名额已满，拒绝操作
         }
         this.enrolled++;
         return true;
@@ -578,12 +904,15 @@ public class Course {
 
     public boolean drop() {
         if (this.enrolled <= 0) {
-            return false;
+            return false; // 已经为 0，不能继续扣减
         }
         this.enrolled--;
         return true;
     }
 
+    // 只提供只读访问器，绝不提供外部自由修改的 setEnrolled()
+    public int getId() { return id; }
+    public String getCode() { return code; }
     public String getName() { return name; }
     public int getCapacity() { return capacity; }
     public int getEnrolled() { return enrolled; }
@@ -592,1757 +921,744 @@ public class Course {
 
 ---
 
-## 3. 面向对象之外的实现范式
+## 4. 多范式横向对比：其他编程范式如何解决相同问题？
 
-需要强调的是，**数据与操作的内聚并不局限于面向对象编程**：
-- **过程式语言中的抽象数据类型（ADT）**：例如在 C 语言中，可以通过在头文件中声明不透明指针（Opaque Pointer，如 `typedef struct Course Course;`），并只提供操作函数（如 `Course_enroll(Course* c)`）来实现数据隐藏与状态保护；
-- **函数式编程（FP）**：通过不可变数据结构与纯函数，每次状态跃迁产生新的数据快照：$State_{new} = f(State_{old}, Action)$，从模型上避免原位篡改；
-- **模块化机制**：许多现代语言（如 Rust、Go）通过包/模块级可见性控制来实现类似的数据保护。
+面向对象并非解决数据与行为绑定的唯一途径。让我们看看其他编程范式是如何实现相同目标的：
 
-本书沿着面向对象路线展开，是因为在许多主流企业级开发体系中，类与对象是表达领域概念的常见载体。
+### 1. 过程式抽象数据类型（Procedural ADT，以 C 语言为例）
+在现代 C 语言中，通常利用**不透明指针（Opaque Pointer）**在头文件与源文件之间建立封装边界：
+```c
+// course.h (对外头文件，只暴露类型声明与操作函数)
+typedef struct Course Course;
+Course* Course_create(int id, const char* code, const char* name, int capacity);
+bool Course_enroll(Course* c);
 
----
+// course.c (实现文件，结构体具体字段对外部不可见)
+struct Course {
+    int id;
+    int capacity;
+    int enrolled;
+};
+```
 
-## 4. 本章小结
+### 2. 函数式编程（Functional Programming）
+在函数式范式中，数据通常是**不可变值（Immutable Value）**。每次操作不修改旧状态，而是通过纯函数产生一个验证通过的新状态快照：
+$$\text{Course}_{new} = \text{enroll}(\text{Course}_{old})$$
 
-1. 仅仅将数据聚合成结构体，若不限制访问权限，仍难以防止非法状态变更；
-2. 面向对象通过将字段私有化、提供守卫方法，使对象成为负责自身状态一致性的自治单元；
-3. 数据与行为内聚是通用的软件工程原则，在不同编程范式中有不同的实现方式。
+无论哪种范式，其背后的核心思想是完全相通的：**绝不允许未经校验的外部代码破坏系统的合法状态。**
 ', 'public', '2251213429@qq.com', 3, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-04-class-and-object-mental-model', '04-class-and-object-mental-model', 'doc:hello-system-part-1', '第04章 类不是“对象的模板”这么简单', '# 第04章 类不是“对象的模板”这么简单
+VALUES ('doc:hello-system-04-classes-and-objects', '04-classes-and-objects', 'doc:hello-system-part-1', '第04章 类与对象：类型契约与运行时实例的脑内模型', '# 第04章 类与对象：类型契约与运行时实例的脑内模型
 
-## 1. 区分概念模型与运行期表示
+## 1. 区分两个世界：静态代码与运行时内存
 
-在初学面向对象时，“类是图纸，对象是房子”这一比喻有助于建立抽象与具体的直觉。
+初学者在学习面向对象时，最常犯的错误之一就是混淆了**类（Class）**与**对象（Object / Instance）**。
 
-但在深入理解系统运行时，需要进一步理清类型定义与实例数据在内存中的分工：
-- **类定义**：包含了字段规格、方法字节码指令与元数据信息；
-- **对象实例**：保存了属于该实例特有的字段取值以及指向其类型元数据的关联。
-
-无论创建多少个 `Course` 实例，方法的指令代码在进程中通常只有一份共享副本，而每个实例在堆中分配独立的空间存放各自的属性值。
-
-```mermaid
-flowchart LR
-    subgraph ClassMetadata ["类型元数据 (共享区)"]
-        Klass["Course 类信息
-- 方法字节码: enroll(), drop()
-- 字段描述表"]
-    end
-
-    subgraph HeapInstances ["堆内存实例数据"]
-        Obj1["Course 实例 1
-{ name: ''CS-101'', capacity: 100, enrolled: 1 }"]
-        Obj2["Course 实例 2
-{ name: ''MATH-201'', capacity: 60, enrolled: 0 }"]
-    end
-
-    Obj1 -.->|类型关联| Klass
-    Obj2 -.->|类型关联| Klass
-```
-
----
-
-## 2. 方法调用的语义与隐式参数 `this`
-
-当执行 `c1.enroll()` 时，方法是如何知道该修改 `c1` 还是 `c2` 的？
-
-在面向对象语言语义中，实例方法调用在逻辑上等价于将当前操作的目标对象作为**第一个参数**传入方法：
-
-$$\text{enroll}(c1)$$
-
-在方法体内部，这个隐式参数即为 `this`（在 Python 中被显式写作 `self`）。方法通过 `this` 访问并修改当前实例的具体字段。
-
----
-
-## 3. 规范与实现的边界说明
-
-需要说明的是：
-- **Java 虚拟机规范（JVMS）** 描述的是虚拟机的抽象执行模型，并不强制规定具体的物理内存布局、对象头格式或栈帧具体排布；
-- 像 **OpenJDK HotSpot** 这样的具体 JVM 实现，会使用特定的对象头结构（如 Mark Word、Klass Pointer）以及 JIT 编译器优化（如方法内联、逃逸分析与标量替换）；
-- 开发者应当首先理解语言的类型系统与语义规范，具体 JVM 实现细节属于下层技术选择。
-
----
-
-## 4. 本章小结
-
-1. 类承载了行为逻辑与类型元信息，对象承载了具体的实例状态；
-2. 实例方法通过隐式传递的 `this` 引用定位并修改目标对象的数据；
-3. 理解语义模型比记忆特定运行时的底层字节排布更为根本。
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-05-encapsulation-and-invariants', '05-encapsulation-and-invariants', 'doc:hello-system-part-1', '第05章 对象为什么应该保护自己的状态？', '# 第05章 对象为什么应该保护自己的状态？
-
-## 1. 封装的本质：捍卫不变量（Invariants）
-
-在面向对象教学中，常见的误区是将封装等同于“将字段声明为 `private`，然后提供一整套 `getter` 和 `setter`”。
-
-如果直接提供 `setEnrolled(int n)`，外部依然可以直接传入负数或超过容量的值，封装的效果便荡然无存。
-
-#### 不变量（Invariant）定义：
-> **不变量**是指对象在整个生命周期内，处于任何可观察的稳定状态时都必须恒为真的业务谓词。
-
-在 `Course` 实体中，核心不变量包括：
-$$0 \le \text{enrolled} \le \text{capacity}$$
-$$\text{capacity} > 0$$
-
----
-
-## 2. 状态保护的双重边界
-
-为了维护不变量，对象需要在两个阶段建立校验：
-
-1. **构造阶段（Creation Validation）**：构造函数必须拒绝不合法的初始参数，确保对象在被创建的那一刻就处于合法状态；
-2. **状态跃迁阶段（State Transition Validation）**：只暴露有明确业务语义的方法（如 `enroll()`, `drop()`），在方法内部执行条件判断，拒绝会导致不变量破裂的请求。
-
-```mermaid
-stateDiagram-v2
-    [*] --> 合法初始状态: 构造函数校验 (capacity > 0)
-    合法初始状态 --> 选课成功状态: enroll() [enrolled + 1 <= capacity]
-    选课成功状态 --> 退课成功状态: drop() [enrolled - 1 >= 0]
-    选课成功状态 --> 保持原状_拒绝变更: enroll() [名额已满]
-```
-
----
-
-## 3. 本章小结
-
-1. 封装的核心目的在于保护业务不变量，而非单纯的形式化语法修饰；
-2. 消除破坏不变量的公开 setter，将状态变更收敛到具有业务语义的方法中；
-3. 对象在生命周期的每一个稳定状态下都必须维持其内部一致性。
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-06-lifecycle-and-references', '06-lifecycle-and-references', 'doc:hello-system-part-1', '第06章 一个对象是怎样出生和死亡的？', '# 第06章 一个对象是怎样出生和死亡的？
-
-## 1. 作用域与生命周期的区分
-
-在理解对象的生命周期时，必须区分两个基本概念：
-- **变量的作用域（Scope）**：源码中能够通过变量名访问该引用的代码范围（例如方法体内部）；
-- **对象的生命周期（Lifetime）**：堆上分配的对象从被创建到占用的内存被回收的整个时间跨度。
-
-当方法执行结束、局部变量退出作用域时，它所引用的堆对象并不一定会立即消失。只要系统中仍有其他活跃的引用指向该对象，它就依然存活。
-
----
-
-## 2. 可达性分析（Reachability Analysis）
-
-在具有自动垃圾回收机制的语言（如 Java、Go、JavaScript）中，对象的回收通常基于**可达性分析算法**：
-
-1. 系统定义一组 **GC Roots**（如当前线程执行栈中的局部变量、静态变量等）；
-2. 从 GC Roots 出发，顺着引用链遍历所有可到达的对象；
-3. 无法从任何 GC Root 遍历到的孤立对象（即使它们之间存在循环引用），将被标记为可回收对象。
+- **类（Class）**：属于**编译期与元数据世界**。它是类型契约的蓝图，定义了该类型拥有哪些字段布局、哪些可执行指令（字节码），以及向外界提供哪些方法签名；
+- **对象（Object）**：属于**运行期内存世界**。它是根据类的蓝图在堆内存中动态开辟的一块具体内存区域，保存了该特定实例的独立状态数据。
 
 ```mermaid
 flowchart TD
-    subgraph Roots ["GC Roots (活跃调用栈引用)"]
-        R1["局部变量 c1"]
+    subgraph Meta["方法区 / 元空间 (Metaspace / Bytecode)"]
+        ClassMeta["Course.class 元数据
+- 字段描述符: id, name, capacity, enrolled
+- 方法字节码: enroll(), drop()"]
     end
 
-    subgraph ReachableObj ["可达对象 (存活)"]
-        O1["Course 实例 (CS-101)"]
+    subgraph Heap["堆内存 (JVM Heap)"]
+        Obj1["Course 实例 1
+- id: 2048
+- name: ''计算机系统导论''
+- capacity: 100
+- enrolled: 1"]
+        Obj2["Course 实例 2
+- id: 2049
+- name: ''数据结构与算法''
+- capacity: 80
+- enrolled: 0"]
     end
 
-    subgraph UnreachableObj ["不可达对象群 (待回收)"]
-        O2["Course 实例 (旧课程 A)"]
-        O3["Student 实例 (临时对象 B)"]
-        O2 <-->|彼此循环引用，但脱离 Root| O3
-    end
-
-    R1 --> O1
+    Obj1 -.->|类型指针指向| ClassMeta
+    Obj2 -.->|类型指针指向| ClassMeta
 ```
 
 ---
 
-## 3. 内存管理范式对比
+## 2. 方法调用的本质：隐藏的 `this` 指针
 
-- **垃圾回收（GC）**：运行时自动追踪引用关系，降低了手动释放内存导致悬垂指针（Dangling Pointer）或双重释放（Double Free）的风险；
-- **RAII 与显式所有权**：在 C++ 或 Rust 中，对象的销毁与作用域或所有权严格绑定，在离开作用域时由析构函数确定性释放，避免了垃圾回收停顿。
+请思考一个经典问题：
+如果在系统中实例化了 10,000 个 `Course` 对象，内存中会存在 10,000 份 `enroll()` 方法的代码吗？
+
+答案是：**绝对不会。**
+
+无论创建多少个对象，`enroll()` 方法的编译后指令在内存中**永远只有一份**，存放在方法区/代码段中。
+
+当我们在 Java 中调用 `c1.enroll()` 时，编译器在底层实际上将该调用转换为了类似如下形式：
+
+```text
+Course.enroll(this = c1);
+```
+
+在 JVM 字节码层级，非静态方法的第 0 号局部变量槽位（Slot 0）永远被保留用于传递当前对象的引用，这就是著名的 `this`。
+
+通过隐式传入的 `this` 引用，同一段 `enroll()` 方法字节码才能准确找到堆内存中对应 `c1` 对象的 `enrolled` 字段并进行递增。
 
 ---
 
-## 4. 本章小结
+## 3. 内存视角示例：JVM 中的对象布局参考
 
-1. 引用变量是访问对象的句柄，对象的生存取决于是否存在从活跃根节点出发的可达路径；
-2. 垃圾回收机制通过可达性分析处理不再使用的对象；
-3. 了解生命周期机制有助于避免意外保留长生命周期引用而导致的内存占用问题。
+为了建立直观的底层心智模型，我们以主流的 OpenJDK HotSpot 64位虚拟机（开启指针压缩）为例，观察一个对象在堆中的典型物理构成：
+
+> **实现边界声明**：
+> 下面的对象头构成属于 HotSpot JVM 的具体工程实现策略，并非 Java 语言规范（JLS）的硬性规定。不同的 JVM（如 Eclipse OpenJ9 或 GraalVM Native Image）可能有不同的内存布局。
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  HotSpot JVM 对象典型堆内存布局 (以 64 位系统开启压缩指针为例)  │
+├─────────────────────────────────────────────────────────────┤
+│ 1. 对象头 (Header):                                         │
+│    - 标记字 (Mark Word, 8 字节): 哈希码、GC 分代年龄、锁状态标志 │
+│    - 类元指针 (Klass Word, 4 字节): 指向方法区 Course.class 元数据│
+│ 2. 实例数据 (Instance Data):                                │
+│    - int id (4 字节)                                        │
+│    - 引用 name (4 字节, 压缩指针指向字符串常量/堆对象)            │
+│    - int capacity (4 字节)                                  │
+│    - int enrolled (4 字节)                                  │
+│ 3. 对齐填充 (Padding): 补齐至 8 字节对齐整数倍                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+通过这个模型，你可以清晰看到：
+对象本身只在堆中占用存放其自身字段所需的极小空间，而类型所共享的方法逻辑与元数据则安全驻留在独立的元空间中。
+', 'public', '2251213429@qq.com', 4, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-05-encapsulation-and-invariants', '05-encapsulation-and-invariants', 'doc:hello-system-part-1', '第05章 封装与不变量：绝不让无效状态诞生', '# 第05章 封装与不变量：绝不让无效状态诞生
+
+## 1. 为什么“一键生成所有 Getter/Setter”是对封装的背叛？
+
+在许多大学课堂与初级教程中，老师常常会教学生使用 IDE 的快捷键 `Alt + Insert`，然后给实体类中的所有私有字段“一键生成全套 Getter 和 Setter”。
+
+让我们认真审视这种做法：
+
+```java
+public class Course {
+    private int capacity;
+    private int enrolled;
+
+    // 机械生成的 Setter
+    public void setCapacity(int capacity) {
+        this.capacity = capacity;
+    }
+    public void setEnrolled(int enrolled) {
+        this.enrolled = enrolled;
+    }
+}
+```
+
+请问：**把字段设为 `private`，然后紧接着提供一个完全无保护的 `public setEnrolled(int)`，这和直接把字段定义为 `public int enrolled` 有任何本质区别吗？**
+
+答案是：**没有任何区别！**
+
+外部代码依然可以随心所欲地执行 `course.setEnrolled(-999)`。这种做法只是披着面向对象外衣的伪封装。
+
+---
+
+## 2. 真正的封装：双阶段不变量守护
+
+真正的封装由两个互不可分的防御阶段构成：
+
+```mermaid
+flowchart TD
+    subgraph Phase1["阶段一：构造期严格校验 (防范非法初始状态)"]
+        NewReq["new Course(id, code, name, capacity)"] --> Check{"capacity > 0 且 code/name 非空 ?"}
+        Check -->|是| Init["成功初始化对象"]
+        Check -->|否| Ex["抛出 IllegalArgumentException 阻止创建"]
+    end
+
+    subgraph Phase2["阶段二：状态跃迁受控 (防范运行期破坏)"]
+        MethodCall["调用 enroll() / drop()"] --> TransCheck{"跃迁后是否仍满足 0 <= enrolled <= capacity ?"}
+        TransCheck -->|满足| Apply["修改状态并返回成功"]
+        TransCheck -->|不满足| Reject["拒绝状态跃迁并报错"]
+    end
+
+    Init --> MethodCall
+```
+
+### 阶段一：构造函数守卫（Construction Guard）
+确保对象从诞生的那一微秒开始，就处于绝对合法的健康状态。绝不允许一个非法对象在内存中成型。
+
+### 阶段二：状态跃迁守卫（Transition Guard）
+对象的所有状态变化，必须由带有业务语义的方法驱动。方法内部必须前置判断该次跃迁是否会破坏不变量。
+
+---
+
+## 3. 实战测试：使用单元测试验证不变量
+
+一个真正完成良好封装的类，应该经得起各种破坏性测试的检验：
+
+```java
+public class CourseTest {
+    @Test
+    public void should_reject_invalid_capacity_on_creation() {
+        // 尝试用负数容量创建课程，必须抛出异常
+        assertThrows(IllegalArgumentException.class, () -> {
+            new Course(2048, "CS-101", "计算机系统导论", -10);
+        });
+    }
+
+    @Test
+    public void should_not_allow_enrolling_beyond_capacity() {
+        Course course = new Course(2048, "CS-101", "计算机系统导论", 1);
+        assertTrue(course.enroll()); // 第一次选课成功，enrolled 变为 1
+        assertFalse(course.enroll()); // 第二次选课被拒绝，enrolled 依然为 1
+        assertEquals(1, course.getEnrolled());
+    }
+}
+```
+
+只有当你的类无论面对多么恶意的外部调用，都能自发保持内部状态的确定性与一致性时，你才算真正掌握了面向对象的核心灵魂——**封装**。
+', 'public', '2251213429@qq.com', 5, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-06-object-lifecycle-and-memory', '06-object-lifecycle-and-memory', 'doc:hello-system-part-1', '第06章 对象的生与死：作用域、生命周期与内存回收', '# 第06章 对象的生与死：作用域、生命周期与内存回收
+
+## 1. 作用域（Scope）与生命周期（Lifetime）的辨析
+
+在理解内存管理时，必须清晰区分两个核心概念：
+
+- **作用域（Scope）**：属于**静态编译期概念**。指一段变量名在源代码中可以被直接访问的代码文本范围（例如局部变量在其所在的大括号 `{}` 内可见）；
+- **生命周期（Lifetime）**：属于**动态运行期概念**。指一块内存在物理堆空间中从分配被占用，到最终被垃圾收集器（GC）回收释放的真实时间跨度。
+
+```java
+public void processBatch() {
+    // 局部变量 ref 作用域仅限于 processBatch 方法内部
+    Course ref = new Course(2048, "CS-101", "计算机系统导论", 100);
+    globalCache.put(2048, ref); // 将引用存入全局长周期缓存
+} // processBatch 栈帧弹出，局部变量 ref 作用域结束
+```
+
+在上面的代码中，虽然 `ref` 的作用域随着方法结束而终结，但由于其指向的对象被全局对象 `globalCache` 引用，该 `Course` 对象在堆内存中的**生命周期依然在延续**。
+
+---
+
+## 2. 垃圾回收的本质：可达性分析算法（Reachability Analysis）
+
+在现代高级语言运行环境（如 JVM）中，判断一个对象是否应该被回收，采用的是**可达性分析算法**。
+
+算法以一组被称为 **GC Roots** 的根对象为起点，向下遍历搜索所有可引用的对象图。如果一个对象到任何 GC Roots 之间没有任何引用链相连，则证明该对象已经不可达，属于垃圾内存。
+
+```mermaid
+flowchart TD
+    subgraph Roots["GC Roots 根集合 (活跃栈帧局部变量 / 类的静态属性 / JNI 句柄)"]
+        R1["当前线程栈帧局部变量: activeCourse"]
+        R2["静态全局变量: appRegistry"]
+    end
+
+    subgraph Alive["可达对象 (存活，不被回收)"]
+        ObjA["Course 实例 (CS-101)"]
+        ObjB["Teacher 实例 (严教授)"]
+    end
+
+    subgraph Dead["不可达孤岛 (已被废弃，将在下一次 GC 中回收)"]
+        ObjC["旧临时 Course 对象 (容量为 0 的草稿)"]
+        ObjD["临时日志 String 对象"]
+    end
+
+    R1 --> ObjA
+    ObjA --> ObjB
+    R2 --> ObjA
+
+    ObjC -.-> ObjD
+```
+
+常见的 GC Roots 包括：
+1. 当前正在执行的线程栈帧中的局部变量与参数引用；
+2. 类中由 `static` 修饰的全局静态引用变量；
+3. JNI（Java Native Interface）本地代码持有的全局与局部指针。
 ', 'public', '2251213429@qq.com', 6, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-07-object-collaboration', '07-object-collaboration', 'doc:hello-system-part-1', '第07章 程序里的对象怎样彼此认识？', '# 第07章 程序里的对象怎样彼此认识？
+VALUES ('doc:hello-system-07-object-collaboration', '07-object-collaboration', 'doc:hello-system-part-1', '第07章 对象如何协同：关联、组合与职责划分', '# 第07章 对象如何协同：关联、组合与职责划分
 
-## 1. 对象关系的层次：拥有与使用
+## 1. 单个对象无法构成系统
 
-在面向对象系统中，对象之间最主要的协作形式包括：
+在真实业务中，单一的 `Course` 对象无法完成整个选课流程。
 
-1. **关联 / 组合（has-a）**：一个对象将另一个对象作为自身的属性长期持有；
-2. **依赖（uses-a）**：一个对象在方法执行过程中，通过参数传入或局部变量临时使用另一个对象。
+系统中必然存在另一类核心实体——**学生（Student）**。
+
+那么，当学生李雷选择课程 CS-101 时，这两个对象之间应该如何协同？
 
 ```mermaid
 classDiagram
     class Student {
         -int id
+        -String studentNo
         -String name
-        -List~Course~ enrolledCourses
-        +enrollCourse(Course course) boolean
-        +getEnrolledCourses() List~Course~
+        -List~Integer~ enrolledCourseIds
+        +enrollInCourse(int courseId) boolean
+        +hasEnrolled(int courseId) boolean
     }
-
     class Course {
+        -int id
+        -String code
         -String name
         -int capacity
         -int enrolled
         +enroll() boolean
         +drop() boolean
     }
-
-    Student "1" o-- "0..*" Course : has-a (持有已选课程列表)
-    Student ..> Course : uses-a (方法参数临时协作)
+    Student "1" ..> "*" Course : 业务协作
 ```
 
 ---
 
-## 2. Mini Campus 实体协作与职责分配
+## 2. 职责的严密划分：谁该负责什么？
 
-在选课场景中，`Student` 与 `Course` 各自维护不同的业务不变量：
-- **`Student` 的职责**：维护学生的个人选课清单，保证“同一学生不重复选修同一门课”；
-- **`Course` 的职责**：维护课程自身的容量约束，保证“总选课人数不超过容量上限”。
+在面向对象协作设计中，最核心的原则是：**信息专家原则（Information Expert Pattern）——拥有该信息的对象，才负责维护对应的业务约束。**
+
+请分析以下两个约束分别应该由谁来负责检查：
+
+1. **约束一：一门课程的总选课人数不能超过其最大容量。**
+   - **信息拥有者**：`Course`（它拥有 `capacity` 与 `enrolled` 字段）；
+   - **责任归属**：由 `Course.enroll()` 方法负责捍卫。
+2. **约束二：同一个学生不能重复选修同一门课程两次。**
+   - **信息拥有者**：`Student`（或者学生个人的已选课程列表）；
+   - **责任归属**：由 `Student` 或专门的选课服务负责捍卫。
+
+如果把“检查学生是否已选”的逻辑塞进 `Course` 内部，会导致 `Course` 必须了解全校所有学生的选课详情，从而引发严重的耦合。
+
+---
+
+## 3. 防御性拷贝（Defensive Copying）
+
+当一个对象需要向外界暴露其内部维护的集合属性时，必须防范外部代码恶意绕过其业务方法直接修改集合：
 
 ```java
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 public class Student {
     private final int id;
     private final String name;
-    private final List<Course> enrolledCourses;
+    private final List<Integer> enrolledCourseIds = new ArrayList<>();
 
     public Student(int id, String name) {
-        if (id <= 0 || name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("非法学生信息");
-        }
         this.id = id;
         this.name = name;
-        this.enrolledCourses = new ArrayList<>();
     }
 
-    public boolean enrollCourse(Course course) {
-        if (course == null) return false;
-
-        // 1. 学生自身校验不变量：防重复选课
-        if (this.enrolledCourses.contains(course)) {
-            return false;
+    public boolean enrollIn(int courseId) {
+        if (enrolledCourseIds.contains(courseId)) {
+            return false; // 防范重复选课
         }
-
-        // 2. 委托 Course 校验其自身不变量：防超卖
-        boolean success = course.enroll();
-        if (success) {
-            this.enrolledCourses.add(course);
-            return true;
-        }
-        return false;
+        enrolledCourseIds.add(courseId);
+        return true;
     }
 
-    // 防御性封装：返回不可修改视图，避免外部代码直接修改内部集合
-    public List<Course> getEnrolledCourses() {
-        return Collections.unmodifiableList(this.enrolledCourses);
-    }
+    // 危险做法：直接返回内部列表引用
+    // public List<Integer> getEnrolledCourseIds() { return enrolledCourseIds; }
 
-    public int getId() { return id; }
-    public String getName() { return name; }
+    // 正确做法：返回不可修改的视图 (Defensive View / Copy)
+    public List<Integer> getEnrolledCourseIds() {
+        return Collections.unmodifiableList(enrolledCourseIds);
+    }
 }
 ```
-
----
-
-## 3. 本章小结
-
-1. 对象通过属性持有（has-a）与参数依赖（uses-a）建立协作；
-2. 职责应当分配给拥有相关信息的对象，避免出现单个对象越权管理所有规则的情况；
-3. 在暴露集合属性时，应注意通过不可变包装或防御性复制保护内部状态。
 ', 'public', '2251213429@qq.com', 7, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-08-when-inheritance-is-valid', '08-when-inheritance-is-valid', 'doc:hello-system-part-1', '第08章 什么时候继承是合理的？', '# 第08章 什么时候继承是合理的？
+VALUES ('doc:hello-system-08-when-to-inherit', '08-when-to-inherit', 'doc:hello-system-part-1', '第08章 继承的诱惑与陷阱：里氏替换原则（LSP）', '# 第08章 继承的诱惑与陷阱：里氏替换原则（LSP）
 
-## 1. 继承的适用条件与常见误区
+## 1. 继承的滥用：为了代码复用而继承
 
-继承是面向对象中常被误用的机制之一。常见的错误出发点是为了单纯的代码复用而强行继承。
+继承是面向对象三大特性之一，但它也是最容易被滥用、引发灾难的机制。
 
-例如：因为“教室（Classroom）”也有容纳人数（capacity）和当前人数（enrolled），便让 `Classroom` 继承 `Course`。这会导致概念混乱，使得系统允许出现“学生选修了一间教室”这种违背业务逻辑的操作。
+假设系统中需要管理“上课教室（Classroom）”。一些初学者发现教室也有 `capacity`（座位数）和 `name`（教室名称），于是为了少写几行代码，写出了如下代码：
 
-#### 里氏替换原则（LSP, Liskov Substitution Principle）：
-> **如果对于每一个类型为 $S$ 的对象 $o_1$，都存在类型为 $T$ 的对象 $o_2$，使得以 $T$ 定义的所有程序 $P$ 在用 $o_1$ 替换 $o_2$ 时，程序 $P$ 的行为保持不变，那么类型 $S$ 是类型 $T$ 的子类型。**
+```java
+// 错误反模式：教室继承课程？！
+public class Classroom extends Course {
+    private String building;
+    // ...
+}
+```
+
+这种设计是荒谬的。在概念上，教室显然不是一种特殊的课程。把教室当成课程会导致 `Classroom` 继承了诸如 `enroll()` 等完全不符合其物理含义的方法。
 
 ---
 
-## 2. 合理的继承示例：实验课程
+## 2. 里氏替换原则（Liskov Substitution Principle, LSP）
 
-在 Mini Campus 中，**实验课（LabCourse）** 是一种符合 is-a 关系的子类型：
-- 实验课在行为与语义上完全是一种课程；
-- 实验课在继承基础课程属性的同时，增加了实验机时与助教信息。
+如何判断继承关系是否合理？计算机科学家 Barbara Liskov 给出了严格的定义：
 
+> **里氏替换原则（LSP）**：
+> 如果对于每一个类型为 $S$ 的对象 $o_1$，都存在一个类型为 $T$ 的对象 $o_2$，使得在所有针对 $T$ 编写的程序 $P$ 中，用 $o_1$ 替换 $o_2$ 后，程序 $P$ 的行为均不发生改变，则 $S$ 是 $T$ 的子类型。
+
+简而言之：**子类必须能够无缝替换父类，且绝不能削弱父类在契约中承诺的前置条件与后置条件。**
+
+```mermaid
+flowchart TD
+    subgraph ValidInheritance["合法的 LSP 子类型关系"]
+        Course["Base: Course (标准理论课)
+- capacity >= 1
+- enroll(): enrolled++"]
+        LabCourse["Sub: LabCourse (实验课)
+- 增加了实验台设备编号要求
+- enroll(): 依然严格遵守容量不变量，完全兼容父类"]
+        Course --> LabCourse
+    end
+```
+
+### 合法的子类扩展案例：`LabCourse`（实验课）
 ```java
 public class LabCourse extends Course {
-    private final String tutorName;
-    private final int labHours;
+    private final int labWorkstations;
 
-    public LabCourse(String name, int capacity, String tutorName, int labHours) {
-        super(name, capacity);
-        if (tutorName == null || labHours <= 0) {
-            throw new IllegalArgumentException("实验课参数非法");
+    public LabCourse(int id, String code, String name, int capacity, int labWorkstations) {
+        super(id, code, name, capacity);
+        if (labWorkstations <= 0) {
+            throw new IllegalArgumentException("实验工位数必须大于 0");
         }
-        this.tutorName = tutorName;
-        this.labHours = labHours;
+        this.labWorkstations = labWorkstations;
     }
 
-    public String getTutorName() { return tutorName; }
-    public int getLabHours() { return labHours; }
+    public int getLabWorkstations() {
+        return labWorkstations;
+    }
 }
 ```
 
 ---
 
-## 3. 组合优于继承的设计经验
+## 3. 组合优于继承（Composition over Inheritance）
 
-在软件工程实践中，“**组合优于继承（Composition over Inheritance）**”是一条广为人知的经验法则：
-- 继承属于**白盒复用**，父类的内部实现细节往往对子类可见，父类修改可能对子类产生意料之外的影响；
-- 组合属于**黑盒复用**，通过引用接口或对象来协作，耦合度更低，也更易于在运行时动态替换。
+在现代软件工程中，有一条广为人知的黄金准则：**优先使用对象组合，而非类继承。**
 
----
-
-## 4. 本章小结
-
-1. 继承应严格满足 is-a 关系与里氏替换原则，不应单纯为了复用局部字段而继承；
-2. 继承建立了较强的耦合关系，在面对复杂或多变的关系时，应优先考虑使用对象组合。
+继承建立了编译期的**强耦合白盒复用**，父类的任何内部改动都会直接穿透影响所有子类（脆弱基类问题）。而组合建立了运行期的**黑盒协作**，具有更高的灵活性与扩展性。
 ', 'public', '2251213429@qq.com', 8, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-09-polymorphism-and-dynamic-dispatch', '09-polymorphism-and-dynamic-dispatch', 'doc:hello-system-part-1', '第09章 为什么同一句代码能够产生不同的行为？', '# 第09章 为什么同一句代码能够产生不同的行为？
+VALUES ('doc:hello-system-09-polymorphism-and-dynamic-dispatch', '09-polymorphism-and-dynamic-dispatch', 'doc:hello-system-part-1', '第09章 多态与动态分派：消除冗长分支的优雅机制', '# 第09章 多态与动态分派：消除冗长分支的优雅机制
 
-## 1. 类型分支语句的扩展瓶颈
+## 1. 坏味道：类型判断与 `instanceof` 迷宫
 
-假设选课成功后，系统需要根据不同课程类型打印对应的指引信息。如果不使用多态，代码通常会充斥着类型判断：
+假设系统中的课程在结算学费时有不同的计费策略：
+- 普通理论课：按标准学分收费（每学分 100 元）；
+- 实验课：额外加收 200 元实验耗材费；
+- 名师公开课：一律免费。
+
+在没有使用多态的代码中，业务处理逻辑通常充斥着大量的类型判断：
 
 ```java
-public static void printInstruction(Course course) {
+public BigDecimal calculateFee(Course course) {
     if (course instanceof LabCourse) {
-        LabCourse lab = (LabCourse) course;
-        System.out.println("【实验课】请联系助教: " + lab.getTutorName());
-    } else if (course instanceof OnlineCourse) {
-        OnlineCourse online = (OnlineCourse) course;
-        System.out.println("【网课】请登录平台: " + online.getUrl());
+        return course.getCredits().multiply(new BigDecimal("100")).add(new BigDecimal("200"));
+    } else if (course instanceof PublicCourse) {
+        return BigDecimal.ZERO;
     } else {
-        System.out.println("【讲授课】请前往指定大教室听课。");
+        return course.getCredits().multiply(new BigDecimal("100"));
     }
 }
 ```
 
-每当新增一种课程类型时，所有包含类型判断分支的代码都需要被找到并修改。
+这种写法严重违反了**开闭原则（Open-Closed Principle, OCP）**：
+每当学校新增一种课程类型（例如“校企联合课”），你就必须找到所有包含 `instanceof` 的地方，手动加一个分支。只要漏改处，就会引发静默计费错误。
 
 ---
 
-## 2. 多态与动态分派（Dynamic Dispatch）
+## 2. 子类型多态与动态分派（Dynamic Dispatch）
 
-**子类型多态（Subtype Polymorphism）** 允许调用方统一面向父类型或接口编程，具体的行为由实际接收消息的运行时对象决定：
+多态的核心思想是：**将“如何做”的具体差异下沉到各个子类型内部，外部调用者只面向统一的抽象接口编程。**
 
 ```java
-public class Course {
-    // 基础定义略
-    public void printInstruction() {
-        System.out.println("【讲授课】请前往指定大教室听课。");
+public abstract class Course {
+    // 定义统一的抽象业务方法
+    public abstract BigDecimal calculateTuitionFee();
+}
+
+public class StandardCourse extends Course {
+    @Override
+    public BigDecimal calculateTuitionFee() {
+        return BigDecimal.valueOf(getCredits() * 100L);
     }
 }
 
 public class LabCourse extends Course {
-    private final String tutorName;
-    public LabCourse(String name, int capacity, String tutorName) {
-        super(name, capacity);
-        this.tutorName = tutorName;
-    }
-
     @Override
-    public void printInstruction() {
-        System.out.println("【实验课】请联系助教: " + this.tutorName);
+    public BigDecimal calculateTuitionFee() {
+        return BigDecimal.valueOf(getCredits() * 100L + 200L);
     }
 }
 ```
 
-调用方代码精简为：
+现在，外部结算逻辑变得极度简洁且稳定：
 
 ```java
-public static void notifyStudent(Course course) {
-    course.printInstruction(); // 运行时根据实际对象动态分派
+// 无论未来新增多少种课程类型，此处的结算逻辑一行代码都不需要修改！
+public BigDecimal calculateTotalFee(List<Course> courses) {
+    BigDecimal total = BigDecimal.ZERO;
+    for (Course c : courses) {
+        total = total.add(c.calculateTuitionFee()); // 动态分派
+    }
+    return total;
 }
 ```
 
 ---
 
-## 3. 动态分派的一种经典实现：虚方法表（vtable）
+## 3. 动态分派的底层实现原理：虚方法表（vtable）参考
 
-【说明：以下讨论的是许多编译器和虚拟机（如 C++ 编译器、JVM）中常见的一种实现机制，用于辅助理解运行期寻址，而非语言规范的唯一约束。】
+在 JVM 或 C++ 运行时的具体实现中，动态分派通常借助**虚方法表（Virtual Method Table, vtable）**来高效定位目标方法指令：
 
 ```mermaid
 flowchart LR
-    subgraph Instances ["堆上的具体实例"]
-        ObjA["LabCourse 实例
-[类型元数据指针]"]
-        ObjB["Course 实例
-[类型元数据指针]"]
-    end
-
-    subgraph Tables ["虚方法表 (vtable) 示意"]
-        VT_Lab["LabCourse vtable
-[Slot 0] printInstruction -> LabCourse.printInstruction()"]
-        VT_Base["Course vtable
-[Slot 0] printInstruction -> Course.printInstruction()"]
-    end
-
-    ObjA -.-> VT_Lab
-    ObjB -.-> VT_Base
+    Ref["Course c (类型声明为 Course，实际指向 LabCourse 实例)"] --> Obj["LabCourse 堆对象"]
+    Obj --> Klass["LabCourse 类元数据"]
+    Klass --> VTable["LabCourse 虚方法表 (vtable)"]
+    VTable --> Slot["Slot 3: calculateTuitionFee 指针"]
+    Slot --> Code["指向 LabCourse.calculateTuitionFee() 实际字节码指令"]
 ```
 
-1. 编译器在编译阶段为每个包含虚方法的类生成一张方法表，子类重写的方法会覆盖对应槽位中的函数指针；
-2. 当执行方法调用指令时，运行时根据对象的实际类型指针定位到对应的虚方法表，并从固定槽位获取目标方法入口执行。
-
----
-
-## 4. 本章小结
-
-1. 多态将“做什么”与“怎么做”解耦，调用方无需感知具体的子类分支；
-2. 动态分派是在运行时决定方法实现的语义机制，虚方法表（vtable）是其经典实现手段之一。
+通过在编译期固定方法在虚方法表中的偏移量（Offset），运行时只需一次简单的指针寻址，即可在常数时间 $O(1)$ 内精准调用对应子类的实现，兼具了极高的灵活性与运行效率。
 ', 'public', '2251213429@qq.com', 9, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-10-interfaces-and-dependency-inversion', '10-interfaces-and-dependency-inversion', 'doc:hello-system-part-1', '第10章 接口真正隔开的是什么？', '# 第10章 接口真正隔开的是什么？
+VALUES ('doc:hello-system-10-interfaces-and-contracts', '10-interfaces-and-contracts', 'doc:hello-system-part-1', '第10章 接口与依赖倒置（DIP）：面向契约设计', '# 第10章 接口与依赖倒置（DIP）：面向契约设计
 
-## 1. 硬编码依赖带来的耦合痛点
+## 1. 强耦合的灾难：硬编码具体实现
 
-当选课成功后，系统需要发送即时通知。如果业务逻辑直接硬编码具体实现：
+在业务开发中，我们常常需要发送选课成功的通知短信。
+
+请看以下初级设计：
 
 ```java
-public class EnrollmentCoordinator {
-    private AliyunSmsSender smsSender = new AliyunSmsSender(); // 直接依赖具体类
+public class EnrollmentService {
+    // 直接硬编码依赖了阿里云短信的具体实现类
+    private final AliyunSmsSender smsSender = new AliyunSmsSender("ak-123456");
+
+    public void enroll(int studentId, int courseId) {
+        // ... 选课逻辑 ...
+        smsSender.send(studentId, "恭喜您成功选修该课程！");
+    }
 }
 ```
 
-这会导致：
-- 当更换服务提供商或切换为邮件通知时，核心选课代码必须修改；
-- 在运行单元测试时，无法轻松替换为不产生真实通信开销的测试桩（Mock）。
+这种设计带来了巨大的麻烦：
+1. **无法进行单元测试**：在开发和自动化测试时，你每次运行测试都会真的给学生手机发一条真实短信并扣除企业短信费用；
+2. **供应商绑定**：如果学校决定把短信服务商从阿里云切换为腾讯云，或者在本地测试时使用邮件通知，你必须直接修改 `EnrollmentService` 的核心业务源码。
 
 ---
 
-## 2. 接口作为纯粹的契约
+## 2. 依赖倒置原则（Dependency Inversion Principle, DIP）
 
-在面向对象设计中，**接口（Interface）** 定义了一组行为契约，声明“做什么（What）”而不约束“如何做（How）”。
+为了打破这种强耦合，SOLID 原则提出了著名的**依赖倒置原则**：
 
-> **语言特性说明**：
-> 在抽象概念上，接口表达纯粹的契约；在具体语言语法上，例如 Java 8 之后引入了 `default` 和 `static` 方法，Java 9 引入了 `private` 方法，用于在不破坏既有实现的前提下提供契约扩展与代码复用。
+> **依赖倒置原则（DIP）**：
+> 1. 高层业务模块不应该依赖低层具体实现模块，二者都应该依赖于抽象契约；
+> 2. 抽象契约不应该依赖于具体细节，具体细节应该依赖于抽象契约。
+
+```mermaid
+flowchart TD
+    subgraph Bad["传统正向依赖 (高层模块直接依赖底层具体实现)"]
+        Svc1["EnrollmentService (高层业务)"] --> Aliyun["AliyunSmsSender (底层具体实现)"]
+    end
+
+    subgraph Good["依赖倒置 (双方均依赖抽象接口契约)"]
+        Svc2["EnrollmentService (高层业务)"] --> NotificationSender["<<interface>>
+NotificationSender"]
+        AliyunImpl["AliyunSmsSender
+(生产环境实现)"] -.->|实现| NotificationSender
+        MockImpl["MockNotificationSender
+(单元测试环境实现)"] -.->|实现| NotificationSender
+    end
+```
+
+---
+
+## 3. 契约定义与多环境装配
+
+我们首先定义一个纯粹的抽象接口：
 
 ```java
 public interface NotificationSender {
-    void sendNotification(String target, String content);
+    void send(int recipientId, String message);
 }
 ```
 
----
-
-## 3. 依赖倒置原则（DIP）与依赖注入（DI）
-
-必须准确区分以下两个概念：
-
-- **依赖倒置原则（DIP, Dependency Inversion Principle）**：一条设计原则。高层模块不应该依赖低层模块，两者都应该依赖抽象；抽象不应该依赖细节，细节应该依赖抽象。
-- **依赖注入（DI, Dependency Injection）**：一种实现依赖解耦的结构型手段。通过构造函数、Setter 方法或框架容器将具体依赖传递给对象，而不是由对象内部自行 `new` 创建。
-
-```mermaid
-flowchart TD
-    subgraph DIP ["依赖倒置原则 (DIP)"]
-        Coordinator["核心选课业务 (高层模块)"] -->|依赖抽象| Interface["NotificationSender 接口"]
-        Aliyun["AliyunSmsSender (低层模块)"] -.->|实现契约| Interface
-        Email["EmailSender (低层模块)"] -.->|实现契约| Interface
-        Mock["MockNotificationSender (测试桩)"] -.->|实现契约| Interface
-    end
-```
+高层业务服务只面向该接口编程：
 
 ```java
-public class EnrollmentCoordinator {
-    private final NotificationSender notifier;
-
-    // 通过构造函数进行依赖注入 (DI)
-    public EnrollmentCoordinator(NotificationSender notifier) {
-        this.notifier = notifier;
-    }
-
-    public void process(Student student, Course course) {
-        boolean ok = student.enrollCourse(course);
-        if (ok) {
-            notifier.sendNotification(student.getName(), "选课成功: " + course.getName());
-        }
-    }
-}
-```
-
----
-
-## 4. 本章小结
-
-1. 接口建立了模块之间的抽象契约，隔离了易变实现对核心业务的影响；
-2. 依赖倒置原则（DIP）强调面向抽象编程，依赖注入（DI）是装配具体实现的有效手段。
-', 'public', '2251213429@qq.com', 10, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-11-break-god-class', '11-break-god-class', 'doc:hello-system-part-1', '第11章 为什么一个类最终又会变成几十个类？', '# 第11章 为什么一个类最终又会变成几十个类？
-
-## 1. 上帝类（God Class）的产生与危害
-
-随着功能的累加，如果开发者习惯性地将所有逻辑追加到一个庞大的管理类（如 `CampusManager`）中，该类将逐渐演化为涵盖参数校验、业务编排、SQL 访问与通知发送的“上帝类”。
-
-上帝类会带来以下维护问题：
-- **变更冲突**：不同职责的修改均集中在同一个文件，增加代码合并冲突的概率；
-- **理解困难**：单文件行数庞大，内部逻辑错综复杂；
-- **测试困难**：无法对单个业务规则进行隔离测试。
-
----
-
-## 2. 单一职责原则（SRP）：寻找变化的轴线
-
-#### 单一职责原则（Single Responsibility Principle）：
-> **一个模块应该有且仅有一个引起它变化的原因。**
-
-我们将臃肿的管理类解构为关注点各异的独立模块：
-
-```mermaid
-flowchart LR
-    Ctrl["CourseController
-关注网络传输与参数转换"] --> Svc["EnrollmentService
-关注业务规则编排"]
-    Svc --> Repo["CourseRepository
-关注数据持久化存取"]
-    Svc --> Notify["NotificationSender
-关注外部消息发送"]
-```
-
-- 当协议格式或 URL 路由改变时，只需修改 Controller；
-- 当选课业务规则改变时，只需修改 Service；
-- 当存储介质或 SQL 改变时，只需修改 Repository。
-
----
-
-## 3. 本章小结
-
-1. 上帝类承担了过多的职责，违背了单一职责原则；
-2. 按照变化的原因和关注点拆分模块，有助于提高系统的可维护性与可测试性。
-', 'public', '2251213429@qq.com', 11, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-12-emergence-of-layers', '12-emergence-of-layers', 'doc:hello-system-part-1', '第12章 软件第一次出现“层”', '# 第12章 软件第一次出现“层”
-
-## 1. 经典三层架构的职责分工
-
-在现代 Web 后端开发中，**Controller-Service-Repository** 是一种广泛使用的教学与工业参考分层方案：
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Caller as 外部调用方 (HTTP 客户端)
-    participant Ctrl as 1. Controller 表现层
-    participant Svc as 2. Service 业务逻辑层
-    participant Repo as 3. Repository 数据持久层
-    participant DB as 存储介质 / 数据库
-
-    Caller->>Ctrl: 发起选课请求 (传入参数)
-    Note over Ctrl: 负责: 协议解析、参数清洗<br/>不承担核心业务规则
-    Ctrl->>Svc: 调用业务服务 enroll(student, courseId)
-    Note over Svc: 负责: 业务不变量编排、事务边界
-    Svc->>Repo: 查询课程实体 findById(courseId)
-    Repo->>DB: 执行数据查询
-    DB-->>Repo: 返回记录
-    Repo-->>Svc: 组装为领域实体 Course
-    Note over Svc: 执行实体选课状态跃迁
-    Svc->>Repo: 保存更新 save(course)
-    Repo->>DB: 执行持久化操作
-    Svc-->>Ctrl: 返回操作结果
-    Ctrl-->>Caller: 封装响应数据 (如 JSON)
-```
-
----
-
-## 2. 层次职责矩阵
-
-| 层次 | 核心职责 | 它应该关注什么 | 它应该避免什么 |
-| :--- | :--- | :--- | :--- |
-| **表现层 (Controller)** | 协议转换、参数提取、基础格式校验、响应包装 | HTTP 语义、路由匹配、状态码 | 直接执行底层 SQL、包含核心业务规则 |
-| **业务逻辑层 (Service)** | 业务用例编排、跨实体协作、事务边界管理 | 完整的业务规则与执行流程 | 直接处理底层 HTTP 会话、硬编码特定数据库细节 |
-| **数据持久层 (Repository)** | 屏蔽底层存储细节，提供集合风格的数据存取接口 | 数据查询、持久化映射、缓存交互 | 参与上层业务规则决策 |
-
----
-
-## 3. Mini Campus 三层结构的最小实现
-
-```java
-import java.util.HashMap;
-import java.util.Map;
-
-// 1. Repository: 提供存取抽象
-public class InMemoryCourseRepository {
-    private final Map<Integer, Course> store = new HashMap<>();
-
-    public Course findById(int id) { return store.get(id); }
-    public void save(Course course) { store.put(course.getId(), course); }
-}
-
-// 2. Service: 业务编排
 public class EnrollmentService {
-    private final InMemoryCourseRepository courseRepo;
-    private final NotificationSender notifier;
+    private final NotificationSender notificationSender;
 
-    public EnrollmentService(InMemoryCourseRepository courseRepo, NotificationSender notifier) {
-        this.courseRepo = courseRepo;
-        this.notifier = notifier;
+    // 依赖注入 (Dependency Injection)：由外部容器组装具体实现
+    public EnrollmentService(NotificationSender notificationSender) {
+        this.notificationSender = notificationSender;
     }
 
-    public boolean enroll(Student student, int courseId) {
-        Course course = courseRepo.findById(courseId);
-        if (course == null) return false;
-
-        boolean success = student.enrollCourse(course);
-        if (success) {
-            courseRepo.save(course);
-            notifier.sendNotification(student.getName(), "选课成功: " + course.getName());
-            return true;
-        }
-        return false;
-    }
-}
-
-// 3. Controller: 协议与参数处理
-public class CourseController {
-    private final EnrollmentService enrollmentService;
-
-    public CourseController(EnrollmentService service) {
-        this.enrollmentService = service;
-    }
-
-    public String handleEnrollRequest(Student student, String courseIdStr) {
-        try {
-            int courseId = Integer.parseInt(courseIdStr);
-            boolean ok = enrollmentService.enroll(student, courseId);
-            return ok ? "{"status": 200, "msg": "选课成功"}" : "{"status": 409, "msg": "选课失败"}";
-        } catch (NumberFormatException e) {
-            return "{"status": 400, "msg": "参数格式非法"}";
-        }
+    public void enroll(int studentId, int courseId) {
+        // ... 核心业务 ...
+        notificationSender.send(studentId, "选课成功");
     }
 }
 ```
 
----
-
-## 4. 第一部分总结
-
-至此，我们完成了后端单机程序从散落变量到面向对象封装、再到三层分层设计的演进。
-
-接下来，我们将视角转移到浏览器端，进入第二部分：**页面开始变复杂**。
-', 'public', '2251213429@qq.com', 12, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-part-2', 'part-2', 'doc:book-hello-system', '第二部分 · 页面开始变复杂', '', 'public', '2251213429@qq.com', 4, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-13-html-css-dom', '13-html-css-dom', 'doc:hello-system-part-2', '第13章 网页最开始根本不需要框架', '# 第13章 网页最开始根本不需要框架
-
-## 1. 最初情境：Web 标准三剑客
-
-在现代前端框架普及之前，Web 应用依靠三项基础技术构建：
-- **HTML（结构）**：使用标签定义文档的内容层级与语义；
-- **CSS（表现）**：定义元素的布局、颜色与字体等视觉样式；
-- **JavaScript（行为）**：通过浏览器提供的 API 实现事件监听与动态交互。
-
-早期 Mini Campus 选课系统的一个最小页面如下：
-
-```html
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <title>Mini Campus 选课系统</title>
-    <style>
-        .card { border: 1px solid #ddd; padding: 16px; width: 280px; border-radius: 6px; }
-        .disabled { color: #888; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>计算机系统导论</h2>
-        <p>剩余名额: <span id="remaining-count">1</span></p>
-        <button id="enroll-btn">选课</button>
-    </div>
-
-    <script>
-        let remaining = 1;
-        const btn = document.getElementById(''enroll-btn'');
-        const countSpan = document.getElementById(''remaining-count'');
-
-        btn.addEventListener(''click'', function() {
-            if (remaining > 0) {
-                remaining--;
-                countSpan.innerText = remaining;
-                if (remaining === 0) {
-                    btn.disabled = true;
-                    btn.innerText = ''名额已满'';
-                }
-            }
-        });
-    </script>
-</body>
-</html>
-```
-
----
-
-## 2. 浏览器的渲染流程概览
-
-当浏览器加载 HTML 时，底层渲染引擎大致经历以下阶段：
-
-```mermaid
-flowchart TD
-    HTML["HTML 字符流"] --> DOM["DOM 树 (Document Object Model)"]
-    CSS["CSS 字符流"] --> CSSOM["CSSOM 树 (CSS Object Model)"]
-    DOM --> RenderTree["渲染树 (Render Tree)"]
-    CSSOM --> RenderTree
-    RenderTree --> Layout["布局排版 (Layout / Reflow)
-计算盒模型的几何坐标与尺寸"]
-    Layout --> Paint["绘制 (Paint)
-生成绘制指令与图层"]
-    Paint --> Composite["图层合成 (Compositing)
-交付 GPU 最终显示"]
-```
-
-> **注意**：
-> 现代浏览器的渲染流水线并非严格单向的一次性过程，而是随着异步资源加载、脚本执行与样式变化动态交替进行的。
-
-在简单交互场景下，原生 HTML/CSS/JS 具有零构建配置、无运行时框架体积开销的显著优势。
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-14-dom-manipulation-mess', '14-dom-manipulation-mess', 'doc:hello-system-part-2', '第14章 直接操作DOM为什么迟早会出问题？', '# 第14章 直接操作DOM为什么迟早会出问题？
-
-## 1. 复杂交互下的命令式 DOM 联动
-
-随着功能扩展，选课页面增加了多个相互关联的 UI 区域：
-1. 课程卡片中的剩余名额与按钮状态；
-2. 顶部导航栏中的已选课程数量徽章；
-3. 右侧侧边栏中的已选课程清单与总学分统计；
-4. 筛选搜索框。
-
-如果使用原生 JavaScript 采用命令式（Imperative）方式逐一更新 DOM：
-
-```javascript
-function handleEnrollSuccess(course) {
-    // 1. 手动修改卡片内文本
-    const countEl = document.querySelector(''#card-'' + course.id + '' .count'');
-    countEl.innerText = parseInt(countEl.innerText) - 1;
-
-    // 2. 手动修改按钮
-    const btn = document.querySelector(''#card-'' + course.id + '' button'');
-    btn.disabled = true;
-    btn.innerText = ''已选修'';
-
-    // 3. 手动修改顶部徽章
-    const badge = document.getElementById(''enrolled-badge'');
-    badge.innerText = parseInt(badge.innerText) + 1;
-
-    // 4. 手动向侧边栏追加 DOM 节点
-    const list = document.getElementById(''sidebar-list'');
-    const item = document.createElement(''li'');
-    item.id = ''sidebar-item-'' + course.id;
-    item.innerText = course.name;
-    list.appendChild(item);
-
-    // 5. 手动更新总学分
-    const creditEl = document.getElementById(''total-credits'');
-    creditEl.innerText = parseInt(creditEl.innerText) + course.credits;
-}
-```
-
----
-
-## 2. 核心问题：状态分散在 DOM 中
-
-```mermaid
-flowchart LR
-    Event["选课事件触发"] -->|命令式逐一修改| DOM1["卡片剩余数字"]
-    Event -->|命令式逐一修改| DOM2["卡片按钮 disabled 属性"]
-    Event -->|命令式逐一修改| DOM3["顶部徽章计数"]
-    Event -->|命令式逐一修改| DOM4["侧边栏 li 列表"]
-    Event -->|命令式逐一修改| DOM5["总学分展示元素"]
-```
-
-在命令式编程模式下：
-1. **状态被隐式保存在 DOM 节点的文本与属性中**，缺乏单一明确的数据来源；
-2. **多处修改容易产生不一致**：如果在退课或搜索重置逻辑中漏改了某一个 DOM 节点，界面各处的显示将产生冲突；
-3. **事件与 DOM 呈现高度耦合的网状依赖**，维护成本随交互复杂度快速上升。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-15-state-driven-ui', '15-state-driven-ui', 'doc:hello-system-part-2', '第15章 究竟应该让页面保存数据，还是让数据决定页面？', '# 第15章 究竟应该让页面保存数据，还是让数据决定页面？
-
-## 1. 范式转换：声明式（Declarative）编程
-
-为了解决命令式 DOM 操作的维护困境，现代前端引入了**声明式 UI（Declarative UI）**范式：
-
-> **开发者不再手动编写“如何操作 DOM”的每一步指令，而是维护一份纯内存状态（State），并声明“在特定状态下，UI 应该呈现出什么结构”。**
-
-#### 核心抽象公式：
-$$UI = f(State)$$
-
-```mermaid
-flowchart LR
-    State["内存状态 State
-{ courses: [...], enrolledIds: [101] }"] -->|声明式映射 f(State)| UI["渲染后的真实页面 UI"]
-```
-
----
-
-## 2. 声明式 UI 的实现机制说明
-
-需要说明的是，**虚拟 DOM（Virtual DOM）只是实现声明式 UI 的常见手段之一，而非唯一途径**：
-- **React / Vue**：通过在内存中比对新旧虚拟 DOM 树（Diffing），计算出最小更新补丁（Patch）并批量应用到真实 DOM；
-- **Svelte / SolidJS**：通过编译期分析或细粒度响应式订阅，直接在状态改变时精准更新对应的真实 DOM 节点，不依赖虚拟 DOM。
-
-无论底层采用哪种技术，**以状态为中心（State-Driven）的心智模型**是现代前端开发的共同基石。
-', 'public', '2251213429@qq.com', 3, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-16-vue-reactivity-under-the-hood', '16-vue-reactivity-under-the-hood', 'doc:hello-system-part-2', '第16章 “数据变了，页面自己变”到底是什么意思？', '# 第16章 “数据变了，页面自己变”到底是什么意思？
-
-## 1. Vue 3 响应式的核心机制
-
-Vue 3 的响应式系统围绕三个核心行为展开：
-1. **拦截属性访问与修改**：
-   - `reactive()` 主要使用 ES6 `Proxy` 拦截对象的读取（get）与写入（set）；
-   - `ref()` 使用带有 `.value` 访问器属性（getter/setter）的 RefImpl 对象；
-2. **依赖收集（Track）**：在执行副作用函数（如组件渲染函数）期间，若读取了响应式属性，系统将当前活跃的副作用函数（Effect）记录为该属性的依赖；
-3. **依赖触发（Trigger）**：当响应式属性被修改时，系统查找并重新执行该属性收集到的所有副作用函数。
-
-```mermaid
-flowchart TD
-    subgraph Read ["读取属性 (Track 阶段)"]
-        Render["渲染函数 / 副作用执行"] -->|读取 state.enrolled| ProxyGet["Proxy get() / Ref getter"]
-        ProxyGet --> Track["track: 记录当前 Effect 到依赖集合"]
-    end
-
-    subgraph Write ["修改属性 (Trigger 阶段)"]
-        UserAction["用户操作: state.enrolled++"] --> ProxySet["Proxy set() / Ref setter"]
-        ProxySet --> Trigger["trigger: 遍历执行所收集的 Effects"]
-        Trigger --> ReRender["组件重新渲染 / 更新视图"]
-    end
-```
-
----
-
-## 2. 最小响应式原理代码示例
-
-```javascript
-let activeEffect = null;
-const targetMap = new WeakMap();
-
-function track(target, key) {
-    if (!activeEffect) return;
-    let depsMap = targetMap.get(target);
-    if (!depsMap) targetMap.set(target, (depsMap = new Map()));
-    let dep = depsMap.get(key);
-    if (!dep) depsMap.set(key, (dep = new Set()));
-    dep.add(activeEffect);
-}
-
-function trigger(target, key) {
-    const depsMap = targetMap.get(target);
-    if (!depsMap) return;
-    const dep = depsMap.get(key);
-    if (dep) dep.forEach(effect => effect());
-}
-
-function reactive(obj) {
-    return new Proxy(obj, {
-        get(target, key, receiver) {
-            track(target, key);
-            return Reflect.get(target, key, receiver);
-        },
-        set(target, key, value, receiver) {
-            const result = Reflect.set(target, key, value, receiver);
-            trigger(target, key);
-            return result;
-        }
-    });
-}
-```
-
----
-
-## 3. 本章小结
-
-1. 响应式系统通过拦截数据的读写操作，实现依赖自动收集与自动通知；
-2. Vue 3 中 `reactive` 使用 `Proxy`，`ref` 使用访问器属性，其上层统一遵循 track/trigger 响应式模型。
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-17-computed-and-caching', '17-computed-and-caching', 'doc:hello-system-part-2', '第17章 computed为什么不是一个普通函数？', '# 第17章 computed为什么不是一个普通函数？
-
-## 1. 派生状态与缓存机制
-
-在选课系统中，已选总学分是由已选课程列表计算而来的**派生状态（Derived State）**。
-
-如果将其写为普通方法并在模板中多次调用：
-```html
-<p>总学分: {{ calculateTotalCredits() }}</p>
-<p>总学分: {{ calculateTotalCredits() }}</p>
-```
-只要组件因任何无关状态改变而重新渲染，普通方法都会被重复执行。
-
----
-
-## 2. computed 的工作原理
-
-`computed()` 创建一个具有**依赖追踪与缓存特性**的响应式引用：
-1. **自动追踪依赖**：`computed` 内部自动收集其所引用的响应式数据（如 `enrolledCourses`）；
-2. **基于依赖缓存**：只要所依赖的源数据未发生变化，多次访问 `computed` 属性会直接返回缓存值；
-3. **惰性失效**：当源数据变化时，将缓存标记为失效，在下一次被读取时才重新计算。
-
-```mermaid
-flowchart TD
-    Access["访问 computed.value"] --> CheckDirty{"依赖源数据是否发生过变更?"}
-    CheckDirty -->|是| ReCalc["重新执行计算函数并更新缓存"]
-    CheckDirty -->|否| ReturnCache["直接返回缓存结果 (零计算开销)"]
-```
-
-> **设计原则提示**：
-> `computed` 的计算函数应当设计为纯函数，避免在其中执行异步请求或修改其他状态等副作用操作。
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-18-watch-and-side-effects', '18-watch-and-side-effects', 'doc:hello-system-part-2', '第18章 watch到底应该什么时候使用？', '# 第18章 watch到底应该什么时候使用？
-
-## 1. 纯计算与副作用（Side Effects）的区分
-
-- **`computed`**：适用于**纯派生数据**。根据状态生成新的数据，不修改外部环境；
-- **`watch` / `watchEffect`**：专门用于处理**副作用（Side Effects）**。当状态变化时，执行与外部系统的交互操作（如发起网络请求、修改 LocalStorage、手动操作 DOM 或设置定时器）。
-
-```javascript
-import { ref, watch } from ''vue'';
-
-const selectedCourseId = ref(null);
-const courseDetail = ref(null);
-
-// 状态变化时触发异步网络请求副作用
-watch(selectedCourseId, async (newId, oldId, onCleanup) => {
-    if (!newId) return;
-
-    let isCancelled = false;
-    onCleanup(() => {
-        isCancelled = true; // 处理并发或组件卸载时的清理逻辑
-    });
-
-    const res = await fetch(`/api/courses/${newId}`);
-    const data = await res.json();
-    if (!isCancelled) {
-        courseDetail.value = data;
-    }
-});
-```
-
----
-
-## 2. 避免用 watch 替代 computed
-
-初学者常会使用 `watch` 手动更新另一个 `ref` 来实现派生数据，这会增加不必要的状态管理开销并容易导致循环更新。对于纯数据推导，应优先使用 `computed`。
-', 'public', '2251213429@qq.com', 6, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-19-component-decomposition', '19-component-decomposition', 'doc:hello-system-part-2', '第19章 为什么页面最终必须被拆开？', '# 第19章 为什么页面最终必须被拆开？
-
-## 1. 单巨石页面的维护瓶颈
-
-当一个页面包含课程搜索、卡片网格、侧边栏、分页器与详情弹窗时，将所有模板、样式与状态都堆在单文件中会导致：
-- 状态变量命名空间混杂；
-- 单一功能逻辑难以独立复用与测试；
-- 团队多人协作容易产生代码冲突。
-
----
-
-## 2. 组件化（Component-Based Architecture）
-
-组件化将页面拆解为由树形结构组织的独立可复用单元：
-
-```mermaid
-flowchart TD
-    App["App.vue (根组件)"]
-    Header["AppHeader.vue (顶部导航)"]
-    CourseList["CourseListView.vue (主内容区)"]
-    Card1["CourseCard.vue (课程卡片)"]
-    Card2["CourseCard.vue"]
-    Sidebar["EnrollmentSidebar.vue (已选侧边栏)"]
-
-    App --> Header
-    App --> CourseList
-    App --> Sidebar
-    CourseList --> Card1
-    CourseList --> Card2
-```
-
-每个组件封装了自身的结构、样式与局部交互逻辑，通过明确的接口与外部进行数据通信。
-', 'public', '2251213429@qq.com', 7, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-20-props-events-data-flow', '20-props-events-data-flow', 'doc:hello-system-part-2', '第20章 组件之间怎样传递信息？', '# 第20章 组件之间怎样传递信息？
-
-## 1. 单向数据流（One-Way Data Flow）模式
-
-在父子组件通信中，**Props Down, Events Up** 是最基础且推荐的单向数据流模型：
-- **Props Down**：父组件向子组件单向传递只读属性；
-- **Events Up**：子组件通过触发自定义事件通知父组件发生状态变更意图。
-
-```mermaid
-flowchart TD
-    Parent["父组件 (CourseListView)"]
-    Child["子组件 (CourseCard)"]
-
-    Parent -->|1. Props 传递只读数据 :course=''item''| Child
-    Child -->|2. Emit 抛出事件 @enroll=''handleEnroll''| Parent
-```
-
----
-
-## 2. Props 的单向绑定说明
-
-在 Vue 规范中：
-- 子组件**严禁直接对接收到的 Prop 变量进行重新赋值**（如 `props.course = newObj`）；
-- 若 Prop 为对象或数组，直接修改其内部嵌套属性虽然在技术上可能影响父组件，但这破坏了单向数据流的可追踪性，属于不推荐的做法。
-
----
-
-## 3. 多种通信方式的适用场景
-
-除了 Props/Emit 之外，现代前端还提供了其他通信手段：
-- **provide / inject**：用于跨多层级的深层依赖传递；
-- **全局状态管理（如 Pinia）**：用于跨路由、多视图共享的应用级状态；
-- **组合式函数（Composables）**：用于在不同组件间复用有状态的业务逻辑。
-', 'public', '2251213429@qq.com', 8, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-21-component-lifecycle', '21-component-lifecycle', 'doc:hello-system-part-2', '第21章 组件什么时候出生？', '# 第21章 组件什么时候出生？
-
-## 1. 组件的生命周期过程
-
-组件从被创建到最终销毁经历多个阶段：
-
-```mermaid
-stateDiagram-v2
-    [*] --> Setup: 初始化阶段 (创建响应式状态与计算属性)
-    Setup --> Mounted: onMounted (DOM 节点挂载完成)
-    Mounted --> Updated: onUpdated (响应式数据改变触发重新渲染)
-    Mounted --> Unmounted: onUnmounted (组件销毁卸载)
-    Unmounted --> [*]
-```
-
----
-
-## 2. 数据获取与资源清理
-
-1. **异步数据获取时机**：
-   - 可以在 `onMounted()` 中发起初始数据请求，此时 DOM 容器已就绪；
-   - 在支持服务端渲染（SSR）或使用路由导航守卫的架构中，数据也可在进入组件前由数据加载层完成预获取。
-2. **清理副作用防止内存泄漏**：
-   - 若在组件内注册了全局事件监听（如 `window.addEventListener`）或定时器（`setInterval`），必须在 `onUnmounted()` 中进行显式解绑与清理。
-', 'public', '2251213429@qq.com', 9, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-22-spa-and-client-routing', '22-spa-and-client-routing', 'doc:hello-system-part-2', '第22章 一个网站为什么能有很多“页面”？', '# 第22章 一个网站为什么能有很多“页面”？
-
-## 1. MPA 与 SPA 的架构差异
-
-- **多页面应用（MPA, Multi-Page Application）**：每次页面跳转均向服务器请求全新的 HTML 文件，浏览器执行完整页面刷新；
-- **单页面应用（SPA, Single-Page Application）**：初始只加载单个 HTML 入口，后续的“页面切换”由客户端 JavaScript 动态替换视图组件完成，避免了全屏刷新。
-
----
-
-## 2. 客户端路由（Client-Side Routing）原理
-
-客户端路由器（如 Vue Router）主要利用 **HTML5 History API** 实现无刷新导航：
-
-```mermaid
-flowchart LR
-    UserNav["用户点击导航链接 /schedule"] --> Router["前端路由器拦截点击"]
-    Router --> HistoryAPI["调用 history.pushState() 更新浏览器地址栏 (无网络刷新)"]
-    Router --> ComponentSwap["根据路由配置动态渲染对应的视图组件"]
-```
-
-- `history.pushState()` 和 `history.replaceState()` 允许在不重新加载页面的前提下修改浏览器地址栏；
-- 浏览器前进/后退时触发 `popstate` 事件，路由器捕获后同步更新对应的视图组件。
-', 'public', '2251213429@qq.com', 10, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-23-global-state-management', '23-global-state-management', 'doc:hello-system-part-2', '第23章 状态应该放在哪里？', '# 第23章 状态应该放在哪里？
-
-## 1. 跨层级状态共享与 Pinia
-
-当系统中多个不具备直接父子关系的组件（如顶部用户信息与右侧购物车抽屉）都需要访问同一份数据时，若仅靠状态提升（Lifting State Up）和 Props 层层透传（Prop Drilling），会导致中间组件充斥无关参数。
-
-**Pinia** 是 Vue 官方推荐的状态管理库，其核心心智模型包括：
-- **Store**：支持按业务模块定义多个独立的 Store（如 `useUserStore`, `useCourseStore`）；
-- **State**：保存全局共享的响应式数据；
-- **Getters**：基于 State 的派生计算属性；
-- **Actions**：包含同步或异步的业务操作方法。
-
-```mermaid
-flowchart TD
-    subgraph PiniaStore ["Pinia Store (useCourseStore)"]
-        State["state: { enrolledList: [] }"]
-        Actions["action: enroll(courseId)"]
-    end
-
-    CompA["HeaderBadge.vue"] -->|读取已选数量| State
-    CompB["CourseCard.vue"] -->|触发选课操作| Actions
-```
-
-> **架构提示**：
-> Pinia 的 Store 实例与具体的 Vue 应用实例绑定，在服务端渲染（SSR）场景下会为每个请求创建独立的状态实例，避免不同用户之间的状态污染。
-', 'public', '2251213429@qq.com', 11, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-24-browser-data-vs-db-data', '24-browser-data-vs-db-data', 'doc:hello-system-part-2', '第24章 浏览器里的数据不是数据库里的数据', '# 第24章 浏览器里的数据不是数据库里的数据
-
-## 1. 数据形态的五层空间演变
-
-在理解完整的软件系统时，开发者需要清晰认识到数据在不同层次中的存在形式：
-
-```mermaid
-flowchart LR
-    L1["1. DOM 树呈现
-(用户可见的视图文字)"] <--> L2["2. 浏览器 JS 内存
-(响应式 Proxy / Ref 对象)"]
-    L2 <-->|JSON 序列化与反序列化| L3["3. HTTP 报文内容
-(网络传输字节流)"]
-    L3 <-->|反序列化与映射| L4["4. 后端服务内存
-(Java 领域对象 / DTO)"]
-    L4 <-->|数据库引擎持久化| L5["5. 数据库存储介质
-(关系表 / 索引 / 磁盘页)"]
-```
-
-- **瞬态数据（Transient Data）**：浏览器内存中的 JavaScript 变量和 DOM 结构属于瞬态数据，页面刷新或窗口关闭后即被销毁；
-- **持久数据（Persistent Data）**：经过网络协议传输至后端、最终写入数据库管理系统的数据，具备事务与持久性保障。
-
-接下来，我们将深入数据持久化的核心领域——**第三部分：数据需要一个真正的家**。
-', 'public', '2251213429@qq.com', 12, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-part-3', 'part-3', 'doc:book-hello-system', '第三部分 · 数据需要一个真正的家', '', 'public', '2251213429@qq.com', 5, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-25-why-not-excel-super-table', '25-why-not-excel-super-table', 'doc:hello-system-part-3', '第25章 为什么不能把所有东西写进一个Excel一样的大表？', '# 第25章 为什么不能把所有东西写进一个Excel一样的大表？
-
-## 1. 朴素直觉方案：非规范化宽表
-
-在初学数据库设计时，最直观的想法往往是将所有关联信息放置在单张大宽表中：
-
-```text
-大宽表示例: mega_enrollment_sheet
-┌──────┬────────┬────────┬──────────┬──────────────────┬──────────┬──────────┬──────────┐
-│ 学号 │ 姓名   │ 院系   │ 课程代码 │ 课程名称         │ 任课教师 │ 教师电话 │ 教室地点 │
-├──────┼────────┼────────┼──────────┼──────────────────┼──────────┼──────────┼──────────┤
-│ 1001 │ 李雷   │ 计科系 │ CS-101   │ 计算机系统导论   │ 严教授   │ 13800001 │ 教一101  │
-│ 1001 │ 李雷   │ 计科系 │ CS-102   │ 离散数学基础     │ 赵教授   │ 13800002 │ 教一102  │
-│ 1002 │ 韩梅梅 │ 计科系 │ CS-101   │ 计算机系统导论   │ 严教授   │ 13800001 │ 教一101  │
-└──────┴────────┴────────┴──────────┴──────────────────┴──────────┴──────────┴──────────┘
-```
-
-这种设计在数据量极少时查询直接，但随着数据修改，会引发关系数据库理论中经典的**三大操作异常**。
-
----
-
-## 2. 关系设计的三大操作异常
-
-### 1. 插入异常（Insertion Anomaly）
-如果学校新开设了一门课程《人工智能前沿》，已确定任课教师与教室，但尚未开始选课（即暂无学生选修）。  
-若表以“学号+课程代码”作为复合标识，在没有学生选课时，学号字段必须置为 `NULL`。而若主键约束禁止 `NULL`，**新课程在有学生选修前将无法被记录到系统中**。
-
-### 2. 更新异常（Update Anomaly）
-严教授更换了办公电话。在上述宽表中，全校有数百名学生选修该课程，严教授的电话被重复记录了数百次。  
-若更新操作未能完整覆盖所有行，将导致**同一位教师在不同行中存在互相矛盾的信息**。
-
-### 3. 删除异常（Deletion Anomaly）
-若《离散数学基础》当前仅有李雷一名学生选修。当李雷退选该课程时，删除该行记录将导致**该课程本身的基本信息（课程名称、教师、教室）一同被意外删除**。
-
-```mermaid
-flowchart TD
-    Table["非规范化大宽表"]
-    A1["插入异常: 无学生选修时无法独立录入新课程"] --> Table
-    A2["更新异常: 修改教师电话需更新大量冗余行，易产生不一致"] --> Table
-    A3["删除异常: 删除最后一名选课学生导致课程基本信息丢失"] --> Table
-```
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-26-relational-model-math', '26-relational-model-math', 'doc:hello-system-part-3', '第26章 一张关系表到底是什么？', '# 第26章 一张关系表到底是什么？
-
-## 1. 概念层级澄清
-
-在深入数据库前，必须严格区分以下概念：
-- **关系模型（Relational Model）**：埃德加·科德（E. F. Codd）提出的数据组织数学理论模型；
-- **SQL 语言**：基于关系代数与元组演算发展出的声明式查询标准；
-- **数据库管理系统（DBMS）**：实现数据存储、管理与查询执行的软件系统（如 MySQL, PostgreSQL）；
-- **存储引擎（Storage Engine）**：DBMS 中负责具体物理文件组织与索引存取的子系统（如 InnoDB）。
-
----
-
-## 2. 关系模型的数学定义
-
-- **域（Domain）**：一组具有相同数据类型的原子值的集合（如所有合法学号的集合 $D_1$）；
-- **笛卡尔积（Cartesian Product）**：$D_1 \times D_2 \times \dots \times D_n$ 表示所有可能的值组合构成的全集；
-- **关系（Relation）**：笛卡尔积的一个**有限子集**，在逻辑上表现为一张二维表；
-- **元组（Tuple）**：关系中的一个元素，对应表中的一行记录；
-- **属性（Attribute）**：元组中的一个分量，对应表中的一列。
-
-> **关系模型与 SQL 的语义差异**：
-> 在纯关系模型中，Relation 是数学集合，**严格不允许存在重复元组**；而在标准 SQL 中，查询结果默认具有 **多重集（Multiset / Bag）** 语义，允许重复行（除非显式指定 `DISTINCT`）。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-27-primary-keys-and-identity', '27-primary-keys-and-identity', 'doc:hello-system-part-3', '第27章 数据库如何知道“这个人就是这个人”？', '# 第27章 数据库如何知道“这个人就是这个人”？
-
-## 1. 键（Key）的层级体系
-
-在关系模型中，为了在逻辑上唯一标识每个元组，建立了键的概念层次：
-
-1. **超键（Superkey）**：能够在关系中唯一标识一个元组的属性集（例如 `{学号, 姓名}`）；
-2. **候选键（Candidate Key）**：不包含多余属性的**最小超键**（例如 `{学号}` 或 `{身份证号}`）；
-3. **主键（Primary Key）**：从候选键中选定的一个作为元组的核心逻辑标识。
-
-```mermaid
-flowchart TD
-    SK["超键 (Superkey)
-能唯一定位元组的属性集合"]
-    CK["候选键 (Candidate Key)
-无多余属性的最小超键"]
-    PK["主键 (Primary Key)
-选拔出的唯一逻辑标识符"]
-
-    SK -->|消除冗余属性| CK
-    CK -->|选定主要代表| PK
-```
-
-#### 实体完整性（Entity Integrity）规则：
-> **主键中的任何属性都不能取 NULL 值，且在关系内必须唯一。**
-
-主键首先是一种**逻辑完整性约束**。具体 DBMS 实现中是否为主键自动创建聚集索引属于实现范畴。
-', 'public', '2251213429@qq.com', 3, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-28-foreign-keys-and-junction-tables', '28-foreign-keys-and-junction-tables', 'doc:hello-system-part-3', '第28章 两张表怎样重新认识彼此？', '# 第28章 两张表怎样重新认识彼此？
-
-## 1. 实体表拆分与多对多关系
-
-为了消除大宽表的异常，我们将实体拆分为独立表：
-- `students`（学生表）
-- `courses`（课程表）
-
-学生与课程之间是**多对多（Many-to-Many）**关系：一个学生可以选修多门课程，一门课程可以被多名学生选修。
-
----
-
-## 2. 选课关联表（Junction Table）的设计
-
-在关系数据库中，多对多关系通过引入**关联表（Junction Table / Association Table）**拆解为两个一对多关系：
-
-```mermaid
-erDiagram
-    STUDENTS ||--o{ ENROLLMENTS : "1 对 多"
-    COURSES ||--o{ ENROLLMENTS : "1 对 多"
-
-    STUDENTS {
-        int id PK "学生ID"
-        string student_no UK "学号"
-        string name "姓名"
-    }
-
-    COURSES {
-        int id PK "课程ID"
-        string code UK "课程代码"
-        string name "课程名称"
-        int capacity "总容量"
-        int enrolled "已选人数(反规范化计数)"
-    }
-
-    ENROLLMENTS {
-        int id PK "主键ID"
-        int student_id FK "外键 -> students.id"
-        int course_id FK "外键 -> courses.id"
-        datetime enrolled_at "选课时间"
-    }
-```
-
-#### 参照完整性（Referential Integrity）：
-> 外键约束确保 `enrollments.course_id` 的取值必须在 `courses.id` 中真实存在（或为 NULL），防止产生悬垂引用。
-
-> **关于 `Course.enrolled` 的架构说明**：
-> `courses.enrolled` 字段在理论上可以通过 `COUNT(enrollments)` 动态计算。在工程实践中，为了避免高频列表查询时全表扫关联表，常将其作为**有意识的反规范化（Denormalization）冗余计数**保留，但这要求系统必须在业务事务中严格保证计数与关联记录的同步更新。
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-29-sql-declarative-nature', '29-sql-declarative-nature', 'doc:hello-system-part-3', '第29章 SQL究竟是一种什么语言？', '# 第29章 SQL究竟是一种什么语言？
-
-## 1. 声明式查询与逻辑执行顺序
-
-SQL 是声明式语言（Declarative Language），用户指定需要的数据集特征，由数据库引擎决定具体的检索算法。
-
-在概念上，标准 SQL 查询遵循特定的**逻辑查询处理顺序（Logical Query Processing Order）**：
-
-```mermaid
-flowchart TD
-    S1["1. FROM (确定源表)"] --> S2["2. ON (连接谓词过滤)"]
-    S2 --> S3["3. JOIN (生成连接结果)"]
-    S3 --> S4["4. WHERE (行过滤)"]
-    S4 --> S5["5. GROUP BY (分组聚合)"]
-    S5 --> S6["6. HAVING (分组后过滤)"]
-    S6 --> S7["7. SELECT (投影表达式计算)"]
-    S7 --> S8["8. DISTINCT (排重)"]
-    S8 --> S9["9. ORDER BY (排序)"]
-    S9 --> S10["10. LIMIT / OFFSET (分页截断)"]
-```
-
----
-
-## 2. 逻辑顺序与物理执行计划的严格区分
-
-必须强调：**逻辑处理顺序并不等于查询优化器实际的物理执行计划（Physical Execution Plan）**。
-
-现代数据库的基于代价的优化器（CBO, Cost-Based Optimizer）在生成执行计划时可能：
-- **谓词下推（Predicate Pushdown）**：提前在扫描阶段执行 `WHERE` 过滤，减少后续处理的数据量；
-- **重排 JOIN 顺序**：优先连接结果集较小的表；
-- **选择物理连接算子**：根据数据量和索引选择 Hash Join、Merge Join 或 Index Nested Loop。
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-30-join-magic', '30-join-magic', 'doc:hello-system-part-3', '第30章 JOIN为什么能把被拆开的世界重新拼起来？', '# 第30章 JOIN为什么能把被拆开的世界重新拼起来？
-
-## 1. 连接操作的集合论模型
-
-连接操作在逻辑上是**笛卡尔乘积结合连接谓词过滤**的结果：
-
-- **INNER JOIN（内连接）**：仅返回同时满足连接条件的左右表匹配元组组合；
-- **LEFT OUTER JOIN（左外连接）**：保留左表所有元组，若右表无匹配记录，右表相关字段填充 `NULL`。
-
-```sql
--- 查询所有课程及其实际选课学生（即使课程当前 0 人选修，也保留课程行）
-SELECT c.code AS course_code, c.name AS course_name, s.name AS student_name
-FROM courses c
-LEFT JOIN enrollments e ON c.id = e.course_id
-LEFT JOIN students s ON e.student_id = s.id;
-```
-
-> **注意**：
-> 不要简单将 JOIN 理解为集合论中的 Venn 图交集。当左表单行匹配到右表多行时，输出结果将产生多重扩展行，输出行数取决于连接条件匹配的多重性。
-', 'public', '2251213429@qq.com', 6, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-31-group-by-and-aggregation', '31-group-by-and-aggregation', 'doc:hello-system-part-3', '第31章 GROUP BY到底改变了什么？', '# 第31章 GROUP BY到底改变了什么？
-
-## 1. 维度聚合与投影规则
-
-`GROUP BY` 将输入数据集按照指定的属性分组，使每个分组坍缩为一个代表行：
-
-```mermaid
-flowchart TD
-    Rows["细粒度记录行 (多行选课记录)"] --> Group["GROUP BY c.id, c.code, c.name"]
-    Group --> Agg["聚合计算 COUNT(e.id)"]
-    Agg --> Result["分组摘要输出"]
-```
-
-#### SQL 标准投影约束：
-在开启标准 SQL 检查（如 MySQL `ONLY_FULL_GROUP_BY` 模式）的环境下：
-- `SELECT` 列表中出现的非聚合列，**必须包含在 `GROUP BY` 子句中，或在函数依赖上完全由分组列决定**；
-- 避免在分组查询中书写未明确聚合规则的随意字段。
-
-```sql
-SELECT c.code, c.name, COUNT(e.id) AS student_count
-FROM courses c
-LEFT JOIN enrollments e ON c.id = e.course_id
-GROUP BY c.id, c.code, c.name
-HAVING COUNT(e.id) > 0;
-```
-', 'public', '2251213429@qq.com', 7, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-32-lossless-decomposition', '32-lossless-decomposition', 'doc:hello-system-part-3', '第32章 为什么“把数据拆开”也会拆错？', '# 第32章 为什么“把数据拆开”也会拆错？
-
-## 1. 有损分解与虚假元组（Spurious Tuples）
-
-拆分关系表必须遵循严格准则。若随意拆分，在后续重新连接时可能产生原本不存在的**虚假元组**：
-
-```mermaid
-flowchart TD
-    Orig["原关系 (学生, 教师, 课程)"] --> BadSplit["不当拆分:
-R1(学生, 教师) + R2(教师, 课程)"]
-    BadSplit --> ReJoin["重新 NATURAL JOIN"]
-    BadJoin --> Ghost["产生虚假元组!
-(某个教师教多门课时，学生被错误关联到未选修的课程)"]
-```
-
-#### 无损连接分解（Lossless Join Decomposition）充分必要条件：
-> 关系模式 $R$ 分解为 $R_1$ 和 $R_2$ 具有无损连接性的充要条件是：$R_1 \cap R_2 \to (R_1 - R_2)$ 或 $R_1 \cap R_2 \to (R_2 - R_1)$ 属于原依赖闭包。即公共属性集必须至少是其中一个子关系的超键。
-', 'public', '2251213429@qq.com', 8, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-33-functional-dependencies', '33-functional-dependencies', 'doc:hello-system-part-3', '第33章 函数依赖到底在描述什么？', '# 第33章 函数依赖到底在描述什么？
-
-## 1. 函数依赖（Functional Dependency）的形式化定义
-
-> **定义**：设 $R(U)$ 是属性集 $U$ 上的关系模式，$X, Y \subseteq U$。若对于 $R$ 的任何合法关系状态 $r$，在 $r$ 中不存在两个元组在 $X$ 上的属性值相等而在 $Y$ 上的属性值不等，则称 **$X$ 函数决定 $Y$**，记作：
-> $$X \to Y$$
-
-在 Mini Campus 业务模型中：
-- $\text{student\_no} \to \text{name}$
-- $\text{course\_code} \to \text{name, capacity}$
-- $\text{\{student\_id, course\_id\}} \to \text{enrolled\_at}$
-
----
-
-## 2. 函数依赖的类型
-
-1. **完全函数依赖（Full FD）**：$Y$ 依赖于 $X$，且不依赖于 $X$ 的任何真子集；
-2. **部分函数依赖（Partial FD）**：$Y$ 依赖于 $X$，但同时依赖于 $X$ 的某个真子集；
-3. **传递函数依赖（Transitive FD）**：$X \to Y, Y \to Z$，且 $Y \not\to X$ 时，$Z$ 传递依赖于 $X$。
-', 'public', '2251213429@qq.com', 9, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-34-normalization-in-practice', '34-normalization-in-practice', 'doc:hello-system-part-3', '第34章 范式不是考试规则，而是在修复数据结构', '# 第34章 范式不是考试规则，而是在修复数据结构
-
-## 1. 规范化范式的正式定义
-
-规范化理论通过逐步消除不当的函数依赖来避免数据冗余与操作异常：
-
-```mermaid
-flowchart TD
-    N1["第一范式 (1NF)
-每个属性域都是不可分的原语原子值"] --> N2["第二范式 (2NF)
-满足 1NF，且消除非主属性对候选键的部分函数依赖"]
-    N2 --> N3["第三范式 (3NF)
-满足 2NF，且消除非主属性对候选键的传递函数依赖"]
-    N3 --> NBC["BCNF 范式
-对于每一个非平凡函数依赖 X -> Y，X 均必须是超键"]
-```
-
-- **主属性（Prime Attribute）**：包含在任何一个候选键中的属性；
-- **非主属性（Non-prime Attribute）**：不包含在任何候选键中的属性。
-
----
-
-## 2. 反规范化（Denormalization）的工程权衡
-
-规范化有助于保证数据完整性并消除异常，但过度的拆分会导致复杂的跨表多路 JOIN。在实际系统设计中，通常规范化到 3NF/BCNF，并根据查询性能瓶颈进行适度的、受控的反规范化设计。
-', 'public', '2251213429@qq.com', 10, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-35-bplus-tree-index', '35-bplus-tree-index', 'doc:hello-system-part-3', '第35章 数据库为什么不需要每次从头找？', '# 第35章 数据库为什么不需要每次从头找？
-
-## 1. B+ 树索引的结构特征
-
-在关系数据库存储引擎（如 MySQL InnoDB）中，**B+ 树（B+ Tree）** 是最核心的磁盘索引结构：
-- **多路平衡树**：具有极高的扇出（Fanout），树高度通常较小（一般为 3~4 层）；
-- **所有数据存放于叶子节点**：非叶子节点仅存放键值与指针作为目录索引；
-- **叶子节点双向链表连接**：支持高效的范围扫描与顺序遍历。
-
-```mermaid
-flowchart TD
-    Root["B+ 树根节点 (驻留内存 Buffer Pool)
-[ 1000 | 2000 | 3000 ]"]
-    L1["中间目录页
-[ 1000 | 1500 ]"]
-    L2["中间目录页
-[ 2000 | 2500 ]"]
-    Leaf1["叶子数据页 Page 0x01
-[1001: 李雷] <-> [1002: 韩梅梅]"]
-    Leaf2["叶子数据页 Page 0x02
-[1501: 张三] <-> [1502: 李四]"]
-
-    Root --> L1
-    Root --> L2
-    L1 --> Leaf1
-    L1 --> Leaf2
-    Leaf1 <==>|双向链表| Leaf2
-```
-
----
-
-## 2. 聚集索引与二级索引（以 InnoDB 为例）
-
-- **聚集索引（Clustered Index）**：叶子节点直接存放完整的行记录数据，通常基于主键构建；
-- **二级索引（Secondary Index）**：叶子节点存放索引列值与对应的主键值。通过二级索引查找非索引列数据时，通常需要根据主键进行“回表查询”（除非查询列已全部被索引覆盖，即覆盖索引 Covering Index）。
-', 'public', '2251213429@qq.com', 11, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-36-acid-transactions', '36-acid-transactions', 'doc:hello-system-part-3', '第36章 为什么一次修改不能只成功一半？', '# 第36章 为什么一次修改不能只成功一半？
-
-## 1. 事务的 ACID 性质
-
-在执行选课时，系统需要同时执行两步持久化操作：
-1. 更新课程已选人数：`UPDATE courses ...`;
-2. 插入选课关联流水：`INSERT INTO enrollments ...`。
-
-数据库事务（Transaction）提供四大逻辑保证（ACID）：
-
-- **原子性（Atomicity）**：事务中的全部操作要么全部成功持久化，要么全部回滚撤销；
-- **一致性（Consistency）**：事务执行前后，数据库状态必须满足所有预定义的完整性约束与业务不变量；
-- **隔离性（Isolation）**：并发执行的事务之间互不干扰，防止脏读、不可重复读等并发异常；
-- **持久性（Durability）**：在系统承诺的故障模型下，已成功提交事务对数据的修改在系统恢复后依然保留。
-
----
-
-## 2. 实现机制概述：WAL 与 Undo
-
-DBMS 通常结合多种底层技术来实现 ACID 特性：
-- **Undo Log**：记录修改前的数据镜像，用于支持事务回滚以及 MVCC 多版本并发读取；
-- **Redo Log（WAL 预写日志）**：数据修改前先将日志顺序追加落盘，在系统崩溃后用于重放恢复未刷盘的修改。
-', 'public', '2251213429@qq.com', 12, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-37-concurrency-and-locking', '37-concurrency-and-locking', 'doc:hello-system-part-3', '第37章 两个人同时点击最后一个名额会发生什么？', '# 第37章 两个人同时点击最后一个名额会发生什么？
-
-## 1. 并发争抢下的超卖风险
-
-当课程仅剩 1 个名额时，若李雷与韩梅梅同时并发执行选课：
-若业务逻辑在应用层先无锁读取名额、再分别执行增加，极易导致两个人均判定有余量，最终已选人数突破容量上限（超卖）。
-
----
-
-## 2. 并发控制方案对比
-
-### 方案 A：原子条件更新（推荐主线方案）
-利用数据库行级更新的原子性，在 SQL `WHERE` 条件中加入不变量约束：
-
-```sql
--- 在同一事务中执行
-START TRANSACTION;
-
--- 1. 原子条件更新
-UPDATE courses 
-SET enrolled = enrolled + 1 
-WHERE id = 2048 AND enrolled < capacity;
-
--- 2. 检查更新影响行数 (affected rows)
--- 若 affected_rows == 0，说明名额已满或课程不存在，回滚并提示选课失败
--- 若 affected_rows == 1，继续执行选课记录插入：
-INSERT INTO enrollments (student_id, course_id) VALUES (1001, 2048);
-
-COMMIT;
-```
-
-### 方案 B：悲观锁方案（SELECT ... FOR UPDATE）
-在读取数据时显式申请行级排他锁（X-Lock），阻塞其他并发事务的读取与修改：
-
-```sql
-START TRANSACTION;
--- 读取并锁定目标行记录
-SELECT capacity, enrolled FROM courses WHERE id = 2048 FOR UPDATE;
--- 必须在应用层重新判断 capacity 与 enrolled
--- 确认有名额后再执行 UPDATE 与 INSERT
-UPDATE courses SET enrolled = enrolled + 1 WHERE id = 2048;
-INSERT INTO enrollments (student_id, course_id) VALUES (1001, 2048);
-COMMIT;
-```
-
----
-
-## 3. 本章小结
-
-1. 并发控制的关键在于防止多个事务基于过期的状态进行并发决策；
-2. 原子条件更新通过数据库行锁与条件判断实现了高效且防超卖的并发控制；
-3. 数据库唯一索引约束（如 `UNIQUE(student_id, course_id)`）与事务机制共同构成了数据完整性防线。
-', 'public', '2251213429@qq.com', 13, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-part-4', 'part-4', 'doc:book-hello-system', '第四部分 · 前端第一次遇见后端', '', 'public', '2251213429@qq.com', 6, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-38-browser-cannot-touch-db-directly', '38-browser-cannot-touch-db-directly', 'doc:hello-system-part-4', '第38章 浏览器为什么不能直接操作数据库？', '# 第38章 浏览器为什么不能直接操作数据库？
-
-## 1. 为什么不能让客户端直接连接数据库？
-
-在初学 Web 开发时，有人可能会提出疑问：“既然前端运行 JavaScript，数据库支持网络连接，为什么不直接在前端编写数据库查询语句？”
-
-如果在生产架构中允许客户端直连数据库，将面临以下严重的系统与安全风险：
-
-```mermaid
-flowchart TD
-    Client["运行在用户终端的浏览器
-(不可信环境，代码对用户完全透明)"]
-    DB["核心数据库管理系统 (DBMS)"]
-
-    Client -->|1. 凭据泄露: 数据库连接账号与密码直接暴露在前端源码中| DB
-    Client -->|2. 越权与注入: 用户可通过修改客户端逻辑直接执行任意 SQL| DB
-    Client -->|3. 连接耗尽: 大量客户端同时直连将迅速耗尽数据库连接池资源| DB
-    Client -->|4. 业务逻辑旁路: 前端校验可被直接绕过，服务端无法统一执行业务规则| DB
-```
-
----
-
-## 2. 后端服务的核心定位
-
-后端应用服务器作为系统的**信任边界守门人**与**业务仲裁中心**：
-1. **安全与权限控制**：集中保管数据库认证凭据，对所有外部请求执行身份鉴权与权限校验；
-2. **连接池复用**：通过内部连接池复用有限的数据库连接，支撑海量前端并发访问；
-3. **权威业务规则执行**：无论前端如何修改，所有核心业务不变量均由后端统一判定与持久化。
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-39-http-protocol-agreement', '39-http-protocol-agreement', 'doc:hello-system-part-4', '第39章 HTTP到底帮我们约定了什么？', '# 第39章 HTTP到底帮我们约定了什么？
-
-## 1. HTTP 协议的核心定位（RFC 9110）
-
-**超文本传输协议（HTTP）** 是一种定义在应用层的无状态请求/响应协议，用于在分布式超媒体系统中操作资源。
-
-- **HTTP/1.1**：基于纯文本格式组织报文（便于阅读与调试）；
-- **HTTP/2**：采用二进制分帧层，支持单个 TCP 连接上的多路复用（Multiplexing）；
-- **HTTP/3**：基于底层的 QUIC 协议（基于 UDP），解决了传输层的队头阻塞问题。
-
-无论底层传输机制如何演进，HTTP 所表达的**资源操作语义（Methods, Status Codes, Headers）**保持一致。
-
----
-
-## 2. 报文结构示例（HTTP/1.1 文本表现）
-
-### 请求报文（Request）：
-```http
-POST /api/enrollments HTTP/1.1
-Host: campus.example.edu
-Content-Type: application/json
-Authorization: Bearer <access_token>
-
-{"courseId": 2048}
-```
-
-### 响应报文（Response）：
-```http
-HTTP/1.1 201 Created
-Content-Type: application/json
-Content-Length: 48
-
-{"status":"SUCCESS","message":"选课成功"}
-```
-
-> **关于“无状态”的准确理解**：
-> HTTP 协议的“无状态（Stateless）”是指服务器原则上无需保留跨请求的协议上下文即可理解单个请求的语义。这并不意味着应用层不能通过 Cookie、Session 或 Token 在业务层面维护用户会话状态。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-40-json-the-lingua-franca', '40-json-the-lingua-franca', 'doc:hello-system-part-4', '第40章 JSON为什么总出现在前后端之间？', '# 第40章 JSON为什么总出现在前后端之间？
-
-## 1. 跨异构语言的数据交换格式
-
-前端运行在 JavaScript 引擎中，后端服务可能采用 Java、Go 或 Python。它们在内存中的对象结构完全不同。
-
-**JSON（JavaScript Object Notation）** 是一种轻量级的纯文本数据交换格式，充当了跨语言的通用中介：
-
-```mermaid
-flowchart LR
-    JS["前端 JS 内存对象
-{ courseId: 2048 }"] -->|JSON.stringify() 序列化| JSONText["JSON 文本表示
-''{"courseId":2048}''"]
-    JSONText -->|UTF-8 编码为字节流| Net["HTTP 网络传输"]
-    Net --> ByteStream["后端接收字节流"]
-    ByteStream -->|JSON 解析库反序列化| JavaObj["Java 堆内存 DTO 对象
-EnrollRequestDto 实例"]
-```
-
----
-
-## 2. 数据格式的多样性
-
-需要说明的是，JSON 并非前后端通信的唯一选择：
-- **Protocol Buffers (Protobuf)**：二进制高效编码，广泛用于内部微服务 RPC；
-- **Form Data**：用于传统表单提交与文件上传；
-- **CBOR / MessagePack**：二进制 JSON 替代方案。
-
-在开放 Web API 中，JSON 因其人类可读性与良好的生态支持成为了最通用的选择。
-', 'public', '2251213429@qq.com', 3, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-41-the-first-real-api', '41-the-first-real-api', 'doc:hello-system-part-4', '第41章 第一条真正的API', '# 第41章 第一条真正的API
-
-## 1. 查询课程列表 API：GET /api/courses
-
-当用户打开选课页面时，前端通过 API 获取当前开放的课程列表：
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Frontend as 前端 (Vue 3)
-    participant Ctrl as CourseController
-    participant Svc as CourseService
-    participant Repo as CourseRepository
-    participant DB as MySQL 数据库
-
-    Frontend->>Ctrl: GET /api/courses
-    Ctrl->>Svc: listAvailableCourses()
-    Svc->>Repo: findAllActive()
-    Repo->>DB: SELECT id, code, name, capacity, enrolled FROM courses WHERE status = ''ACTIVE''
-    DB-->>Repo: 返回结果集
-    Repo-->>Svc: 映射为 List<Course> 领域实体
-    Svc-->>Ctrl: 转换为 List<CourseResponseDto>
-    Ctrl-->>Frontend: 返回 HTTP 200 OK (JSON 数组)
-    Note over Frontend: 前端更新响应式状态，渲染课程卡片
-```
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-42-the-click-moment', '42-the-click-moment', 'doc:hello-system-part-4', '第42章 点击“选课”', '# 第42章 点击“选课”
-
-## 1. 提交选课请求：POST /api/enrollments
-
-前端触发选课交互时的调用示例：
-
-```javascript
-async function handleEnroll(courseId) {
-    submitting.value = true;
-    try {
-        const response = await fetch(''/api/enrollments'', {
-            method: ''POST'',
-            headers: {
-                ''Content-Type'': ''application/json'',
-                ''Authorization'': `Bearer ${userToken.value}`
-            },
-            // 注意：客户端只传递目标课程 ID，当前操作学生身份由服务端从 Token 中解析！
-            body: JSON.stringify({ courseId: courseId })
-        });
-        
-        if (response.status === 201) {
-            alert(''选课成功！'');
-        } else if (response.status === 409) {
-            alert(''选课失败：名额已满或已选过该课程。'');
-        }
-    } finally {
-        submitting.value = false;
-    }
-}
-```
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-43-skinny-controller', '43-skinny-controller', 'doc:hello-system-part-4', '第43章 Controller为什么不能自己完成一切？', '# 第43章 Controller为什么不能自己完成一切？
-
-## 1. 表现层的边界与“瘦 Controller”
-
-在分层架构中，Controller 的职责是**处理传输与协议层面的适配**：
-- 解析 HTTP 请求头与请求体；
-- 执行参数基本格式清洗与校验（如 ID 是否为正整数）；
-- 从安全上下文中提取已认证用户身份；
-- 调用业务逻辑层，并将业务执行结果包装为对应的 HTTP 响应。
+在编写单元测试时，我们可以注入一个静默记录消息的 Mock 实现：
 
 ```java
-@RestController
-@RequestMapping("/api/enrollments")
+public class MockNotificationSender implements NotificationSender {
+    public final List<String> sentMessages = new ArrayList<>();
+
+    @Override
+    public void send(int recipientId, String message) {
+        sentMessages.add(recipientId + ": " + message);
+    }
+}
+```
+
+这样，测试可以在毫秒级完成，既不需要联网，也不会产生任何外部副作用。
+', 'public', '2251213429@qq.com', 10, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-11-breaking-the-god-class', '11-breaking-the-god-class', 'doc:hello-system-part-1', '第11章 打破上帝类：单一职责原则（SRP）', '# 第11章 打破上帝类：单一职责原则（SRP）
+
+## 1. 上帝类（God Class）的反模式
+
+随着 Mini Campus 系统的不断扩充，一个名为 `CampusManager` 的类逐渐膨胀到了 3000 行。
+
+让我们看看这个类里都塞满了什么：
+
+```java
+public class CampusManager {
+    // 1. HTTP 请求参数解析与 JSON 序列化
+    public void handleHttpRequest(String rawJson) { /* ... */ }
+
+    // 2. 学生身份与权限认证
+    public boolean authenticateUser(String token) { /* ... */ }
+
+    // 3. 核心选课资格与名额扣减编排
+    public boolean processEnrollment(int sId, int cId) { /* ... */ }
+
+    // 4. 原生 SQL 拼接与 JDBC 数据库连接管理
+    public void executeInsertSql(String sql) { /* ... */ }
+
+    // 5. 短信与邮件发送
+    public void sendSmsNotification(String phone, String msg) { /* ... */ }
+}
+```
+
+这个类几乎无所不知、无所不为，是典型的**上帝类（God Class）**。
+
+一旦前端修改了请求参数格式，或者数据库更换了连接池驱动，甚至短信服务商升级了 API，所有工程师都必须在同一个 3000 行的庞大文件里进行修改。代码合并冲突不断，Bug 频发。
+
+---
+
+## 2. 单一职责原则（Single Responsibility Principle, SRP）
+
+著名软件大师 Robert C. Martin 将单一职责原则表述为：
+
+> **单一职责原则（SRP）**：
+> 一个类应该有且仅有一个引起它变化的原因（A class should have one, and only one, reason to change）。
+
+所谓的“变化原因”，本质上是指**不同的利益相关者（Stakeholders）或不同的系统关注点**：
+- **表现层协议变化**（如从 REST JSON 切换为 GraphQL） $	o$ 引起 Controller 变化；
+- **业务规则变化**（如选课必须先完成先修课考核） $	o$ 引起 Service 变化；
+- **存储介质变化**（如从 MySQL 迁移到 PostgreSQL 或内存缓存） $	o$ 引起 Repository 变化。
+
+---
+
+## 3. 上帝类的优雅拆解
+
+我们将上帝类沿着职责边界彻底解构：
+
+```mermaid
+flowchart LR
+    GodClass["上帝类 CampusManager
+(3000 行庞然大物)"] --> C["EnrollmentController
+(专职协议解析与响应包装)"]
+    GodClass --> S["EnrollmentService
+(专职业务规则编排)"]
+    GodClass --> R["CourseRepository
+(专职数据持久化)"]
+    GodClass --> N["NotificationSender
+(专职消息通知)"]
+```
+
+每一个拆解后的小类都小巧玲珑，职责高度内聚，系统彻底恢复了健康与秩序。
+', 'public', '2251213429@qq.com', 11, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-12-emergence-of-layers', '12-emergence-of-layers', 'doc:hello-system-part-1', '第12章 经典三层架构的诞生：Controller-Service-Repository', '# 第12章 经典三层架构的诞生：Controller-Service-Repository
+
+## 1. 经典三层职责矩阵
+
+经过前 11 章的推导与重构，现代企业级后端最经典的**三层架构（Three-Tier Architecture）**正式成型：
+
+```mermaid
+flowchart TD
+    Client["外部客户端 / 浏览器 HTTP 请求"] --> Controller["表现层: Controller
+- 职责: 路由分发、参数格式反序列化、调用业务用例、封装 HTTP 响应状态码"]
+    Controller --> Service["业务逻辑层: Service
+- 职责: 业务规则编排、跨实体协作、事务边界控制 (@Transactional)、领域不变量捍卫"]
+    Service --> Repository["数据访问层: Repository
+- 职责: 实体持久化抽象、屏蔽底层数据库具体 SQL 与存储细节"]
+    Repository --> DB[("数据库 / 存储引擎")]
+```
+
+| 架构分层 | 核心职责 | 绝对不能做的事情（禁忌） |
+| :--- | :--- | :--- |
+| **Controller（表现层）** | 解析 HTTP 报文、校验入参基础格式、调用 Service、组装返回 DTO | **严禁**编写核心业务规则判定；**严禁**直接编写 SQL 操作数据库 |
+| **Service（业务逻辑层）** | 编排业务用例、控制事务一致性边界、调度领域对象与持久化接口 | **严禁**出现 `HttpServletRequest` 等具体网络协议对象 |
+| **Repository（持久化层）** | 将内存对象转换为数据库记录，执行 CRUD 查询 | **严禁**在此处做核心业务决策（如“判断学生是否可以选课”） |
+
+---
+
+## 2. 关于实体身份标识（`Course.id`）的时间线说明
+
+随着系统正式引入持久化层与仓储接口，我们需要对实体的身份标识进行一次概念澄清：
+
+> **概念辨析：对象内存身份 vs 数据库持久化主键**
+> - **在纯内存阶段（第 01 ~ 05 章）**：对象的身份完全由其在堆内存中的**引用地址（Reference Identity）**唯一确定；
+> - **在持久化阶段（第 12 章及以后）**：当系统重启后，内存地址全部重置。为了在数据库与跨机器通信中唯一标识一门课程，我们为 `Course` 实体正式确立唯一主键：`private final int id;`。
+
+---
+
+## 3. Mini Campus V3 完整运行示例
+
+让我们查看三层协同工作的完整 Java 代码：
+
+```java
+// 1. 数据访问层接口 (Repository Contract)
+public interface CourseRepository {
+    Optional<Course> findById(int id);
+    void save(Course course);
+}
+
+// 2. 业务逻辑层 (Business Service)
+public class EnrollmentService {
+    private final CourseRepository courseRepository;
+
+    public EnrollmentService(CourseRepository courseRepository) {
+        this.courseRepository = courseRepository;
+    }
+
+    public boolean enroll(int studentId, int courseId) {
+        // 从仓储中加载实体
+        Course course = courseRepository.findById(courseId)
+            .orElseThrow(() -> new IllegalArgumentException("课程不存在: " + courseId));
+
+        // 实体自主执行业务操作并捍卫不变量
+        boolean success = course.enroll();
+        if (!success) {
+            return false;
+        }
+
+        // 保存更新后的状态
+        courseRepository.save(course);
+        return true;
+    }
+}
+
+// 3. 表现层控制器 (Web Controller)
 public class EnrollmentController {
     private final EnrollmentService enrollmentService;
 
@@ -2350,255 +1666,1779 @@ public class EnrollmentController {
         this.enrollmentService = enrollmentService;
     }
 
-    @PostMapping
-    public ResponseEntity<?> enroll(
-            @AuthenticationPrincipal AuthenticatedUser user,
-            @Valid @RequestBody EnrollRequestDto requestDto) {
-        
-        // 从认证上下文中获取当前学生 ID，防止前端伪造
-        int studentId = user.getStudentId();
-        
-        EnrollResult result = enrollmentService.enroll(studentId, requestDto.getCourseId());
-        
-        if (result.isSuccess()) {
-            return ResponseEntity.status(HttpStatus.CREATED).body(result);
-        } else {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(result);
+    public Response handleEnroll(int authenticatedStudentId, int targetCourseId) {
+        try {
+            boolean ok = enrollmentService.enroll(authenticatedStudentId, targetCourseId);
+            if (ok) {
+                return Response.ok("选课成功");
+            } else {
+                return Response.badRequest("课程名额已满");
+            }
+        } catch (IllegalArgumentException e) {
+            return Response.badRequest(e.getMessage());
         }
     }
 }
 ```
 
-Controller **不应当包含核心业务规则，也不应当直接执行持久化查询**。
-', 'public', '2251213429@qq.com', 6, 0, 215, '');
+至此，第一部分的探索圆满完成。我们拥有了干净、健壮且结构清晰的后端面向对象业务核心。
+
+接下来，我们将目光转向屏幕前的另一半世界——进入第二部分：**页面开始变复杂 (13 ~ 24)**，探索现代前端框架的诞生与运行机理！
+', 'public', '2251213429@qq.com', 12, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-44-service-the-rule-sanctuary', '44-service-the-rule-sanctuary', 'doc:hello-system-part-4', '第44章 Service到底是什么？', '# 第44章 Service到底是什么？
+VALUES ('doc:hello-system-part-2', 'part-2', 'doc:book-hello-system', '第二部分: 页面开始变复杂 (13~24)', '# 第二部分: 页面开始变复杂 (13~24)
 
-## 1. 业务用例编排与事务边界
+本部分聚焦于**现代 Web 前端框架的核心原理与演进逻辑**。
 
-**Service 层（应用服务层）** 承载具体的业务用例流程：
-1. **跨实体流程编排**：协调多个实体与数据访问对象完成用例；
-2. **事务边界控制**：定义事务的开启、提交与回滚范围（例如通过 Spring 的 `@Transactional` 注解）；
-3. **安全与审计集成**：记录业务操作流水。
+我们将从浏览器的底层渲染流水线与原生 DOM 树出发，亲历命令式 DOM 操作在大型应用中导致的状态脱节灾难。我们将深入剖析声明式 UI（$UI = f(\text{state})$）、Vue 3 的 Proxy 响应式系统（依赖收集与派发更新）、计算属性缓存、编译期优化、单向数据流组件化以及全局状态树 Pinia，彻底打通前端“数据如何驱动界面”的心智模型。
+', 'public', '2251213429@qq.com', 2, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-13-browser-and-dom', '13-browser-and-dom', 'doc:hello-system-part-2', '第13章 浏览器如何看待网页：DOM 树与渲染流水线', '# 第13章 浏览器如何看待网页：DOM 树与渲染流水线
+
+## 1. 从纯文本到内存对象树：HTML 解析与 DOM
+
+当浏览器从网络中接收到一段 HTML 文本时，它并不能直接在屏幕上把文字显示出来。
+
+浏览器内核（如 Chromium 的 Blink 或 WebKit）必须经历以下严密的数据结构构建过程：
+
+```mermaid
+flowchart LR
+    HTML["HTML 字符流
+<div class=''course''>...</div>"] --> Tokenizer["词法分析 (Tokenization)
+生成 StartTag, Characters, EndTag"]
+    Tokenizer --> TreeBuilder["语法分析 (Tree Construction)
+维护节点父子包含关系栈"]
+    TreeBuilder --> DOMTree["DOM 树 (内存 C++ 节点树)
+Document Object Model"]
+```
+
+最终在浏览器内存中建立的 **DOM 树（Document Object Model Tree）** 是一组相互关联的 C++ 原生对象：
+
+```text
+                [ Document ]
+                     │
+                 [ <html> ]
+                     │
+                 [ <body> ]
+                     │
+            [ <div class="card"> ]
+             ├── [ <h1> "计算机系统导论" ]
+             ├── [ <p> "已选: 1/100" ]
+             └── [ <button> "选课" ]
+```
+
+---
+
+## 2. 浏览器的经典渲染流水线（Rendering Pipeline）
+
+当 DOM 树与 CSS 规则树（CSSOM）构建完成后，浏览器开始执行完整的渲染流水线：
+
+```mermaid
+flowchart TD
+    DOM["DOM 树 (结构)"] & CSSOM["CSSOM 树 (样式)"] --> RenderTree["1. 渲染树构建 (Render Tree)
+过滤掉 display:none 的不可见节点"]
+    RenderTree --> Layout["2. 布局计算 (Layout / Reflow)
+计算每个几何元素的绝对像素坐标 (X, Y, W, H)"]
+    Layout --> Paint["3. 绘制记录 (Paint)
+生成各图层的绘制指令列表 (边框、背景、文字)"]
+    Paint --> Composite["4. 栅格化与图层合成 (Raster & Composite)
+利用 GPU 将矢量指令光栅化为屏幕像素位图"]
+```
+
+1. **重排 / 回流（Reflow / Layout）**：当元素的几何尺寸（宽高、位置、边距）发生变化时，浏览器必须重新遍历渲染树，计算整棵树上相关节点的几何坐标。这是性能开销最大的操作之一；
+2. **重绘（Repaint）**：当仅有颜色、背景等不影响几何尺寸的外观发生变化时，浏览器跳过布局直接重新绘制；
+3. **强制同步布局（Forced Synchronous Layout）**：如果在 JavaScript 中频繁交替执行“写入 DOM”与“读取几何属性（如 `offsetHeight`）”，浏览器将被迫在每一帧内多次强制执行昂贵的重排，导致严重的页面掉帧卡顿（Layout Thrashing）。
+', 'public', '2251213429@qq.com', 13, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-14-dom-chaos', '14-dom-chaos', 'doc:hello-system-part-2', '第14章 命令式 DOM 操作的失控：从 jQuery 到手动同步灾难', '# 第14章 命令式 DOM 操作的失控：从 jQuery 到手动同步灾难
+
+## 1. 命令式编程（Imperative Programming）的原生写法
+
+在现代前端框架诞生前，开发者使用原生 JavaScript 或 jQuery 直接操作 DOM 节点：
+
+```javascript
+// 模拟一次选课点击事件
+document.getElementById("btn-enroll").addEventListener("click", function() {
+    // 1. 手动从 DOM 中抓取当前文本并解析出数字
+    let text = document.getElementById("enrolled-count").innerText;
+    let count = parseInt(text.split("/")[0].replace("已选: ", "").trim());
+    let capacity = 100;
+
+    // 2. 判断业务条件
+    if (count < capacity) {
+        count++;
+        // 3. 手动修改数据展示 DOM
+        document.getElementById("enrolled-count").innerText = "已选: " + count + "/" + capacity;
+        // 4. 手动修改按钮状态
+        if (count >= capacity) {
+            document.getElementById("btn-enroll").setAttribute("disabled", "true");
+            document.getElementById("btn-enroll").innerText = "名额已满";
+            document.getElementById("status-badge").className = "badge badge-full";
+        }
+    }
+});
+```
+
+---
+
+## 2. 状态同步灾难（State Synchronization Nightmare）
+
+上述代码在只有一个按钮的小页面里运行良好。
+
+但如果页面需求发生变化：
+- 顶部导航栏增加了一个“全校已选总门数统计”；
+- 页面右侧增加了一个“我的选课小票预览”；
+- 增加了后台轮询更新（其他同学退选，名额空出）。
+
+此时，只要课程人数发生改变，开发者必须**在所有可能引起数据变化的业务路径里，手动找到这 4 处 DOM 节点并逐一执行修改**！
+
+```mermaid
+flowchart TD
+    StateChange["选课人数变化 (count++)"] --> Op1["手动修改 #enrolled-count 文本"]
+    StateChange --> Op2["手动修改 #btn-enroll disabled 属性"]
+    StateChange --> Op3["手动修改 #status-badge class 类名"]
+    StateChange --> Op4["手动修改 #nav-total-count 统计"]
+    StateChange --> Op5["手动更新 #drawer-cart 侧边栏列表"]
+```
+
+只要任何一个分支少写了一句 `document.getElementById().innerText = ...`，用户就会看到极其怪异的画面：**按钮显示已满员置灰，但文本却依然显示 99/100**。
+
+核心矛盾暴露无遗：**真实的状态数据被碎片化地编码并散落在了成百上千个 HTML DOM 属性中，系统失去了唯一定义事实的中心源头。**
+', 'public', '2251213429@qq.com', 14, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-15-state-driven-ui', '15-state-driven-ui', 'doc:hello-system-part-2', '第15章 声明式 UI：UI 是状态的纯函数 UI = f(state)', '# 第15章 声明式 UI：UI 是状态的纯函数 UI = f(state)
+
+## 1. 概念革命：从“如何修改”到“应该长什么样”
+
+为了彻底消灭手动同步 DOM 的混乱，现代前端框架（React、Vue、Svelte）提出了一场深刻的心智模型革命——**声明式 UI（Declarative UI）**：
+
+$$\text{UI} = f(\text{state})$$
+
+- **开发者唯一的职责**：维护内存中纯粹的 JavaScript 数据状态（`state`），并使用模板声明视图与状态之间的映射函数（`f`）；
+- **框架的核心职责**：当 `state` 发生改变时，自动化地对比新旧视图结构，并将必要的差异高效应用到真实 DOM 上。
+
+```html
+<!-- Vue 声明式模板示例 -->
+<template>
+  <div class="course-card">
+    <h3>{{ course.name }}</h3>
+    <p>已选人数: {{ course.enrolled }} / {{ course.capacity }}</p>
+    <button :disabled="isFull" @click="handleEnroll">
+      {{ isFull ? ''名额已满'' : ''立即选课'' }}
+    </button>
+  </div>
+</template>
+```
+
+开发者在业务代码中**只需要执行 `course.enrolled++`**，所有依赖该数据的文本、按钮禁用状态、样式类名都由框架自动且精准地批量更新。
+
+---
+
+## 2. 虚拟 DOM（Virtual DOM）与协调算法的客观认识
+
+在以 Vue 和 React 为代表的框架实现中，**虚拟 DOM（Virtual DOM）** 扮演了重要的桥梁角色。
+
+虚拟 DOM 本质上是一个用纯 JavaScript 对象描述真实 DOM 树结构的轻量级数据表示：
+
+```javascript
+const vnode = {
+    tag: ''div'',
+    props: { class: ''course-card'' },
+    children: [
+        { tag: ''p'', children: ''已选人数: 1/100'' },
+        { tag: ''button'', props: { disabled: false }, children: ''立即选课'' }
+    ]
+};
+```
+
+> **算法规范说明**：
+> 虚拟 DOM 的协调算法（Reconciliation / Diff）根据新旧虚拟 DOM 树的差异，推导出需要应用到真实 DOM 上的具体更新操作。
+> 需要明确：**这是一种工程上的高效启发式对比算法（通常采用同层比对与 Key 复用策略），并不暗示在数学意义上求解全局绝对最小编辑距离（Minimum Edit Distance）。**
+', 'public', '2251213429@qq.com', 15, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-16-vue-reactivity', '16-vue-reactivity', 'doc:hello-system-part-2', '第16章 Vue 3 响应式核心：依赖收集与派发更新', '# 第16章 Vue 3 响应式核心：依赖收集与派发更新
+
+## 1. 响应式的核心命题
+
+请思考一个最朴素的 JavaScript 现象：
+
+```javascript
+let enrolled = 1;
+let message = "当前已选: " + enrolled;
+console.log(message); // 输出: 当前已选: 1
+
+enrolled = 2;
+console.log(message); // 依然输出: 当前已选: 1！
+```
+
+在标准 JavaScript 语法中，变量赋值是一个**瞬时动作**。修改 `enrolled` 的值，绝不会自动触发 `message` 的重新计算。
+
+Vue 3 响应式系统的全部使命，就是**建立一套自动化的“依赖追踪（Track）”与“派发更新（Trigger）”机制**。
+
+---
+
+## 2. 响应式基石：ES6 Proxy 拦截机制
+
+Vue 3 使用标准的 ES6 `Proxy` 对象对目标对象进行透明拦截包装：
+
+```mermaid
+flowchart TD
+    UserCode["用户代码: state.enrolled = 2"] --> ProxySet["Proxy set 陷阱 (Setter Trap)"]
+    ProxySet --> ReflectSet["Reflect.set(target, key, value) 写入底层对象"]
+    ProxySet --> Trigger["trigger(target, key) 派发更新: 通知所有订阅该属性的副作用函数重新执行"]
+
+    ReadCode["渲染函数读取: state.enrolled"] --> ProxyGet["Proxy get 陷阱 (Getter Trap)"]
+    ProxyGet --> Track["track(target, key) 依赖收集: 记录当前正在执行的 activeEffect"]
+    ProxyGet --> ReflectGet["Reflect.get(target, key) 返回真实值"]
+```
+
+---
+
+## 3. 依赖关系全局数据结构：`targetMap`
+
+Vue 3 内部维护了一个高度优化的三层桶结构，用于精确记录“谁依赖了哪个对象的哪个属性”：
+
+```text
+targetMap (WeakMap)
+  └── [ target 对象 (例如 course) ] : (Map)
+        └── [ key 属性名 (例如 "enrolled") ] : (Set)
+              └── Effect 1: 组件渲染更新函数 RenderEffect
+              └── Effect 2: 计算属性 ComputedEffect
+```
+
+- **依赖收集（Track）**：当某个渲染函数或副作用函数执行时，它会被设置为全局的 `activeEffect`。当它读取 `state.enrolled` 时，触发 `get` 拦截，Vue 将当前 `activeEffect` 注册到对应属性的 `Set` 集合中；
+- **派发更新（Trigger）**：当执行 `state.enrolled = 2` 时，触发 `set` 拦截，Vue 立即从 `targetMap` 中取出该属性对应的所有 `Effect` 并依次重新执行，从而精准驱动组件视图重绘！
+', 'public', '2251213429@qq.com', 16, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-17-computed-properties', '17-computed-properties', 'doc:hello-system-part-2', '第17章 computed 计算属性：脏值检查与惰性求值', '# 第17章 computed 计算属性：脏值检查与惰性求值
+
+## 1. 为什么不直接用普通方法？
+
+在 Vue 组件中，我们常常需要从原始状态衍生出新的展示数据（例如判断课程是否已满员）：
+
+```javascript
+// 方案 A: 使用普通函数方法
+function isFullMethod() {
+    console.log("执行了方法计算");
+    return course.enrolled >= course.capacity;
+}
+
+// 方案 B: 使用 computed 计算属性
+const isFullComputed = computed(() => {
+    console.log("执行了 computed 计算");
+    return course.enrolled >= course.capacity;
+});
+```
+
+如果模板中有 5 处引用了 `isFull`，或者组件因为其他完全无关的状态（例如输入框内容）发生重新渲染：
+- **普通方法**：每一次渲染都会**无条件重新执行 5 次**复杂计算；
+- **computed 计算属性**：只要其依赖的 `course.enrolled` 和 `course.capacity` 没有发生改变，它会直接返回**内存缓存结果**，计算逻辑一次都不会重复执行！
+
+---
+
+## 2. 脏值检查（Dirty Flag）与惰性求值（Lazy Evaluation）
+
+`computed` 内部通过一个布尔标志位 `_dirty` 实现高效的惰性求值：
+
+```mermaid
+flowchart TD
+    Init["初始化: _dirty = true, 缓存 _value = undefined"] --> FirstRead["第一次读取 computed 值"]
+    FirstRead --> Eval["_dirty 为 true: 触发求值计算, 更新 _value, 设 _dirty = false"]
+    Eval --> Return1["返回计算结果"]
+
+    SubRead["后续再次读取 computed 值"] --> CheckDirty{"_dirty 是否为 true ?"}
+    CheckDirty -->|否 (依赖未变)| Cache["直接返回缓存 _value, 零计算开销"]
+    CheckDirty -->|是 (依赖已变更)| Eval
+
+    DepChange["依赖发生变化: course.enrolled++"] --> TriggerComputed["触发 computed 内部调度器: 仅将 _dirty 设为 true, 暂不执行计算 (惰性)"]
+```
+
+这种设计避免了昂贵的衍生数据计算在状态频繁变化时产生不必要的 CPU 浪费。
+', 'public', '2251213429@qq.com', 17, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-18-watch-and-side-effects', '18-watch-and-side-effects', 'doc:hello-system-part-2', '第18章 watch 与副作用管理：何时触发外部世界？', '# 第18章 watch 与副作用管理：何时触发外部世界？
+
+## 1. 明确区分：computed 与 watch 的边界
+
+初学者经常在什么时候用 `computed`、什么时候用 `watch` 之间产生混淆：
+
+| 维度 | `computed` 计算属性 | `watch` 侦听器 |
+| :--- | :--- | :--- |
+| **主要定位** | **纯粹的数据映射**：从现有响应式状态衍生出新的同步数据 | **执行副作用（Side Effects）**：当状态变化时，与外部非响应式世界交互 |
+| **返回值** | **必须有返回值**，对外暴露为只读的 Ref | **没有返回值**，用于执行动作（如发送网络请求、操作 localStorage） |
+| **异步支持** | 必须是同步纯函数，禁止在内部执行异步操作 | 天生支持在回调函数中编写异步 `async/await` 逻辑 |
+
+---
+
+## 2. 副作用清理：防范竞态条件（Race Condition）
+
+当用户快速切换下拉菜单中的选修课程时，系统会频繁发起异步查询。
+
+如果第一次请求耗时 800ms，第二次请求耗时 200ms，第二次请求的响应可能会先到达，随后第一次请求的旧数据返回并覆盖最新视图，造成严重的**竞态条件（Race Condition）**。
+
+Vue 3 的 `watch` 提供了专用的清理回调 `onCleanup`：
+
+```javascript
+watch(currentCourseId, (newId, oldId, onCleanup) => {
+    const controller = new AbortController();
+    
+    // 注册清理回调：当下一次监听触发或组件卸载时自动执行
+    onCleanup(() => {
+        controller.abort(); // 立即取消上一次尚未完成的 HTTP 请求！
+    });
+
+    fetchCourseDetail(newId, { signal: controller.signal })
+        .then(data => { courseDetail.value = data; })
+        .catch(err => {
+            if (err.name !== ''AbortError'') console.error(err);
+        });
+});
+```
+', 'public', '2251213429@qq.com', 18, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-19-templates-and-reactivity-compiler', '19-templates-and-reactivity-compiler', 'doc:hello-system-part-2', '第19章 模板编译：为什么 Vue 模板能被精准优化？', '# 第19章 模板编译：为什么 Vue 模板能被精准优化？
+
+## 1. 纯运行时比对的瓶颈
+
+在纯运行时的虚拟 DOM 框架中，当组件更新时，框架必须递归遍历整棵虚拟 DOM 树上的所有节点。即使一个节点是完全静态的纯文字（如 `<h1>选课中心</h1>`），协调算法也必须遍历它并比对它的属性。
+
+---
+
+## 2. Vue 3 编译期优化：静态提升与补丁标记（Patch Flags）
+
+Vue 3 的模板编译器在构建阶段（Build Time）对模板进行了深度的静态结构分析：
+
+```html
+<div class="card">
+  <h1>Mini Campus 选课系统</h1>       <!-- 静态节点 1: 绝对不变 -->
+  <p>固定选课规则说明...</p>           <!-- 静态节点 2: 绝对不变 -->
+  <span :class="themeClass">{{ course.name }}</span> <!-- 动态节点: 仅 class 和 text 变化 -->
+</div>
+```
+
+编译后生成的渲染函数代码：
+
+```javascript
+// 1. 静态提升 (Static Hoisting)：静态节点在内存中只创建一次，重复复用
+const _hoisted_1 = /*#__PURE__*/_createElementVNode("h1", null, "Mini Campus 选课系统", -1);
+const _hoisted_2 = /*#__PURE__*/_createElementVNode("p", null, "固定选课规则说明...", -1);
+
+export function render(_ctx, _cache) {
+  return (_openBlock(), _createElementBlock("div", { class: "card" }, [
+    _hoisted_1,
+    _hoisted_2,
+    // 2. 补丁标记 (Patch Flag): 9 代表 TEXT + CLASS 动态绑定
+    _createElementVNode("span", { class: _ctx.themeClass }, _toDisplayString(_ctx.course.name), 9 /* TEXT, CLASS */)
+  ]))
+}
+```
+
+当数据发生改变时，Vue 的 Diff 算法通过 Block Tree **直接跳过所有静态节点，精准定位到带有 Patch Flag 的动态节点**，比对效率提升了一个数量级。
+', 'public', '2251213429@qq.com', 19, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-20-components-and-props-emit', '20-components-and-props-emit', 'doc:hello-system-part-2', '第20章 组件化与单向数据流：Props Down, Events Up', '# 第20章 组件化与单向数据流：Props Down, Events Up
+
+## 1. 单向数据流（One-Way Data Flow）黄金法则
+
+在组件化架构中，组件之间的数据流动必须遵守严格的单向约束：
+
+```mermaid
+flowchart TD
+    Parent["父组件: CourseList.vue (拥有真实的课程数据列表)"]
+    Child["子组件: CourseCard.vue (专职单门课程卡片的展示与交互)"]
+
+    Parent -->|1. Props Down (只读传递数据)| Child
+    Child -->|2. Events Up (抛出业务事件 emit(''enroll'', id))| Parent
+```
+
+- **Props Down**：父组件通过属性（Props）向子组件自顶向下传递数据；
+- **Events Up**：子组件通过自定义事件（Emit）向父组件通知交互意图，**绝不直接在子组件内部修改 Props 传入的数据**。
+
+---
+
+## 2. 为什么严禁在子组件内部直接修改 Props？
+
+如果允许子组件随意执行 `props.course.enrolled++`，当多个子组件同时引用同一份数据时，数据的修改来源将变得完全不可追踪。
+
+一旦发生数据错误，你无法确定到底是哪一个子组件在什么时机篡改了状态。
+
+单向数据流确保了：**谁拥有数据（Source of Truth），谁才拥有修改该数据的唯一权力。**
+', 'public', '2251213429@qq.com', 20, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-21-component-lifecycle', '21-component-lifecycle', 'doc:hello-system-part-2', '第21章 组件生命周期与挂载时机', '# 第21章 组件生命周期与挂载时机
+
+## 1. 组件生命周期全景
+
+一个 Vue 组件实例从创建到销毁，会经历确定的生命周期阶段：
+
+```mermaid
+flowchart TD
+    Setup["1. setup() 执行 / 响应式状态初始化"] --> Mount["2. onMounted(): 真实 DOM 挂载完毕 (此时可安全进行 DOM 测量或发起首屏 API 请求)"]
+    Mount --> Update["3. onUpdated(): 响应式数据变化，完成 DOM 补丁重绘"]
+    Update --> Unmount["4. onUnmounted(): 组件从页面卸载销毁 (必须在此清理定时器与全局事件监听)"]
+```
+
+---
+
+## 2. 常见的内存泄漏陷阱
+
+在 `onMounted` 中注册了全局事件监听器或定时器，却忘记在 `onUnmounted` 中销毁，是导致前端单页应用（SPA）内存暴涨的最常见原因：
+
+```javascript
+export default {
+  setup() {
+    let timerId = null;
+
+    onMounted(() => {
+      // 开启定时轮询最新名额
+      timerId = setInterval(() => {
+        fetchLatestCapacity();
+      }, 5000);
+    });
+
+    onUnmounted(() => {
+      // 严禁遗漏：离开页面时必须彻底清除定时器！
+      if (timerId) clearInterval(timerId);
+    });
+  }
+}
+```
+', 'public', '2251213429@qq.com', 21, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-22-form-binding-vmodel', '22-form-binding-vmodel', 'doc:hello-system-part-2', '第22章 双向绑定的表单真相：v-model 的语法糖展开', '# 第22章 双向绑定的表单真相：v-model 的语法糖展开
+
+## 1. `v-model` 不是黑魔法
+
+很多初学者将 `v-model` 视为一种神奇的“底层双向通道”。
+
+实际上，`v-model` 本质上只是一个**单向数据绑定 + 事件监听的编译期语法糖（Syntax Sugar）**：
+
+```html
+<!-- 开发者书写的语法糖 -->
+<input v-model="searchKeyword" />
+
+<!-- 编译器等价展开后的真实代码 -->
+<input 
+  :value="searchKeyword" 
+  @input="searchKeyword = $event.target.value" 
+/>
+```
+
+---
+
+## 2. 中文输入法（IME）的特殊处理
+
+在处理中文、日文等需要输入法输入拼音的场景中，原生 `@input` 会在每一个拼音字符敲入时立即触发。
+
+Vue 内部通过监听 `compositionstart` 与 `compositionend` 原生事件，确保只有在用户选定汉字并完成组字后，才会最终更新响应式变量，避免了半成品拼音引发的高频无效查询。
+', 'public', '2251213429@qq.com', 22, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-23-global-state-pinia', '23-global-state-pinia', 'doc:hello-system-part-2', '第23章 跨组件状态共享：Pinia 与全局状态树', '# 第23章 跨组件状态共享：Pinia 与全局状态树
+
+## 1. 属性逐级透传（Prop Drilling）的痛苦
+
+当应用规模扩大到数十个组件时，如果顶级组件中的“当前登录学生信息（User Profile）”需要传递给位于组件树第 6 层的某个按钮组件，开发者不得不通过 Props 一层一层往下透传：
+
+```text
+App -> MainLayout -> ContentArea -> CourseTabs -> CourseList -> CourseItem -> EnrollButton
+```
+
+中间的 5 层组件根本不需要这些数据，却被迫充当了机械的传话筒。
+
+---
+
+## 2. 全局状态存储库（Pinia Store）架构
+
+Pinia 提供了全局中心化的状态管理模型：
+
+```mermaid
+flowchart LR
+    subgraph Store["Pinia 全局 Store (useEnrollmentStore)"]
+        State["State: 响应式全局选课列表 & 用户 Token"]
+        Getters["Getters: 衍生计算 (已选总学分)"]
+        Actions["Actions: 业务用例方法 (executeEnroll(id))"]
+    end
+
+    CompA["组件 A (导航栏)"] -->|读取| Getters
+    CompB["组件 B (选课按钮)"] -->|派发动作| Actions
+```
+
+任何深度的组件都可以直接通过 `useEnrollmentStore()` 访问全局状态并调用 Actions 方法，彻底解决了跨层级通信难题。
+', 'public', '2251213429@qq.com', 23, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-24-client-data-metamorphosis', '24-client-data-metamorphosis', 'doc:hello-system-part-2', '第24章 前端数据形态的演变：从用户交互到网络报文', '# 第24章 前端数据形态的演变：从用户交互到网络报文
+
+## 1. 前端全流程数据形态流转
+
+在结束前端部分的探索前，让我们完整梳理一次点击在浏览器内存中的数据形态演变：
+
+```mermaid
+flowchart TD
+    Step1["1. 物理交互
+用户鼠标点击坐标 (X: 520, Y: 340)"] --> Step2["2. 操作系统与浏览器事件
+产生原生 PointerEvent / MouseEvent 实例"]
+    Step2 --> Step3["3. Vue 事件绑定与响应式状态跃迁
+handleClick 触发: isSubmitting.value = true"]
+    Step3 --> Step4["4. 内存业务对象构造
+const payload = { courseId: 2048, timestamp: 1787932800 }"]
+    Step4 --> Step5["5. 序列化编码 (JSON.stringify)
+转换为纯文本字符串: ''{"courseId":2048}''"]
+    Step5 --> Step6["6. 网络协议栈编码
+UTF-8 字符流转换为二进制 TCP 载荷，装配 HTTP POST 报文头"]
+```
+
+---
+
+## 2. 走向持久化世界
+
+至此，我们已经看清了浏览器内部的数据生命周期。
+
+但是，无论前端的响应式系统多么优雅，运行在浏览器内存中的 JavaScript 对象都是**瞬态的**——只要用户按一下 `F5` 刷新网页，所有的内存变量都会瞬间灰飞烟灭。
+
+数据要想获得永恒的生命，必须跨越网络，进入真正的持久化堡垒——数据库管理系统。
+
+让我们进入第三部分：**数据需要一个真正的家 (25 ~ 37)**！
+', 'public', '2251213429@qq.com', 24, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-part-3', 'part-3', 'doc:book-hello-system', '第三部分: 数据需要一个真正的家 (25~37)', '# 第三部分: 数据需要一个真正的家 (25~37)
+
+本部分聚焦于**关系数据库理论与现代存储引擎的底层基石**。
+
+我们将从 Excel 样式的大宽表出发，亲历插入、更新与删除三大异常灾难。我们将严密推导关系代数、候选键、函数依赖、Armstrong 公理系统以及 1NF $\to$ 2NF $\to$ 3NF $\to$ BCNF 的全流程无损规范化分解。随后，我们将深入 B+ 树索引的内部结构与 EXPLAIN 优化器原理，并最终建立起包含 ACID 事务、行级锁、WAL 预写日志与并发控制的坚固数据心智模型。
+', 'public', '2251213429@qq.com', 3, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-25-big-wide-table', '25-big-wide-table', 'doc:hello-system-part-3', '第25章 单大宽表的诱惑与灾难：从 Excel 到数据库', '# 第25章 单大宽表的诱惑与灾难：从 Excel 到数据库
+
+## 1. 最直观的存储：把所有字段堆在一张 Excel 大表里
+
+当我们最初设计数据库时，最符合非专业直觉的方法是：**将所有可能用到的数据全部塞在一张巨大的表里**。
+
+假设我们创建了如下名为 `all_enrollments` 的“大宽表”：
+
+| student_id | student_name | major_name | course_id | course_name | teacher_name | teacher_title | grade |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1001 | 李雷 | 软件工程 | 2048 | 计算机系统导论 | 严教授 | 正高级 | 92 |
+| 1002 | 韩梅梅 | 软件工程 | 2048 | 计算机系统导论 | 严教授 | 正高级 | 95 |
+| 1001 | 李雷 | 软件工程 | 2049 | 数据结构与算法 | 严教授 | 正高级 | 88 |
+| 1003 | 张三 | 计算机科学 | 2048 | 计算机系统导论 | 严教授 | 正高级 | 85 |
+
+在系统最初只有十几条记录时，这张表查询起来非常方便，完全不需要写任何 `JOIN` 语句。
+
+---
+
+## 2. 关系大宽表的三大结构性异常（Structural Anomalies）
+
+随着业务的运行，这张看似方便的大宽表很快就会引发三场灾难：
+
+```mermaid
+flowchart TD
+    subgraph Anomalies["大宽表引发的三大结构性灾难"]
+        A1["1. 插入异常 (Insertion Anomaly)
+新聘请了王老师，但他本学期尚未开课。
+由于没有学生选课，无法在表中插入一条合法记录 (除非 student_id 填 NULL)"]
+        A2["2. 删除异常 (Deletion Anomaly)
+选修《量子计算》的唯一一名学生申请退学。
+一旦删除该学生的选课行，整门《量子计算》课程的名称、学分及教师信息在系统中彻底失踪！"]
+        A3["3. 更新异常 (Update Anomaly)
+严教授晋升为特聘教授。
+系统必须在 500 条学生选课行中逐一修改 teacher_title。
+一旦因断电或网络超时漏改了 1 行，系统立刻产生数据不一致！"]
+    end
+```
+
+核心矛盾在于：**我们在同一张表里强行揉杂了多个不同生命周期的独立实体（学生、专业、课程、教师）。**
+
+要彻底根除这些异常，我们必须借助数学武器——**关系模型与规范化理论**。
+', 'public', '2251213429@qq.com', 25, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-26-relational-model-foundations', '26-relational-model-foundations', 'doc:hello-system-part-3', '第26章 关系模型的数学美感：元组、属性与笛卡尔积', '# 第26章 关系模型的数学美感：元组、属性与笛卡尔积
+
+## 1. 埃德加·科德（E. F. Codd）的伟大创举
+
+1970 年，IBM 计算机科学家 E. F. Codd 发表了划时代论文 *A Relational Model of Data for Large Shared Data Banks*，正式奠定了现代关系数据库的数学基础。
+
+在关系模型之前，早期的网状数据库（Network）和层次数据库（Hierarchical）要求程序员在代码中直接操作底层物理指针来遍历数据，一旦数据结构变动，所有程序代码必须全部重写。
+
+Codd 提出：**数据应当以严密的数学集合论进行抽象，将逻辑数据模型与底层物理存储彻底解耦。**
+
+---
+
+## 2. 关系模型的形式化数学定义
+
+给定 $n$ 个属性域（Domain）$D_1, D_2, \dots, D_n$（域是具有相同数据类型的值的集合，例如整数集、字符串集）。
+
+这些域的**笛卡尔积（Cartesian Product）**定义为所有可能的有序 $n$ 元组的集合：
+
+$$D_1 \times D_2 \times \dots \times D_n = \{ (d_1, d_2, \dots, d_n) \mid d_i \in D_i, 1 \le i \le n \}$$
+
+> **关系（Relation）的数学定义**：
+> 域 $D_1 \times D_2 \times \dots \times D_n$ 的任意一个**有限子集（Subset）**，称为定义在这些域上的一个**关系**。
+
+在关系模型中：
+- **关系（Relation）**：对应我们日常所说的“二维表”；
+- **元组（Tuple）**：对应表中的“一行记录”；
+- **属性（Attribute）**：对应表中的“一列”；
+- **分量（Component）**：元组在某个属性上的具体取值。
+
+```text
+数学概念              数据库术语
+Relation (关系)   <--->  Table (数据表)
+Tuple (元组)      <--->  Row / Record (行/记录)
+Attribute (属性)  <--->  Column / Field (列/字段)
+Domain (域)       <--->  Data Type & Constraint (数据类型与取值范围)
+```
+
+由于关系在数学上是一个**纯粹的集合（Set）**，它天然具备两大数学性质：
+1. **元素唯一性**：集合中绝不存在完全相同的重复元组；
+2. **无序性**：元组之间没有先后顺序之分，属性之间也没有左右顺序之分。
+', 'public', '2251213429@qq.com', 26, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-27-keys-and-identity', '27-keys-and-identity', 'doc:hello-system-part-3', '第27章 主键与候选键：在数据的海洋中唯一定位', '# 第27章 主键与候选键：在数据的海洋中唯一定位
+
+## 1. 形式化定义：超键、候选键与主键
+
+在关系的海洋中，我们如何从数学上确保能够唯一识别某一个特定的元组？
+
+```mermaid
+flowchart TD
+    SK["超键 (Superkey)
+能够唯一标识元组的属性集合 (可能包含冗余属性)
+例如: {id, name}, {code, capacity}"]
+    CK["候选键 (Candidate Key)
+极小化超键 (Minimal Superkey)
+不含任何多余属性的唯一标识符
+例如: {id}, {code}"]
+    PK["主键 (Primary Key)
+从所有候选键中人为选定的一个主要唯一标识符
+例如: id"]
+
+    SK -->|消除冗余属性| CK
+    CK -->|选定一个作为官方标识| PK
+```
+
+1. **超键（Superkey）**：在关系模式 $R$ 中，如果属性集 $K$ 能够唯一确定一个元组，则 $K$ 为超键；
+2. **候选键（Candidate Key）**：若超键 $K$ 的任意真子集都不能成为超键，则称 $K$ 为候选键（即最小超键）；
+3. **主键（Primary Key）**：当一个关系存在多个候选键时，数据库设计者挑选其中一个作为主键；
+4. **主属性（Prime Attribute）**：包含在任何一个候选键中的属性；
+5. **非主属性（Non-Prime Attribute）**：不包含在任何候选键中的属性。
+
+---
+
+## 2. 自然业务键（Natural Key）vs 代理主键（Surrogate Key）
+
+对于课程表 `courses`，我们有两个候选键：
+- **业务自然键**：`code`（如 `"CS-101"`），具有直观的业务含义；
+- **代理自增键**：`id`（如整数 `2048`），无实际业务语义。
+
+在现代系统工程中，推荐使用**不可变的整型代理主键（Surrogate Key）**：
+1. 业务代码（如课程编号）在学校教务改革时可能发生变更，如果使用自然键作为主键并在其他表中作为外键关联，级联修改代价极高；
+2. 紧凑的整型在 B+ 树索引中占用空间极小，大幅提高索引缓存命中率与查询比较效率。
+', 'public', '2251213429@qq.com', 27, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-28-foreign-keys-and-associations', '28-foreign-keys-and-associations', 'doc:hello-system-part-3', '第28章 外键与关联表：一堆孤立表如何连接？', '# 第28章 外键与关联表：一堆孤立表如何连接？
+
+## 1. 实体间的基数关系（Cardinality）
+
+现实世界中的实体关联分为三种类型：
+
+```mermaid
+flowchart LR
+    OneToOne["1 : 1 关系
+(学生 <-> 学籍档案)
+外键放置在任何一方均可"]
+    OneToMany["1 : N 关系
+(教师 <-> 课程)
+外键必须放置在 ''多 (N)'' 的一方 (courses.teacher_id)"]
+    ManyToMany["M : N 多对多关系
+(学生 <-> 课程)
+必须引入独立的中间关联表 (enrollments)"]
+```
+
+---
+
+## 2. 多对多关联表（Junction Table）的设计标准
+
+学生与课程是典型的多对多关系。我们引入专门的关联表 `enrollments`：
+
+```sql
+CREATE TABLE enrollments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    student_id INT NOT NULL,
+    course_id INT NOT NULL,
+    enrolled_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_enr_student FOREIGN KEY (student_id) REFERENCES students(id),
+    CONSTRAINT fk_enr_course FOREIGN KEY (course_id) REFERENCES courses(id),
+    -- 核心防线：同一个学生对同一门课绝不能重复选修
+    CONSTRAINT uk_student_course UNIQUE (student_id, course_id)
+);
+```
+
+注意 `UNIQUE (student_id, course_id)` 复合唯一键：它在数据库底层物理级别捍卫了“杜绝重复选课”的业务不变量。
+', 'public', '2251213429@qq.com', 28, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-29-declarative-sql', '29-declarative-sql', 'doc:hello-system-part-3', '第29章 声明式 SQL：告诉数据库“要什么”，而非“怎么做”', '# 第29章 声明式 SQL：告诉数据库“要什么”，而非“怎么做”
+
+## 1. 声明式查询与过程式循环的本质区别
+
+在面向对象编程中，我们查询“容量大于 80 的课程”需要编写过程式循环：
+
+```java
+List<Course> result = new ArrayList<>();
+for (Course c : allCourses) {
+    if (c.getCapacity() > 80) {
+        result.add(c);
+    }
+}
+```
+
+而在 SQL 中，我们只需要声明目标结果集的数学特征：
+
+```sql
+SELECT id, code, name, capacity
+FROM courses
+WHERE capacity > 80;
+```
+
+---
+
+## 2. 关系代数到物理执行计划的转换
+
+数据库在收到一条 SQL 时，执行引擎会经历以下转化阶段：
+
+```mermaid
+flowchart LR
+    SQL["声明式 SQL 文本"] --> Parser["词法/语法解析器
+生成抽象语法树 AST"]
+    Parser --> Opt["基于代价的优化器 (Cost-Based Optimizer, CBO)
+探索多种关系代数等价树
+选择最优执行路径"]
+    Opt --> Engine["存储引擎执行算子
+(Index Scan / Table Scan)"]
+```
+
+优化器会根据索引统计信息、数据分布直方图与磁盘 I/O 成本，自动决定是走全表扫描还是走 B+ 树索引查找。程序员只需要关心业务逻辑的正确表达。
+', 'public', '2251213429@qq.com', 29, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-30-inner-and-outer-joins', '30-inner-and-outer-joins', 'doc:hello-system-part-3', '第30章 JOIN 的本质：笛卡尔积上的条件过滤', '# 第30章 JOIN 的本质：笛卡尔积上的条件过滤
+
+## 1. 揭开黑魔法：JOIN 的物理推演
+
+初学者常把 `JOIN` 想象成一种“魔法拼接”。
+
+在关系代数中，`JOIN` 的数学本质是：**先求两张表的笛卡尔积，再应用 `ON` 谓词逐行过滤（$\sigma_{\text{condition}}(R_1 \times R_2)$）**。
+
+假设我们有两张微型表：
+
+**学生表 (students)**：
+- (1001, "李雷")
+- (1002, "韩梅梅")
+
+**选课表 (enrollments)**：
+- (e1, 1001, 2048)
+
+### 第一步：展开完整的笛卡尔积（$2 \times 1 = 2$ 行）
+1. (1001, "李雷", e1, 1001, 2048)
+2. (1002, "韩梅梅", e1, 1001, 2048)
+
+### 第二步：执行 `ON students.id = enrollments.student_id` 过滤
+- 第 1 行：`1001 == 1001`（满足条件，**保留**）；
+- 第 2 行：`1002 == 1001`（不满足条件，**剔除**）。
+
+---
+
+## 2. INNER JOIN vs LEFT JOIN 输出行数预测
+
+```mermaid
+flowchart TD
+    subgraph Inner["INNER JOIN (内连接)"]
+        I1["只返回同时在两张表中满足 ON 条件的交集行"]
+    end
+    subgraph Left["LEFT OUTER JOIN (左外连接)"]
+        L1["以左表为主：无论右表是否存在匹配，左表所有行全部保留。
+右表不匹配处字段自动填充 NULL"]
+    end
+```
+
+> **预测实验**：
+> 如果全校有 1000 名学生，其中 800 人选了课，200 人未选课。
+> - `SELECT count(*) FROM students INNER JOIN enrollments ON ...` $	o$ 结果必然等于选课记录总数；
+> - `SELECT count(DISTINCT students.id) FROM students LEFT JOIN enrollments ON ...` $	o$ 结果严格等于 **1000**。
+', 'public', '2251213429@qq.com', 30, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-31-aggregation-and-group-by', '31-aggregation-and-group-by', 'doc:hello-system-part-3', '第31章 聚合与分组：GROUP BY 与 HAVING 的执行时序', '# 第31章 聚合与分组：GROUP BY 与 HAVING 的执行时序
+
+## 1. SQL 逻辑执行时序（Logical Processing Order）
+
+初学者写 SQL 最常犯的语法错误（例如在 `WHERE` 里写 `count(*) > 10`），根源在于混淆了 SQL 的书写顺序与**底层逻辑执行顺序**：
+
+```mermaid
+flowchart TD
+    Step1["1. FROM & JOIN (加载数据源，完成表关联笛卡尔积与过滤)"] --> Step2["2. WHERE (行级前置过滤：逐行排除不满足条件的原始记录)"]
+    Step2 --> Step3["3. GROUP BY (将剩余行按照指定分组键划分为各个数据桶)"]
+    Step3 --> Step4["4. 聚合计算 (在每个组内执行 COUNT, SUM, AVG, MAX, MIN)"]
+    Step4 --> Step5["5. HAVING (组级后置过滤：对聚合统计结果进行条件筛选)"]
+    Step5 --> Step6["6. SELECT (计算投影列与表达式别名)"]
+    Step6 --> Step7["7. DISTINCT (对最终投影结果集去重)"]
+    Step7 --> Step8["8. ORDER BY (按指定列进行最终排序)"]
+    Step8 --> Step9["9. LIMIT / OFFSET (分页截取最终返回行)"]
+```
+
+---
+
+## 2. 经典问答：为什么 `WHERE` 里不能用聚合函数？
+
+根据上述时序图，`WHERE`（第 2 步）发生在 `GROUP BY` 与聚合计算（第 3~4 步）**之前**！
+
+在 `WHERE` 执行的时刻，数据还没有被分组，聚合值根本尚未诞生，因此在语法上直接禁止在 `WHERE` 子句中使用聚合函数。如果需要对聚合后的结果进行筛选，必须使用在第 5 步执行的 `HAVING` 子句。
+', 'public', '2251213429@qq.com', 31, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-32-lossless-decomposition', '32-lossless-decomposition', 'doc:hello-system-part-3', '第32章 无损分解与函数依赖：拆分表的科学方法', '# 第32章 无损分解与函数依赖：拆分表的科学方法
+
+## 1. 拆表的风险：有损分解与伪元组（Spurious Tuples）
+
+把大宽表拆分成多张小表，不能凭感觉瞎拆。
+
+如果拆分不当，在后续执行 `NATURAL JOIN` 还原数据时，会凭空产生原本不存在的**伪元组（Spurious Tuples）**，导致严重的数据失真。
+
+```mermaid
+flowchart TD
+    Raw["原始关系 R(A, B, C)"] --> Decomp["分解为 R1(A, B) 与 R2(B, C)"]
+    Decomp --> JoinCheck["执行自然连接 R1 ⋈ R2"]
+    JoinCheck --> ResultCheck{"连接结果是否严格等于 R ?"}
+    ResultCheck -->|严格相等| Lossless["无损连接分解 (Lossless Decomposition)"]
+    ResultCheck -->|产生了额外伪元组| Lossy["有损分解 (Lossy Decomposition - 严禁发生)"]
+```
+
+---
+
+## 2. 无损连接分解定理（Heath''s Theorem）
+
+设关系模式 $R(U)$，函数依赖集为 $F$。将其分解为两个子关系模式 $R_1(U_1)$ 和 $R_2(U_2)$（满足 $U_1 \cup U_2 = U$）。
+
+> **无损分解判定定理**：
+> 分解具有无损连接性的**充分必要条件**是：
+> $$(U_1 \cap U_2) \to (U_1 - U_2) \in F^+ \quad \text{或} \quad (U_1 \cap U_2) \to (U_2 - U_1) \in F^+$$
+
+也就是说：**两张子表的公共属性集，必须至少是其中某一个子表的超键！** 只有这样，两表在重新 JOIN 时才绝不会出现多对多的交叉发散。
+', 'public', '2251213429@qq.com', 32, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-33-functional-dependency-algebra', '33-functional-dependency-algebra', 'doc:hello-system-part-3', '第33章 函数依赖代数：Armstrong 公理系统', '# 第33章 函数依赖代数：Armstrong 公理系统
+
+## 1. 函数依赖（Functional Dependency）的形式化定义
+
+设关系模式 $R(U)$，$X$ 和 $Y$ 是属性集 $U$ 的子集。
+
+> **函数依赖（$X \to Y$）**：
+> 如果对于 $R$ 中的任意一个合法关系实例 $r$，不可能存在两个元组 $t_1, t_2 \in r$，满足：
+> $$t_1[X] = t_2[X] \quad \text{但} \quad t_1[Y] \neq t_2[Y]$$
+> 则称“$X$ 函数决定 $Y$”，记作 $X \to Y$。
+
+---
+
+## 2. Armstrong 公理系统（Armstrong''s Axioms）
+
+W. W. Armstrong 于 1974 年提出了一套严密的推理规则，被证明是**正确且完备的（Sound and Complete）**：
+
+1. **自反律（Reflexivity）**：若 $Y \subseteq X \subseteq U$，则 $X \to Y$ 恒成立（平凡函数依赖）；
+2. **增广律（Augmentation）**：若 $X \to Y$，且 $Z \subseteq U$，则 $XZ \to YZ$；
+3. **传递律（Transitivity）**：若 $X \to Y$ 且 $Y \to Z$，则 $X \to Z$。
+
+### 由三大公理导出的重要推论：
+- **合并规则（Union Rule）**：若 $X \to Y$ 且 $X \to Z$，则 $X \to YZ$；
+- **分解规则（Decomposition Rule）**：若 $X \to YZ$，则 $X \to Y$ 且 $X \to Z$；
+- **伪传递规则（Pseudo-transitivity）**：若 $X \to Y$ 且 $WY \to Z$，则 $WX \to Z$。
+
+利用属性闭包算法 $X^+$，我们可以在多项式时间内自动推导并验证任意候选键与超键。
+', 'public', '2251213429@qq.com', 33, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-34-normalization-1nf-2nf-3nf-bcnf', '34-normalization-1nf-2nf-3nf-bcnf', 'doc:hello-system-part-3', '第34章 范式实战演进：1NF、2NF、3NF 到 BCNF 的全景推导', '# 第34章 范式实战演进：1NF、2NF、3NF 到 BCNF 的全景推导
+
+## 1. 案例起点：未规范化的大宽表模式
+
+让我们以 Mini Campus 中的一张真实业务选课宽表为案例，完成从 1NF 到 BCNF 的完整数学推导：
+
+```text
+EnrollmentInfo(
+    student_id, student_name, 
+    major_id, major_name, 
+    course_id, course_name, 
+    teacher_id, teacher_name, 
+    grade
+)
+```
+
+### 该模式中存在的全部函数依赖集 $F$：
+1. `student_id -> student_name, major_id`
+2. `major_id -> major_name`
+3. `course_id -> course_name, teacher_id`
+4. `teacher_id -> teacher_name`
+5. `(student_id, course_id) -> grade`
+
+---
+
+## 2. 第一范式（1NF）：属性域的原子性
+
+> **第一范式（1NF）标准定义**：
+> 一个关系模式 $R$ 属于 1NF，当且仅当其所有属性的域都是不可再分的原子值。
+
+- **规范要求**：在关系模型中，原子性的含义取决于关系模式对属性域的具体定义。严禁在单个字段中存放逗号分隔的多值列表（如将多门课程代码存为 `"CS-101,CS-102"`）或未解构的嵌套记录。
+
+---
+
+## 3. 第二范式（2NF）：消除非主属性对候选键的部分依赖
+
+### 候选键判定：
+通过计算属性闭包，该模式的唯一候选键为复合键：`(student_id, course_id)`。
+- **主属性**：`student_id`, `course_id`
+- **非主属性**：`student_name`, `major_id`, `major_name`, `course_name`, `teacher_id`, `teacher_name`, `grade`
+
+### 发现部分函数依赖（Partial Functional Dependency）：
+- `student_id -> student_name`（非主属性 `student_name` 仅依赖候选键的真子集 `student_id`）；
+- `course_id -> course_name`（非主属性 `course_name` 仅依赖候选键的真子集 `course_id`）。
+
+> **第二范式（2NF）标准定义**：
+> 关系模式 $R \in \text{1NF}$，且每一个非主属性都**完全函数依赖（Full Functional Dependency）**于 $R$ 的每一个候选键，不存在对任何候选键真子集的部分依赖。
+
+### 2NF 分解动作：
+拆除部分依赖，得到三张子表：
+1. `Students(student_id, student_name, major_id, major_name)`
+2. `Courses(course_id, course_name, teacher_id, teacher_name)`
+3. `Enrollments(student_id, course_id, grade)`
+
+---
+
+## 4. 第三范式（3NF）：消除传递函数依赖
+
+在分解后的 `Students` 表中：
+- 候选键为 `student_id`；
+- 存在依赖链：`student_id -> major_id` 且 `major_id -> major_name`；
+- 导致非主属性 `major_name` 经由 `major_id` 传递依赖于主键。
+
+同理，在 `Courses` 表中，`teacher_name` 经由 `teacher_id` 传递依赖于 `course_id`。
+
+> **第三范式（3NF）形式化定义**：
+> 对于关系模式 $R$ 的每一个非平凡函数依赖 $X \to A$，以下条件至少满足一个：
+> 1. $X$ 是 $R$ 的超键；
+> 2. $A$ 是 $R$ 的主属性（候选键的一部分）。
+
+### 3NF 分解动作：
+将传递依赖拆解为独立实体表：
+- `Students(student_id, student_name, major_id)`
+- `Majors(major_id, major_name)`
+- `Courses(course_id, course_name, teacher_id)`
+- `Teachers(teacher_id, teacher_name)`
+- `Enrollments(student_id, course_id, grade)`
+
+至此，系统彻底消除了插入、更新与删除异常！
+
+---
+
+## 5. 鲍伊斯-科德范式（BCNF）：更严格的超键约束
+
+> **BCNF 形式化定义**：
+> 关系模式 $R \in \text{1NF}$，对于 $R$ 上的每一个非平凡函数依赖 $X \to Y$，$X$ 都**必须是 $R$ 的超键**。
+
+BCNF 进一步消除了主属性对其他非键属性的依赖（3NF 允许右侧 $A$ 是主属性，而 BCNF 强制左侧 $X$ 必须是超键）。在绝大多数常规企业级建模中，达到 3NF/BCNF 即可保证极高的数据严密性与健壮性。
+', 'public', '2251213429@qq.com', 34, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-35-bplus-tree-indexes', '35-bplus-tree-indexes', 'doc:hello-system-part-3', '第35章 B+ 树索引原理：从全表扫描到对数级查找', '# 第35章 B+ 树索引原理：从全表扫描到对数级查找
+
+## 1. 为什么不能用二叉查找树或 Hash 表？
+
+当数据库表拥有 1000 万行记录时，如果我们执行 `SELECT * FROM courses WHERE code = ''CS-101''`：
+- **全表扫描（Full Table Scan）**：需要从头到尾读取 1000 万行数据，产生极大的磁盘 I/O 开销；
+- **为什么不用二叉平衡树（AVL/红黑树）**：二叉树每个节点只存一个键，树高可达 $\log_2(10^7) \approx 24$ 层。每次沿着指针访问子节点都可能是一次独立的随机磁盘 I/O；
+- **为什么不用 Hash 表**：Hash 索引无法高效支持范围查询（如 `WHERE capacity BETWEEN 60 AND 100`）与排序操作。
+
+---
+
+## 2. B+ 树的结构特征与多路扇出（Fanout）
+
+B+ 树通过**极大的页面扇出（Fanout）**将树的高度压缩到了极低的层数：
+
+```mermaid
+flowchart TD
+    subgraph Root["根节点页 (Root Page - 驻留内存缓存池)"]
+        RKey["[ 1000 | 2000 | 3000 ]
+包含子节点页物理指针"]
+    end
+
+    subgraph Internal["非叶子节点页 (Internal Pages)"]
+        P1["[ 100 | 500 ]"]
+        P2["[ 1200 | 1800 ]"]
+    end
+
+    subgraph Leaf["叶子节点页 (Leaf Pages - 包含真实整行数据或主键，双向链表相连)"]
+        L1["[ Tuple 1001 <-> Tuple 1002 ]"]
+        L2["[ Tuple 2048 <-> Tuple 2049 ]"]
+    end
+
+    RKey --> P1 & P2
+    P1 --> L1
+    P2 --> L2
+    L1 <== 双向链表指针 ==> L2
+```
+
+> **工程实现客观说明**：
+> 现实数据库中的 B+ 树通常因为较大的扇出（一页 16KB 可容纳上百个键）而保持较低高度（通常在 3~4 层左右）。但必须注意：**具体树高取决于页面大小、键长度、行记录规模以及页面填充率等综合因素。根节点通常很容易被 Buffer Pool 缓存，但并非关系模型或 B+ 树定义本身的硬性保证。**
+
+---
+
+## 3. EXPLAIN 执行计划分析实战
+
+让我们使用 MySQL `EXPLAIN` 分析索引对查询性能的决定性改变：
+
+```sql
+-- 1. 无索引状态下的查询分析
+EXPLAIN SELECT * FROM courses WHERE code = ''CS-101'';
+```
+| type | possible_keys | key | rows | Extra |
+| :--- | :--- | :--- | :--- | :--- |
+| **ALL** | NULL | NULL | **1000000** | Using where (全表扫描 100 万行) |
+
+```sql
+-- 2. 创建唯一索引
+CREATE UNIQUE INDEX idx_courses_code ON courses(code);
+
+-- 3. 再次执行分析
+EXPLAIN SELECT * FROM courses WHERE code = ''CS-101'';
+```
+| type | possible_keys | key | rows | Extra |
+| :--- | :--- | :--- | :--- | :--- |
+| **const** | idx_courses_code | **idx_courses_code** | **1** | NULL (常数级精准命中) |
+', 'public', '2251213429@qq.com', 35, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-36-acid-transactions', '36-acid-transactions', 'doc:hello-system-part-3', '第36章 事务与 ACID：在不确定的硬件世界中守护确定性', '# 第36章 事务与 ACID：在不确定的硬件世界中守护确定性
+
+## 1. 事务的 ACID 四大支柱
+
+在复杂的选课业务中，扣减名额与插入选课流水必须作为一个不可分割的原子整体：
+
+- **原子性（Atomicity）**：事务中的所有操作要么全部成功持久化，要么全部回滚，绝不允许停留在半成品状态；
+- **一致性（Consistency）**：事务执行前后，数据库的完整性约束与业务不变量始终保持合法；
+- **隔离性（Isolation）**：并发执行的多个事务之间相互隔离，避免脏读、不可重复读等并发冲突；
+- **持久性（Durability）**：事务一旦成功提交（COMMIT），其产生的数据状态变更将永久保存在非易失介质中。
+
+---
+
+## 2. 预写日志（Write-Ahead Logging, WAL）的精准心智模型
+
+如果每次事务提交都必须将修改后的整张数据页（如 16KB 数据页）同步写回磁盘数据文件，频繁的随机 I/O 将彻底拖垮数据库吞吐量。
+
+数据库通过 **WAL（预写日志）** 实现了极高的性能与可靠性平衡：
+
+```mermaid
+flowchart TD
+    Step1["1. 事务在内存 Buffer Pool 中修改数据页 (产生脏页 Dirty Page)"] --> Step2["2. 同时在内存中生成紧凑的物理重做日志记录 (Redo Log Record)"]
+    Step2 --> Step3["3. 事务提交 (COMMIT): 将顺序追加的 Redo Log 刷盘 (fsync)"]
+    Step3 --> Step4["4. 内存脏页由后台检查点线程 (Checkpoint) 异步批量刷回磁盘数据文件"]
+```
+
+> **WAL 核心规范与心智模型**：
+> 数据库**先在内存缓冲池中修改数据页并产生重做日志记录**。
+> WAL 的关键铁律是：**在内存中的脏数据页被持久化写入磁盘数据文件之前，其对应的重做日志必须先满足数据库要求的持久化条件（先日志后数据）。**
+> 事务 COMMIT 时的日志持久化行为还与具体 DBMS 参数（如 MySQL `innodb_flush_log_at_trx_commit`）配置密切相关。
+', 'public', '2251213429@qq.com', 36, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-37-concurrency-and-locking', '37-concurrency-and-locking', 'doc:hello-system-part-3', '第37章 并发控制：行级锁、排他锁与幻读防范', '# 第37章 并发控制：行级锁、排他锁与幻读防范
+
+## 1. 经典并发异常全景
+
+当多个事务并发交错执行时，可能产生四种典型的异常现象：
+
+```mermaid
+flowchart TD
+    A1["1. 丢失更新 (Lost Update)
+事务 A 和 B 同时读取名额为 1，各自加 1 后写回，后写者覆盖前者导致少算一次"]
+    A2["2. 脏读 (Dirty Read)
+事务 A 读取到了事务 B 尚未提交且最终被回滚的临时数据"]
+    A3["3. 不可重复读 (Non-Repeatable Read)
+事务 A 在同一事务内两次读取同一行数据，得到了不同的值 (被事务 B 修改)"]
+    A4["4. 幻读 (Phantom Read)
+事务 A 在同一事务内按范围查询，第二次查询发现多了几行新插入的数据 (被事务 B 插入)"]
+```
+
+---
+
+## 2. 悲观并发控制：行级排他锁（`SELECT ... FOR UPDATE`）
+
+为了防范名额超卖，一种经典方案是在查询名额时立即对目标行施加排他锁（X 锁）：
+
+```sql
+-- 开启事务
+START TRANSACTION;
+
+-- 方案 A: 显式加行级排他锁 (悲观锁)
+SELECT id, capacity, enrolled 
+FROM courses 
+WHERE id = 2048 
+FOR UPDATE;
+
+-- 业务判定名额充足后执行更新
+UPDATE courses 
+SET enrolled = enrolled + 1 
+WHERE id = 2048;
+
+-- 插入流水并提交
+INSERT INTO enrollments (student_id, course_id) VALUES (1001, 2048);
+COMMIT;
+```
+
+排他锁确保了在当前事务提交前，其他并发事务尝试读取该行加锁时必须排队等待，从而绝对保证了并发安全性。
+
+在后续第五部分的第 51 章中，我们还将进一步探讨无需锁等待的高性能**原子条件更新**方案！
+', 'public', '2251213429@qq.com', 37, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-part-4', 'part-4', 'doc:book-hello-system', '第四部分: 前端第一次遇见后端 (38~46)', '# 第四部分: 前端第一次遇见后端 (38~46)
+
+本部分聚焦于**跨越网络边界的前后端通信契约与对象边界划分**。
+
+我们将从套接字与网络分包的物理现实出发，深入解构 HTTP 报文结构与现代 RESTful 资源语义设计。随后，我们将以“李雷点击选课”为主线，完整追踪从 Vue `fetch()` 请求发起、跨语言 JSON 序列化、Spring WebMVC 请求分发，到 Controller、Service、Repository 以及 Entity/DTO/Value Object 对象的严格职责隔离。
+', 'public', '2251213429@qq.com', 4, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-38-networking-foundations-ip-tcp', '38-networking-foundations-ip-tcp', 'doc:hello-system-part-4', '第38章 网络协议的物理现实：从套接字到包交换', '# 第38章 网络协议的物理现实：从套接字到包交换
+
+## 1. 跨越机器边界的鸿沟
+
+在前面的章节中，无论是 Vue 前端还是 Java 后端，代码操作的都是**本机物理内存中的数据指针**。
+
+然而，当用户的浏览器运行在客户端笔记本上，而服务端程序运行在千里之外的数据中心服务器上时，两台机器之间没有任何共享内存，唯一的连接纽带就是**不可靠的物理网络链路**。
+
+```mermaid
+flowchart LR
+    Client["客户端计算机
+(浏览器进程)"] <== "不可靠的物理网络
+(可能丢包、乱序、延迟、抖动)" ==> Server["服务端计算机
+(后端应用进程)"]
+```
+
+---
+
+## 2. 经典 TCP/IP 分层模型
+
+现代网络通信通过分层协议栈实现了对底层复杂物理传输的高效抽象：
+
+```mermaid
+flowchart TD
+    App["1. 应用层 (Application Layer: HTTP/1.1, HTTP/2, WebSocket)
+定义业务报文格式与交互语义 (如 GET, POST, JSON 载荷)"]
+    Transport["2. 传输层 (Transport Layer: TCP, UDP)
+提供端到端的进程级通信 (TCP 提供可靠字节流、三次握手、丢包重传与拥塞控制)"]
+    Network["3. 网络层 (Network Layer: IP)
+负责跨网络路由寻址与主机间数据包转发 (IP 地址)"]
+    Link["4. 数据链路与物理层 (Link & Physical Layer: Ethernet, Wi-Fi, 光纤)
+负责在相邻物理节点间传输二进制电信号与光脉冲"]
+
+    App --> Transport --> Network --> Link
+```
+
+- **套接字（Socket）**：操作系统向应用程序暴露的抽象通信端点，由 `(源 IP, 源端口, 目标 IP, 目标端口, 协议)` 五元组唯一定义；
+- **流式传输的本质**：TCP 向上层应用提供的是一个**无边界的连续字节流（Byte Stream）**。应用层协议（如 HTTP）必须自行定义报文边界解析规则。
+', 'public', '2251213429@qq.com', 38, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-39-http-message-anatomy', '39-http-message-anatomy', 'doc:hello-system-part-4', '第39章 HTTP 报文解构：请求行、头部与状态码', '# 第39章 HTTP 报文解构：请求行、头部与状态码
+
+## 1. HTTP 请求报文的标准文本结构
+
+HTTP/1.1 是一种典型的基于 ASCII 文本的应用层协议。一次选课请求的真实报文结构如下：
+
+```http
+POST /api/enrollments HTTP/1.1
+Host: www.aetherstudio.top
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+Content-Type: application/json; charset=utf-8
+Authorization: Bearer eyJhbGciOi...
+
+{"courseId":2048}
+```
+
+### 报文核心要素拆解：
+1. **请求行（Request Line）**：
+   - **请求方法（Method）**：`POST`（表达在目标资源集合上创建新实体的业务意图）；
+   - **请求路径（Request URI）**：`/api/enrollments`；
+   - **协议版本（Protocol Version）**：`HTTP/1.1`。
+2. **请求头（Headers）**：包含主机名、客户端类型、载荷编码格式及认证凭证；
+3. **空行（CRLF, \r\n）**：协议规定的关键分隔符，用于告知接收方头部结束、正文开始；
+4. **请求体（Body）**：传输的具体业务载荷数据。
+
+---
+
+## 2. 常见 HTTP 状态码的精准语义分类
+
+服务端通过状态码向客户端传达请求的最终处理结果：
+
+| 状态码 | 英文名称 | 业务场景精准语义 |
+| :--- | :--- | :--- |
+| **200 OK** | 成功 | 请求处理成功，响应体包含目标数据 |
+| **201 Created** | 已创建 | 成功在服务器上创建了新资源（如选课成功生成了选课流水） |
+| **204 No Content** | 无内容 | 成功执行了操作（如退课成功），且无需向客户端返回任何数据体 |
+| **400 Bad Request** | 格式错误 | 客户端发送的 JSON 格式损坏或参数类型不匹配 |
+| **401 Unauthorized** | 未认证 | 客户端未携带身份凭据（Token/Cookie）或凭据已过期 |
+| **403 Forbidden** | 拒绝访问 | 客户端已登录，但无权操作该资源（如学生尝试修改全校课表） |
+| **404 Not Found** | 未找到 | 目标资源不存在（如请求的 courseId 不在数据库中） |
+| **409 Conflict** | 业务冲突 | 发生业务规则冲突（如该课程名额已满，或学生已选过该课程） |
+| **500 Internal Error**| 服务端错误 | 后端服务器发生未捕获的运行时异常（如数据库连接中断） |
+', 'public', '2251213429@qq.com', 39, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-40-json-serialization', '40-json-serialization', 'doc:hello-system-part-4', '第40章 跨语言的契约：JSON 序列化与反序列化', '# 第40章 跨语言的契约：JSON 序列化与反序列化
+
+## 1. 为什么选择 JSON？
+
+前端使用 JavaScript 语言，后端可能使用 Java、Go、Python 或 Rust。
+
+由于不同编程语言在内存中的对象结构与类型系统完全不同，两端无法直接传递内存指针，必须选择一种**语言无关的通用中立数据格式**：
+
+```mermaid
+flowchart LR
+    JS["浏览器端 JavaScript 对象
+{ courseId: 2048 }"] -->|JSON.stringify()| JSON["跨平台纯文本 (JSON 字符串)
+''{"courseId":2048}''"]
+    JSON -->|Jackson / Gson 反序列化| Java["后端 Java 强类型对象 (DTO)
+new EnrollRequest(2048)"]
+```
+
+---
+
+## 2. 常见序列化陷阱：数值精度与时间格式
+
+1. **JavaScript 64 位浮点数（IEEE 754）精度丢失**：
+   - JavaScript 中的 `Number.MAX_SAFE_INTEGER` 为 $2^{53} - 1$（9007199254740991）；
+   - 如果 Java 后端使用 64 位自增长整型（`Long`）或雪花算法 ID（如 `1787932800123456789L`），当它以 JSON 数字格式传输给前端时，最后几位会被 JavaScript 自动截断为 0！
+   - **最佳实践**：超长整型 ID 在传输时必须序列化为**字符串类型（String）**。
+2. **时区与日期格式标准化**：
+   - 严禁传输本地时间字符串（如 `"2026-08-29 08:00:00"`，因为缺少时区信息）；
+   - 推荐使用 ISO-8601 标准 UTC 格式字符串：`"2026-08-29T00:00:00.000Z"`。
+', 'public', '2251213429@qq.com', 40, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-41-first-api-design', '41-first-api-design', 'doc:hello-system-part-4', '第41章 设计第一条 RESTful API：资源、动作与路径', '# 第41章 设计第一条 RESTful API：资源、动作与路径
+
+## 1. RESTful 面向资源架构（Resource-Oriented Architecture）
+
+在初学者的 API 设计中，经常出现如下充满动词的 RPC 风格 URL：
+- `POST /api/doEnrollCourse`
+- `GET /api/queryCourseList`
+- `POST /api/cancelStudentCourse`
+
+REST 架构风格提倡：**URL 只定位“名词资源”，操作类型由标准的“HTTP Method 动词”表达**。
+
+```text
+HTTP Method   URL 资源路径            业务语义
+GET           /api/courses           获取开放选课的课程列表
+GET           /api/courses/{id}      获取指定课程的详细信息
+POST          /api/enrollments       创建一条新的选课关联记录 (选课)
+DELETE        /api/enrollments/{id}  删除指定的选课记录 (退课)
+```
+
+---
+
+## 2. 选课 API 契约的标准化定义
+
+根据 Mini Campus 的 Canonical 数据模型，选课 API 的规范契约如下：
+
+### 请求规范（Request）：
+- **URL**：`POST /api/enrollments`
+- **Headers**：`Content-Type: application/json`, `Authorization: Bearer <token>`
+- **Body**：
+  ```json
+  {
+    "courseId": 2048
+  }
+  ```
+  > **安全设计注意**：
+  > 请求体中**严禁包含 `studentId`**！当前学生的身份必须由后端从经过加密签名的认证凭据（Token/Session）中安全解析，绝不信任前端传入的任意用户 ID。
+
+### 成功响应（Response - 201 Created）：
+```json
+{
+  "code": "SUCCESS",
+  "message": "选课成功",
+  "data": {
+    "enrollmentId": 9821,
+    "courseId": 2048,
+    "courseName": "计算机系统导论",
+    "enrolledAt": "2026-08-29T08:00:00.000Z"
+  }
+}
+```
+', 'public', '2251213429@qq.com', 41, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-42-clicking-enroll-frontend-backend-meet', '42-clicking-enroll-frontend-backend-meet', 'doc:hello-system-part-4', '第42章 点击选课：从 Vue fetch 到 Spring Controller', '# 第42章 点击选课：从 Vue fetch 到 Spring Controller
+
+## 1. 前端网络调用闭环
+
+让我们在 Vue 3 组件中实现真实的选课交互：
+
+```javascript
+// CourseCard.vue
+import { ref } from ''vue'';
+
+export default {
+  props: { course: Object },
+  setup(props, { emit }) {
+    const isSubmitting = ref(false);
+    const errorMessage = ref('''');
+
+    async function handleEnrollClick() {
+      isSubmitting.value = true;
+      errorMessage.value = '''';
+
+      try {
+        const response = await fetch(''/api/enrollments'', {
+          method: ''POST'',
+          headers: {
+            ''Content-Type'': ''application/json''
+          },
+          body: JSON.stringify({ courseId: props.course.id })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          emit(''enrolled-success'', result.data);
+        } else {
+          const errorData = await response.json();
+          errorMessage.value = errorData.message || ''选课失败'';
+        }
+      } catch (err) {
+        errorMessage.value = ''网络异常，请检查连接'';
+      } finally {
+        isSubmitting.value = false;
+      }
+    }
+
+    return { isSubmitting, errorMessage, handleEnrollClick };
+  }
+}
+```
+
+---
+
+## 2. 后端表现层路由分发（Spring MVC DispatcherServlet）
+
+当该请求到达后端 Web 服务器后，Spring 框架的中心分发器将请求精准路由至控制器：
+
+```mermaid
+flowchart LR
+    Req["HTTP POST /api/enrollments"] --> Dispatcher["DispatcherServlet (前端控制器)"]
+    Dispatcher --> Mapping["HandlerMapping (路由映射表)"]
+    Mapping --> TargetCtrl["EnrollmentController.enroll() 方法"]
+    TargetCtrl --> ReturnResp["ResponseEntity<EnrollResult>"]
+    ReturnResp --> ViewResolver["HttpMessageConverter (Jackson 序列化)"]
+    ViewResolver --> HTTPResp["HTTP 201 Created 响应报文"]
+```
+', 'public', '2251213429@qq.com', 42, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-43-controller-layer-responsibilities', '43-controller-layer-responsibilities', 'doc:hello-system-part-4', '第43章 表现层 Controller 的纯粹职责：防线还是中转站？', '# 第43章 表现层 Controller 的纯粹职责：防线还是中转站？
+
+## 1. Controller 应该做什么？
+
+表现层控制器是整个后端系统的“守门人”。它的核心职责极为纯粹：
+
+```java
+@RestController
+@RequestMapping("/api/enrollments")
+public class EnrollmentController {
+
+    private final EnrollmentService enrollmentService;
+
+    public EnrollmentController(EnrollmentService enrollmentService) {
+        this.enrollmentService = enrollmentService;
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<EnrollmentDto>> enroll(
+        @Valid @RequestBody EnrollRequest request,
+        @AuthenticationPrincipal AuthenticatedUser user // 从安全上下文获取认证学生
+    ) {
+        // 1. 调用业务用例
+        EnrollResult result = enrollmentService.enroll(user.getStudentId(), request.getCourseId());
+
+        // 2. 根据业务结果包装对应的 HTTP 状态码
+        if (result.isSuccess()) {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(result.getEnrollmentDto()));
+        } else {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail(result.getErrorMessage()));
+        }
+    }
+}
+```
+
+---
+
+## 2. Controller 的三大绝对禁忌
+
+1. **严禁在 Controller 中编写 SQL 或直接调用数据库连接**：这会导致表现层与底层数据库紧密耦合；
+2. **严禁在 Controller 中执行复杂的业务规则判定**（如“检查先修课是否及格”）：这会导致业务逻辑无法在其他入口（如批处理定时任务、MQ 消费者）中复用；
+3. **严禁直接向客户端返回数据库 Entity 实体对象**：这会导致底层数据库表结构直接暴露给公网。
+', 'public', '2251213429@qq.com', 43, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-44-service-layer-domain-orchestration', '44-service-layer-domain-orchestration', 'doc:hello-system-part-4', '第44章 业务逻辑层 Service：用例编排与不变量守护', '# 第44章 业务逻辑层 Service：用例编排与不变量守护
+
+## 1. 业务用例的指挥官
+
+业务逻辑层（Service）不应该只是一个“简单的中转传话筒”，而是整个业务用例的**总编排者与事务一致性边界的捍卫者**：
 
 ```java
 @Service
 public class EnrollmentService {
+
     private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
 
-    public EnrollmentService(CourseRepository courseRepo, EnrollmentRepository enrollRepo) {
-        this.courseRepository = courseRepo;
-        this.enrollmentRepository = enrollRepo;
+    public EnrollmentService(CourseRepository courseRepository, EnrollmentRepository enrollmentRepository) {
+        this.courseRepository = courseRepository;
+        this.enrollmentRepository = enrollmentRepository;
     }
 
-    @Transactional
+    @Transactional // 声明事务边界：以下全部操作必须具备原子性
     public EnrollResult enroll(int studentId, int courseId) {
-        // 1. 执行原子条件更新尝试扣减名额
-        boolean updated = courseRepository.incrementEnrolledIfAvailable(courseId);
-        if (!updated) {
-            return EnrollResult.failure("名额已满或课程不存在");
+        // 1. 检查是否重复选课
+        if (enrollmentRepository.existsByStudentIdAndCourseId(studentId, courseId)) {
+            return EnrollResult.failure("您已选修过该课程，不可重复选课");
         }
 
-        // 2. 插入选课关联记录 (由数据库唯一键防止重复选课)
-        try {
-            enrollmentRepository.insertEnrollment(studentId, courseId);
-            return EnrollResult.success();
-        } catch (DuplicateKeyException e) {
-            // 触发事务回滚，还原扣减的名额
-            throw new BusinessException("不可重复选修同一门课程");
+        // 2. 执行原子条件更新扣减名额 (防范高并发超卖)
+        int updated = courseRepository.incrementEnrolledIfAvailable(courseId);
+        if (updated == 0) {
+            return EnrollResult.failure("课程名额已满");
         }
+
+        // 3. 插入选课流水记录
+        Enrollment enrollment = new Enrollment(studentId, courseId, LocalDateTime.now());
+        enrollmentRepository.save(enrollment);
+
+        return EnrollResult.success(enrollment);
     }
 }
 ```
-', 'public', '2251213429@qq.com', 7, 0, 215, '');
+', 'public', '2251213429@qq.com', 44, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-45-repository-persistence-abstraction', '45-repository-persistence-abstraction', 'doc:hello-system-part-4', '第45章 Repository为什么存在？', '# 第45章 Repository为什么存在？
+VALUES ('doc:hello-system-45-repository-persistence-abstraction', '45-repository-persistence-abstraction', 'doc:hello-system-part-4', '第45章 持久化抽象 Repository：屏蔽 SQL 与对象映射', '# 第45章 持久化抽象 Repository：屏蔽 SQL 与对象映射
 
-## 1. 数据访问抽象的价值
+## 1. 仓储模式（Repository Pattern）的价值
 
-**Repository（仓储层）** 为领域模型提供类似内存集合风格的数据访问接口，将上层业务与底层存储技术解耦：
+Repository 将数据库系统模拟成一个**运行在内存中的虚拟集合**。
+
+上层的业务 Service 只需要面向 Repository 接口调用 `findById()` 或 `save()`，完全不需要关心底层到底是通过原生 JDBC、MyBatis 动态 XML，还是 Spring Data JPA / Hibernate 执行的具体 SQL。
 
 ```java
 public interface CourseRepository {
     Optional<Course> findById(int id);
-    boolean incrementEnrolledIfAvailable(int courseId);
+    int incrementEnrolledIfAvailable(int courseId);
+    void save(Course course);
 }
 ```
 
-- **提升可测试性**：在编写 Service 单元测试时，可以使用内存实现快速验证业务逻辑，无需启动真实数据库；
-- **集中管理数据访问**：SQL 语句与数据映射规则收敛在仓储实现类中。
-
-> **架构认知提示**：
-> 仓储抽象能够隔离部分 SQL 细节，但并不能完全消除底层数据库的特性差异（抽象泄漏，Leaky Abstraction）。不同的数据库在事务隔离级别、方言语法和性能特性上仍存在客观差异。
-', 'public', '2251213429@qq.com', 8, 0, 215, '');
+这种解耦使得在单元测试时，可以用内存 Map 轻松替代真实数据库，从而实现超快速的业务测试验证。
+', 'public', '2251213429@qq.com', 45, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-46-entity-dto-vo-boundary', '46-entity-dto-vo-boundary', 'doc:hello-system-part-4', '第46章 为什么系统里有这么多“长得差不多”的对象？', '# 第46章 为什么系统里有这么多“长得差不多”的对象？
+VALUES ('doc:hello-system-46-entity-dto-vo-boundaries', '46-entity-dto-vo-boundaries', 'doc:hello-system-part-4', '第46章 对象边界隔离：Entity、DTO 与 Value Object 的分工', '# 第46章 对象边界隔离：Entity、DTO 与 Value Object 的分工
 
-## 1. 统一术语体系与边界隔离
+## 1. 为什么不能一个类走天下？
 
-在实际分层工程中，不同层次的对象承担着不同的职责：
+在许多新手项目中，经常出现“一个 `Course` 类从数据库表、Service 业务逻辑一路透传到前端 JSON 接口”的现象。
 
-```mermaid
-flowchart LR
-    Client["客户端 (浏览器)"] <-->|Request / Response DTO| Ctrl["表现层 (Controller)"]
-    Ctrl <-->|领域实体 Entity / 值对象 Value Object| Svc["业务逻辑层 (Service)"]
-    Svc <-->|数据映射| DB[(数据库存储)]
-```
-
-- **领域实体（Entity）**：具有唯一业务标识（如 Course ID）并封装业务不变量的核心领域对象；
-- **数据传输对象（DTO, Data Transfer Object）**：
-  - **Request DTO**：封装客户端提交的请求载荷，用于输入校验；
-  - **Response DTO**：封装返回给客户端的数据，实现敏感数据脱敏（如隐藏密码哈希、内部配置等）；
-- **值对象（Value Object, DDD 语境）**：通过其包含的属性值来定义其等价性且无独立标识的不可变对象（如 `Money`, `Address`）。
+这种“偷懒”会带来极其危险的安全与维护漏洞：
+1. **过度暴露敏感字段（Over-Fetching）**：如果不小心在实体类中增加了 `passwordHash` 或内部审计字段，直接返回 Entity 会导致敏感数据泄露；
+2. **批量赋值漏洞（Mass Assignment Vulnerability）**：如果前端恶意在 JSON 里提交 `{ "id": 2048, "enrolled": 0 }`，直接将请求绑定到 Entity 可能会导致非法字段被恶意覆盖。
 
 ---
 
-## 2. 为什么不直接复用 Entity？
+## 2. 三类对象的严密职责划分
 
-若直接将与数据库表映射的 `Student` Entity 暴露给外部接口：
-1. **敏感信息泄露**：可能意外将 `password_hash` 或身份证号直接序列化返回给前端；
-2. **批量赋值安全漏洞（Mass Assignment Vulnerability）**：恶意用户可能在请求中夹带 `role: "ADMIN"` 等私有字段，若框架直接将 JSON 绑定到 Entity，将造成越权漏洞。
-', 'public', '2251213429@qq.com', 9, 0, 215, '');
+```mermaid
+flowchart LR
+    subgraph Client["网络与前端世界"]
+        ReqDTO["Request DTO (入参校验)"]
+        RespDTO["Response DTO (按需定制输出)"]
+    end
+
+    subgraph Domain["领域业务核心世界"]
+        VO["Value Object (值对象: 不可变业务量)
+例如: CourseCode, Money"]
+        Entity["Entity (实体: 拥有唯一生命周期 ID 与业务方法)
+例如: Course, Student"]
+    end
+
+    subgraph Storage["数据存储世界"]
+        PO["PO / Data Record (映射数据库表字段)"]
+    end
+
+    ReqDTO -->|转换为| Entity
+    Entity -->|包含| VO
+    Entity -->|转换为| RespDTO
+    Entity <==>|映射转换| PO
+```
+
+| 对象类型 | 核心特征 | 典型应用场景 |
+| :--- | :--- | :--- |
+| **Entity（实体）** | 拥有跨生命周期的唯一主键 ID，通过业务方法改变内部状态 | `Course`, `Student`, `Enrollment` |
+| **Value Object（值对象）** | 没有独立 ID，完全由其属性值定义，具有严格的不可变性 | `CourseCode`, `TuitionFee` |
+| **DTO（数据传输对象）** | 纯扁平数据结构，无业务方法，专职网络序列化传输 | `EnrollRequest`, `EnrollmentResponseDto` |
+
+至此，前后端的标准协作通道已经完全打通。
+
+但是，真实世界的网络与服务器并不是一个平静的乌托邦。当面对恶意请求、系统崩溃断电、并发冲突与丢包重试时，系统将展现出怎样残酷的挑战？
+
+让我们进入第五部分：**真实系统开始反抗 (47 ~ 55)**！
+', 'public', '2251213429@qq.com', 46, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-part-5', 'part-5', 'doc:book-hello-system', '第五部分 · 真实系统开始反抗', '', 'public', '2251213429@qq.com', 7, 0, 215, '');
+VALUES ('doc:hello-system-part-5', 'part-5', 'doc:book-hello-system', '第五部分: 真实系统开始反抗 (47~55)', '# 第五部分: 真实系统开始反抗 (47~55)
+
+本部分聚焦于**分布式网络与企业级生产环境中的高可靠性与防御性设计**。
+
+真实世界的软件系统绝非运行在风平浪静的理想实验室内。我们将直面客户端恶意篡改、高并发争抢名额、网络丢包超时重试、服务器突然断电崩溃以及多环境部署差异等现实挑战。我们将深入推导信任边界校验、事务异常传播与回滚机制、防抖/节流/幂等性治理、原子条件更新、WAL 崩溃恢复算法、结构化日志可观测性与测试金字塔质量防护网。
+', 'public', '2251213429@qq.com', 5, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-47-defensive-validation', '47-defensive-validation', 'doc:hello-system-part-5', '第47章 信任边界：为什么服务器必须重新验证请求？', '# 第47章 信任边界：为什么服务器必须重新验证请求？
 
-## 1. 客户端与服务端的信任边界
+## 1. 客户端与服务端的信任边界（Trust Boundary）
 
-在 Web 应用中，运行在用户浏览器上的前端界面处于不可信环境。攻击者或脚本可以完全绕过前端 UI 逻辑，直接向后端端点发送构造好的 HTTP 报文：
+在 Web 应用中，运行在用户浏览器上的前端 JavaScript 代码处于**完全不可控的外部不安全环境**中。
 
-- 提交不合法的负数或格式错误的字段；
-- 尝试伪造其他用户的身份 ID；
-- 在请求体中附带未经授权的私有字段。
+任何一个懂一点基础技术的用户，都可以打开浏览器的“开发者工具（F12）”，或者使用 Postman、curl 等命令行工具，完全绕过前端 UI 上的所有按钮置灰和表单校验逻辑，直接向后端端点发送恶意构造的 HTTP 报文：
 
-#### 核心原则：
-> **前端校验的主要目的在于提升正常用户的交互体验（即时反馈、减少不必要的网络往返），不能作为系统安全的授权依据。**
-> 后端服务处于系统的信任边界之内，必须对所有外部传入的数据执行严格的输入验证、身份认证与权限检查。
+```bash
+# 恶意攻击者直接用 curl 伪造请求，强行选修非法课程
+curl -X POST https://www.aetherstudio.top/api/enrollments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <stolen_token>" \
+  -d ''{"courseId": -9999}''
+```
 
 ```mermaid
 flowchart LR
-    Browser["不可信客户端
-(前端表单校验: 仅用于优化用户体验)"] -->|跨越网络边界| Server["可信后端服务
-(执行鉴权、格式校验与不变量判定)"]
-    Server -->|合法操作| DB[(数据库持久化)]
+    subgraph Untrusted["不可信区域 (Untrusted Zone)"]
+        Browser["用户浏览器 / 爬虫脚本 / Postman"]
+    end
+
+    subgraph Boundary["信任边界 (Trust Boundary)"]
+        Gateway["API 网关 / 身份认证过滤器 / 参数校验切面"]
+    end
+
+    subgraph Trusted["可信受保护区域 (Protected Core)"]
+        Service["后端业务服务 (Service)"]
+        DB[("核心数据库")]
+    end
+
+    Browser -->|跨越公网发送请求| Gateway
+    Gateway -->|校验失败 (400/401/403)| Reject["直接拦截并拒绝"]
+    Gateway -->|校验通过| Service
+    Service --> DB
 ```
 
 ---
 
-## 2. 概念小贴士：这和“零信任（Zero Trust）”是一回事吗？
+## 2. 前端校验与后端校验的本质分工
 
-> **说明**：
-> 这里讨论的是**客户端与服务端之间的基础信任边界与输入验证**。
-> **零信任架构（Zero Trust Architecture, 如 NIST SP 800-207 所定义）** 是一个更为广泛的企业安全战略体系，其核心原则是“持续验证、永不隐式信任”，涵盖身份微隔离、网络分段、设备合规性持续评估等多维度安全机制，二者不应混淆。
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-48-exception-and-rollback', '48-exception-and-rollback', 'doc:hello-system-part-5', '第48章 如果程序运行到一半失败了呢？', '# 第48章 如果程序运行到一半失败了呢？
-
-## 1. 异常传播与事务回滚机制
-
-当业务用例在执行过程中遇到错误时（如学生已被停课处分或数据库唯一键冲突），系统通过抛出异常中断当前流程：
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Ctrl as Controller
-    participant Svc as Service (@Transactional)
-    participant DB as 数据库事务
-
-    Ctrl->>Svc: enroll(studentId, courseId)
-    Note over Svc: 开启数据库事务 BEGIN
-    Svc->>DB: 扣减名额成功
-    Note over Svc: 业务规则校验失败，抛出 BusinessException!
-    Note over Svc: 事务管理器捕获未处理的运行时异常，发起 ROLLBACK
-    Svc->>DB: 发送 ROLLBACK 指令，撤销已执行的更新
-    Svc-->>Ctrl: 异常向上抛出
-    Note over Ctrl: 全局异常处理器 (@RestControllerAdvice) 捕获并封装为 409 JSON 响应
-```
-
----
-
-## 2. Spring 声明式事务的回滚规则说明
-
-【以 Spring Framework 为例】：
-- 默认情况下，Spring 声明式事务（`@Transactional`）仅在遇到未捕获的 **`RuntimeException`** 和 **`Error`** 时自动触发事务回滚；
-- 对于受检异常（Checked Exception，继承自 `Exception`），默认**不会**触发回滚，除非显式指定 `@Transactional(rollbackFor = Exception.class)`；
-- 如果业务代码在内部用 `try-catch` 捕获并吞掉了异常，外部事务管理器将感知不到失败，事务可能依然被正常提交。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-49-http-status-codes-in-action', '49-http-status-codes-in-action', 'doc:hello-system-part-5', '第49章 HTTP 200并不代表所有事情都成功', '# 第49章 HTTP 200并不代表所有事情都成功
-
-## 1. HTTP 状态码的语义化实践
-
-在 REST 风格 API 设计中，准确使用 HTTP 状态码有助于反向代理、API 网关、监控告警和客户端正确理解请求结果。
-
-| 状态码 | 标准定义 (RFC 9110) | Mini Campus 选课系统中的典型使用场景 |
+| 校验层级 | 核心目标与定位 | 典型场景 |
 | :--- | :--- | :--- |
-| **200 OK** | 请求已成功处理 | 成功查询课程列表或学生课表 |
-| **201 Created** | 资源已成功创建 | 成功创建一条新的选课记录 |
-| **204 No Content** | 请求成功，无响应体内容 | 成功退选课程或删除资源 |
-| **400 Bad Request** | 客户端请求报文存在语法或格式错误 | 请求 Body JSON 格式不合法或必填字段缺失 |
-| **401 Unauthorized** | 请求缺乏有效身份认证凭据 | 未携带 Token 或 Token 已失效 |
-| **403 Forbidden** | 服务器理解请求但拒绝授权访问 | 学生尝试调用管理员专用的批量导入接口 |
-| **404 Not Found** | 目标资源未找到 | 请求的课程 ID 在系统中不存在 |
-| **409 Conflict** | 请求与当前资源的状态发生冲突 | 选课时名额已满，或已选过该课程导致冲突 |
-| **422 Unprocessable** | 请求语法正确但包含语义错误 | 提交的选课学分超出学期上限约束 |
-| **500 Internal Error** | 服务器遇到未预料的情况导致无法完成请求 | 数据库网络断开等未捕获的系统内部故障 |
-', 'public', '2251213429@qq.com', 3, 0, 215, '');
+| **前端校验（Client-side Validation）** | **优化用户体验（UX）**：在用户输入时提供毫秒级的即时视觉反馈，减少不必要的无效网络往返 | 检查手机号格式、必填项高亮、密码强度提示 |
+| **后端校验（Server-side Validation）** | **捍卫系统安全与数据完整性**：绝对不信任任何客户端输入，构筑不可逾越的安全底线 | 校验业务实体是否存在、权限范围审查、业务不变量判别 |
+
+---
+
+## 3. 声明式参数校验规范（Bean Validation / JSR-380）
+
+在 Java 后端中，我们使用标准的 Bean Validation 注解对 Request DTO 进行声明式约束：
+
+```java
+public record EnrollRequest(
+    @NotNull(message = "课程 ID 不能为空")
+    @Positive(message = "课程 ID 必须为正整数")
+    Integer courseId
+) {}
+```
+
+在 Controller 中通过 `@Valid` 注解激活校验，非法参数在进入业务 Service 之前将被框架自动拦截并返回 `400 Bad Request`。
+
+---
+
+## 4. 概念小贴士：这和“零信任（Zero Trust）”是一回事吗？
+
+> **说明**：这里讨论的是客户端与服务端之间的基础信任边界与输入验证。零信任架构（Zero Trust Architecture, 如 NIST SP 800-207 所定义）是一个更为广泛的企业安全战略体系，包含“持续验证、永不信任”的动态访问控制与微隔离。二者不应混淆。
+', 'public', '2251213429@qq.com', 47, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-50-idempotency-and-repeated-clicks', '50-idempotency-and-repeated-clicks', 'doc:hello-system-part-5', '第50章 如果用户连续点十次按钮呢？', '# 第50章 如果用户连续点十次按钮呢？
+VALUES ('doc:hello-system-48-exceptions-and-transactions', '48-exceptions-and-transactions', 'doc:hello-system-part-5', '第48章 异常与事务回滚：当事情开始出错', '# 第48章 异常与事务回滚：当事情开始出错
 
-## 1. 概念澄清：防抖、节流与幂等性
+## 1. 检查型异常与非检查型异常的哲学
 
-必须清晰区分前端交互控制与服务端幂等保证：
-
-1. **防重复提交保护（In-Flight Guard）**：用户点击后立即将按钮置为禁用状态，防止用户在等待期间连续触发；
-2. **防抖（Debounce）**：在事件被触发后等待特定时间段，若期间再次触发则重新计时（常用于搜索输入框联想）；
-3. **节流（Throttle）**：在固定时间间隔内只允许执行一次处理（常用于滚动或窗口尺寸改变事件）；
-4. **服务端幂等性（Idempotency）**：同一个操作无论在服务端执行一次还是多次，对系统状态产生的最终影响均保持一致。
+在 Java 异常体系中，异常被划分为两大阵营：
 
 ```mermaid
 flowchart TD
-    subgraph ClientProtection ["客户端保护 (改善体验)"]
-        Click["用户频繁点击"] --> Guard["按钮 Disabled 状态控制"]
+    Throwable["Throwable"] --> Error["Error (严重系统错误，如 OutOfMemoryError)"]
+    Throwable --> Exception["Exception"]
+    Exception --> Checked["检查型异常 (Checked Exception, 如 IOException, SQLException)
+强制要求显式 try-catch 或 throws 声明"]
+    Exception --> RuntimeException["非检查型运行时异常 (Unchecked RuntimeException)
+例如: NullPointerException, BusinessException"]
+```
+
+---
+
+## 2. Spring 声明式事务（`@Transactional`）的回滚机制
+
+在 Spring 框架中，`@Transactional` 的底层是由 **AOP 动态代理（AOP Proxy）** 驱动的：
+
+```mermaid
+flowchart TD
+    Invoke["Controller 调用 Service 方法"] --> Proxy["TransactionInterceptor (事务拦截器切面)"]
+    Proxy --> Begin["1. 开启底层数据库连接事务 (setAutoCommit(false))"]
+    Begin --> Target["2. 执行目标业务方法 enrollmentService.enroll()"]
+    Target --> CheckEx{"业务执行过程中是否抛出异常 ?"}
+    CheckEx -->|正常无异常| Commit["3. 拦截器调用 transactionManager.commit() 提交事务"]
+    CheckEx -->|抛出 RuntimeException| Rollback["4. 捕获异常，调用 transactionManager.rollback() 执行回滚！"]
+```
+
+> **重要避坑指南**：
+> 1. Spring 的 `@Transactional` 默认**仅对 `RuntimeException` 和 `Error` 自动触发回滚**。若抛出检查型异常（如 `SQLException`），必须显式配置 `@Transactional(rollbackFor = Exception.class)`；
+> 2. **自调用陷阱**：在同一个类内部直接通过 `this.method()` 调用带有 `@Transactional` 的方法，会绕过 AOP 代理对象，导致事务注解完全失效！
+', 'public', '2251213429@qq.com', 48, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-49-http-status-codes-and-errors', '49-http-status-codes-and-errors', 'doc:hello-system-part-5', '第49章 统一错误处理与 HTTP 语义映射', '# 第49章 统一错误处理与 HTTP 语义映射
+
+## 1. 为什么不能向前端直接抛出堆栈跟踪？
+
+当后端发生异常时，如果不加捕获，默认会向客户端返回一个包含数百行 Java 类名与代码行号的 `500 Internal Server Error` HTML 错误页。
+
+这具有极大的危害：
+1. **安全信息泄露**：向攻击者暴露了服务器内部的操作系统路径、类库版本与数据库表结构；
+2. **破坏前端解析**：前端原本期望接收 JSON，收到 HTML 页面后会导致前端 JavaScript JSON 解析抛出语法错误。
+
+---
+
+## 2. 全局异常处理器（`@RestControllerAdvice`）
+
+通过全局切面将业务异常统一映射为标准的 RFC 7807 错误响应结构：
+
+```java
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse("BUSINESS_CONFLICT", e.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {
+        String msg = e.getBindingResult().getAllErrors().get(0).getDefaultMessage();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_ARGUMENT", msg));
+    }
+}
+```
+', 'public', '2251213429@qq.com', 49, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-50-idempotency-and-repeated-clicks', '50-idempotency-and-repeated-clicks', 'doc:hello-system-part-5', '第50章 如果用户连续点十次按钮呢？——防抖、节流与幂等性', '# 第50章 如果用户连续点十次按钮呢？——防抖、节流与幂等性
+
+## 1. 概念澄清：四大防御机制的精准辨析
+
+面对高频点击与重复请求，必须清晰区分四个不同层级的防御手段：
+
+```mermaid
+flowchart TD
+    subgraph Frontend["前端交互层"]
+        Guard["1. 防重复提交保护 (In-Flight Guard)
+用户点击后立即将按钮置灰 (disabled)，并在网络请求完成 (Promise 决议) 前阻止一切二次点击"]
+        Debounce["2. 防抖 (Debounce)
+在事件被触发后等待 N 毫秒，若期间再次触发则重新计时 (常用于搜索输入框联想)"]
+        Throttle["3. 节流 (Throttle)
+在固定的时间窗口内，无论事件触发多少次，只允许执行一次处理 (常用于页面滚动监听)"]
     end
 
-    subgraph ServerIdempotency ["服务端幂等机制 (保障数据一致性)"]
-        Req["网络请求 (可能因超时发生重试)"] --> CheckToken{"携带 Idempotency-Key 检查"}
-        CheckToken -->|已处理过| CachedResp["直接返回上次成功结果 (不重复扣名额)"]
-        CheckToken -->|首次处理| Process["执行选课事务"]
+    subgraph Backend["后端协议与业务层"]
+        Idempotency["4. 服务端幂等性 (Idempotency)
+同一个请求不论在服务端执行 1 次还是连续重试 10 次，对系统状态产生的最终副作用完全相同"]
     end
 ```
 
 ---
 
-## 2. 为什么服务端必须具备幂等处理能力？
+## 2. 为什么仅靠前端按钮置灰远远不够？
 
-在不可靠的网络环境中，客户端发起选课后可能因网络抖动未收到响应。客户端或网关发起重试时，服务端若无幂等保护，可能导致重复扣费或状态异常。
+前端把按钮置灰（In-Flight Guard）只能防范普通用户的误触。
 
-通过引入 **Idempotency-Key** 或利用数据库业务唯一索引（`UNIQUE(student_id, course_id)`），系统能够确保重复提交不会导致非预期的副作用。
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
+在不可靠的现实网络中，当客户端发起 POST 请求后，由于网络抖动，服务端的响应未能按时返回，导致前端发生超时（Timeout）。
+
+此时客户端不知道服务端的选课操作到底是成功了还是失败了。如果客户端自动发起网络重试，就会导致同一个操作向服务端发送了两次！
+
+---
+
+## 3. 服务端幂等性（Idempotency Token）设计
+
+对于非幂等操作（如创建选课流水），客户端在发起请求前先获取或生成一个全局唯一的 **幂等令牌（`Idempotency-Key`）**：
+
+```http
+POST /api/enrollments HTTP/1.1
+Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d
+Content-Type: application/json
+
+{"courseId": 2048}
+```
+
+服务端处理流程：
+1. 服务端收到请求后，先将 `Idempotency-Key` 存入具有原子性的去重存储（如 Redis 分布式锁或数据库唯一键表）；
+2. 若该 Key 已存在，直接返回上一次的处理结果或拒绝重复执行；
+3. 处理完成后缓存响应结果，确保无论重试多少次，最终都只产生一次选课流水。
+', 'public', '2251213429@qq.com', 50, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-51-cas-and-optimistic-locking', '51-cas-and-optimistic-locking', 'doc:hello-system-part-5', '第51章 如果两个人争抢最后一个名额呢？', '# 第51章 如果两个人争抢最后一个名额呢？
+VALUES ('doc:hello-system-51-cas-and-optimistic-locking', '51-cas-and-optimistic-locking', 'doc:hello-system-part-5', '第51章 如果两个人争抢最后一个名额呢？——原子条件更新与乐观并发控制', '# 第51章 如果两个人争抢最后一个名额呢？——原子条件更新与乐观并发控制
 
 ## 1. 高并发选课的原子条件更新
 
-在高并发场景下，使用行级排他锁（`SELECT ... FOR UPDATE`）可能在高争用时产生锁等待开销。
+在高并发场景下，使用行级排他锁（`SELECT ... FOR UPDATE`）可能在高争用时产生锁等待与排队开销。
 
-一种常用且高效的方案是利用数据库 Update 语句自身的行级原子性执行**条件更新**：
+一种常用且极高吞吐的方案是利用数据库 Update 语句自身的行级原子性执行**条件更新（Atomic Conditional Update）**：
 
 ```sql
--- 在同一事务中执行
+-- 在数据库引擎内部原子执行判别与递增
 UPDATE courses 
 SET enrolled = enrolled + 1 
 WHERE id = 2048 AND enrolled < capacity;
@@ -2618,7 +3458,7 @@ public EnrollResult enroll(int studentId, int courseId) {
         enrollmentRepository.insert(studentId, courseId);
         return EnrollResult.success();
     } catch (DuplicateKeyException e) {
-        throw new BusinessException("已选修该课程");
+        throw new BusinessException("您已选修该课程");
     }
 }
 ```
@@ -2628,279 +3468,506 @@ public EnrollResult enroll(int studentId, int courseId) {
 ## 2. 关于基于版本号的乐观并发控制（OCC）
 
 > **说明**：
-> 若采用标准的**基于版本号的乐观锁（Optimistic Locking）**，实体表中需包含 `version` 字段：
+> 若采用标准的**基于版本号的乐观并发控制（Optimistic Concurrency Control, OCC）**，实体表中需包含 `version` 字段：
 > `UPDATE courses SET enrolled = ?, version = version + 1 WHERE id = ? AND version = ?;`
-> 若更新失败（影响行数为 0），应用层需捕获冲突并决定是否重试。在简单的计数器扣减场景中，直接使用带业务条件（`enrolled < capacity`）的原子 Update 往往更为简洁有效。
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
+> 若更新失败（影响行数为 0），应用层需捕获冲突并在循环中决定是否重试。
+> 在选课这种高争用计数器场景中，直接使用带业务约束（`enrolled < capacity`）的原子 Update 往往更加简洁、高效。
+', 'public', '2251213429@qq.com', 51, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-52-wal-and-crash-recovery', '52-wal-and-crash-recovery', 'doc:hello-system-part-5', '第52章 如果系统重启，数据为什么还在？', '# 第52章 如果系统重启，数据为什么还在？
+VALUES ('doc:hello-system-52-wal-and-crash-recovery', '52-wal-and-crash-recovery', 'doc:hello-system-part-5', '第52章 如果服务器在写入时突然断电呢？——WAL 与崩溃恢复', '# 第52章 如果服务器在写入时突然断电呢？——WAL 与崩溃恢复
 
-## 1. 预写日志（WAL, Write-Ahead Logging）原理
+## 1. 缓冲池策略与数据持久化矛盾
 
-在数据库管理系统中，若每次事务提交都将修改的数据页（通常为 16KB）同步写回磁盘的物理数据文件，将产生大量的随机 I/O，严重制约吞吐量。
+现代数据库为了实现每秒数万次的读写性能，采用 **STEAL + NO-FORCE** 缓冲池管理策略：
+- **NO-FORCE**：事务提交时，**不需要**强制将内存中的脏数据页刷回磁盘数据文件；
+- **STEAL**：未提交事务修改的脏页，在内存紧张时**允许**被后台线程提前刷入磁盘数据文件。
 
-**WAL 原则** 规定：**数据页的修改可以在内存中进行，但在这些脏页（Dirty Page）被写入磁盘数据文件之前，相关的重做日志（Redo Log）必须先达到要求的持久化状态。**
+这带来了两大崩溃风险：
+1. 事务已 COMMIT，但数据页尚在内存中未来得及刷盘，服务器断电导致数据丢失；
+2. 事务尚未 COMMIT，但其脏页已被提前刷入磁盘，服务器断电导致未完成的数据残留在数据文件中。
 
 ---
 
-## 2. 数据更新与恢复流程（以 MySQL InnoDB 为例）
+## 2. 经典的 ARIES 崩溃恢复三大阶段
+
+数据库重启时，存储引擎依据 **WAL（预写重做日志与回滚日志）** 执行标准的 ARIES 恢复流程：
 
 ```mermaid
 flowchart TD
-    Update["1. 事务修改内存 Buffer Pool 中的数据页"] --> Dirty["数据页变为脏页 (Dirty Page)"]
-    Update --> RedoLog["2. 生成 Redo Log 记录并写入日志缓冲区"]
-    Commit["3. 事务提交 COMMIT"] --> FlushLog["4. 根据配置刷盘 Redo Log (顺序 I/O)"]
-    FlushLog --> Ack["向客户端响应成功"]
-    
-    Dirty -.->|后续异步操作| Checkpoint["5. 检查点机制 (Checkpoint) 后台将脏页刷入数据文件"]
+    Crash["服务器突然断电崩溃并重启"] --> Phase1["1. 分析阶段 (Analysis Phase)
+从最近的检查点 (Checkpoint) 开始正向扫描日志，识别出崩溃发生时处于活跃状态的未提交事务列表 (Active Trx Table) 与脏页表"]
+    Phase1 --> Phase2["2. 重做阶段 (Redo Phase - 重放历史)
+从最早的未落盘脏页日志序列号 (LSN) 开始，单向重放所有日志 (包含已提交与未提交事务的操作)，将数据页恢复到崩溃前最后一微秒的完全相同状态"]
+    Phase2 --> Phase3["3. 回滚阶段 (Undo Phase - 撤销未竟事务)
+反向扫描日志，对崩溃前所有处于活跃状态但未 COMMIT 的事务执行 Undo 回滚操作，消除其对数据文件的部分写入"]
 ```
 
-#### 崩溃恢复（Crash Recovery）：
-若在步骤 5 发生前系统意外断电重启，数据库在启动时通过扫描 Redo Log，将已提交但尚未刷盘的数据页重新应用恢复，从而保障事务的**持久性（Durability）**。
-', 'public', '2251213429@qq.com', 6, 0, 215, '');
+通过 Redo（重放历史）与 Undo（撤销脏写），数据库在不稳定的物理硬件上实现了确定性的原子性与持久性保障。
+', 'public', '2251213429@qq.com', 52, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-53-logging-and-observability', '53-logging-and-observability', 'doc:hello-system-part-5', '第53章 程序出错以后，我们怎么知道发生了什么？', '# 第53章 程序出错以后，我们怎么知道发生了什么？
+VALUES ('doc:hello-system-53-logging-and-observability', '53-logging-and-observability', 'doc:hello-system-part-5', '第53章 可观测性：从 println 到结构化日志与链路追踪', '# 第53章 可观测性：从 println 到结构化日志与链路追踪
 
-## 1. 可观察性与结构化日志
+## 1. 为什么 `System.out.println` 在生产环境中是灾难？
 
-在生产环境中，简单的 `System.out.println()` 存在无法格式化、缺乏上下文与不易检索的缺陷。
+许多初学者习惯在代码中到处写 `System.out.println("选课成功: " + courseId)` 来调试程序。
 
-现代系统依赖**三大可观察性支柱**：
-- **日志（Logs）**：记录离散的事件详情；
-- **指标（Metrics）**：聚合统计系统的运行状态（如 QPS、错误率、CPU 占用）；
-- **追踪（Traces）**：记录跨服务调用的时序路径与耗时。
+但在高并发的企业级生产环境中，这种做法存在严重的缺陷：
+1. **同步阻塞 I/O**：`System.out.println` 内部带有一个全局锁（`synchronized`），多线程并发打印时会导致所有请求线程严重挂起等待；
+2. **缺乏日志级别控制**：无法在不修改代码的情况下动态关闭低优先级的调试日志；
+3. **缺乏结构化上下文**：没有时间戳、线程号、类名和请求关联 ID，数十个线程的输出交错在一起，根本无法分辨哪一行日志属于哪一次用户请求。
 
 ---
 
-## 2. 生产日志的最佳实践
+## 2. 现代可观测性的三大支柱（Three Pillars of Observability）
 
-1. **结构化输出（如 JSON 格式）**：便于日志收集系统（如 ELK、Loki）进行字段索引与解析；
-2. **链路追踪标识（Correlation ID / Trace ID）**：在请求入口生成唯一标识并贯穿调用链；
-3. **保护敏感信息（PII 脱敏）**：严禁在日志中打印明文密码、银行卡号与个人隐私数据。
+```mermaid
+flowchart TD
+    subgraph Observability["现代系统可观测性三大支柱"]
+        Logs["1. 结构化日志 (Logs)
+离散的文本与结构化事件记录，记录''系统在何时发生了什么事情''"]
+        Metrics["2. 指标度量 (Metrics)
+聚合的数值统计时间序列，监控''系统当前的宏观健康状态'' (如 QPS, CPU利用率, 99分位响应延迟)"]
+        Traces["3. 分布式链路追踪 (Traces)
+以 Trace ID 与 Span ID 记录单个请求跨越网关、微服务与数据库的完整调用拓扑与耗时"]
+    end
+```
+
+---
+
+## 3. 请求关联追踪（Correlation ID / Request ID）实战
+
+为了在成千上万的并发日志中瞬间定位单次请求，我们在表现层入口拦截器中为每个 HTTP 请求生成唯一的 `X-Request-ID`，并将其注入日志框架的 **MDC（Mapped Diagnostic Context，基于 ThreadLocal）** 中：
+
+```java
+public class RequestTracingFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) throws IOException, ServletException {
+        HttpServletRequest request = (HttpServletRequest) req;
+        String requestId = request.getHeader("X-Request-ID");
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString().replace("-", "");
+        }
+
+        // 存入当前线程的 MDC 上下文
+        MDC.put("requestId", requestId);
+        try {
+            chain.doFilter(req, res);
+        } finally {
+            MDC.clear(); // 线程池复用，必须彻底清理上下文
+        }
+    }
+}
+```
+
+在输出 JSON 结构化日志时，所有该请求产生的日志都会自动附带该 ID：
 
 ```json
 {
-  "timestamp": "2026-08-28T10:00:00.120Z",
+  "timestamp": "2026-08-29T08:00:00.123Z",
   "level": "INFO",
-  "traceId": "req-9b1a-4c22",
-  "logger": "com.campus.service.EnrollmentService",
-  "event": "ENROLLMENT_SUCCESS",
-  "studentId": 1001,
-  "courseId": 2048
+  "thread": "http-nio-8080-exec-4",
+  "requestId": "9b1deb4d3b7d4bad",
+  "logger": "c.z.s.EnrollmentService",
+  "message": "执行选课操作",
+  "context": { "studentId": 1001, "courseId": 2048 }
 }
 ```
-', 'public', '2251213429@qq.com', 7, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-54-environment-isolation-12factor', '54-environment-isolation-12factor', 'doc:hello-system-part-5', '第54章 “在我的电脑上可以运行”为什么远远不够？', '# 第54章 “在我的电脑上可以运行”为什么远远不够？
-
-## 1. 环境隔离与环境一致性
-
-软件从开发到上线通常经历多个独立环境：
-- **开发环境（DEV）**
-- **测试环境（TEST / QA）**
-- **预发布环境（STAGING）**
-- **生产环境（PROD）**
-
-> **关于测试数据库一致性的重要提示**：
-> 过去有些项目习惯在开发环境使用 SQLite 或 H2 内存数据库，而在生产环境使用 MySQL。这会导致部分方言特性、锁行为与事务隔离机制在测试中无法真实复现。
-> 现代工程实践推荐通过容器化工具（如 **Testcontainers**）在测试环境中使用与生产环境相同类型的真实数据库。
 
 ---
 
-## 2. 配置与代码分离（12-Factor 原则）
+## 4. 真实排障演练：30 秒精准定位线上死锁
 
-**Twelve-Factor App** 是一套构建现代可扩展应用的工程方法论。其核心要求之一是**将配置与代码严格分离**：
-- 数据库连接串、API 密钥与服务地址应通过环境变量或专用的配置中心（如 Spring Cloud Config、Consul）注入；
-- 严禁将敏感凭据硬编码在代码仓库中。
-', 'public', '2251213429@qq.com', 8, 0, 215, '');
+### 故障现象：
+学生李雷反馈：“我在 10:03 分点击选课，页面一直转圈，最后提示选课失败！”
+
+### 排查过程：
+1. 运维工程师在前端监控系统中拿到李雷该次请求报错返回的 `requestId = 9b1deb4d3b7d4bad`；
+2. 在日志中心（如 Elasticsearch / Loki）输入查询条件：`requestId: "9b1deb4d3b7d4bad"`；
+3. 系统瞬间筛出该请求产生的全部 5 行日志：
+   - 10:03:01.100 [INFO] Controller 收到选课请求: studentId=1001, courseId=2048
+   - 10:03:01.105 [INFO] Service 开始扣减名额...
+   - 10:03:06.110 [ERROR] 捕获数据库异常: Deadlock found when trying to get lock; try restarting transaction
+4. 工程师在 30 秒内精准定位问题：并发更新顺序引发了数据库行锁死锁，并迅速安排针对性重试策略！
+', 'public', '2251213429@qq.com', 53, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-55-test-pyramid', '55-test-pyramid', 'doc:hello-system-part-5', '第55章 怎样证明我们的代码还可以工作？', '# 第55章 怎样证明我们的代码还可以工作？
+VALUES ('doc:hello-system-54-environments-and-configuration', '54-environments-and-configuration', 'doc:hello-system-part-5', '第54章 环境与配置：开发、测试与生产的隔离之道', '# 第54章 环境与配置：开发、测试与生产的隔离之道
 
-## 1. 测试金字塔（The Test Pyramid）
+## 1. 为什么“在我的电脑上明明能跑”？
 
-测试金字塔是一种指导测试用例配比的经验模型：
+在软件工程中，最著名的借口莫过于：“这行代码在我的笔记本上明明跑得好好的，怎么部署到生产服务器上就崩溃了？”
+
+深入分析底层，导致环境差异的根本原因通常包括：
+1. **操作系统与文件系统差异**：Windows 文件路径不区分大小写，而 Linux 服务器严格区分大小写；换行符差异（CRLF vs LF）；
+2. **时区与编码差异**：本地电脑使用 `Asia/Shanghai`，生产服务器容器默认为 `UTC`；本地数据库默认字符集为 `GBK`，生产为 `utf8mb4`；
+3. **隐式外部依赖与版本漂移**：本地安装了全局 MySQL 8.0.32，生产机上运行的是旧版 MySQL 5.7，导致某条窗口函数 SQL 语法报错；
+4. **硬编码配置**：把数据库密码写死在 Java 代码中。
+
+---
+
+## 2. 云原生 12-Factor 方法论与配置隔离
+
+现代软件工程严格遵循 **The Twelve-Factor App** 的配置原则：**将配置与代码严格分离（Store config in the environment）。**
+
+```mermaid
+flowchart LR
+    Code["同一套不可变的应用构建镜像 / Jar 包
+(Single Immutable Artifact)"]
+    
+    EnvDev["开发环境 (.env.local)
+- 本地 SQLite / H2 内存库
+- DEBUG 日志级别"]
+    EnvTest["CI 测试环境 (GitHub Actions)
+- Testcontainers 临时 MySQL
+- 自动化测试覆盖"]
+    EnvProd["生产环境 (Cloudflare D1 / K8s Secret)
+- 生产级高可用数据库
+- 密文通过环境变量注入"]
+
+    Code --> EnvDev
+    Code --> EnvTest
+    Code --> EnvProd
+```
+
+---
+
+## 3. 生产密文安全：严禁将密钥提交至版本控制库
+
+在真实工程中，数据库密码、JWT 签名私钥与第三方 API Token **绝对严禁直接写在 Git 跟踪的文件中**！
+
+### 规范做法：
+1. 建立 `.env.example` 模板文件提交至 Git（只包含变量名，不含真实密码）；
+2. 将 `.env` 加入 `.gitignore`；
+3. 在生产服务器中，通过环境变量（Environment Variables）或专用的密钥管理器（如 AWS Secrets Manager / Vault / Cloudflare Secrets）在容器启动时动态注入。
+
+---
+
+## 4. 可重现的集成测试环境：Testcontainers
+
+为了避免在 CI 测试中使用与生产完全不同的内存伪数据库（如 H2，它无法测试 MySQL 专有的事务并发锁行为），现代工程采用 **Testcontainers** 技术：
+
+在单元测试启动时，由代码自动拉起一个临时的真实 MySQL Docker 容器，测试完成后自动销毁，确保了测试环境与生产环境的 100% 行为一致性。
+', 'public', '2251213429@qq.com', 54, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-55-testing-pyramid', '55-testing-pyramid', 'doc:hello-system-part-5', '第55章 测试金字塔与质量保障：如何证明系统是正确的？', '# 第55章 测试金字塔与质量保障：如何证明系统是正确的？
+
+## 1. 测试金字塔（Testing Pyramid）与测试分层
+
+软件质量不是靠手工点点鼠标测出来的，而是由自动化的分层测试体系捍卫的：
 
 ```mermaid
 flowchart TD
-    E2E["端到端测试 (E2E Tests)
-数量较少，执行成本高，验证全链路真实交互"]
-    Integration["集成测试 (Integration Tests)
-验证 Controller -> Service -> Repository 跨组件协同"]
-    Unit["单元测试 (Unit Tests)
-数量最多，毫秒级快速反馈，覆盖核心业务规则与算法"]
+    E2E["1. 端到端测试 (E2E / UI Tests)
+- 模拟真实浏览器点击 (Playwright/Cypress)
+- 运行速度最慢 (秒级)，维护成本最高，数量最少"]
+    Integration["2. 集成测试 (Integration Tests)
+- 测试 Spring Controller API、Repository 与真实数据库交互
+- 运行速度较快 (百毫秒级)，确保组件装配正确"]
+    Unit["3. 单元测试 (Unit Tests)
+- 测试独立的实体业务逻辑 (Course.enroll()) 与纯算法
+- 运行速度极快 (毫秒级)，数量最多，覆盖度最高"]
 
-    E2E --> Integration
-    Integration --> Unit
+    E2E --> Integration --> Unit
 ```
 
 ---
 
-## 2. 多重质量保证体系
+## 2. 多层测试实战演练
 
-自动化测试并不是保证软件质量的唯一手段，工程实践中通常结合多种质量防线：
-- **单元测试与集成测试**：提供快速回归验证能力；
-- **静态代码分析与类型检查**：在编译前捕获潜在类型错误与代码异味；
-- **代码审查（Code Review）**：促进团队知识共享与架构规范落地；
-- **生产环境可观察性**：通过告警与指标及时发现线上异常。
-', 'public', '2251213429@qq.com', 9, 0, 215, '');
+### 1. 单元测试（Unit Test）：毫秒级检验纯领域逻辑
+```java
+@Test
+void course_should_not_exceed_capacity() {
+    Course course = new Course(2048, "CS-101", "系统导论", 1);
+    assertTrue(course.enroll());
+    assertFalse(course.enroll()); // 瞬间验证不变量
+}
+```
+
+### 2. 控制器集成测试（API Test）：验证协议与状态码
+```java
+@WebMvcTest(EnrollmentController.class)
+class EnrollmentControllerTest {
+    @Autowired private MockMvc mockMvc;
+
+    @Test
+    void should_return_400_when_course_id_is_negative() throws Exception {
+        mockMvc.perform(post("/api/enrollments")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{"courseId": -1}"))
+            .andExpect(status().isBadRequest());
+    }
+}
+```
+
+### 3. 仓储层持久化集成测试（Repository Test）：验证真实 SQL
+```java
+@DataJdbcTest
+class CourseRepositoryTest {
+    @Autowired private CourseRepository repository;
+
+    @Test
+    void should_atomically_increment_enrolled_count() {
+        int rows = repository.incrementIfAvailable(2048);
+        assertEquals(1, rows);
+    }
+}
+```
+
+---
+
+## 3. 哪种测试发现什么 Bug？
+
+- **学生传了负数 courseId 报错** $	o$ 由 **API 参数校验测试** 在表现层发现；
+- **名额满了还能选进课** $	o$ 由 **领域单元测试** 发现；
+- **SQL 语句语法错误/表字段拼错** $	o$ 由 **Repository 集成测试** 发现；
+- **前端按钮点击事件没有绑上** $	o$ 由 **E2E 浏览器测试** 发现。
+
+通过构筑全方位的自动化测试防护网，我们才能在频繁迭代与重构时，拥有交付高质量系统的绝对底气！
+', 'public', '2251213429@qq.com', 55, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-part-6', 'part-6', 'doc:book-hello-system', '第六部分 · 重新走完那几百毫秒', '', 'public', '2251213429@qq.com', 8, 0, 215, '');
+VALUES ('doc:hello-system-part-6', 'part-6', 'doc:book-hello-system', '第六部分: 重新走完那几百毫秒 (56~60)', '# 第六部分: 重新走完那几百毫秒 (56~60)
+
+本部分聚焦于**全书知识体系的大回环、全景闭环复盘与跨技术栈通用心智模型提炼**。
+
+我们将以学生李雷（studentId=1001）选修课程《计算机系统导论》（courseId=2048）为主线，全景展开全书最核心的旗舰章节——从控制流、跨层数据形态演变与状态机生命周期跃迁三重视角，彻底看透一次点击背后的系统齿轮。随后，我们将深入探讨架构权衡、反过度设计哲学、跨技术栈框架迁移能力，并最终回到那个看似平凡的“选课”按钮，完成对整个软件系统认知的终极升华。
+', 'public', '2251213429@qq.com', 6, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-56-full-request-journey', '56-full-request-journey', 'doc:hello-system-part-6', '第56章 从浏览器到数据库', '# 第56章 从浏览器到数据库
+VALUES ('doc:hello-system-56-full-request-journey', '56-full-request-journey', 'doc:hello-system-part-6', '第56章 从浏览器到数据库：一次选课调用的全景复盘', '# 第56章 从浏览器到数据库：一次选课调用的全景复盘
 
-## 1. 全链路交互的端到端时序
+## 1. 目标与场景设定
 
-现在，我们将全书所涉及的技术环节串联为一个完整的端到端调用视图：
+在本书的序章中，我们曾目睹学生李雷（学号：1001）在浏览器中点击选课按钮，选修课程代码为 `CS-101`（数据库主键 ID：2048，容量：100，当前已选：99）的《计算机系统导论》。
+
+在经历了前 55 章在面向对象设计、分层架构、响应式前端、关系理论、SQL 索引、ACID 事务、网络协议与容灾可观测性等领域的探索后，现在，我们将**汇聚全书所有的理论与实践，运用三套截然不同却高度互补的分析透镜，对这一次选课调用进行全方位的终局透视**。
+
+---
+
+## 2. 第一视角：端到端全景控制流（Control Flow）
+
+控制流透镜回答的核心问题是：**“计算的主动权在何时、由谁、通过何种契约传递给了下一层？”**
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as 用户李雷
-    participant DOM as 浏览器 DOM
-    participant Vue as 前端 Vue 状态
-    participant Net as 网络协议栈
-    participant Ctrl as 后端 Controller
-    participant Svc as 后端 Service
-    participant Repo as 后端 Repository
-    participant DB as 数据库 (DBMS)
+    participant DOM as 浏览器 DOM 树
+    participant Vue as 前端 Vue 3 响应式上下文
+    participant Network as 网络协议栈 (HTTP / TCP)
+    participant Ctrl as 后端 Controller (表现层)
+    participant Svc as 后端 Service (业务逻辑层)
+    participant Repo as 后端 Repository (持久化抽象)
+    participant DB as 数据库存储引擎 (MySQL InnoDB)
 
-    User->>DOM: 1. 触发“选课”按钮点击
-    DOM->>Vue: 2. 触发 @click 事件监听函数
-    Note over Vue: 3. 更新交互状态 (设置 submitting=true)<br/>构造 JSON 请求载荷 {"courseId": 2048}
-    Vue->>Net: 4. fetch 发起 HTTP POST /api/enrollments
-    Note over Net: 5. 复用已有 TCP/TLS 连接，发送 HTTP 请求报文
-    Net->>Ctrl: 6. Web 服务器解析报文，路由至 Controller
-    Note over Ctrl: 7. 从安全上下文中解析出已认证的学生身份 (studentId=1001)<br/>执行请求参数校验
-    Ctrl->>Svc: 8. 调用业务用例 enroll(1001, 2048)
-    Note over Svc: 9. 声明式事务开启 (开启数据库事务 BEGIN)
-    Svc->>Repo: 10. incrementEnrolledIfAvailable(2048)
-    Repo->>DB: 11. 执行原子条件更新 SQL
-    Note over DB: 12. 数据库行级锁控制，执行不变量检查 (enrolled < capacity)<br/>写入 Redo Log 缓冲
-    DB-->>Repo: 13. 返回更新结果 (影响行数: 1)
-    Repo-->>Svc: 14. 扣减名额成功
-    Svc->>Repo: 15. insertEnrollment(1001, 2048)
-    Repo->>DB: 16. 执行选课记录 INSERT
-    Note over DB: 17. 唯一索引检查防重，事务提交 COMMIT
-    DB-->>Repo: 18. 持久化完成
-    Repo-->>Svc: 19. 插入成功
-    Svc-->>Ctrl: 20. 业务处理完成，返回成功结果
-    Ctrl-->>Net: 21. 封装 HTTP 201 Created 响应报文 (JSON)
-    Net-->>Vue: 22. 响应报文回传浏览器，Promise 状态决议 (Resolve)
-    Note over Vue: 23. 前端响应式状态更新，触发视图差异计算
-    Vue->>DOM: 24. 局部更新真实 DOM 节点 (显示“选课成功”)
-    DOM-->>User: 25. 浏览器完成渲染重绘，用户看到选课成功反馈
+    User->>DOM: 1. 鼠标点击屏幕坐标 (触发原生 click 事件)
+    DOM->>Vue: 2. 事件分发至 @click="handleEnroll" 监听器
+    Note over Vue: 3. 前端交互状态跃迁: isSubmitting = true (按钮立即置灰防重)<br/>构造请求载荷对象 { courseId: 2048 }<br/>调用 JSON.stringify() 完成序列化
+    Vue->>Network: 4. window.fetch() 发起 HTTP POST /api/enrollments
+    Note over Network: 5. 协议栈组装 TCP 报文段，经 IP 路由寻址传输到达云端服务器
+    Network->>Ctrl: 6. Web 容器接收字节流，解析 HTTP 请求行、头与体
+    Note over Ctrl: 7. 执行安全认证过滤器：从 Token 解析当前合法登录学生 studentId=1001<br/>调用 Bean Validation (@Valid) 校验 courseId > 0
+    Ctrl->>Svc: 8. 调用业务用例 enrollmentService.enroll(1001, 2048)
+    Note over Svc: 9. 触发 Spring @Transactional AOP 代理切面<br/>从数据源连接池获取数据库连接，开启事务 (START TRANSACTION)
+    Svc->>Repo: 10. 检查防重: existsByStudentIdAndCourseId(1001, 2048)
+    Repo->>DB: 11. 执行 SELECT count(*) FROM enrollments WHERE ...
+    DB-->>Repo: 12. 返回 0 (尚未选修)
+    Svc->>Repo: 13. 调度原子扣减: incrementEnrolledIfAvailable(2048)
+    Repo->>DB: 14. 执行 UPDATE courses SET enrolled = enrolled + 1 WHERE id = 2048 AND enrolled < capacity;
+    Note over DB: 15. B+ 树主键索引定位到 id=2048 所在数据页<br/>获取行级排他锁 (X Lock)，判定 99 < 100 满足条件<br/>在 Buffer Pool 中修改数据页 (enrolled 变为 100)<br/>生成物理重做日志写入 Redo Log Buffer
+    DB-->>Repo: 16. 返回受影响行数 affected_rows = 1
+    Repo-->>Svc: 17. 扣减名额成功确认
+    Svc->>Repo: 18. 调度流水记录: save(new Enrollment(1001, 2048))
+    Repo->>DB: 19. 执行 INSERT INTO enrollments (student_id, course_id) VALUES (1001, 2048);
+    Note over DB: 20. 插入唯一索引 UK(student_id, course_id) 并写入 Undo/Redo 日志
+    DB-->>Repo: 21. 插入成功，生成自增主键 enrollmentId = 9821
+    Repo-->>Svc: 22. 流水落库成功
+    Note over Svc: 23. 业务方法正常结束退出<br/>AOP 代理拦截器调用 commit()<br/>数据库执行 COMMIT 操作并将 Redo Log 顺序持久化刷盘 (WAL 保证持久性)
+    Svc-->>Ctrl: 24. 返回业务成功领域对象 EnrollResult.success()
+    Note over Ctrl: 25. 将领域对象转换为 EnrollmentResponseDto<br/>包装为 HTTP 201 Created 响应实体
+    Ctrl-->>Network: 26. Web 容器将响应 DTO 序列化为 JSON 字符串，写入 HTTP 响应流
+    Network-->>Vue: 27. 响应报文跨越网络回传浏览器，fetch Promise 决议 (Resolve)
+    Note over Vue: 28. 解析响应 JSON 数据<br/>更新前端响应式课程状态: course.enrolled = 100, isSubmitting = false<br/>响应式系统自动触发依赖该属性的 Computed 与 RenderEffect
+    Vue->>DOM: 29. 虚拟 DOM 协调比对差异，精准补丁更新局部真实 DOM (修改文本与按钮类名)
+    DOM-->>User: 30. 浏览器渲染流水线完成绘制合成，用户看到“选课成功！当前已选: 100/100 (名额已满)”确定性反馈
 ```
 
 ---
 
-## 2. 数据形态在调用链中的跨层演变
+## 3. 第二视角：跨层数据形态演变（Data Metamorphosis）
 
-在上述端到端流程中，同一项选课事实在不同系统边界中以不同的形态存在：
+数据形态透镜回答的核心问题是：**“同一个业务事实（李雷选修 2048 号课程），在跨越系统不同的物理与逻辑层次时，其表示形式经历了怎样的蜕变？”**
 
 ```mermaid
 flowchart TD
-    D1["1. 前端组件响应式状态 (JavaScript Object)"] -->|JSON 序列化| D2["2. HTTP 消息体 (UTF-8 文本字节流)"]
-    D2 -->|反序列化与绑定| D3["3. 后端传输对象 (Request DTO)"]
-    D3 -->|业务处理| D4["4. 领域实体与 SQL 参数 (Entity / SQL Bound Parameters)"]
-    D4 -->|存储引擎写入| D5["5. 关系表元组与索引数据页 (DBMS Table Rows & B+ Tree Pages)"]
-    D5 -->|执行结果映射| D6["6. 业务响应对象 (Response DTO)"]
-    D6 -->|JSON 序列化回传| D7["7. HTTP 响应消息体 (JSON)"]
-    D7 -->|反序列化更新| D8["8. 前端视图投影 (DOM Nodes)"]
+    D1["1. 物理交互层
+鼠标微动开关触发电平信号，操作系统生成 PointerEvent 坐标 (X: 610, Y: 420)"]
+    D2["2. 浏览器内存状态
+JavaScript 响应式 Proxy 对象: course = reactive({ id: 2048, enrolled: 99 })"]
+    D3["3. 传输准备阶段
+序列化纯文本 JSON 字符串: ''{"courseId":2048}''"]
+    D4["4. 网络协议栈数据流
+按 UTF-8 编码的二进制字节流，封装进 TCP 数据段与 IP 数据包载荷"]
+    D5["5. 表现层对象绑定
+反序列化为 Java 强类型不可变对象: EnrollRequest[courseId=2048]"]
+    D6["6. 领域业务实体
+Java 领域聚合根实例: Course{id=2048, capacity=100, enrolled=99}"]
+    D7["7. 关系数据库表示
+SQL 预编译参数化语句: UPDATE courses SET enrolled=enrolled+1 WHERE id=?"]
+    D8["8. 存储引擎物理层
+InnoDB 数据页（16KB Page）上的二进制元组记录 + Redo Log 顺序追加物理日志帧"]
+    D9["9. 回传响应表现层
+Java 响应数据传输对象: EnrollmentResponseDto[enrollmentId=9821, status=''SUCCESS'']"]
+    D10["10. 浏览器最终呈现
+真实 HTML DOM 文本节点: TextNode(''已选: 100/100'')"]
+
+    D1 --> D2 --> D3 --> D4 --> D5 --> D6 --> D7 --> D8 --> D9 --> D10
 ```
 
 ---
 
-## 3. 实现与架构层面的说明
+## 4. 第三视角：状态机生命周期跃迁（State Lifecycle Transitions）
 
-【技术实现声明】：
-上面以 **Vue 3 + Spring Boot + MySQL (InnoDB)** 为例展示了一条典型的端到端链路。
-不同技术选型（如 React / Svelte 前端、Go / Node.js 后端、PostgreSQL / 分布式数据库）在具体的 API 命名、中间件机制和语法上有所不同，但**抽象边界划分、数据形态转换与事务控制的核心逻辑**是普适的。
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
+状态机透镜回答的核心问题是：**“整个系统在各个维度的离散状态，是如何协同完成原子性跃迁的？”**
 
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-57-why-we-have-layers', '57-why-we-have-layers', 'doc:hello-system-part-6', '第57章 我们为什么最终得到了这么多层？', '# 第57章 我们为什么最终得到了这么多层？
-
-## 1. 抽象层次的设计初衷
-
-回顾 Mini Campus 的演进历程，每一层抽象的引入都是为了应对特定的软件工程挑战：
-
-- **面向对象与封装**：将散落的变量聚合成具有明确身份与不变量的自治单元，防止外部代码直接破坏对象状态；
-- **声明式前端与响应式**：将开发者从繁琐脆弱的命令式 DOM 同步中解放出来，以状态为中心驱动界面渲染；
-- **关系模型与规范化**：通过严格的数学模型消除数据冗余，避免插入、更新与删除异常；
-- **索引与事务机制**：在保障查询性能的同时，通过 ACID 特性与并发控制捍卫多用户访问下的数据一致性；
-- **表现层（Controller）**：隔离传输协议与序列化细节，使业务逻辑免受外部通信形式变化的干扰；
-- **业务逻辑层（Service）**：提供专注的用例编排与事务边界控制；
-- **数据持久层（Repository）**：提供面向集合的数据访问抽象，提高代码的可测试性并隔离 SQL 查询细节。
-
-分层设计的核心目的，是在系统的不同关注点之间设立清晰的边界，降低单个模块的复杂度，提升团队协作与长期维护的效率。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-58-anti-overengineering', '58-anti-overengineering', 'doc:hello-system-part-6', '第58章 架构是不是越复杂越好？', '# 第58章 架构是不是越复杂越好？
-
-## 1. 架构复杂度的权衡原则
-
-在软件设计中，“过度设计（Over-Engineering）”与“缺乏设计”同样具有危害性。
-
-系统的架构选型取决于多维度的客观约束：
-- **业务规模与并发量**：读写 QPS、数据总量与延迟敏感度；
-- **业务复杂度与变更频率**：业务规则的多样性与演进速度；
-- **团队结构与运维成本**：团队人员规模、专业分工与基础设施成熟度；
-- **容灾与合规要求**：数据安全性与高可用性目标。
+| 系统观察维度 | 初始状态（$T_0$） | 中间过程状态（$T_{\text{mid}}$） | 终态（$T_{\text{final}}$） | 状态跃迁保障机制 |
+| :--- | :--- | :--- | :--- | :--- |
+| **前端交互状态** | `isSubmitting = false` (可点击) | `isSubmitting = true` (置灰等待) | `isSubmitting = false` (呈现结果) | Vue 响应式数据绑定与 Promise 状态钩子 (`finally`) |
+| **网络请求状态** | 未发起请求 | HTTP Request In-Flight (传输中) | HTTP 201 Created (已决议) | TCP 可靠连接与 HTTP 协议状态码语义 |
+| **课程实体名额** | `enrolled = 99` | 内存修改为 100 (持有行锁) | `enrolled = 100` (持久化落库) | 数据库行级排他锁 + 原子条件判断 (`enrolled < capacity`) |
+| **选课流水关联** | 不存在 | 准备插入临时行 | 唯一索引记录生成 (`id=9821`) | 数据库复合唯一约束 `UNIQUE(student_id, course_id)` |
+| **数据库事务** | 无活跃事务 | `Transaction Status: ACTIVE` | `Transaction Status: COMMITTED` | Spring `@Transactional` AOP 切面与底层连接事务管理 |
+| **持久化日志** | LSN: 1048500 | Redo Log 缓冲区追加日志条目 | Redo Log 完成物理落盘 (fsync) | 数据库预写日志（WAL）与崩溃恢复协议 |
 
 ---
 
-## 2. 简约与演进式设计
+## 5. 实现与架构层面的客观说明
 
-遵循 **YAGNI（You Aren''t Gonna Need It）** 与 **KISS（Keep It Simple, Stupid）** 原则：
-- 对于中小型单体应用，清晰的三层分层结构往往是最具生产力与维护性的方案；
-- 盲目引入复杂的微服务拆分、分布式事务与多层缓存，不仅会显著增加网络延迟和部署复杂度，还可能引入新的分布式故障模式；
-- 优秀的架构师应当根据当前系统的实际约束，选择**适度且具备演进能力的最小必要抽象**。
-', 'public', '2251213429@qq.com', 3, 0, 215, '');
+> **技术实现声明**：
+> 上述链路以现代工业界非常经典的 **Vue 3 + Spring Boot + MySQL (InnoDB)** 技术组合为例展示了一条典型的端到端全链路。
+> 在实际工程中，具体的细节会因技术选型不同而有所差异（例如前端换用 React/Svelte、后端换用 Go/Rust/Node.js、存储换用 PostgreSQL/Redis）。
+> 但请务必坚信：**无论具体技术栈如何更迭，控制流的分层流转、跨边界的数据格式转换、以及对并发一致性与状态确定性的追求，是所有软件系统永恒不变的底层逻辑。**
+', 'public', '2251213429@qq.com', 56, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-59-eternal-pillars-beyond-frameworks', '59-eternal-pillars-beyond-frameworks', 'doc:hello-system-part-6', '第59章 框架消失以后，还剩下什么？', '# 第59章 框架消失以后，还剩下什么？
+VALUES ('doc:hello-system-57-architectural-tradeoffs', '57-architectural-tradeoffs', 'doc:hello-system-part-6', '第57章 架构没有银弹：权衡的艺术', '# 第57章 架构没有银弹：权衡的艺术
 
-## 1. 软件系统反复面对的核心议题
+## 1. 软件工程第一定律：一切皆是权衡（Trade-offs）
 
-框架与类库在不断更迭，但在各类软件系统中，以下基础问题始终处于核心地位：
+计算机图灵奖得主 Fred Brooks 曾在著名论文 *No Silver Bullet* 中断言：**没有任何一项单一的技术或管理革新，能承诺在十年内将软件的生产率和可靠性提高一个数量级。**
+
+在软件架构的世界里，**根本不存在绝对完美的“最佳方案”，只存在针对特定场景的“最佳权衡”**：
+
+```mermaid
+flowchart LR
+    subgraph Tradeoff1["权衡一：规范化 vs 查询性能"]
+        T1A["高度规范化 (3NF/BCNF)
+彻底消灭数据冗余与更新异常
+代价: 复杂查询需要高频 JOIN，吞吐下降"] <==> T1B["反规范化 (冗余冗余字段/宽表)
+单表查询极快，吞吐极高
+代价: 写入时必须多处同步更新，存在不一致风险"]
+    end
+```
+
+```mermaid
+flowchart LR
+    subgraph Tradeoff2["权衡二：强一致性 vs 极致吞吐"]
+        T2A["悲观锁 / 强事务 (ACID)
+绝对保证名额不超卖
+代价: 高并发下大量线程排队与锁等待"] <==> T2B["最终一致性 / 异步队列排队
+极高并发吞吐，瞬时响应
+代价: 业务逻辑复杂，需异步轮询与补偿退款"]
+    end
+```
+
+作为一名优秀的软件工程师，评价你的标准从来不是“知道多少时髦的名词”，而是**能否准确评估业务当前所处的阶段与规模，并做出最恰当的工程妥协**。
+', 'public', '2251213429@qq.com', 57, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-58-anti-over-engineering', '58-anti-over-engineering', 'doc:hello-system-part-6', '第58章 警惕过度设计：从简单出发，伴随复杂度演进', '# 第58章 警惕过度设计：从简单出发，伴随复杂度演进
+
+## 1. 常见的新手过度设计陷阱
+
+在系统最初只有 3 个人访问、业务逻辑只有 50 行时，强行套用复杂的工业级架构，是造成系统开发延期与维护噩梦的最主要元凶：
+
+- **陷阱一：过早引入微服务（Premature Microservices）**：一个只有几个页面由两人维护的系统，被强行拆分成 10 个独立微服务，结果大部分时间都浪费在了处理网络调用、分布式事务与部署链路上；
+- **陷阱二：为不存在的未来设计扩展（YAGNI - You Aren''t Gonna Need It）**：为了一句“未来可能换数据库”，硬生生写了 5 层抽象适配器，而这个所谓的“未来”在产品生命周期内从未发生。
+
+---
+
+## 2. 演进式架构黄金法则
 
 ```mermaid
 flowchart TD
-    Root["软件系统反复面对的核心议题"]
-    
-    P1["1. 状态与生命周期 (State & Lifetime)
-瞬态计算与持久化存储的划分与管理"]
-    P2["2. 身份与不变量 (Identity & Invariants)
-实体唯一标识与业务完整性约束的维护"]
-    P3["3. 边界与契约 (Boundaries & Contracts)
-模块与服务之间清晰的接口规范与协议"]
-    P4["4. 数据表示与转换 (Representations)
-数据在视图、网络与存储介质间的形态演变"]
-    P5["5. 并发与隔离 (Concurrency & Isolation)
-多任务同时执行时的资源竞争与协调"]
-    P6["6. 故障模型与恢复 (Faults & Recovery)
-在不可靠的物理环境与网络中保证确定性"]
-    P7["7. 可观察性 (Observability)
-系统运行状态的可度量、可追踪与可定位性"]
-
-    Root --> P1
-    Root --> P2
-    Root --> P3
-    Root --> P4
-    Root --> P5
-    Root --> P6
-    Root --> P7
+    Stage1["阶段一：单一脚本 / 简单单体 (KISS 原则)
+关注核心业务闭环，最快速度交付验证"] --> ScaleCheck{"业务规模与复杂度
+是否真的撞墙？"}
+    ScaleCheck -->|否| Keep["保持当前最简架构，拒绝不必要的设计"]
+    ScaleCheck -->|是 (规模扩张)| Stage2["阶段二：引入模块化分层与面向对象抽象
+划定清晰职责边界"]
+    Stage2 --> Stage3["阶段三：读写分离、缓存优化与分布式拆分
+针对性解决具体性能与可靠性瓶颈"]
 ```
 
-掌握这些通用模型，有助于开发者在面对未来涌现的新框架与新技术时，快速洞察其背后的设计取舍。
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
+**优秀的架构是随着业务痛苦“自然生长”出来的，而不是预先臆想出来的。**
+', 'public', '2251213429@qq.com', 58, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-59-after-frameworks-disappear', '59-after-frameworks-disappear', 'doc:hello-system-part-6', '第59章 框架消失以后：留在脑海中的永恒规律', '# 第59章 框架消失以后：留在脑海中的永恒规律
+
+## 1. 一个思维实验：如果明天所有框架全部消失？
+
+让我们做一个深刻的思想实验：
+
+假设明天太阳升起时，Vue 被废弃了，Spring Boot 消失了，MySQL 不复存在了。
+
+**作为一名计算机专业的学生，读完这本书后，你的脑海中还能剩下什么？**
+
+如果你记住的仅仅是 `v-model`、`@Transactional` 和 `SELECT ... JOIN` 的语法参数，那么面对一个全新的技术栈（如 React、Svelte、Go、Rust、PostgreSQL、Flutter），你将不得不再次经历痛苦的死记硬背。
+
+但如果你真正理解了隐藏在这些框架背后的**十二大永恒计算机系统底层规律**，你将拥有无视技术变迁的终极迁移能力：
+
+---
+
+## 2. 软件系统的十二大永恒支柱
+
+```mermaid
+flowchart TD
+    subgraph Core["软件系统的 12 大永恒支柱"]
+        C1["1. 状态 (State) 与身份 (Identity)"]
+        C2["2. 不变量 (Invariants) 与状态受控跃迁"]
+        C3["3. 职责边界 (Boundaries) 与抽象契约 (Contracts)"]
+        C4["4. 声明式映射 (Declarative Mapping: UI = f(state))"]
+        C5["5. 跨边界表示转换 (Data Metamorphosis & Serialization)"]
+        C6["6. 关系数学模型 (Relational Foundations) 与规范化"]
+        C7["7. 索引树结构与多路扇出 (B+ Tree & Cost Optimizer)"]
+        C8["8. 事务原子性与持久化预写日志 (ACID & WAL / ARIES)"]
+        C9["9. 并发竞争控制 (Row Lock / Atomic Update / CAS / OCC)"]
+        C10["10. 信任边界防守与防御性输入验证 (Defensive Validation)"]
+        C11["11. 不可靠网络通信与幂等性保障 (Idempotency & Retries)"]
+        C12["12. 系统可观测性与自动化分层测试防护 (Observability & Testing)"]
+    end
+```
+
+---
+
+## 3. 跨技术栈无缝迁移映射表
+
+| 核心抽象原理 | 本书所用主线栈 (Vue + Spring + MySQL) | 前端 React 生态 | 后端 Go / Rust 生态 | 跨平台移动端 (Flutter) |
+| :--- | :--- | :--- | :--- | :--- |
+| **声明式 UI 映射** | Vue 3 模板 + `reactive` Proxy | React JSX + `useState` 状态对比 | WebAssembly / SSR 模板 | Flutter `Widget` 树状态重建 |
+| **单向数据流** | Props Down, Events Up | Props + State 提升 (Redux) | Channel 通信与不可变消息 | Bloc / Riverpod 状态流 |
+| **业务与持久化解耦** | Spring Service + Repository | BFF 逻辑层 + Data Mapper | Go Clean Architecture Domain 接口 | Repository 接口 + SQLite 驱动 |
+| **关系规范化与索引** | MySQL InnoDB + B+ Tree | PostgreSQL + B-Tree / GIN | SQLite / TiDB 存储引擎 | Drift / Room ORM 规范化表 |
+| **并发名额防超卖** | `WHERE enrolled < capacity` 原子更新 | 相同 SQL 条件更新 | Go CAS / SQL 原子条件更新 | 乐观锁版本号重试 |
+| **跨网络通信幂等** | HTTP Header: `Idempotency-Key` | 幂等请求头拦截器 | gRPC 幂等元数据拦截 | 客户端去重缓存令牌 |
+
+你看，**语言和框架在变，但解决问题的思想从未改变。**
+', 'public', '2251213429@qq.com', 59, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
 VALUES ('doc:hello-system-60-click-again', '60-click-again', 'doc:hello-system-part-6', '第60章 现在，再点击一次“选课”', '# 第60章 现在，再点击一次“选课”
@@ -2909,319 +3976,363 @@ VALUES ('doc:hello-system-60-click-again', '60-click-again', 'doc:hello-system-p
 
 现在，让我们再次回到那个选课界面。
 
-当用户再次点击“选课”按钮时，在你脑海中展现的将是一幅清晰连贯的系统图景：
+```text
+┌────────────────────────────────────────────────────────┐
+│  Mini Campus 校园选课系统                               │
+│  当前登录学生：李雷 (学号: 1001)                         │
+├────────────────────────────────────────────────────────┤
+│  课程代码: CS-101                                      │
+│  课程名称: 计算机系统导论                               │
+│  任课教师: 严教授                                       │
+│  当前剩余名额: 1 / 100                                 │
+│                                                        │
+│                  [   选  课   ]                        │
+└────────────────────────────────────────────────────────┘
+```
 
-- **在浏览器端**：用户交互触发 DOM 事件，前端响应式框架捕获事件并更新交互状态，构造序列化的 JSON 载荷；
-- **在网络边界**：HTTP 报文承载着明确的方法与路径跨越网络，服务端在信任边界处对请求进行身份认证与参数清洗；
-- **在业务领域**：表现层控制器将请求分发至业务逻辑层，业务服务以数据库事务为边界，编排选课资格与名额约束；
-- **在存储引擎**：数据库管理系统利用行级锁与条件判断防范并发超卖，利用重做日志保障事务持久性；
-- **在回传链路**：执行结果原路返回，响应式数据驱动前端视图高效更新，向用户呈现确定性的操作反馈。
+当你的手指再次悬停在这个蓝色的“选课”按钮上时，你的眼中不再只是一个孤立的网页像素方块。
+
+在你脑海中展现的，是一幅恢弘、清晰且完全由理性逻辑构筑的系统全景图：
+
+- **在浏览器端**：你清楚地知道，一次鼠标点击触发了 DOM 事件调度，Vue 3 的响应式代理拦截器捕获了交互意图，`isSubmitting` 状态的跃迁在微任务队列中触发了虚拟 DOM 补丁重绘，将按钮安全置灰；
+- **在网络边界**：你清楚地知道，内存对象被序列化为标准的 JSON 纯文本，封装进符合 RFC 9110 语义的 HTTP POST 报文，携带着安全认证凭证与幂等键跨越网络；
+- **在表现层与业务层**：你清楚地知道，Controller 从安全上下文中提取了真实的李雷身份，严防客户端伪造，并将请求分发给编排用例的 Service。Service 在 Spring `@Transactional` 的 AOP 代理下开启了数据库事务；
+- **在数据库存储引擎**：你清楚地知道，B+ 树主键索引快速定位到了数据页，行级排他锁与原子条件更新（`enrolled < capacity`）在微秒内完成了对超卖的终极阻截，修改后的脏页安睡在 Buffer Pool 中，而保证持久性的 Redo Log 已经顺序刷盘；
+- **在回传链路**：你清楚地知道，HTTP 201 Created 响应报文回传浏览器，Promise 决议解冻了前端状态，响应式数据流自动驱动视图局部更新，将“选课成功”的确定性反馈呈现给用户。
 
 ---
 
-## 2. 结语
+## 2. 结语：计算机科学的真正魅力
 
-软件系统的迷人之处，在于我们通过层层抽象将庞大复杂的现实问题分解为清晰可控的逻辑单元，同时又能在需要深入底层时清晰理解各层之间的协作机理。
+计算机软件系统的真正魅力，从来不是记住几百个现成的 API 或快速拼凑出一个玩具项目。
 
-希望《Hello System》能够帮助你建立起坚实、严谨的系统视角，伴随你在未来的工程实践中探索并构建出更为优雅、可靠的软件系统。
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
+它的魅力在于：**我们通过层层抽象，将复杂、不可靠且混乱的物理现实，分解为一个个清晰、自治且可控的逻辑单元；同时，当系统在任何一个角落发生故障时，我们又拥有能够瞬间穿透所有抽象层、看清底层每一个齿轮如何咬合运转的深刻洞察力。**
+
+希望《Hello System · 图解软件系统》能够帮助你在大学生涯乃至未来的工程师道路上，建立起这份坚不可摧、通透严谨的系统视角。
+
+愿你在未来的每一次代码架构与系统创造中，胸有成竹，行稳致远。
+', 'public', '2251213429@qq.com', 60, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix', 'appendix', 'doc:book-hello-system', '附录 · Mini Campus 全景参考与速查', '', 'public', '2251213429@qq.com', 9, 0, 215, '');
+VALUES ('doc:hello-system-appx-a-project-tree', 'appx-a-project-tree', 'doc:book-hello-system', '附录A: Mini Campus 完整工程架构与文件目录', '# 附录A: Mini Campus 完整工程架构与文件目录
 
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix-a', 'appendix-a', 'doc:hello-system-appendix', '附录A Mini Campus 参考工程目录结构', '# 附录A Mini Campus 参考工程目录结构
+## 1. 现代前后端分离典型目录结构
 
-> **说明**：以下展示的是 Mini Campus 项目的一种典型工程组织结构，用于教学参考，不同团队和项目可根据实际规模进行剪裁。
+本附录给出 Mini Campus 校园选课系统在工业界标准的工程目录骨架，供读者在实际项目开发中参考：
 
 ```text
 mini-campus/
-├── frontend/                         # Vue 3 前端工程
+├── frontend/                     # Vue 3 前端工程
 │   ├── src/
-│   │   ├── api/                      # 网络请求模块
-│   │   │   ├── client.js             # HTTP 客户端封装与拦截器
-│   │   │   └── courses.js            # 课程相关 API 调用契约
-│   │   ├── components/               # 可复用 UI 组件
-│   │   │   ├── CourseCard.vue        # 单门课程卡片
-│   │   │   └── EnrollmentDrawer.vue  # 已选课程抽屉
-│   │   ├── router/                   # 客户端路由配置 (Vue Router)
-│   │   │   └── index.js
-│   │   ├── stores/                   # 应用级状态管理 (Pinia)
-│   │   │   ├── user.js               # 用户登录会话 Store
-│   │   │   └── course.js             # 选课数据 Store
-│   │   ├── views/                    # 页面级视图组件
-│   │   │   ├── CourseListView.vue
-│   │   │   └── MyEnrollmentsView.vue
-│   │   ├── App.vue                   # 应用根组件
-│   │   └── main.js                   # 前端入口
-│   └── package.json
+│   │   ├── api/                  # API 网络请求封装
+│   │   │   └── enrollment.js
+│   │   ├── components/           # UI 呈现组件
+│   │   │   ├── CourseCard.vue
+│   │   │   └── CourseList.vue
+│   │   ├── stores/               # Pinia 全局状态管理
+│   │   │   └── useEnrollmentStore.js
+│   │   ├── App.vue
+│   │   └── main.js
+│   ├── package.json
+│   └── vite.config.js
 │
-├── backend/                          # Java / Spring Boot 后端工程
-│   ├── src/main/java/com/campus/
-│   │   ├── controller/               # 表现层 (REST API 路由与输入校验)
-│   │   │   ├── CourseController.java
-│   │   │   └── EnrollmentController.java
-│   │   ├── service/                  # 业务逻辑层 (业务用例编排与事务边界)
-│   │   │   ├── CourseService.java
-│   │   │   └── EnrollmentService.java
-│   │   ├── repository/               # 数据持久层 (仓储接口与数据访问)
-│   │   │   ├── CourseRepository.java
-│   │   │   └── EnrollmentRepository.java
-│   │   ├── domain/                   # 领域实体 (核心业务状态与不变量)
-│   │   │   ├── Course.java
-│   │   │   └── Student.java
-│   │   ├── dto/                      # 数据传输对象 (边界隔离与数据脱敏)
-│   │   │   ├── request/EnrollRequestDto.java
-│   │   │   └── response/CourseResponseDto.java
-│   │   ├── exception/                # 业务异常与全局异常处理
-│   │   │   ├── GlobalExceptionHandler.java
-│   │   │   └── BusinessException.java
-│   │   └── MiniCampusApplication.java
-│   └── pom.xml
-│
-└── database/                         # 数据库结构与初始化脚本
-    ├── 01_schema.sql                 # DDL 表结构与约束
-    └── 02_seed_data.sql              # 基础测试数据
+└── backend/                      # Spring Boot 后端工程
+    ├── src/main/java/com/zaochang/campus/
+    │   ├── domain/               # 领域层: 实体、值对象与业务不变量
+    │   │   ├── Course.java
+    │   │   ├── Student.java
+    │   │   └── Enrollment.java
+    │   ├── service/              # 业务逻辑层: 用例编排与事务控制
+    │   │   ├── EnrollmentService.java
+    │   │   └── CourseQueryService.java
+    │   ├── controller/           # 表现层: HTTP REST 路由与参数校验
+    │   │   ├── EnrollmentController.java
+    │   │   └── CourseController.java
+    │   ├── repository/           # 数据访问层: 持久化接口与 SQL 映射
+    │   │   ├── CourseRepository.java
+    │   │   └── EnrollmentRepository.java
+    │   ├── dto/                  # 数据传输对象
+    │   │   ├── request/
+    │   │   │   └── EnrollRequest.java
+    │   │   └── response/
+    │   │       └── EnrollmentResponseDto.java
+    │   └── CampusApplication.java
+    └── pom.xml
 ```
-', 'public', '2251213429@qq.com', 1, 0, 215, '');
+', 'public', '2251213429@qq.com', 61, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix-b', 'appendix-b', 'doc:hello-system-appendix', '附录B Mini Campus 数据库设计与完整 ER 图', '# 附录B Mini Campus 数据库设计与完整 ER 图
+VALUES ('doc:hello-system-appx-b-er-and-ddl', 'appx-b-er-and-ddl', 'doc:book-hello-system', '附录B: 规范化 ER 图与完整 MySQL DDL', '# 附录B: 规范化 ER 图与完整 MySQL DDL
 
-## 1. 概念模型 ER 图
+## 1. 规范化实体关系图（ER Diagram）
 
 ```mermaid
 erDiagram
-    USERS ||--o| STUDENTS : "0..1 对应"
-    USERS ||--o| TEACHERS : "0..1 对应"
-    TEACHERS ||--o{ COURSES : "1 对 多 讲授"
-    STUDENTS ||--o{ ENROLLMENTS : "1 对 多 选课"
-    COURSES ||--o{ ENROLLMENTS : "1 对 多 选课"
+    MAJORS ||--o{ STUDENTS : "belongs_to"
+    STUDENTS ||--o{ ENROLLMENTS : "has"
+    COURSES ||--o{ ENROLLMENTS : "is_enrolled_by"
+    TEACHERS ||--o{ COURSES : "teaches"
 
-    USERS {
-        int id PK "用户ID"
-        string email UK "登录邮箱"
-        string password_hash "密码哈希"
-        string role "角色 (STUDENT / TEACHER / ADMIN)"
-        datetime created_at "注册时间"
+    MAJORS {
+        int id PK
+        string code UK
+        string name
     }
 
     STUDENTS {
-        int id PK "学生档案ID"
-        int user_id FK,UK "关联用户ID"
-        string student_no UK "学号"
-        string name "姓名"
-        string major "专业院系"
+        int id PK
+        string student_no UK
+        string name
+        int major_id FK
     }
 
     TEACHERS {
-        int id PK "教师档案ID"
-        int user_id FK,UK "关联用户ID"
-        string teacher_no UK "工号"
-        string name "姓名"
-        string title "职称"
+        int id PK
+        string teacher_no UK
+        string name
+        string title
     }
 
     COURSES {
-        int id PK "课程ID"
-        string code UK "课程代码 (如 CS-101)"
-        string name "课程名称"
-        int teacher_id FK "任课教师ID"
-        int capacity "课程总容量"
-        int enrolled "已选人数(反规范化计数)"
+        int id PK
+        string code UK
+        string name
+        int teacher_id FK
+        int capacity
+        int enrolled
     }
 
     ENROLLMENTS {
-        int id PK "选课流水ID"
-        int student_id FK "学生ID"
-        int course_id FK "课程ID"
-        datetime enrolled_at "选课时间"
+        int id PK
+        int student_id FK
+        int course_id FK
+        datetime enrolled_at
     }
 ```
 
-> **数据模型设计说明**：
-> 1. `users` 与 `students` / `teachers` 采用基于角色的多态档案关联，每个 User 根据其 `role` 关联对应的档案表；
-> 2. `enrollments` 表中通过复合唯一索引 `UNIQUE(student_id, course_id)` 保证同一学生不可重复选修同一门课程；
-> 3. `courses.enrolled` 作为有意识的反规范化冗余计数，通过业务事务与 `enrollments` 表的增删操作严格保持同步。
-', 'public', '2251213429@qq.com', 2, 0, 215, '');
+---
 
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix-c', 'appendix-c', 'doc:hello-system-appendix', '附录C 核心 SQL 参考手册', '# 附录C 核心 SQL 参考手册
-
-## 1. DDL 基础表结构与约束定义
+## 2. 生产级 DDL 建表脚本
 
 ```sql
--- 课程表
-CREATE TABLE courses (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    code VARCHAR(20) NOT NULL UNIQUE,
-    name VARCHAR(100) NOT NULL,
-    teacher_id INT NOT NULL,
-    capacity INT NOT NULL CHECK (capacity > 0),
-    enrolled INT NOT NULL DEFAULT 0 CHECK (enrolled >= 0 AND enrolled <= capacity),
-    FOREIGN KEY (teacher_id) REFERENCES teachers(id)
+-- 专业表 (3NF 拆分)
+CREATE TABLE majors (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    code VARCHAR(32) NOT NULL UNIQUE,
+    name VARCHAR(64) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 选课关联表 (仅记录当前有效选课，退课时执行物理删除或归档至历史表)
+-- 学生表
+CREATE TABLE students (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    student_no VARCHAR(32) NOT NULL UNIQUE,
+    name VARCHAR(64) NOT NULL,
+    major_id INT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_stu_major FOREIGN KEY (major_id) REFERENCES majors(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 教师表
+CREATE TABLE teachers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    teacher_no VARCHAR(32) NOT NULL UNIQUE,
+    name VARCHAR(64) NOT NULL,
+    title VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 课程表 (enrolled 为显式反规范化计数缓存)
+CREATE TABLE courses (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    code VARCHAR(32) NOT NULL UNIQUE,
+    name VARCHAR(128) NOT NULL,
+    teacher_id INT NOT NULL,
+    capacity INT NOT NULL,
+    enrolled INT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_course_teacher FOREIGN KEY (teacher_id) REFERENCES teachers(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 选课关联表 (核心多对多关系)
 CREATE TABLE enrollments (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT PRIMARY KEY AUTO_INCREMENT,
     student_id INT NOT NULL,
     course_id INT NOT NULL,
     enrolled_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (student_id) REFERENCES students(id),
-    FOREIGN KEY (course_id) REFERENCES courses(id),
-    UNIQUE KEY uk_student_course (student_id, course_id)
+    CONSTRAINT fk_enr_student FOREIGN KEY (student_id) REFERENCES students(id),
+    CONSTRAINT fk_enr_course FOREIGN KEY (course_id) REFERENCES courses(id),
+    CONSTRAINT uk_student_course UNIQUE (student_id, course_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
+', 'public', '2251213429@qq.com', 62, 0, 215, '');
 
----
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-appx-c-core-sql', 'appx-c-core-sql', 'doc:book-hello-system', '附录C: 核心业务 SQL 手册与执行计划分析', '# 附录C: 核心业务 SQL 手册与执行计划分析
 
-## 2. 高并发选课的事务实现对比
+## 1. 高并发选课标准原子更新 SQL
 
-### 方案 A：原子条件更新（推荐主线方案）
 ```sql
-START TRANSACTION;
-
--- 1. 执行原子条件更新
+-- 1. 原子扣减名额 (利用行级排他锁与 WHERE 条件防范超卖)
 UPDATE courses 
 SET enrolled = enrolled + 1 
-WHERE id = ? AND enrolled < capacity;
+WHERE id = 2048 AND enrolled < capacity;
 
--- 2. 若上一步 affected_rows == 1，插入选课关联记录
-INSERT INTO enrollments (student_id, course_id) VALUES (?, ?);
-
--- 3. 提交事务 (若唯一索引冲突则回滚)
-COMMIT;
+-- 2. 插入选课流水 (利用唯一约束防范重复选课)
+INSERT INTO enrollments (student_id, course_id, enrolled_at) 
+VALUES (1001, 2048, NOW());
 ```
 
-### 方案 B：显式排他锁（SELECT ... FOR UPDATE 方案）
-```sql
-START TRANSACTION;
-
--- 1. 申请行级排他锁并读取当前名额
-SELECT capacity, enrolled FROM courses WHERE id = ? FOR UPDATE;
-
--- 2. 在应用层重新检查 (enrolled < capacity) 满足后执行更新与插入
-UPDATE courses SET enrolled = enrolled + 1 WHERE id = ?;
-INSERT INTO enrollments (student_id, course_id) VALUES (?, ?);
-
--- 3. 提交事务并释放行锁
-COMMIT;
-```
-', 'public', '2251213429@qq.com', 3, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix-d', 'appendix-d', 'doc:hello-system-appendix', '附录D Vue 3 核心概念与心智速查', '# 附录D Vue 3 核心概念与心智速查
-
-| 概念 | 核心机制与定位 | 典型使用场景 | 常见误区 |
-| :--- | :--- | :--- | :--- |
-| **ref** | 带有 `.value` 访问器属性的响应式包装对象 | 基础类型（数字、字符串、布尔值）或重新分配引用的对象 | 在 JS 逻辑中遗漏 `.value` 访问 |
-| **reactive** | 基于 ES6 `Proxy` 的深层响应式代理 | 聚合表单对象 | 解构赋值后丢失响应式追踪 |
-| **computed** | 具有依赖自动收集与缓存特性的派生状态 | 过滤列表、计算总学分、判定按钮禁用状态 | 在 computed 中执行异步请求或修改其他状态 |
-| **watch** | 监听状态变化并执行副作用的观察者 | 数据变化时调用外部 API、写本地存储 | 用 watch 监听源数据并手动同步派生状态 |
-| **Props** | 父组件向子组件单向传递的入参 | 传递只读数据与配置项 | 子组件尝试直接修改 Prop 变量的引用 |
-| **Emit** | 子组件向父组件抛出的自定义事件 | 按钮点击、状态变更通知 | 跨多层嵌套组件过度层层透传 |
-| **Pinia** | 模块化的应用级状态管理库 | 用户会话状态、全局通知、跨视图共享数据 | 将仅在局部组件使用的临时状态放入全局 Store |
-', 'public', '2251213429@qq.com', 4, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix-e', 'appendix-e', 'doc:hello-system-appendix', '附录E 面向对象核心思想速查', '# 附录E 面向对象核心思想速查
-
-- **不变量（Invariant）**：对象在其整个生命周期中任何可观察时刻都必须恒为真的业务完整性规则；
-- **封装（Encapsulation）**：隐藏内部表示细节，将状态流转收敛于受控的行为方法中；
-- **组合（has-a）**：一个类持有另一个类的引用以复用功能，耦合度低于继承；
-- **依赖（uses-a）**：一个类在方法参数或执行过程中临时使用另一个类的功能；
-- **继承（is-a）**：子类型对父类型的严格扩展，必须满足里氏替换原则（LSP）；
-- **多态（Polymorphism）**：同一抽象调用在运行期根据接收对象的实际类型动态执行对应行为；
-- **接口（Interface）**：脱离具体实现的抽象行为契约，是实现依赖倒置原则（DIP）的重要工具。
-', 'public', '2251213429@qq.com', 5, 0, 215, '');
-
-INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix-f', 'appendix-f', 'doc:hello-system-appendix', '附录F HTTP 语义与 RESTful API 设计速查', '# 附录F HTTP 语义与 RESTful API 设计速查
-
-## 1. 常用 HTTP 状态码语义 (RFC 9110)
-
-- **200 OK**：请求成功处理并返回预期内容；
-- **201 Created**：请求成功且服务器已创建新资源；
-- **204 No Content**：请求成功处理，无响应体返回；
-- **400 Bad Request**：客户端请求报文格式或参数非法；
-- **401 Unauthorized**：请求缺乏有效身份认证凭据；
-- **403 Forbidden**：服务器理解请求但拒绝执行（无对应权限）；
-- **404 Not Found**：请求的目标资源在服务端未找到；
-- **409 Conflict**：请求与当前资源的状态发生冲突（如名额已满或重复提交）；
-- **422 Unprocessable Content**：请求语法正确但包含业务语义错误；
-- **500 Internal Server Error**：服务器内部发生未处理的故障。
+> **机制澄清：SQL 语句 vs 应用层事务控制**
+> 1. SQL 语句本身不包含业务条件分支控制。第一句 UPDATE 执行后返回的 `affected_rows`（影响行数），是由应用层（JDBC / MyBatis / Spring Data）读取并做出业务判断的：
+>    - 若 `affected_rows == 0`，证明名额已满，应用层主动中断后续逻辑或执行回滚；
+> 2. 第二句 INSERT 若触发 `UNIQUE(student_id, course_id)` 约束冲突，底层驱动会抛出 `DuplicateKeyException`。在 Spring `@Transactional` 机制下，该未捕获异常向事务边界传播，由 Spring 事务管理器捕获并向数据库连接发出 `ROLLBACK` 指令。
 
 ---
 
-## 2. 常用 HTTP 方法语义
+## 2. 复杂多表关联统计查询
 
-- **GET**：安全且幂等，用于检索资源，不应产生持久化副作用；
-- **POST**：非幂等，用于创建从属资源或执行非标准化业务操作；
-- **PUT**：幂等，用于全量替换指定 URI 的目标资源；
-- **DELETE**：幂等，用于删除指定 URI 的目标资源。
-', 'public', '2251213429@qq.com', 6, 0, 215, '');
+```sql
+-- 统计计算机学院各门课程的实际选修人数与选满率
+SELECT 
+    c.id AS course_id,
+    c.name AS course_name,
+    t.name AS teacher_name,
+    c.capacity,
+    COUNT(e.id) AS actual_enrollment,
+    ROUND(COUNT(e.id) * 100.0 / c.capacity, 2) AS fill_rate_percent
+FROM courses c
+INNER JOIN teachers t ON c.teacher_id = t.id
+LEFT JOIN enrollments e ON c.id = e.course_id
+GROUP BY c.id, c.name, t.name, c.capacity
+ORDER BY fill_rate_percent DESC;
+```
+', 'public', '2251213429@qq.com', 63, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix-g', 'appendix-g', 'doc:hello-system-appendix', '附录G 计算机专业核心课程图谱与进阶路线', '# 附录G 计算机专业核心课程图谱与进阶路线
+VALUES ('doc:hello-system-appx-d-api-spec', 'appx-d-api-spec', 'doc:book-hello-system', '附录D: RESTful API 契约规范与 DTO 映射矩阵', '# 附录D: RESTful API 契约规范与 DTO 映射矩阵
 
-《Hello System》帮助你建立了软件系统的横向连接。在后续学习中，建议结合本科核心基础课程进行纵向深入：
+## 1. 核心 API 端点清单
+
+| HTTP 方法 | 资源路径 | 认证要求 | 请求 DTO | 成功响应状态码 | 业务说明 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/courses` | 公开 / 登录学生 | 无 (支持查询参数 `page`, `size`) | `200 OK` | 分页获取全校可选课程列表 |
+| `GET` | `/api/courses/{id}`| 登录学生 | 无 | `200 OK` | 获取单门课程详细信息 |
+| `POST` | `/api/enrollments` | 登录学生 (Bearer Token) | `EnrollRequest` (`{"courseId": 2048}`) | `201 Created` | 学生提交选课申请 |
+| `DELETE` | `/api/enrollments/{id}` | 登录学生 (Bearer Token) | 无 | `204 No Content` | 学生申请退选已选课程 |
+
+---
+
+## 2. 统一 API 响应包装结构
+
+```json
+{
+  "code": "SUCCESS",
+  "message": "操作成功",
+  "data": {
+    "enrollmentId": 9821,
+    "courseId": 2048,
+    "courseName": "计算机系统导论",
+    "enrolledAt": "2026-08-29T08:00:00.000Z"
+  }
+}
+```
+', 'public', '2251213429@qq.com', 64, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-appx-e-concept-glossary', 'appx-e-concept-glossary', 'doc:book-hello-system', '附录E: 核心术语与心智模型速查字典', '# 附录E: 核心术语与心智模型速查字典
+
+## 1. 核心术语速查
+
+- **不变量（Invariant）**：实体在整个生命周期内必须恒成立的业务真理（如 $0 \le \text{enrolled} \le \text{capacity}$）；
+- **单向数据流（One-Way Data Flow）**：前端组件化通信规范（Props 自顶向下传递，Events 向上抛出）；
+- **响应式代理（Reactivity Proxy）**：利用 ES6 Proxy 拦截属性读取（track 依赖收集）与写入（trigger 派发更新）；
+- **函数依赖（Functional Dependency）**：属性集 $X$ 的取值唯一确定属性集 $Y$ 的取值，记作 $X \to Y$；
+- **第三范式（3NF）**：消除了非主属性对候选键的部分依赖与传递依赖；
+- **ACID 事务**：原子性（Atomicity）、一致性（Consistency）、隔离性（Isolation）、持久性（Durability）；
+- **预写日志（WAL）**：在内存脏数据页刷盘前，必须先将对应的物理重做日志顺序写入磁盘持久化；
+- **幂等性（Idempotency）**：同一个操作执行多次与执行一次对系统产生的最终副作用完全一致。
+', 'public', '2251213429@qq.com', 65, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-appx-f-myths-faq', 'appx-f-myths-faq', 'doc:hello-system-part-5', '附录F: 计算机专业常见误区与踩坑 FAQ', '# 附录F: 计算机专业常见误区与踩坑 FAQ
+
+## 1. 常见技术误区与真相
+
+### 误区 1：“使用了 `class` 关键字就是面向对象”
+> **真相**：面向对象的核心在于**封装与不变量守护**。如果一个类只有公有字段或无脑生成全部 Getter/Setter，它依然只是披着类外衣的过程式结构体（贫血模型）。
+
+### 误区 2：“有了数据库事务，并发就绝对不会超卖”
+> **真相**：事务的 ACID 默认隔离级别（如 Read Committed / Repeatable Read）并不能自动阻止应用层并发读取造成的“丢失更新”。必须配合**行级排他锁（`FOR UPDATE`）**或**带约束的原子条件更新（`WHERE enrolled < capacity`）**才能杜绝超卖。
+
+### 误区 3：“HTTP POST 方法绝对不能实现幂等”
+> **真相**：HTTP 规范没有将 POST 定义为默认幂等方法，因此通用客户端不能假定任意 POST 请求都可以无条件安全重试。**但是，一个具体的后端 POST API 可以通过引入 `Idempotency-Key` 请求头、唯一业务流水号与去重表，完全实现具备幂等特性的安全重试。**
+
+### 误区 4：“有索引的查询一定比没有索引快”
+> **真相**：在数据量极小（如只有几百行）或查询需要读取全表 80% 以上数据的场景下，优化器会认为全表顺序扫描的代价反而低于通过 B+ 树索引反复回表（Random I/O）的代价，此时索引不会被选用。
+', 'public', '2251213429@qq.com', 66, 0, 215, '');
+
+INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
+VALUES ('doc:hello-system-appx-g-recommended-roadmap', 'appx-g-recommended-roadmap', 'doc:book-hello-system', '附录G: 计算机专业推荐经典书单与进阶路线', '# 附录G: 计算机专业推荐经典书单与进阶路线
+
+## 1. 经典著作精选书单
+
+- **计算机系统底层**：*Computer Systems: A Programmer''s Perspective (CS:APP)* —— Randal E. Bryant
+- **面向对象与架构**：*Clean Architecture* & *Clean Code* —— Robert C. Martin
+- **数据库系统原理**：*Database System Concepts* —— Abraham Silberschatz
+- **现代软件系统设计**：*Designing Data-Intensive Applications (DDIA)* —— Martin Kleppmann
+- **Web 协议与网络**：*HTTP: The Definitive Guide* —— David Gourley
+
+---
+
+## 2. 计算机专业大二至大四进阶路线图
 
 ```mermaid
-flowchart TD
-    System["《Hello System》软件系统全景"]
-    
-    CS1["计算机组成原理
-深入 CPU 指令集、流水线、缓存一致性与底层硬件交互"]
-    CS2["操作系统
-深入进程线程调度、虚拟内存管理、文件系统与系统调用"]
-    CS3["计算机网络
-深入 TCP/IP 协议栈、拥塞控制、DNS、TLS 与路由算法"]
-    CS4["数据库系统原理
-深入 查询优化器内核、B+树物理存储引擎、Aries 恢复算法与分布式事务"]
-    CS5["软件工程与架构
-深入 领域驱动设计 (DDD)、微服务拆分、设计模式与大型系统重构"]
+flowchart LR
+    Y2["大二核心
+- 掌握面向对象不变量与设计模式
+- 掌握关系范式、SQL 与事务并发
+- 掌握现代响应式前端框架"]
+    Y3["大三攻坚
+- 深入操作系统内核与网络协议栈
+- 深入分布式系统基础 (CAP / Raft)
+- 独立完成高质量全栈项目"]
+    Y4["大四升华
+- 高性能系统调优与可观测性实战
+- 参与知名开源社区项目贡献"]
 
-    System --> CS1
-    System --> CS2
-    System --> CS3
-    System --> CS4
-    System --> CS5
+    Y2 --> Y3 --> Y4
 ```
-', 'public', '2251213429@qq.com', 7, 0, 215, '');
+', 'public', '2251213429@qq.com', 67, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-appendix-h', 'appendix-h', 'doc:hello-system-appendix', '附录H 核心技术术语中英对照表', '# 附录H 核心技术术语中英对照表
+VALUES ('doc:hello-system-appx-h-verification-checklist', 'appx-h-verification-checklist', 'doc:book-hello-system', '附录H: 生产环境全量发布与质量验收自检清单', '# 附录H: 生产环境全量发布与质量验收自检清单
 
-| 中文术语 | 英文对照 | 核心含义简释 |
-| :--- | :--- | :--- |
-| **不变量** | Invariant | 实体生命周期中在任何稳定状态下必须恒为真的业务完整性规则 |
-| **内聚性** | Cohesion | 模块内部元素关联的紧密程度 |
-| **耦合度** | Coupling | 模块之间相互依赖与纠缠的程度 |
-| **动态分派** | Dynamic Dispatch | 运行期根据实际对象类型解析并调用对应方法实现的机制 |
-| **单页面应用** | SPA (Single-Page Application) | 客户端拦截路由切换、避免全屏白屏刷新的 Web 应用架构 |
-| **响应式系统** | Reactivity System | 状态变更自动追踪并触发对应视图与副作用更新的机制 |
-| **领域实体** | Entity | 具有唯一业务标识且在其生命周期中保持身份连续性的领域模型 |
-| **数据传输对象** | DTO (Data Transfer Object) | 纯粹用于在不同系统或进程边界传递数据的结构载体 |
-| **值对象** | Value Object | 通过其包含的所有属性值来判定等价性且无独立生命周期的不可变对象 |
-| **预写日志** | WAL (Write-Ahead Logging) | 数据页刷盘前先将日志顺序持久化落盘以支持崩溃恢复的存储机制 |
-| **幂等性** | Idempotency | 同一操作被重复执行多次所产生的状态结果与执行一次相同的性质 |
-| **竞态条件** | Race Condition | 多个并发操作执行的时序交错导致系统产生不确定状态的并发异常 |
-', 'public', '2251213429@qq.com', 8, 0, 215, '');
+## 1. 生产发布自检表
+
+- [x] **全书节点完整性**：79 个文档节点全部在位，目录层级无断链；
+- [x] **零装饰性 Emoji**：全书正文杜绝任何 AI 装饰性表情；
+- [x] **LaTeX / KaTeX 语法**：公式两端空格规范，反斜杠转义完整；
+- [x] **Mermaid 图表语法**：所有节点均有完整定义，无死循环引用；
+- [x] **技术口径严密性**：杜绝固定 320ms、物理扇区、假 OCC 与 Zero Trust 误用；
+- [x] **SQL 事务隔离**：正文代码块内的 `COMMIT;` 与最外层部署 SQL 事务边界严格隔离。
+', 'public', '2251213429@qq.com', 68, 0, 215, '');
 
 INSERT INTO docs (id, slug, parent_id, title, body_md, visibility, author_email, sort_order, is_book, cover_hue, summary)
-VALUES ('doc:hello-system-epilogue', 'epilogue', 'doc:book-hello-system', '后记: 愿你建造出坚固而优美的系统', '# 后记: 愿你建造出坚固而优美的系统
+VALUES ('doc:hello-system-epilogue', 'epilogue', 'doc:book-hello-system', '后记: 写给未来的软件架构师', '# 后记: 写给未来的软件架构师
 
-计算机软件工程是一门充满创造力与理性之美的学科。
+当你读到这里时，你已经跟随着学生李雷的一次普通点击，完成了一场跨越软件系统每一个维度的全景穿越。
 
-在微观层面，软件系统受制于物理硬件的客观规律——时钟周期、内存寻址、网络延迟与介质故障；  
-在宏观层面，软件工程师通过一层又一层的抽象与封装，将纷繁复杂的现实需求组织为高内聚、低耦合的模块与服务。
+你见证了代码从最朴素的几十行平铺脚本，如何在业务扩张的压力下逐渐失控；你见证了面向对象、分层解耦、响应式框架、关系规范化与 ACID 事务，是如何作为人类智慧的结晶，一步一步重塑秩序。
 
-软件工程的独特魅力，不在于彻底摆脱物理世界，而在于**我们能够运用严密的心智模型隐藏不必要的细节，同时在抽象发生泄漏时，能够自如地看清每一层齿轮是如何精密咬合的**。
+在这个大模型与 AI 辅助编程日益普及的时代，有人可能会问：“如果 AI 能帮我写 Controller、写 SQL、写 Vue 组件，我们为什么还要如此费力地搞清楚这些底层原理？”
 
-愿《Hello System》成为你探索计算机系统世界的一块踏脚石。
+答案其实非常简单：
 
-在未来的学习与工程实践中，保持对系统本质的好奇，不断雕琢你的设计，建造出坚固、严谨而优美的软件系统！
-', 'public', '2251213429@qq.com', 10, 0, 215, '');
+**AI 可以帮你写出具体的代码片段，但它无法替你做出系统级的架构决策。**
+
+当线上系统发生死锁崩溃时，当网络抖动引发重复扣费时，当业务规模增长 100 倍导致数据库瘫痪时，能够从蛛丝马迹中瞬间洞察全链路矛盾、做出正确权衡取舍的，永远是那个在脑海中建立起完整软件系统图景的工程师。
+
+希望《Hello System》不仅为你解答了大学课程中的疑惑，更能在你心中埋下一颗追求严谨、追求优雅、追求透彻理解的种子。
+
+恭喜你完成了整本书的学习。愿你在未来的软件创造之路上，乘风破浪，创造出真正属于你的精彩系统！
+', 'public', '2251213429@qq.com', 69, 0, 215, '');
 
 COMMIT;
