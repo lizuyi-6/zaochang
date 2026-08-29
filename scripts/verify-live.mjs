@@ -101,7 +101,11 @@ async function run() {
       if (![301, 302, 307, 308].includes(res.statusCode)) {
         problems.push(`期望 3xx 重定向, 实际 HTTP ${res.statusCode}`);
       } else {
-        const target = res.location.split("?")[0].replace(/\/$/, "");
+        // Next.js redirect() 会把相对路径解析成绝对 URL 写进 Location 头, 两种形态都合法
+        let target = res.location.split("?")[0].replace(/\/$/, "");
+        if (target.startsWith("http://") || target.startsWith("https://")) {
+          target = new URL(target).pathname.replace(/\/$/, "");
+        }
         if (target !== check.expectRedirectTo) {
           problems.push(`重定向目标错误: ${res.location}`);
         }
