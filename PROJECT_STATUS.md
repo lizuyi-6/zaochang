@@ -1,5 +1,14 @@
 # 造场项目账本
 
+## 2026-08-29(七)《Hello System》全书修订版重发:内容收紧 1500 行 + 修复上轮误删的正文 COMMIT(已上线,生产复验通过)
+
+- 状态:已上线。commit `701ab0a`(生成器 8 文件 + SQL)push → ci `release-gates@701ab0a`(33222318529)与 deploy `deploy-production`(33222407704)双 success;生产 D1 以围栏感知剥离文件重导(写入 553 行),回读 79 节点与本地 Miniflare 一致(正文总长 76488 逐数吻合)。
+- 内容修订:全书正文净收窄约 1500 行(191KB→158KB),结构不变(书根 + 78 章节目录、6 部分 60 章);教学示例改用 course id 2048,书根摘要换新措辞;SQL 保持幂等全量替换语义。本地库经 `import-local-hellosystem.mjs` 同步新版。
+- **上轮缺陷披露与修复**:上一轮生产导入用 `sed '/^COMMIT;$/d'` 剥事务包裹,误删了正文 Markdown 围栏内的 2 处 `COMMIT;`(第 37 章两个并发控制 SQL 示例)——生产 `body_md` 受损 1 个文档。本轮改为围栏感知剥离(只删文件级 `BEGIN TRANSACTION;` 与末行 `COMMIT;`,保留正文 4 处),重导后线上 curl 验证第 37 章 `COMMIT;` 回归(×3)、`INSERT…``` ` 紧邻围栏的损伤模式清零。教训入 commit message:书内 SQL 代码块是正文,剥语句必须按围栏状态。
+- 证据(视觉亲验,headless Chrome 直打生产):书架卡片描述为新措辞;书主页「更新于 2026-08-29」+新摘要;`/bookshelf/hello-system/part-3/37-concurrency-and-locking` 200,面包屑/右栏目录(方案 A/方案 B FOR UPDATE)/进度 39/71 正常,底部代码块含完整 `START TRANSACTION;`。均截图目检。
+- 本轮改动可能引入的新风险:①无 schema/迁移变更,纯 docs 数据替换;②章节 URL 为层级路径(需含 part 段),扁平路径 404 是路由设计非缺陷;③匿名边缘缓存 60s 窗口内书架/章节可能短暂滞后旧版。
+- 未覆盖范围:60 章未逐章生产走查(本地全量已导 + 线上抽查 3 页);登录态阅读进度/「问 AI」未在新版复测。
+
 ## 2026-08-29(六)第三本书《Hello System · 图解软件系统》发布:60 章生成器与产物入库,CI 部署 + 生产 D1 导书(已上线,生产复验通过)
 
 - 状态:已上线。commit `e52ef89`(生成器/SQL/脚本 14 文件)push → ci `release-gates@e52ef89`(33190710797)success → deploy `deploy-production`(33190819982)success;生产 D1 导入 `content/import-hellosystem.sql`——远端 import 端点拒收显式 `BEGIN TRANSACTION/COMMIT`(与本地 node:sqlite 用法冲突),剥去事务包裹后 `d1 execute --file` 写入 474 行,回读 79 节点(书根 public + 78 章节/目录)与本地 Miniflare 库一致。
