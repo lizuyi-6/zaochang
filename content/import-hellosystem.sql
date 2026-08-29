@@ -3601,7 +3601,7 @@ EnrollmentInfo(
 - `Teachers(teacher_id, teacher_name)`
 - `Enrollments(student_id, course_id, grade)`
 
-至此，系统彻底消除了插入、更新与删除异常！
+经过这些分解，由当前函数依赖结构导致的主要插入、更新与删除异常已经被显著减少或消除。
 
 ---
 
@@ -3610,7 +3610,7 @@ EnrollmentInfo(
 > **BCNF 形式化定义**：
 > 关系模式 $R \in \text{1NF}$，对于 $R$ 上的每一个非平凡函数依赖 $X \to Y$，$X$ 都**必须是 $R$ 的超键**。
 
-BCNF 进一步消除了主属性对其他非键属性的依赖（3NF 允许右侧 $A$ 是主属性，而 BCNF 强制左侧 $X$ 必须是超键）。在绝大多数常规企业级建模中，达到 3NF/BCNF 即可保证极高的数据严密性与健壮性。
+BCNF 对函数依赖施加了比 3NF 更严格的约束：对于关系模式 $R$ 中每一个非平凡函数依赖 $X \to Y$，决定因素 $X$ 必须是 $R$ 的超键。两者的差异在于例外的存废——3NF 允许 $X$ 不是超键、但依赖右侧属性 $A$ 是主属性的情形存在；BCNF 不再提供这个例外：决定因素 $X$ 必须是超键。还需要明确的是，3NF/BCNF 能够减少由函数依赖和冗余结构引起的一类数据异常，但并不意味着数据库设计从此天然不存在并发、一致性、约束建模或业务规则问题。
 ', 'public', '2251213429@qq.com', 34, 0, 215, '')
 ON CONFLICT(id) DO UPDATE SET
   slug = excluded.slug,
@@ -3685,13 +3685,15 @@ flowchart TD
 
 让我们使用 MySQL `EXPLAIN` 分析索引对查询性能的决定性改变：
 
+> **教学示例说明**：下面的 `EXPLAIN` 输出是为了帮助理解访问路径变化而构造的教学示例。真实输出会受到数据规模、统计信息、MySQL 版本、索引选择和优化器成本模型的影响。`EXPLAIN` 中的 `rows` 通常表示**优化器估计**需要检查的行数，并不等同于运行时真实精确的扫描行数。
+
 ```sql
 -- 1. 无索引状态下的查询分析
 EXPLAIN SELECT * FROM courses WHERE code = ''CS-101'';
 ```
 | type | possible_keys | key | rows | Extra |
 | :--- | :--- | :--- | :--- | :--- |
-| **ALL** | NULL | NULL | **1000000** | Using where (全表扫描 100 万行) |
+| **ALL** | NULL | NULL | **1000000** | Using where (优化器估计需检查约 100 万行) |
 
 ```sql
 -- 2. 创建唯一索引
@@ -3702,7 +3704,9 @@ EXPLAIN SELECT * FROM courses WHERE code = ''CS-101'';
 ```
 | type | possible_keys | key | rows | Extra |
 | :--- | :--- | :--- | :--- | :--- |
-| **const** | idx_courses_code | **idx_courses_code** | **1** | NULL (常数级精准命中) |
+| **const** | idx_courses_code | **idx_courses_code** | **1** | NULL (优化器估计仅检查 1 行) |
+
+示例中估计的 `rows` 从大范围全表扫描下降到非常小的候选范围。若需要观察查询真实执行时的实际行数与耗时，MySQL 可以使用 `EXPLAIN ANALYZE` 获取实际执行信息。
 ', 'public', '2251213429@qq.com', 35, 0, 215, '')
 ON CONFLICT(id) DO UPDATE SET
   slug = excluded.slug,
@@ -5396,7 +5400,7 @@ course.enrolled = 100 (响应式更新)"]
 
 ## 4. 第三视角：状态机生命周期跃迁（State Lifecycle Transitions）
 
-状态机透镜回答的核心问题是：**“整个系统在各个维度的离散状态，是如何协同完成原子性跃迁的？”**
+状态机透镜回答的核心问题是：**“整个系统在各个维度的状态，是如何沿调用链依次推进，并最终形成一致的业务结果？”**
 
 | 系统观察维度 | 初始状态（$T_0$） | 中间过程状态（$T_{\text{mid}}$） | 终态（$T_{\text{final}}$） | 状态跃迁保障机制 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -5406,6 +5410,8 @@ course.enrolled = 100 (响应式更新)"]
 | **选课流水关联** | 不存在 | 准备插入临时行 | 唯一索引记录生成 (`id=9821`) | 数据库复合唯一约束 `UNIQUE(student_id, course_id)` |
 | **数据库事务** | 无活跃事务 | `Transaction Status: ACTIVE` | `Transaction Status: COMMITTED` | Spring `@Transactional` AOP 切面与底层连接事务管理 |
 | **持久化日志** | 无新增日志记录 | Redo Log 缓冲区追加日志条目 | 日志达到配置所要求的持久化级别 | 数据库预写日志（WAL）与崩溃恢复协议 |
+
+> **原子性边界说明**：数据库事务的原子性（Atomicity）只覆盖**数据库事务边界之内**的操作——上表中的 `UPDATE courses` 与 `INSERT enrollments` 要么一起提交、要么一起回滚。它**不覆盖**浏览器状态、客户端网络请求、HTTP 传输、响应返回与前端 UI 更新：整个端到端链路并不存在一个统一的单一原子事务。一个关键反例是：数据库已经 COMMIT 成功，但返回客户端的 HTTP 响应丢失——此时服务端状态已经成功改变，客户端却不知道操作是否成功。这正是第50章讨论网络重试与幂等性的原因之一。
 
 ---
 

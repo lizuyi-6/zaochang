@@ -82,7 +82,7 @@ export default async function BookPage({ params }: PageProps) {
   if (!found) {
     // V1 Freeze 兼容重定向:附录F 曾错误挂载在第五部分之下,
     // parent 修复后稳定 URL 为 /bookshelf/hello-system/appx-f-myths-faq。
-    // 旧层级 URL 永久 301 到新地址,不静默制造 404。
+    // 旧层级 URL 兼容重定向(临时 307)到新地址,不静默制造 404。
     if (slugs.length === 3 && slugs[0] === "hello-system" && slugs[1] === "part-5" && slugs[2] === "appx-f-myths-faq") {
       redirect("/bookshelf/hello-system/appx-f-myths-faq");
     }

@@ -551,7 +551,7 @@ EnrollmentInfo(
 - \`Teachers(teacher_id, teacher_name)\`
 - \`Enrollments(student_id, course_id, grade)\`
 
-至此，系统彻底消除了插入、更新与删除异常！
+经过这些分解，由当前函数依赖结构导致的主要插入、更新与删除异常已经被显著减少或消除。
 
 ---
 
@@ -560,7 +560,7 @@ EnrollmentInfo(
 > **BCNF 形式化定义**：
 > 关系模式 $R \\in \\text{1NF}$，对于 $R$ 上的每一个非平凡函数依赖 $X \\to Y$，$X$ 都**必须是 $R$ 的超键**。
 
-BCNF 进一步消除了主属性对其他非键属性的依赖（3NF 允许右侧 $A$ 是主属性，而 BCNF 强制左侧 $X$ 必须是超键）。在绝大多数常规企业级建模中，达到 3NF/BCNF 即可保证极高的数据严密性与健壮性。
+BCNF 对函数依赖施加了比 3NF 更严格的约束：对于关系模式 $R$ 中每一个非平凡函数依赖 $X \\to Y$，决定因素 $X$ 必须是 $R$ 的超键。两者的差异在于例外的存废——3NF 允许 $X$ 不是超键、但依赖右侧属性 $A$ 是主属性的情形存在；BCNF 不再提供这个例外：决定因素 $X$ 必须是超键。还需要明确的是，3NF/BCNF 能够减少由函数依赖和冗余结构引起的一类数据异常，但并不意味着数据库设计从此天然不存在并发、一致性、约束建模或业务规则问题。
 `
 });
 
@@ -622,13 +622,15 @@ flowchart TD
 
 让我们使用 MySQL \`EXPLAIN\` 分析索引对查询性能的决定性改变：
 
+> **教学示例说明**：下面的 \`EXPLAIN\` 输出是为了帮助理解访问路径变化而构造的教学示例。真实输出会受到数据规模、统计信息、MySQL 版本、索引选择和优化器成本模型的影响。\`EXPLAIN\` 中的 \`rows\` 通常表示**优化器估计**需要检查的行数，并不等同于运行时真实精确的扫描行数。
+
 \`\`\`sql
 -- 1. 无索引状态下的查询分析
 EXPLAIN SELECT * FROM courses WHERE code = 'CS-101';
 \`\`\`
 | type | possible_keys | key | rows | Extra |
 | :--- | :--- | :--- | :--- | :--- |
-| **ALL** | NULL | NULL | **1000000** | Using where (全表扫描 100 万行) |
+| **ALL** | NULL | NULL | **1000000** | Using where (优化器估计需检查约 100 万行) |
 
 \`\`\`sql
 -- 2. 创建唯一索引
@@ -639,7 +641,9 @@ EXPLAIN SELECT * FROM courses WHERE code = 'CS-101';
 \`\`\`
 | type | possible_keys | key | rows | Extra |
 | :--- | :--- | :--- | :--- | :--- |
-| **const** | idx_courses_code | **idx_courses_code** | **1** | NULL (常数级精准命中) |
+| **const** | idx_courses_code | **idx_courses_code** | **1** | NULL (优化器估计仅检查 1 行) |
+
+示例中估计的 \`rows\` 从大范围全表扫描下降到非常小的候选范围。若需要观察查询真实执行时的实际行数与耗时，MySQL 可以使用 \`EXPLAIN ANALYZE\` 获取实际执行信息。
 `
 });
 
