@@ -280,6 +280,71 @@ describe("Hello System V1 Freeze: 技术表述回潮拦截", () => {
   });
 });
 
+describe("Hello System V1 Freeze: Final Patch 定点修复回归", () => {
+  const bodies = allDocs.map((d) => ({ id: d.id, title: d.title, body: d.bodyMd }));
+  const ch34 = bodies.find((b) => b.id === "doc:hello-system-34-normalization-1nf-2nf-3nf-bcnf");
+  const ch35 = bodies.find((b) => b.id === "doc:hello-system-35-bplus-tree-indexes");
+  const ch56 = bodies.find((b) => b.id === "doc:hello-system-56-full-request-journey");
+
+  test("第34章: 旧 BCNF 错误表述与绝对化断言不得回潮", () => {
+    assert.ok(ch34, "第34章必须存在");
+    assert.ok(!ch34.body.includes("BCNF 进一步消除了主属性对其他非键属性的依赖"),
+      "BCNF 错误核心定义回潮");
+    assert.ok(!ch34.body.includes("彻底消除了插入、更新与删除异常"), "绝对化异常消除断言回潮");
+    assert.ok(!ch34.body.includes("即可保证极高的数据严密性与健壮性"), "绝对化严密性断言回潮");
+  });
+
+  test("第34章: BCNF 核心定义完整（非平凡函数依赖 X→Y ⇒ X 必须为超键）", () => {
+    assert.ok(ch34.body.includes("BCNF"), "缺少 BCNF");
+    assert.ok(ch34.body.includes("非平凡函数依赖"), "缺少非平凡函数依赖");
+    assert.ok(ch34.body.includes("超键"), "缺少超键");
+    assert.ok(/\$X \\to Y\$/.test(ch34.body), "缺少 X → Y 函数依赖表达");
+    assert.ok(/必须是[^。\n]{0,12}超键/.test(ch34.body), "缺少“X 必须为超键”的核心约束表达");
+  });
+
+  test("第56章: 禁止“端到端统一原子事务”错误心智模型回潮", () => {
+    assert.ok(ch56, "第56章必须存在");
+    for (const phrase of ["原子性跃迁", "端到端原子性", "全链路原子事务"]) {
+      assert.ok(!ch56.body.includes(phrase), `第56章发现错误抽象回潮: ${phrase}`);
+    }
+  });
+
+  test("第56章: 原子性边界说明在位并与第50章形成跨章呼应", () => {
+    assert.ok(ch56.body.includes("数据库事务边界"), "缺少数据库事务边界说明");
+    assert.ok(ch56.body.includes("响应丢失"), "缺少 COMMIT 后响应丢失反例");
+    assert.ok(ch56.body.includes("幂等性"), "缺少幂等性呼应");
+    assert.ok(ch56.body.includes("第50章"), "缺少与第50章(重试与幂等)的跨章呼应");
+    // 三视角结构必须保留,只修正“原子性”抽象
+    assert.ok(ch56.body.includes("全景控制流"), "控制流视角必须保留");
+    assert.ok(ch56.body.includes("数据形态"), "数据形态视角必须保留");
+    assert.ok(ch56.body.includes("状态机生命周期"), "状态机视角必须保留");
+  });
+
+  test("第35章: EXPLAIN 示例标注为教学示例,rows 口径为优化器估计", () => {
+    assert.ok(ch35, "第35章必须存在");
+    const explainIdx = ch35.body.indexOf("EXPLAIN");
+    assert.ok(explainIdx >= 0, "第35章必须包含 EXPLAIN 示例");
+    const section = ch35.body.slice(explainIdx);
+    assert.ok(section.includes("教学示例"), "EXPLAIN 示例必须标注为教学示例");
+    assert.ok(section.includes("估计"), "rows 必须标注为优化器估计口径");
+    for (const phrase of ["真实扫描100万行", "真实扫描 100 万行", "实际只扫描1行", "实际只扫描 1 行"]) {
+      assert.ok(!section.includes(phrase), `禁止把教学 rows 写成真实固定扫描行数: ${phrase}`);
+    }
+  });
+
+  test("附录F 重定向: 源码/verify-live/账本注释统一为 307,无“永久301”错误注释", () => {
+    const pageSrc = readFileSync(join(projectRoot, "app", "bookshelf", "[...slug]", "page.tsx"), "utf8");
+    assert.ok(pageSrc.includes('redirect("/bookshelf/hello-system/appx-f-myths-faq")'),
+      "旧层级 URL 必须保持 redirect() 到新稳定 URL");
+    assert.ok(!/永久\s*301/.test(pageSrc), "源码注释不得再声称永久 301");
+    assert.ok(pageSrc.includes("307"), "源码注释必须如实标注 307 临时重定向");
+    const verifyLive = readFileSync(join(projectRoot, "scripts", "verify-live.mjs"), "utf8");
+    assert.ok(!/永久\s*301/.test(verifyLive), "verify-live 不得声称永久 301");
+    const ledger = readFileSync(join(projectRoot, "PROJECT_STATUS.md"), "utf8");
+    assert.ok(!/永久\s*301/.test(ledger), "PROJECT_STATUS 不得声称永久 301");
+  });
+});
+
 describe("Hello System V1 Freeze: Markdown / Mermaid QA", () => {
   test("代码围栏全部成对闭合", () => {
     for (const doc of allDocs) {
