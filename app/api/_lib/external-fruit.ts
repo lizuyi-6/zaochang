@@ -1,7 +1,8 @@
 import { database } from "./community";
 import { FRUIT_POLICY } from "./fruit";
 import { hashToken, randomToken } from "../../oauth-session";
-import { isClientRedirectUri, type requireBearer } from "./oauth-provider";
+import { oauthCorsHeaders, isClientRedirectUri, type requireBearer } from "./oauth-provider";
+import { RateLimitError } from "./rate-limit";
 
 type ExternalIdentity = Awaited<ReturnType<typeof requireBearer>>;
 
@@ -42,6 +43,16 @@ export class ExternalFruitError extends Error {
   constructor(public code: string, public status = 409) {
     super(code);
   }
+}
+
+// oauth 家族 API(v1/fruit/*)的统一错误兜底:ExternalFruitError / RateLimitError
+// → 带 CORS 的 coded JSON。其余返回 null,调用方继续走 oauthJsonError
+// (未知错误一律 server_error,不泄露内部细节)。approve 路由是浏览器重定向流,
+// 错误不带 CORS 头,不在此列。
+export function externalApiErrorResponse(error: unknown): Response | null {
+  if (error instanceof ExternalFruitError) return Response.json({ error: error.code }, { status: error.status, headers: oauthCorsHeaders() });
+  if (error instanceof RateLimitError) return Response.json({ error: error.code }, { status: error.status, headers: oauthCorsHeaders() });
+  return null;
 }
 
 function validIdempotencyKey(value: string) {

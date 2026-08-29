@@ -1,7 +1,7 @@
-import { database, jsonError, optionalMember, requireMember } from "../_lib/community";
-import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
+import { optionalMember } from "../_lib/access-control";
+import { database, jsonError } from "../_lib/community";
+import { guardWrite } from "../_lib/route-guards";
 import { findProduct } from "../../lib/community-data";
-import { assertSameOrigin } from "../_lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +36,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const member = await requireMember();
-    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
-    const originError = assertSameOrigin(request);
-    if (originError) return originError;
-    await enforceRateLimit(await rateLimitKey("comment", member.email), 60, 60 * 60);
+    const guarded = await guardWrite(request, {
+      member: "member",
+      sameOrigin: true,
+      rate: { bucket: "comment", limit: 60, windowSeconds: 60 * 60 },
+    });
+    if (guarded instanceof Response) return guarded;
+    const member = guarded.member;
     const input = await request.json() as Record<string, unknown>;
     const targetType = String(input.targetType ?? "").slice(0, 24);
     const targetRef = String(input.targetRef ?? "").slice(0, 120);

@@ -1,6 +1,7 @@
-import { env } from "cloudflare:workers";
-import { database, jsonError, requireMember } from "../_lib/community";
+import { requireMember } from "../_lib/access-control";
+import { database, jsonError } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
+import { verifyScannedUpload } from "../_lib/upload-core";
 
 export const dynamic = "force-dynamic";
 
@@ -45,23 +46,10 @@ export async function POST(request: Request) {
       if (!Number.isInteger(projectId) || !name || !url.startsWith("/api/uploads/")) return Response.json({ error: "invalid_material" }, { status: 400 });
       const key = decodeURIComponent(url.slice("/api/uploads/".length));
       if (!/^[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(key)) return Response.json({ error: "invalid_material" }, { status: 400 });
-      const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
-      if (!bucket) return Response.json({ error: "uploads_unavailable" }, { status: 503 });
-      const object = await bucket.head(key);
-      const upload = await database().prepare(
-        `SELECT owner_email AS owner, visibility, purpose, scan_status AS scanStatus, sha256
-         FROM uploaded_files WHERE key = ?`,
-      ).bind(key).first<{ owner: string; visibility: string; purpose: string; scanStatus: string; sha256: string }>();
-      if (!object || !upload || upload.owner !== member.email) {
-        return Response.json({ error: "material_not_owned" }, { status: 403 });
-      }
-      if (upload.scanStatus !== "clean"
-        || object.customMetadata?.scanStatus !== "clean"
-        || object.customMetadata?.sha256 !== upload.sha256
-        || upload.visibility !== "private"
-        || upload.purpose !== "incubation_material") {
-        return Response.json({ error: "material_not_scanned" }, { status: 409 });
-      }
+      const check = await verifyScannedUpload({ key, ownerEmail: member.email, expectedPurpose: "incubation_material" });
+      if (check.bucketMissing) return Response.json({ error: "uploads_unavailable" }, { status: 503 });
+      if (check.verdict === "not_owned") return Response.json({ error: "material_not_owned" }, { status: 403 });
+      if (check.verdict === "not_scanned") return Response.json({ error: "material_not_scanned" }, { status: 409 });
       const project = await database().prepare("SELECT id FROM incubation_projects WHERE id = ? AND user_email = ?").bind(projectId, member.email).first();
       if (!project) return Response.json({ error: "project_not_found" }, { status: 404 });
       const material = await database().prepare(

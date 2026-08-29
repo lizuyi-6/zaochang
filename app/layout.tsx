@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { isAdminEmail, isFounderEmail } from "./api/_lib/admin";
+import { isAdminEmail, isFounderEmail } from "./api/_lib/access-control";
 import { database } from "./api/_lib/community";
 import { getChatGPTUser } from "./chatgpt-auth";
 import { SiteShell } from "./components/site-shell";

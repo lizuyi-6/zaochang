@@ -1,4 +1,5 @@
-import { database, jsonError, requireMember, type MemberIdentity } from "../_lib/community";
+import { requireMember, type MemberIdentity } from "../_lib/access-control";
+import { database, jsonError } from "../_lib/community";
 import { canViewDoc, listAllDocs, type DocRow } from "../_lib/docs";
 
 export const dynamic = "force-dynamic";

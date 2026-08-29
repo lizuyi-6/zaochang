@@ -1,4 +1,5 @@
-import { jsonError, requireMember } from "../../_lib/community";
+import { requireMember } from "../../_lib/access-control";
+import { jsonError } from "../../_lib/community";
 import { listUserConsents, revokeUserConsent } from "../../_lib/oauth-provider";
 
 export const dynamic = "force-dynamic";

@@ -1,4 +1,4 @@
-import { requireMember } from "../../../../_lib/community";
+import { requireMember } from "../../../../_lib/access-control";
 import { decideExternalPayment, externalPaymentReturnUrl, ExternalFruitError } from "../../../../_lib/external-fruit";
 import { publicAppOrigin } from "../../../../../oauth-session";
 

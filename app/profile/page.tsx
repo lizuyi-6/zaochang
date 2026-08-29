@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Award, BadgeCheck, Eye, Heart, Link2, LogIn, MapPin, Settings, ShieldCheck, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
-import { isAdminEmail, isFounderEmail } from "../api/_lib/admin";
+import { isAdminEmail, isFounderEmail } from "../api/_lib/access-control";
 import { database, ensureMember } from "../api/_lib/community";
 import { getChatGPTUser } from "../chatgpt-auth";
 import { AnimatedNumber } from "../components/animated-number";

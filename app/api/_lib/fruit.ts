@@ -1,4 +1,11 @@
 import { database } from "./community";
+// D1 约束嗅探的事实来源在 errors.ts;本地沿用旧短名(调用点 20 处,重命名导入保 diff 最小)。
+import {
+  errorMessageIncludes as errorIncludes,
+  isUniqueConstraintError as isUniqueError,
+  isWalletBalanceError as isBalanceError,
+  isWalletPendingError as isPendingError,
+} from "./errors";
 
 export const FRUIT_POLICY = {
   onboardingGrant: 0,
@@ -64,28 +71,6 @@ function validIdempotencyKey(value: string) {
   return /^[a-zA-Z0-9:_-]{8,120}$/.test(value);
 }
 
-function isUniqueError(error: unknown) {
-  return error instanceof Error && error.message.includes("UNIQUE constraint failed");
-}
-
-function isBalanceError(error: unknown) {
-  return error instanceof Error && (
-    error.message.includes("wallet_balance_nonnegative") ||
-    error.message.includes("CHECK constraint failed: balance")
-  );
-}
-
-function isPendingError(error: unknown) {
-  return error instanceof Error && (
-    error.message.includes("wallet_pending_nonnegative") ||
-    error.message.includes("CHECK constraint failed: pending_balance")
-  );
-}
-
-function errorIncludes(error: unknown, marker: string) {
-  return error instanceof Error && error.message.includes(marker);
-}
-
 function rewardGuardReason(error: unknown) {
   if (errorIncludes(error, "like_velocity_limit")) return "velocity_limit";
   if (errorIncludes(error, "like_actor_daily_limit")) return "actor_daily_limit";
@@ -103,6 +88,12 @@ async function wallet(email: string) {
             COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0) AS ledgerPendingBalance
      FROM wallets WHERE user_email = ?`,
   ).bind(email, email, email).first<WalletRow>();
+}
+
+// 钱包+账本聚合读的对外出口(此前 community GET 与 v1/fruit/wallet 各抄了一份同义 SQL):
+// 返回 materialized 与 ledger 双余额的行,完整性断言在 assertWalletIntegrity,读侧不重复实现。
+export function getWalletOverview(email: string) {
+  return wallet(email);
 }
 
 async function assertWalletIntegrity(email: string, row: WalletRow | null | undefined) {

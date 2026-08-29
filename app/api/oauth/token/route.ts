@@ -1,5 +1,6 @@
 import { exchangeToken, oauthCorsHeaders, oauthJsonError } from "../../_lib/oauth-provider";
-import { enforceRateLimit, RateLimitError, requestActorKey } from "../../_lib/rate-limit";
+import { externalApiErrorResponse } from "../../_lib/external-fruit";
+import { enforceRateLimit, requestActorKey } from "../../_lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,8 @@ export async function POST(request: Request) {
     const payload = await exchangeToken(request, params);
     return Response.json(payload, { headers: { ...oauthCorsHeaders(), pragma: "no-cache" } });
   } catch (error) {
-    if (error instanceof RateLimitError) return Response.json({ error: error.code }, { status: error.status, headers: oauthCorsHeaders() });
+    const mapped = externalApiErrorResponse(error);
+    if (mapped) return mapped;
     return oauthJsonError(error);
   }
 }

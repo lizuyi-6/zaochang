@@ -1,6 +1,7 @@
-import { env } from "cloudflare:workers";
-import { database, jsonError, requireMember } from "../_lib/community";
+import { requireMember } from "../_lib/access-control";
+import { database, jsonError } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
+import { verifyScannedUpload } from "../_lib/upload-core";
 
 const themes = ["coral", "mint", "blue", "yellow", "ink"];
 const categories = ["效率工具", "互动体验", "声音影像", "生活方式", "开发工具"];
@@ -33,21 +34,13 @@ export async function POST(request: Request) {
       return Response.json({ error: "invalid_image_url" }, { status: 400 });
     }
     if (imageUrl?.startsWith("/api/uploads/")) {
-      const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
       const key = decodeURIComponent(imageUrl.slice("/api/uploads/".length));
-      const object = bucket ? await bucket.head(key) : null;
-      const upload = await database().prepare(
-        `SELECT owner_email AS owner, visibility, purpose, scan_status AS scanStatus, sha256
-         FROM uploaded_files WHERE key = ?`,
-      ).bind(key).first<{ owner: string; visibility: string; purpose: string; scanStatus: string; sha256: string }>();
-      if (!object || !upload || upload.owner !== member.email) {
+      const check = await verifyScannedUpload({ key, ownerEmail: member.email, expectedPurpose: "product_cover" });
+      // 历史:bucket 不可用与对象缺失同归 not_owned(403),不区分 503。
+      if (check.bucketMissing || check.verdict === "not_owned") {
         return Response.json({ error: "product_cover_not_owned" }, { status: 403 });
       }
-      if (upload.scanStatus !== "clean"
-        || object.customMetadata?.scanStatus !== "clean"
-        || object.customMetadata?.sha256 !== upload.sha256
-        || upload.visibility !== "private"
-        || upload.purpose !== "product_cover") {
+      if (check.verdict === "not_scanned") {
         return Response.json({ error: "invalid_product_cover" }, { status: 400 });
       }
     }

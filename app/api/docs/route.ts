@@ -1,6 +1,6 @@
-import { requireDocEditor, requireFounder } from "../_lib/admin";
+import { requireDocEditor } from "../_lib/access-control";
+import { guardWrite } from "../_lib/route-guards";
 import { database, jsonError } from "../_lib/community";
-import { assertSameOrigin } from "../_lib/request-origin";
 import { DOC_COLUMNS, normalizeSlug, normalizeVisibility } from "../_lib/docs";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +19,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const editor = await requireDocEditor();
-    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
-    const originError = assertSameOrigin(request);
-    if (originError) return originError;
+    const guarded = await guardWrite(request, { member: "docEditor", sameOrigin: true });
+    if (guarded instanceof Response) return guarded;
+    const editor = guarded.member;
     const input = await request.json() as Record<string, unknown>;
     const title = String(input.title ?? "").trim().slice(0, 120);
     const slug = normalizeSlug(String(input.slug ?? title));
@@ -62,10 +61,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    await requireDocEditor();
-    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
-    const originError = assertSameOrigin(request);
-    if (originError) return originError;
+    const guarded = await guardWrite(request, { member: "docEditor", sameOrigin: true });
+    if (guarded instanceof Response) return guarded;
     const input = await request.json() as Record<string, unknown>;
     const id = String(input.id ?? "").slice(0, 80);
     if (!id) return Response.json({ error: "invalid_doc" }, { status: 400 });
@@ -130,10 +127,8 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    await requireFounder();
-    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
-    const originError = assertSameOrigin(request);
-    if (originError) return originError;
+    const guarded = await guardWrite(request, { member: "founder", sameOrigin: true });
+    if (guarded instanceof Response) return guarded;
     const input = await request.json() as Record<string, unknown>;
     const id = String(input.id ?? "").slice(0, 80);
     if (!id) return Response.json({ error: "invalid_doc" }, { status: 400 });

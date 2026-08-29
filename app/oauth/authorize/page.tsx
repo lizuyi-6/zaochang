@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRight, BadgeCheck, LockKeyhole, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { ensureMember, optionalMember } from "../../api/_lib/community";
+import { optionalMember } from "../../api/_lib/access-control";
+import { ensureMember } from "../../api/_lib/community";
 import { createAuthorizationRequest, OAUTH_SCOPES, OAuthProviderError } from "../../api/_lib/oauth-provider";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };

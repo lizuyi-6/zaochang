@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { requireFounder } from "../../api/_lib/admin";
+import { requireFounder } from "../../api/_lib/access-control";
 import { DocsManager } from "./docs-manager";
 
 export const metadata: Metadata = { title: "文档管理" };

@@ -1,4 +1,5 @@
-import { jsonError, requireMember } from "../../_lib/community";
+import { requireMember } from "../../_lib/access-control";
+import { jsonError } from "../../_lib/community";
 import { createDeveloperClient, listDeveloperClients, updateDeveloperClient } from "../../_lib/oauth-provider";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 

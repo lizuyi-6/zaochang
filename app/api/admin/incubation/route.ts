@@ -1,6 +1,7 @@
-import { adminAuditStatement, requireAdmin } from "../../_lib/admin";
+import { requireAdmin } from "../../_lib/access-control";
+import { guardWrite } from "../../_lib/route-guards";
+import { adminAuditStatement } from "../../_lib/admin";
 import { database, jsonError } from "../../_lib/community";
-import { assertSameOrigin } from "../../_lib/request-origin";
 
 const STAGES = ["提交申请", "资料审核", "初步沟通", "项目评估", "确认合作", "产品定位", "原型设计", "开发测试", "上线准备", "进入银河"];
 
@@ -21,10 +22,9 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const admin = await requireAdmin();
-    // CSRF 纵深:跨站写请求 403(见 request-origin.ts;SameSite=Lax 之外的防线)。
-    const originError = assertSameOrigin(request);
-    if (originError) return originError;
+    const guarded = await guardWrite(request, { member: "admin", sameOrigin: true });
+    if (guarded instanceof Response) return guarded;
+    const admin = guarded.member;
     const input = await request.json() as Record<string, unknown>;
     const projectId = Number(input.projectId);
     const status = String(input.status ?? "");
