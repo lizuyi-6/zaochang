@@ -1,5 +1,14 @@
 # 造场项目账本
 
+## 2026-08-29(十)《Hello System》书封上线:cover + banner 挂载书根节点(已上线,生产复验通过)
+
+- 状态:已上线。assets commit `a3fd9e0`(2 文件)push → ci `release-gates`(33234454853)success → deploy `deploy-production`(33234511587)success;生产 D1 对 `doc:book-hello-system` 一次性 UPDATE `cover_image`/`banner_image`(changes 1)并回读一致。
+- 内容:用户提供两张成图(竖版 1055×1491 / 横版 1491×1055),ffmpeg/libwebp 转为 `public/book-covers/hello-system-cover.webp`(900×1272,68.7KB)与 `hello-system-banner.webp`(1491×1055,75KB)——尺寸与 hello-computer 既定 WebP 惯例逐一对齐。
+- 机制:生成器 UPSERT 只写 id/slug/parent/title/body 等正文字段,不触碰 cover_image/banner_image,故本次 D1 直改在未来任意正文重发后持续有效(与 hello-computer 同路径);`import-hellosystem.sql` 与 `v1-snapshot.json` 零变更,冻结 78 节点结构不受影响。
+- 证据:两资源生产 200 且字节数与仓库一致(68700/75072);书架页 HTML 含卡片封面引用、书主页含 `book-banner` 横幅;headless Chrome 视觉亲验——书架三书卡片并列渲染正常、书主页顶部横幅与左栏小封面正常。
+- 本轮改动可能引入的新风险:①纯静态资源 + 单字段 UPDATE,无代码路径变更;②匿名边缘缓存 60s 窗口内书架可能短暂显示旧无封面卡片,本轮验证已在窗口外。
+- 未覆盖范围:登录态下"继续阅读"行的 32×38 小封面缩略未单独截图(同一 cover_image 字段,书架卡片已实证)。
+
 ## 2026-08-29(九)《Hello System》V1 Final Patch:ch34 BCNF 校正 + ch56 原子性边界 + ch35 EXPLAIN 标注 + appx-F 注释统一 307(已上线,生产复验通过)
 
 - 状态:已上线。patch commit `4ec618a`(5 文件,+88/-11)push → ci `release-gates@4ec618a`(33232264365)success → deploy `deploy-production`(33232323145)success。生产 D1 以围栏感知剥离文件执行 UPSERT 重导(changes 79 / rows_written 390 / 173ms),回读 hello-system 78 节点、全库 190 节点、孤儿节点 0、`reading_progress` 5→5 保全。冻结结构零变更:78 节点/60 章/doc id/slug/`v1-snapshot.json` 全部不变。
