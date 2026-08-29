@@ -5,31 +5,14 @@ import { ArrowDownUp, Check, Grid2X2, List, Search, SlidersHorizontal, Sparkles 
 import { useEffect, useMemo, useState } from "react";
 import { ProductCard } from "../components/product-card";
 import { products as seedProducts, type Product } from "../lib/community-data";
+import { hydrateProductRow } from "../lib/product-hydrate";
 
 const categories = ["全部", "互动体验", "效率工具", "声音影像", "生活方式", "开发工具"];
 
+const DISCOVER_IMAGE_FALLBACK = "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1200&q=85";
+
 function hydrateRemote(product: Record<string, unknown>): Product {
-  const theme = ["coral", "mint", "blue", "yellow", "ink"].includes(String(product.coverTheme)) ? String(product.coverTheme) as Product["coverTheme"] : "coral";
-  return {
-    id: Number(product.id),
-    ownerName: String(product.ownerName ?? "新创作者"),
-    ownerInitial: String(product.ownerName ?? "新")[0],
-    title: String(product.title),
-    description: String(product.description),
-    longDescription: String(product.description),
-    category: String(product.category),
-    demoType: String(product.demoType ?? "prototype"),
-    demoUrl: product.demoUrl ? String(product.demoUrl) : null,
-    coverTheme: theme,
-    price: Number(product.price ?? 0),
-    pricingModel: (["free", "one_time", "per_use"].includes(String(product.pricingModel)) ? String(product.pricingModel) : "free") as Product["pricingModel"],
-    likes: Number(product.likes ?? 0),
-    plays: Number(product.plays ?? 0),
-    image: product.imageUrl ? String(product.imageUrl) : "https://images.unsplash.com/photo-1558655146-9f40138edfeb?auto=format&fit=crop&w=1200&q=85",
-    accent: theme === "coral" ? "#ff5c3d" : theme === "mint" ? "#b9ecc8" : theme === "blue" ? "#92c6ef" : theme === "yellow" ? "#f1ca51" : "#171816",
-    release: "刚刚发布",
-    tags: [String(product.category), "社区新作"],
-  };
+  return hydrateProductRow(product, { release: "刚刚发布", tags: [String(product.category), "社区新作"], fallbackImage: DISCOVER_IMAGE_FALLBACK });
 }
 
 export function DiscoverClient() {

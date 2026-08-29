@@ -2,10 +2,9 @@ import { requireMember } from "../_lib/access-control";
 import { database, jsonError } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { verifyScannedUpload } from "../_lib/upload-core";
+import { normalizePricingModel, normalizeProductTheme } from "../../lib/product-hydrate";
 
-const themes = ["coral", "mint", "blue", "yellow", "ink"];
 const categories = ["效率工具", "互动体验", "声音影像", "生活方式", "开发工具"];
-const pricingModels = ["free", "one_time", "per_use"];
 
 export async function POST(request: Request) {
   try {
@@ -17,12 +16,10 @@ export async function POST(request: Request) {
     const category = String(input.category ?? "");
     const demoUrl = String(input.demoUrl ?? "").trim().slice(0, 500) || null;
     const imageUrl = String(input.imageUrl ?? "").trim().slice(0, 500) || null;
-    const pricingModel = pricingModels.includes(String(input.pricingModel)) ? String(input.pricingModel) : "free";
+    const pricingModel = normalizePricingModel(input.pricingModel);
     const requestedPrice = Math.max(0, Math.min(99, Math.floor(Number(input.price) || 0)));
     const price = pricingModel === "free" ? 0 : Math.max(1, requestedPrice);
-    const coverTheme = themes.includes(String(input.coverTheme))
-      ? String(input.coverTheme)
-      : "coral";
+    const coverTheme = normalizeProductTheme(input.coverTheme);
 
     if (title.length < 2 || description.length < 12 || !categories.includes(category)) {
       return Response.json({ error: "invalid_product" }, { status: 400 });

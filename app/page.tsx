@@ -5,16 +5,9 @@ import { AnimatedNumber } from "./components/animated-number";
 import { ProductCard } from "./components/product-card";
 import { Reveal } from "./components/reveal";
 import { challenges, circles, products } from "./lib/community-data";
+import { formatZhDateTime } from "./lib/format";
 
 export const dynamic = "force-dynamic";
-
-function displayDate(value: unknown) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "时间未记录";
-  const parsed = new Date(raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`);
-  if (Number.isNaN(parsed.getTime())) return raw;
-  return new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(parsed);
-}
 
 function Metric({ value }: { value: number | null }) {
   return value === null ? <span aria-label="数据暂不可用">--</span> : <AnimatedNumber value={value} />;
@@ -39,7 +32,7 @@ export default async function HomePage() {
       id: String(post.id ?? `post-${index}`),
       ownerName,
       ownerInitial: ownerName.trim()[0] || "造",
-      createdAt: displayDate(post.createdAt),
+      createdAt: formatZhDateTime(post.createdAt),
       content: String(post.content ?? ""),
       likes: Number(post.likes ?? 0),
       comments: Number(post.comments ?? 0),

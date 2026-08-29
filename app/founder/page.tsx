@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { isAdminEmail, requireFounder } from "../api/_lib/access-control";
 import { database } from "../api/_lib/community";
 import { FOUNDER_DISPLAY_NAME, products as showcaseProducts } from "../lib/community-data";
+import { reviewDisplayState } from "../lib/review-status";
 
 export const metadata: Metadata = { title: "创始人中心" };
 export const dynamic = "force-dynamic";
@@ -16,6 +17,8 @@ type OwnedProduct = {
   category: string;
   status: string;
   reviewStatus: string;
+  approvedVersion: number;
+  reviewVersion: number;
   updatedAt: string;
 };
 
@@ -32,7 +35,9 @@ export default async function FounderPage() {
   const officialProducts = showcaseProducts.filter((product) => product.founderOwned);
   const [ownedResult, incubationCount, pendingProductCount, pendingProjectCount] = await Promise.all([
     db.prepare(
-      `SELECT id, title, category, status, review_status AS reviewStatus, created_at AS updatedAt
+      `SELECT id, title, category, status, review_status AS reviewStatus,
+              review_version AS reviewVersion, approved_version AS approvedVersion,
+              created_at AS updatedAt
        FROM products WHERE owner_email = ? ORDER BY created_at DESC, id DESC`,
     ).bind(founder.email).all<OwnedProduct>(),
     db.prepare("SELECT COUNT(*) AS count FROM incubation_projects WHERE user_email = ?").bind(founder.email).first<CountRow>(),
@@ -91,7 +96,7 @@ export default async function FounderPage() {
       <header><div><span className="deep-eyebrow"><Sparkles size={14} /> ACCOUNT PRODUCTS / {String(databaseProducts.length).padStart(2, "0")}</span><h2>账户创建的产品</h2></div><Link href="/studio/new">发布新产品 <ArrowUpRight size={14} /></Link></header>
       {databaseProducts.length ? databaseProducts.map((product) => <article key={product.id}>
         <div><strong>{product.title}</strong><small>{product.category} · {product.updatedAt}</small></div>
-        <span>{product.reviewStatus === "approved" ? "审核通过" : product.reviewStatus === "rejected" ? "已驳回" : "等待预审"}</span>
+        <span>{(() => { const state = reviewDisplayState(product); return state === "live" ? "审核通过" : state === "rejected" ? "已驳回" : "等待预审"; })()}</span>
         <Link href="/studio">管理 <ArrowUpRight size={13} /></Link>
       </article>) : <div className="founder-empty"><Sparkles size={20} /><span><strong>还没有数据库产品</strong><small>上面的六项是造场预置资产；你之后从创作台发布的产品会出现在这里。</small></span></div>}
     </section>

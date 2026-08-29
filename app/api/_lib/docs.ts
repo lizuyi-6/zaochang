@@ -605,3 +605,55 @@ export async function deleteDoc(input: Record<string, unknown>): Promise<Respons
   if (result.meta.changes !== 1) return Response.json({ error: "doc_not_found" }, { status: 404 });
   return Response.json({ deleted: true, id });
 }
+
+// ---- 书页正文处理助手(此前内联在 bookshelf/[...slug]/page.tsx)----
+
+// 拍平书的目录树为"叶子章节"序列(非分段容器),用于右侧进度 N/总。
+export function collectLeaves(nodes: DocNode[]): DocNode[] {
+  const out: DocNode[] = [];
+  const walk = (ns: DocNode[]) => {
+    for (const n of ns) {
+      if (n.children.length > 0) walk(n.children);
+      else out.push(n);
+    }
+  };
+  walk(nodes);
+  return out;
+}
+
+// 从目录树收集"叶子章节 slug → 书内完整路径",供 renderDocHtml 重写 MkDocs 的
+// NN-slug.md 相对链接。同名 slug 只记首次出现(与原实现一致)。
+export function buildPathByLeafSlug(nodes: DocNode[]): Map<string, string> {
+  const pathByLeafSlug = new Map<string, string>();
+  const walk = (ns: DocNode[], prefix: string[]) => {
+    for (const n of ns) {
+      const path = [...prefix, n.slug];
+      if (n.children.length > 0) walk(n.children, path);
+      else if (!pathByLeafSlug.has(n.slug)) pathByLeafSlug.set(n.slug, path.join("/"));
+    }
+  };
+  walk(nodes, []);
+  return pathByLeafSlug;
+}
+
+export type ChapterHeading = { id: string; text: string; level: number };
+
+// 章节页给 h2/h3 注入稳定 id(ch-N),供右栏本章目录锚定 + scroll-spy。
+// renderDocHtml 经 sanitize 后 h2/h3 为裸标签(无属性),正则替换安全;不动安全消毒配置。
+export function injectChapterHeadingIds(bodyHtml: string): { html: string; headings: ChapterHeading[] } {
+  const headings: ChapterHeading[] = [];
+  let hi = 0;
+  const html = bodyHtml.replace(/<(h[23])>([\s\S]*?)<\/\1>/g, (m, tag: string, inner: string) => {
+    // inner 里 marked 转义过的实体需解码回纯文本,否则右栏目录把 & 显示成字面 &amp;。
+    // &amp; 必须最后解码,避免 &amp;lt; 这类被二次解码成 <。
+    const text = inner.replace(/<[^>]+>/g, "")
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+      .replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+      .trim();
+    if (!text) return m;
+    const id = `ch-${hi++}`;
+    headings.push({ id, text, level: tag === "h2" ? 2 : 3 });
+    return `<${tag} id="${id}">${inner}</${tag}>`;
+  });
+  return { html, headings };
+}

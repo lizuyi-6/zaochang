@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatedNumber } from "../components/animated-number";
 import { Reveal } from "../components/reveal";
+import { reviewDisplayState } from "../lib/review-status";
 
 type StudioProduct = { id: number; title: string; category: string; imageUrl?: string | null; coverTheme: string; plays: number; likes: number; status: string; reviewStatus: "pending_review" | "approved" | "rejected"; reviewVersion: number; approvedVersion: number; reviewedAt?: string | null; reviewNote?: string; submittedAt: string; createdAt: string };
 type Wallet = { lifetimeEarned: number };
@@ -13,8 +14,9 @@ type AuthoredBook = { id: string; slug: string; title: string; summary: string; 
 type RecentBook = { bookId: string; bookSlug: string; bookTitle: string; coverHue: number; coverImage: string; visibility: "public" | "members" | "private"; summary: string; chapterId: string; chapterTitle: string; href: string; updatedAt: string };
 
 function reviewLabel(product: StudioProduct) {
-  if (product.reviewStatus === "approved" && product.approvedVersion === product.reviewVersion) return { text: "已发布", className: "live" };
-  if (product.reviewStatus === "rejected") return { text: "未通过", className: "rejected" };
+  const state = reviewDisplayState(product);
+  if (state === "live") return { text: "已发布", className: "live" };
+  if (state === "rejected") return { text: "未通过", className: "rejected" };
   return { text: "审核中", className: "pending" };
 }
 

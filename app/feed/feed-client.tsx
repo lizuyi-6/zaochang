@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { products, type CommunityPost } from "../lib/community-data";
+import { formatZhDateTime } from "../lib/format";
 
 type Comment = {
   id: number;
@@ -28,22 +29,6 @@ type Comment = {
   createdAt: string;
 };
 type LiveRoomStat = { topic: string; recentMessages: number };
-
-function publishedAt(value: unknown) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "时间未记录";
-  const parsed = new Date(
-    raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`,
-  );
-  if (Number.isNaN(parsed.getTime())) return raw;
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Shanghai",
-  }).format(parsed);
-}
 
 function hydratePost(post: Record<string, unknown>): CommunityPost {
   const name = String(post.ownerName ?? "新创作者");
@@ -55,7 +40,7 @@ function hydratePost(post: Record<string, unknown>): CommunityPost {
     ownerInitial: name[0],
     role: "社区创作者",
     content: String(post.content),
-    createdAt: publishedAt(post.createdAt),
+    createdAt: formatZhDateTime(post.createdAt),
     likes: Number(post.likes ?? 0),
     comments: Number(post.comments ?? 0),
     color: colors[Math.abs(id || 0) % colors.length],
