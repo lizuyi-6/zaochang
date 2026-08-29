@@ -1,5 +1,18 @@
 # 造场项目账本
 
+## 2026-08-29(八)《Hello System》V1 冻结:78 节点定数 + UPSERT 发布语义 + 冻结回归测试(已上线,生产复验通过)
+
+- 状态:已上线。冻结 commit `95bc851`(16 文件,+3422/-378)push → ci `release-gates@95bc851`(33230069204)success → deploy `deploy-production`(33230133286)success;后续 `511e903` 修正 verify-live 重定向比对(见下)。生产 D1 以围栏感知剥离文件执行 UPSERT 重导(changes 79 / rows_written 390 / 180ms),回读 hello-system 78 节点、全库 190 节点、孤儿节点 0。
+- **节点定数**:真实节点数为 **78**(1 书根 + 序言 + 序章 + 6 部分容器 + 60 章(12+12+13+9+9+5) + 8 附录 + 后记);此前账本中"79 节点"为口径误记(把书根与"78 章节目录"重复计数),生产 `COUNT(*)` 实证 78。78 为 V1 权威定数,生成器头注释、附录 H、冻结测试与快照 `v1-snapshot.json` 全部统一。
+- **发布语义(最高优先级工程修复)**:`build-all.mjs` 由"DELETE 全书 docs + 清 reading_progress 再重建"改为 `INSERT ... ON CONFLICT(id) DO UPDATE` 幂等 UPSERT;`updated_at` 仅在内容实际变化时刷新(CASE WHEN … IS NOT …)。生产实证:导入前 `reading_progress` 全表 5 行,导入后仍为 5 行——普通正文发布零触碰阅读进度,未伪造任何历史进度。章节删除今后只能走显式迁移。
+- **附录 F 挂载修复**:parentId 由 part-5 纠正为书根(id/slug 不变,URL 保持 `/bookshelf/hello-system/appx-f-myths-faq`);旧层级 URL `/bookshelf/hello-system/part-5/appx-f-myths-faq` 在 `page.tsx` 中 307 重定向到新 URL(vinext 无 next.config redirects 支持),不静默 404。生产实证:新 URL 200、旧 URL 307 → 新 URL。
+- **既有线上缺陷修复**:根级 sort_order 冲突(序言 1/序章 2 与 part-1 1/part-2 2 撞号,`listAllDocs` 回退按 created_at+id 排序导致线上目录 part-1 排在序言之前);部分容器改 3-8,生产目录实证 preface → prologue → part-1..6 → appx-a..h → epilogue。
+- **21 章技术表述修订**(反绝对化/反伪精确清扫):2^n 状态模型标注教学简化、伪 JVM 栈帧图改源码语义模型、DOM≠"C++ 对象"、代理主键降为常见选择、16KiB 标注 InnoDB 默认配置、Durability 口径统一为"所承诺的故障模型与持久化配置下成功提交的效果应在恢复后保留"(ch36/ch52 双章一致)、五元组限定已建立 TCP 流、HTTP 文本仅限起始行+头部且 HTTP/3=QUIC、JS 大整数为舍入非截断、JWT 签名未加密、@Transactional 标注代理模式、RFC 7807→9457、Testcontainers 删 100% 一致性、ch56 删鼠标微动开关/坐标/LSN 伪精确并改从 DOM click 起笔、ch57 删"软件工程第一定律"、ch59 改题《框架消失以后:留在脑海中的核心问题》等;另修一处规格外真实错误:Vue PatchFlag 9→3(TEXT|CLASS)。正文 190,406 → 198,830 字节(+4.4%),结构修复非重写,体量与基线等价。
+- **冻结回归测试(失败即禁止发布)**:`tests/hello-system-freeze.test.mjs` 39 断言——78 节点/60 章编号连续/父级存在且无环/同级 sort_order 唯一/快照 id+slug 逐字一致/生成 SQL 无 `DELETE FROM reading_progress`/78 个 ON CONFLICT/created_at 不被覆盖/**进度保存测试**(临时 sqlite 全量迁移建库→插阅读进度→重跑 UPSERT→断言进度存活且 last_chapter_id 可解析)/18 条禁用表述回潮拦截/规范模型 DDL 列禁(status/version/semester/deleted/active)与 UNIQUE(student_id,course_id)/EnrollRequest 无 studentId/围栏配对与 Mermaid 图型/零 emoji。测试顶部 import 生成器保证 SQL 与源码同步。`npm test` = build + 集成 105 + 冻结 39 = **144/144 通过**,tsc/eslint 双净。
+- **verify-live 升级**:检查数组化(HTTP 状态/标题/包含/排除/重定向断言),TOC 结构校验(77 个非根链接、appx-f 在根部、无 part-5 下旧链接);`511e903` 修正 Location 绝对 URL 归一化(Next redirect() 写绝对形式,原样比对误报)。生产冒烟 **9/9 PASS**。
+- 本轮改动可能引入的新风险:①UPSERT 不再清理"已废弃节点"——若未来真删章,残留节点需显式迁移清除(语义转向是有意的);②正文 +4.4% 主要集中于 ch36/ch48/ch56 口径段落,已抽查渲染正常;③匿名边缘缓存 60s 窗口内目录可能短暂滞后,本轮验证已在窗口外。
+- 未覆盖范围:60 章未逐章生产走查(本地全量 78 节点已导 + 线上 6 页抽查 + TOC 结构校验);登录态阅读进度写入路径未实测(生产 5 行进度数据保全已实证)。
+
 ## 2026-08-29(七)《Hello System》全书修订版重发:内容收紧 1500 行 + 修复上轮误删的正文 COMMIT(已上线,生产复验通过)
 
 - 状态:已上线。commit `701ab0a`(生成器 8 文件 + SQL)push → ci `release-gates@701ab0a`(33222318529)与 deploy `deploy-production`(33222407704)双 success;生产 D1 以围栏感知剥离文件重导(写入 553 行),回读 79 节点与本地 Miniflare 一致(正文总长 76488 逐数吻合)。
