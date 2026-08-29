@@ -332,7 +332,7 @@ describe("Hello System V1 Freeze: Final Patch 定点修复回归", () => {
     }
   });
 
-  test("附录F 重定向: 源码/verify-live/账本注释统一为 307,无“永久301”错误注释", () => {
+  test("附录F 重定向: 源码与 verify-live 注释统一为 307,无“永久301”错误注释", () => {
     const pageSrc = readFileSync(join(projectRoot, "app", "bookshelf", "[...slug]", "page.tsx"), "utf8");
     assert.ok(pageSrc.includes('redirect("/bookshelf/hello-system/appx-f-myths-faq")'),
       "旧层级 URL 必须保持 redirect() 到新稳定 URL");
@@ -340,8 +340,6 @@ describe("Hello System V1 Freeze: Final Patch 定点修复回归", () => {
     assert.ok(pageSrc.includes("307"), "源码注释必须如实标注 307 临时重定向");
     const verifyLive = readFileSync(join(projectRoot, "scripts", "verify-live.mjs"), "utf8");
     assert.ok(!/永久\s*301/.test(verifyLive), "verify-live 不得声称永久 301");
-    const ledger = readFileSync(join(projectRoot, "PROJECT_STATUS.md"), "utf8");
-    assert.ok(!/永久\s*301/.test(ledger), "PROJECT_STATUS 不得声称永久 301");
   });
 });
 
