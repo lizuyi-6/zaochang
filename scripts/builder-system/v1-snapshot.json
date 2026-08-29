@@ -1,0 +1,553 @@
+{
+  "book": "hello-system",
+  "freezeVersion": "v1",
+  "nodeCount": 78,
+  "nodes": [
+    {
+      "id": "doc:book-hello-system",
+      "slug": "hello-system",
+      "parentId": null,
+      "sortOrder": 1,
+      "title": "Hello System · 图解软件系统"
+    },
+    {
+      "id": "doc:hello-system-preface",
+      "slug": "preface",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 1,
+      "title": "序言: 还原软件系统的本来面目"
+    },
+    {
+      "id": "doc:hello-system-prologue",
+      "slug": "prologue",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 2,
+      "title": "序章: 一次点击"
+    },
+    {
+      "id": "doc:hello-system-part-1",
+      "slug": "part-1",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 3,
+      "title": "第一部分: 程序开始变大 (01~12)"
+    },
+    {
+      "id": "doc:hello-system-01-why-architecture-matters",
+      "slug": "01-why-architecture-matters",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 1,
+      "title": "第01章 从单行脚本到复杂系统：为什么我们需要架构？"
+    },
+    {
+      "id": "doc:hello-system-02-variables-out-of-control",
+      "slug": "02-variables-out-of-control",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 2,
+      "title": "第02章 变量为什么开始失控？——从平铺变量到复合数据类型"
+    },
+    {
+      "id": "doc:hello-system-03-data-and-behavior",
+      "slug": "03-data-and-behavior",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 3,
+      "title": "第03章 数据与行为的割裂：为什么需要自治对象？"
+    },
+    {
+      "id": "doc:hello-system-04-classes-and-objects",
+      "slug": "04-classes-and-objects",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 4,
+      "title": "第04章 类与对象：类型契约与运行时实例的脑内模型"
+    },
+    {
+      "id": "doc:hello-system-05-encapsulation-and-invariants",
+      "slug": "05-encapsulation-and-invariants",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 5,
+      "title": "第05章 封装与不变量：绝不让无效状态诞生"
+    },
+    {
+      "id": "doc:hello-system-06-object-lifecycle-and-memory",
+      "slug": "06-object-lifecycle-and-memory",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 6,
+      "title": "第06章 对象的生与死：作用域、生命周期与内存回收"
+    },
+    {
+      "id": "doc:hello-system-07-object-collaboration",
+      "slug": "07-object-collaboration",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 7,
+      "title": "第07章 对象如何协同：关联、组合与职责划分"
+    },
+    {
+      "id": "doc:hello-system-08-when-to-inherit",
+      "slug": "08-when-to-inherit",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 8,
+      "title": "第08章 继承的诱惑与陷阱：里氏替换原则（LSP）"
+    },
+    {
+      "id": "doc:hello-system-09-polymorphism-and-dynamic-dispatch",
+      "slug": "09-polymorphism-and-dynamic-dispatch",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 9,
+      "title": "第09章 多态与动态分派：消除冗长分支的优雅机制"
+    },
+    {
+      "id": "doc:hello-system-10-interfaces-and-contracts",
+      "slug": "10-interfaces-and-contracts",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 10,
+      "title": "第10章 接口与依赖倒置（DIP）：面向契约设计"
+    },
+    {
+      "id": "doc:hello-system-11-breaking-the-god-class",
+      "slug": "11-breaking-the-god-class",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 11,
+      "title": "第11章 打破上帝类：单一职责原则（SRP）"
+    },
+    {
+      "id": "doc:hello-system-12-emergence-of-layers",
+      "slug": "12-emergence-of-layers",
+      "parentId": "doc:hello-system-part-1",
+      "sortOrder": 12,
+      "title": "第12章 经典三层架构的诞生：Controller-Service-Repository"
+    },
+    {
+      "id": "doc:hello-system-part-2",
+      "slug": "part-2",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 4,
+      "title": "第二部分: 页面开始变复杂 (13~24)"
+    },
+    {
+      "id": "doc:hello-system-13-browser-and-dom",
+      "slug": "13-browser-and-dom",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 13,
+      "title": "第13章 浏览器如何看待网页：DOM 树与渲染流水线"
+    },
+    {
+      "id": "doc:hello-system-14-dom-chaos",
+      "slug": "14-dom-chaos",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 14,
+      "title": "第14章 命令式 DOM 操作的失控：从 jQuery 到手动同步灾难"
+    },
+    {
+      "id": "doc:hello-system-15-state-driven-ui",
+      "slug": "15-state-driven-ui",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 15,
+      "title": "第15章 声明式 UI：UI 是状态的纯函数 UI = f(state)"
+    },
+    {
+      "id": "doc:hello-system-16-vue-reactivity",
+      "slug": "16-vue-reactivity",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 16,
+      "title": "第16章 Vue 3 响应式核心：依赖收集与派发更新"
+    },
+    {
+      "id": "doc:hello-system-17-computed-properties",
+      "slug": "17-computed-properties",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 17,
+      "title": "第17章 computed 计算属性：脏值检查与惰性求值"
+    },
+    {
+      "id": "doc:hello-system-18-watch-and-side-effects",
+      "slug": "18-watch-and-side-effects",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 18,
+      "title": "第18章 watch 与副作用管理：何时触发外部世界？"
+    },
+    {
+      "id": "doc:hello-system-19-templates-and-reactivity-compiler",
+      "slug": "19-templates-and-reactivity-compiler",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 19,
+      "title": "第19章 模板编译：为什么 Vue 模板能被精准优化？"
+    },
+    {
+      "id": "doc:hello-system-20-components-and-props-emit",
+      "slug": "20-components-and-props-emit",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 20,
+      "title": "第20章 组件化与单向数据流：Props Down, Events Up"
+    },
+    {
+      "id": "doc:hello-system-21-component-lifecycle",
+      "slug": "21-component-lifecycle",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 21,
+      "title": "第21章 组件生命周期与挂载时机"
+    },
+    {
+      "id": "doc:hello-system-22-form-binding-vmodel",
+      "slug": "22-form-binding-vmodel",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 22,
+      "title": "第22章 双向绑定的表单真相：v-model 的语法糖展开"
+    },
+    {
+      "id": "doc:hello-system-23-global-state-pinia",
+      "slug": "23-global-state-pinia",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 23,
+      "title": "第23章 跨组件状态共享：Pinia 与全局状态树"
+    },
+    {
+      "id": "doc:hello-system-24-client-data-metamorphosis",
+      "slug": "24-client-data-metamorphosis",
+      "parentId": "doc:hello-system-part-2",
+      "sortOrder": 24,
+      "title": "第24章 前端数据形态的演变：从用户交互到网络报文"
+    },
+    {
+      "id": "doc:hello-system-part-3",
+      "slug": "part-3",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 5,
+      "title": "第三部分: 数据需要一个真正的家 (25~37)"
+    },
+    {
+      "id": "doc:hello-system-25-big-wide-table",
+      "slug": "25-big-wide-table",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 25,
+      "title": "第25章 单大宽表的诱惑与灾难：从 Excel 到数据库"
+    },
+    {
+      "id": "doc:hello-system-26-relational-model-foundations",
+      "slug": "26-relational-model-foundations",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 26,
+      "title": "第26章 关系模型的数学美感：元组、属性与笛卡尔积"
+    },
+    {
+      "id": "doc:hello-system-27-keys-and-identity",
+      "slug": "27-keys-and-identity",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 27,
+      "title": "第27章 主键与候选键：在数据的海洋中唯一定位"
+    },
+    {
+      "id": "doc:hello-system-28-foreign-keys-and-associations",
+      "slug": "28-foreign-keys-and-associations",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 28,
+      "title": "第28章 外键与关联表：一堆孤立表如何连接？"
+    },
+    {
+      "id": "doc:hello-system-29-declarative-sql",
+      "slug": "29-declarative-sql",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 29,
+      "title": "第29章 声明式 SQL：告诉数据库“要什么”，而非“怎么做”"
+    },
+    {
+      "id": "doc:hello-system-30-inner-and-outer-joins",
+      "slug": "30-inner-and-outer-joins",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 30,
+      "title": "第30章 JOIN 的本质：笛卡尔积上的条件过滤"
+    },
+    {
+      "id": "doc:hello-system-31-aggregation-and-group-by",
+      "slug": "31-aggregation-and-group-by",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 31,
+      "title": "第31章 聚合与分组：GROUP BY 与 HAVING 的执行时序"
+    },
+    {
+      "id": "doc:hello-system-32-lossless-decomposition",
+      "slug": "32-lossless-decomposition",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 32,
+      "title": "第32章 无损分解与函数依赖：拆分表的科学方法"
+    },
+    {
+      "id": "doc:hello-system-33-functional-dependency-algebra",
+      "slug": "33-functional-dependency-algebra",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 33,
+      "title": "第33章 函数依赖代数：Armstrong 公理系统"
+    },
+    {
+      "id": "doc:hello-system-34-normalization-1nf-2nf-3nf-bcnf",
+      "slug": "34-normalization-1nf-2nf-3nf-bcnf",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 34,
+      "title": "第34章 范式实战演进：1NF、2NF、3NF 到 BCNF 的全景推导"
+    },
+    {
+      "id": "doc:hello-system-35-bplus-tree-indexes",
+      "slug": "35-bplus-tree-indexes",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 35,
+      "title": "第35章 B+ 树索引原理：从全表扫描到对数级查找"
+    },
+    {
+      "id": "doc:hello-system-36-acid-transactions",
+      "slug": "36-acid-transactions",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 36,
+      "title": "第36章 事务与 ACID：在不确定的硬件世界中守护确定性"
+    },
+    {
+      "id": "doc:hello-system-37-concurrency-and-locking",
+      "slug": "37-concurrency-and-locking",
+      "parentId": "doc:hello-system-part-3",
+      "sortOrder": 37,
+      "title": "第37章 并发控制：行级锁、排他锁与幻读防范"
+    },
+    {
+      "id": "doc:hello-system-part-4",
+      "slug": "part-4",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 6,
+      "title": "第四部分: 前端第一次遇见后端 (38~46)"
+    },
+    {
+      "id": "doc:hello-system-38-networking-foundations-ip-tcp",
+      "slug": "38-networking-foundations-ip-tcp",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 38,
+      "title": "第38章 机器之间如何通信：从 Socket 到 IP/TCP"
+    },
+    {
+      "id": "doc:hello-system-39-http-message-anatomy",
+      "slug": "39-http-message-anatomy",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 39,
+      "title": "第39章 HTTP 报文解构：请求行、头部与状态码"
+    },
+    {
+      "id": "doc:hello-system-40-json-serialization",
+      "slug": "40-json-serialization",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 40,
+      "title": "第40章 跨语言的契约：JSON 序列化与反序列化"
+    },
+    {
+      "id": "doc:hello-system-41-first-api-design",
+      "slug": "41-first-api-design",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 41,
+      "title": "第41章 设计第一条 RESTful API：资源、动作与路径"
+    },
+    {
+      "id": "doc:hello-system-42-clicking-enroll-frontend-backend-meet",
+      "slug": "42-clicking-enroll-frontend-backend-meet",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 42,
+      "title": "第42章 点击选课：从 Vue fetch 到 Spring Controller"
+    },
+    {
+      "id": "doc:hello-system-43-controller-layer-responsibilities",
+      "slug": "43-controller-layer-responsibilities",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 43,
+      "title": "第43章 表现层 Controller 的纯粹职责：防线还是中转站？"
+    },
+    {
+      "id": "doc:hello-system-44-service-layer-domain-orchestration",
+      "slug": "44-service-layer-domain-orchestration",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 44,
+      "title": "第44章 业务逻辑层 Service：用例编排与不变量守护"
+    },
+    {
+      "id": "doc:hello-system-45-repository-persistence-abstraction",
+      "slug": "45-repository-persistence-abstraction",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 45,
+      "title": "第45章 持久化抽象 Repository：屏蔽 SQL 与对象映射"
+    },
+    {
+      "id": "doc:hello-system-46-entity-dto-vo-boundaries",
+      "slug": "46-entity-dto-vo-boundaries",
+      "parentId": "doc:hello-system-part-4",
+      "sortOrder": 46,
+      "title": "第46章 对象边界隔离：Entity、DTO 与 Value Object 的分工"
+    },
+    {
+      "id": "doc:hello-system-part-5",
+      "slug": "part-5",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 7,
+      "title": "第五部分: 真实系统开始反抗 (47~55)"
+    },
+    {
+      "id": "doc:hello-system-47-defensive-validation",
+      "slug": "47-defensive-validation",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 47,
+      "title": "第47章 信任边界：为什么服务器必须重新验证请求？"
+    },
+    {
+      "id": "doc:hello-system-48-exceptions-and-transactions",
+      "slug": "48-exceptions-and-transactions",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 48,
+      "title": "第48章 异常与事务回滚：当事情开始出错"
+    },
+    {
+      "id": "doc:hello-system-49-http-status-codes-and-errors",
+      "slug": "49-http-status-codes-and-errors",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 49,
+      "title": "第49章 统一错误处理与 HTTP 语义映射"
+    },
+    {
+      "id": "doc:hello-system-50-idempotency-and-repeated-clicks",
+      "slug": "50-idempotency-and-repeated-clicks",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 50,
+      "title": "第50章 如果用户连续点十次按钮呢？——防抖、节流与幂等性"
+    },
+    {
+      "id": "doc:hello-system-51-cas-and-optimistic-locking",
+      "slug": "51-cas-and-optimistic-locking",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 51,
+      "title": "第51章 如果两个人争抢最后一个名额呢？——原子条件更新与乐观并发控制"
+    },
+    {
+      "id": "doc:hello-system-52-wal-and-crash-recovery",
+      "slug": "52-wal-and-crash-recovery",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 52,
+      "title": "第52章 如果服务器在写入时突然断电呢？——WAL 与崩溃恢复"
+    },
+    {
+      "id": "doc:hello-system-53-logging-and-observability",
+      "slug": "53-logging-and-observability",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 53,
+      "title": "第53章 可观测性：从 println 到结构化日志与链路追踪"
+    },
+    {
+      "id": "doc:hello-system-54-environments-and-configuration",
+      "slug": "54-environments-and-configuration",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 54,
+      "title": "第54章 环境与配置：开发、测试与生产的隔离之道"
+    },
+    {
+      "id": "doc:hello-system-55-testing-pyramid",
+      "slug": "55-testing-pyramid",
+      "parentId": "doc:hello-system-part-5",
+      "sortOrder": 55,
+      "title": "第55章 测试金字塔与质量保障：如何证明系统是正确的？"
+    },
+    {
+      "id": "doc:hello-system-part-6",
+      "slug": "part-6",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 8,
+      "title": "第六部分: 重新走完那几百毫秒 (56~60)"
+    },
+    {
+      "id": "doc:hello-system-56-full-request-journey",
+      "slug": "56-full-request-journey",
+      "parentId": "doc:hello-system-part-6",
+      "sortOrder": 56,
+      "title": "第56章 从浏览器到数据库：一次选课调用的全景复盘"
+    },
+    {
+      "id": "doc:hello-system-57-architectural-tradeoffs",
+      "slug": "57-architectural-tradeoffs",
+      "parentId": "doc:hello-system-part-6",
+      "sortOrder": 57,
+      "title": "第57章 架构没有银弹：权衡的艺术"
+    },
+    {
+      "id": "doc:hello-system-58-anti-over-engineering",
+      "slug": "58-anti-over-engineering",
+      "parentId": "doc:hello-system-part-6",
+      "sortOrder": 58,
+      "title": "第58章 警惕过度设计：从简单出发，伴随复杂度演进"
+    },
+    {
+      "id": "doc:hello-system-59-after-frameworks-disappear",
+      "slug": "59-after-frameworks-disappear",
+      "parentId": "doc:hello-system-part-6",
+      "sortOrder": 59,
+      "title": "第59章 框架消失以后：留在脑海中的核心问题"
+    },
+    {
+      "id": "doc:hello-system-60-click-again",
+      "slug": "60-click-again",
+      "parentId": "doc:hello-system-part-6",
+      "sortOrder": 60,
+      "title": "第60章 现在，再点击一次“选课”"
+    },
+    {
+      "id": "doc:hello-system-appx-a-project-tree",
+      "slug": "appx-a-project-tree",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 61,
+      "title": "附录A: Mini Campus 完整工程架构与文件目录"
+    },
+    {
+      "id": "doc:hello-system-appx-b-er-and-ddl",
+      "slug": "appx-b-er-and-ddl",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 62,
+      "title": "附录B: 规范化 ER 图与完整 MySQL DDL"
+    },
+    {
+      "id": "doc:hello-system-appx-c-core-sql",
+      "slug": "appx-c-core-sql",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 63,
+      "title": "附录C: 核心业务 SQL 手册与执行计划分析"
+    },
+    {
+      "id": "doc:hello-system-appx-d-api-spec",
+      "slug": "appx-d-api-spec",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 64,
+      "title": "附录D: RESTful API 契约规范与 DTO 映射矩阵"
+    },
+    {
+      "id": "doc:hello-system-appx-e-concept-glossary",
+      "slug": "appx-e-concept-glossary",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 65,
+      "title": "附录E: 核心术语与心智模型速查字典"
+    },
+    {
+      "id": "doc:hello-system-appx-f-myths-faq",
+      "slug": "appx-f-myths-faq",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 66,
+      "title": "附录F: 计算机专业常见误区与踩坑 FAQ"
+    },
+    {
+      "id": "doc:hello-system-appx-g-recommended-roadmap",
+      "slug": "appx-g-recommended-roadmap",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 67,
+      "title": "附录G: 计算机专业推荐经典书单与进阶路线"
+    },
+    {
+      "id": "doc:hello-system-appx-h-verification-checklist",
+      "slug": "appx-h-verification-checklist",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 68,
+      "title": "附录H: 生产环境全量发布与质量验收自检清单"
+    },
+    {
+      "id": "doc:hello-system-epilogue",
+      "slug": "epilogue",
+      "parentId": "doc:book-hello-system",
+      "sortOrder": 69,
+      "title": "后记: 写给未来的软件架构师"
+    }
+  ]
+}

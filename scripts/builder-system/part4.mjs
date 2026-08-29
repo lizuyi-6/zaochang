@@ -11,7 +11,7 @@ part4Docs.push({
   title: "第四部分: 前端第一次遇见后端 (38~46)",
   visibility: "public",
   authorEmail: "2251213429@qq.com",
-  sortOrder: 4,
+  sortOrder: 6,
   isBook: 0,
   coverHue: 215,
   summary: "",
@@ -19,7 +19,7 @@ part4Docs.push({
 
 本部分聚焦于**跨越网络边界的前后端通信契约与对象边界划分**。
 
-我们将从套接字与网络分包的物理现实出发，深入解构 HTTP 报文结构与现代 RESTful 资源语义设计。随后，我们将以“李雷点击选课”为主线，完整追踪从 Vue \`fetch()\` 请求发起、跨语言 JSON 序列化、Spring WebMVC 请求分发，到 Controller、Service、Repository 以及 Entity/DTO/Value Object 对象的严格职责隔离。
+我们将从套接字与 TCP/IP 分层模型出发，深入解构 HTTP 报文结构与现代 RESTful 资源语义设计。随后，我们将以“李雷点击选课”为主线，完整追踪从 Vue \`fetch()\` 请求发起、跨语言 JSON 序列化、Spring WebMVC 请求分发，到 Controller、Service、Repository 以及 Entity/DTO/Value Object 对象的严格职责隔离。
 `
 });
 
@@ -28,14 +28,14 @@ part4Docs.push({
   id: "doc:hello-system-38-networking-foundations-ip-tcp",
   slug: "38-networking-foundations-ip-tcp",
   parentId: "'doc:hello-system-part-4'",
-  title: "第38章 网络协议的物理现实：从套接字到包交换",
+  title: "第38章 机器之间如何通信：从 Socket 到 IP/TCP",
   visibility: "public",
   authorEmail: "2251213429@qq.com",
   sortOrder: 38,
   isBook: 0,
   coverHue: 215,
   summary: "",
-  bodyMd: `# 第38章 网络协议的物理现实：从套接字到包交换
+  bodyMd: `# 第38章 机器之间如何通信：从 Socket 到 IP/TCP
 
 ## 1. 跨越机器边界的鸿沟
 
@@ -64,7 +64,7 @@ flowchart TD
     App --> Transport --> Network --> Link
 \`\`\`
 
-- **套接字（Socket）**：操作系统向应用程序暴露的抽象通信端点，由 \`(源 IP, 源端口, 目标 IP, 目标端口, 协议)\` 五元组唯一定义；
+- **套接字（Socket）**：操作系统向应用程序暴露的抽象通信端点。一个已建立的 TCP 网络流通常可以使用（源 IP、源端口、目标 IP、目标端口、传输层协议）组成的五元组来区分；监听套接字、UDP 套接字等情形与该模型并不完全等价；
 - **流式传输的本质**：TCP 向上层应用提供的是一个**无边界的连续字节流（Byte Stream）**。应用层协议（如 HTTP）必须自行定义报文边界解析规则。
 `
 });
@@ -85,7 +85,7 @@ part4Docs.push({
 
 ## 1. HTTP 请求报文的标准文本结构
 
-HTTP/1.1 是一种典型的基于 ASCII 文本的应用层协议。一次选课请求的真实报文结构如下：
+HTTP/1.1 的起始行（start-line）与头部字段（header fields）采用文本语法，因此非常适合直接展示与调试。一次选课请求的真实报文结构如下：
 
 \`\`\`http
 POST /api/enrollments HTTP/1.1
@@ -106,6 +106,8 @@ Authorization: Bearer eyJhbGciOi...
 3. **空行（CRLF, \\r\\n）**：协议规定的关键分隔符，用于告知接收方头部结束、正文开始；
 4. **请求体（Body）**：传输的具体业务载荷数据。
 
+> **边界说明**：说“HTTP/1.1 基于文本”仅指其起始行与头部字段的语法；HTTP 报文主体可以承载任意媒体类型与二进制数据（如图片、压缩包、Protobuf）。此外，HTTP 并非永远运行在 TCP 之上：HTTP/1.1 与 HTTP/2 通常运行于 TCP，而 HTTP/3 使用基于 UDP 的 QUIC 协议。
+
 ---
 
 ## 2. 常见 HTTP 状态码的精准语义分类
@@ -122,7 +124,7 @@ Authorization: Bearer eyJhbGciOi...
 | **403 Forbidden** | 拒绝访问 | 客户端已登录，但无权操作该资源（如学生尝试修改全校课表） |
 | **404 Not Found** | 未找到 | 目标资源不存在（如请求的 courseId 不在数据库中） |
 | **409 Conflict** | 业务冲突 | 发生业务规则冲突（如该课程名额已满，或学生已选过该课程） |
-| **500 Internal Error**| 服务端错误 | 后端服务器发生未捕获的运行时异常（如数据库连接中断） |
+| **500 Internal Server Error** | 服务端错误 | 服务器遇到了意外情况，无法完成请求（未捕获异常只是产生 500 的常见原因之一，如数据库连接中断） |
 `
 });
 
@@ -158,8 +160,8 @@ flowchart LR
 
 1. **JavaScript 64 位浮点数（IEEE 754）精度丢失**：
    - JavaScript 中的 \`Number.MAX_SAFE_INTEGER\` 为 $2^{53} - 1$（9007199254740991）；
-   - 如果 Java 后端使用 64 位自增长整型（\`Long\`）或雪花算法 ID（如 \`1787932800123456789L\`），当它以 JSON 数字格式传输给前端时，最后几位会被 JavaScript 自动截断为 0！
-   - **最佳实践**：超长整型 ID 在传输时必须序列化为**字符串类型（String）**。
+   - 如果 Java 后端使用 64 位自增长整型（\`Long\`）或雪花算法 ID（如 \`1787932800123456789L\`），当它以 JSON 数字格式传输给前端时，由于超过安全整数范围后 JavaScript \`Number\` 不能保证逐整数精确表示，反序列化后可能发生舍入，从而得到与后端原整数不同的值；
+   - **常见工程方案**：如果整数 ID 可能超过 $2^{53} - 1$ 并要求前端精确保持其值，通常将 ID 序列化为**字符串类型（String）**进行传输。
 2. **时区与日期格式标准化**：
    - 严禁传输本地时间字符串（如 \`"2026-08-29 08:00:00"\`，因为缺少时区信息）；
    - 推荐使用 ISO-8601 标准 UTC 格式字符串：\`"2026-08-29T00:00:00.000Z"\`。
@@ -213,7 +215,7 @@ DELETE        /api/enrollments/{id}  删除指定的选课记录 (退课)
   }
   \`\`\`
   > **安全设计注意**：
-  > 请求体中**严禁包含 \`studentId\`**！当前学生的身份必须由后端从经过加密签名的认证凭据（Token/Session）中安全解析，绝不信任前端传入的任意用户 ID。
+  > 请求体中**严禁包含 \`studentId\`**！当前学生的身份必须由后端从**可信的认证上下文**中解析——即由服务端验证过的认证凭据，例如签名 Token 或服务端 Session（以常见的 JWT 为例，它通常是经过**签名**以保证不可篡改，但载荷本身并未加密）。后端绝不信任前端传入的任意用户 ID。
 
 ### 成功响应（Response - 201 Created）：
 \`\`\`json
@@ -360,7 +362,7 @@ public class EnrollmentController {
 
 ---
 
-## 2. Controller 的三大绝对禁忌
+## 2. Controller 的三大设计禁忌
 
 1. **严禁在 Controller 中编写 SQL 或直接调用数据库连接**：这会导致表现层与底层数据库紧密耦合；
 2. **严禁在 Controller 中执行复杂的业务规则判定**（如“检查先修课是否及格”）：这会导致业务逻辑无法在其他入口（如批处理定时任务、MQ 消费者）中复用；

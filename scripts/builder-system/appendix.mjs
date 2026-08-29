@@ -19,7 +19,7 @@ appendixDocs.push({
 
 ## 1. 现代前后端分离典型目录结构
 
-本附录给出 Mini Campus 校园选课系统在工业界标准的工程目录骨架，供读者在实际项目开发中参考：
+本附录给出 Mini Campus 校园选课系统所采用的一种常见前后端分离工程组织方式，供读者在实际项目开发中参考。需要说明的是：Controller / Service / Repository 的目录划分并不存在唯一的行业标准，不同团队与框架会有不同的合理组织形态：
 
 \`\`\`text
 mini-campus/
@@ -175,6 +175,29 @@ CREATE TABLE enrollments (
     CONSTRAINT uk_student_course UNIQUE (student_id, course_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 \`\`\`
+
+---
+
+## 3. 认证身份的外部边界说明
+
+读者可能会问：第 41 章的 HTTP API 使用了 \`Authorization: Bearer <token>\` 与“当前已认证学生”，为什么这张 ER 图里没有 \`users\` / \`accounts\` 表？
+
+**本书的 ER 图聚焦于 Mini Campus 的业务域。** 认证账户系统被视为独立的身份基础设施（Identity Infrastructure）：认证层负责验证凭据（签名 Token 或服务端 Session），验证通过后将安全主体（Security Principal）映射为业务域中的 \`Student ID\`，业务代码只消费这个已认证的学生身份。Token 并不是凭空直接变成 \`studentId\` 的——中间隔着认证层这座可信桥梁。
+
+\`\`\`mermaid
+flowchart LR
+    subgraph Identity["身份基础设施 (本书范围之外)"]
+        Account["认证账户 / 凭据存储"]
+        Issuer["凭据签发与验证\n(签名 Token / Session)"]
+    end
+
+    subgraph Business["Mini Campus 业务域 (本 ER 图范围)"]
+        Student["students 表\n(业务学生实体)"]
+    end
+
+    Account --> Issuer
+    Issuer -->|"验证通过后映射为安全主体"| Student
+\`\`\`
 `
 });
 
@@ -294,9 +317,9 @@ appendixDocs.push({
 - **单向数据流（One-Way Data Flow）**：前端组件化通信规范（Props 自顶向下传递，Events 向上抛出）；
 - **响应式代理（Reactivity Proxy）**：利用 ES6 Proxy 拦截属性读取（track 依赖收集）与写入（trigger 派发更新）；
 - **函数依赖（Functional Dependency）**：属性集 $X$ 的取值唯一确定属性集 $Y$ 的取值，记作 $X \\to Y$；
-- **第三范式（3NF）**：消除了非主属性对候选键的部分依赖与传递依赖；
+- **第三范式（3NF）**：对于关系中每个非平凡函数依赖 $X \\to A$，至少满足下列条件之一：$X$ 是超键，或 $A$ 是主属性（常见教学直觉：减少非主属性对候选键的不良传递依赖，正式推导见第34章）；
 - **ACID 事务**：原子性（Atomicity）、一致性（Consistency）、隔离性（Isolation）、持久性（Durability）；
-- **预写日志（WAL）**：在内存脏数据页刷盘前，必须先将对应的物理重做日志顺序写入磁盘持久化；
+- **预写日志（WAL）**：在内存脏数据页被持久化之前，必须先将对应的日志记录满足数据库所要求的持久化级别（先日志，后数据页）；
 - **幂等性（Idempotency）**：同一个操作执行多次与执行一次对系统产生的最终副作用完全一致。
 `
 });
@@ -305,7 +328,7 @@ appendixDocs.push({
 appendixDocs.push({
   id: "doc:hello-system-appx-f-myths-faq",
   slug: "appx-f-myths-faq",
-  parentId: "'doc:hello-system-part-5'",
+  parentId: "'doc:book-hello-system'",
   title: "附录F: 计算机专业常见误区与踩坑 FAQ",
   visibility: "public",
   authorEmail: "2251213429@qq.com",
@@ -318,16 +341,16 @@ appendixDocs.push({
 ## 1. 常见技术误区与真相
 
 ### 误区 1：“使用了 \`class\` 关键字就是面向对象”
-> **真相**：面向对象的核心在于**封装与不变量守护**。如果一个类只有公有字段或无脑生成全部 Getter/Setter，它依然只是披着类外衣的过程式结构体（贫血模型）。
+> **真相**：面向对象常讨论的维度包括身份、状态、行为、封装、消息协作与多态；本书特别强调通过封装维护业务不变量。另外需要注意术语语境：**Anemic Domain Model（贫血领域模型）指的是——一个系统声称采用富领域模型，却把所有业务规则放在外部 Service 中，领域 Entity 只保留数据字段**。它是一种有特定语境的设计取舍，不等同于过程式编程，也不意味着所有数据类都应该拥有行为：DTO、ORM Entity、Persistence Model 本来就可能只有数据与访问器，它们并不因此“错误”。
 
 ### 误区 2：“有了数据库事务，并发就绝对不会超卖”
-> **真相**：事务的 ACID 默认隔离级别（如 Read Committed / Repeatable Read）并不能自动阻止应用层并发读取造成的“丢失更新”。必须配合**行级排他锁（\`FOR UPDATE\`）**或**带约束的原子条件更新（\`WHERE enrolled < capacity\`）**才能杜绝超卖。
+> **真相**：仅仅声明使用事务（ACID）并不足以推断并发行为——实际表现取决于具体隔离级别、DBMS 实现（锁 / MVCC / 快照隔离在不同数据库中行为不同）与访问模式。在 Mini Campus 的场景中，可靠的做法是：**带不变量守卫的原子条件更新（\`UPDATE ... SET enrolled = enrolled + 1 WHERE id = ? AND enrolled < capacity\`）+ \`UNIQUE(student_id, course_id)\` 唯一约束，并置于同一事务中**。是否还需要额外的行级排他锁，取决于所用数据库的隔离级别与实现。
 
 ### 误区 3：“HTTP POST 方法绝对不能实现幂等”
-> **真相**：HTTP 规范没有将 POST 定义为默认幂等方法，因此通用客户端不能假定任意 POST 请求都可以无条件安全重试。**但是，一个具体的后端 POST API 可以通过引入 \`Idempotency-Key\` 请求头、唯一业务流水号与去重表，完全实现具备幂等特性的安全重试。**
+> **真相**：HTTP 规范没有将 POST 定义为默认幂等方法，因此通用客户端不能假定任意 POST 请求都可以无条件安全重试。**但是，一个具体的后端 POST API 可以通过引入 \`Idempotency-Key\` 请求头、唯一业务流水号与去重表，实现具备幂等特性的安全重试。**
 
 ### 误区 4：“有索引的查询一定比没有索引快”
-> **真相**：在数据量极小（如只有几百行）或查询需要读取全表 80% 以上数据的场景下，优化器会认为全表顺序扫描的代价反而低于通过 B+ 树索引反复回表（Random I/O）的代价，此时索引不会被选用。
+> **真相**：当查询需要访问表中较大比例的数据时，优化器可能判断顺序扫描的成本低于通过索引进行大量随机访问或回表（Random I/O）的成本，此时索引不会被选用。具体选择由统计信息、成本模型、缓存状态与查询形态共同决定，并不存在普适的固定比例阈值。
 `
 });
 
@@ -384,11 +407,11 @@ appendixDocs.push({
 
 ## 1. 生产发布自检表
 
-- [x] **全书节点完整性**：79 个文档节点全部在位，目录层级无断链；
+- [x] **全书节点完整性**：78 个生成节点全部在位（书根 + 序言 + 序章 + 6 部分 + 60 章 + 8 附录 + 后记），目录层级无断链；
 - [x] **零装饰性 Emoji**：全书正文杜绝任何 AI 装饰性表情；
 - [x] **LaTeX / KaTeX 语法**：公式两端空格规范，反斜杠转义完整；
 - [x] **Mermaid 图表语法**：所有节点均有完整定义，无死循环引用；
-- [x] **技术口径严密性**：杜绝固定 320ms、物理扇区、假 OCC 与 Zero Trust 误用；
+- [x] **技术口径严密性**：杜绝伪精确耗时数字、物理扇区伪底层论、假 OCC 与 Zero Trust 误用；
 - [x] **SQL 事务隔离**：正文代码块内的 \`COMMIT;\` 与最外层部署 SQL 事务边界严格隔离。
 `
 });
@@ -417,7 +440,7 @@ appendixDocs.push({
 
 **AI 可以帮你写出具体的代码片段，但它无法替你做出系统级的架构决策。**
 
-当线上系统发生死锁崩溃时，当网络抖动引发重复扣费时，当业务规模增长 100 倍导致数据库瘫痪时，能够从蛛丝马迹中瞬间洞察全链路矛盾、做出正确权衡取舍的，永远是那个在脑海中建立起完整软件系统图景的工程师。
+当线上系统发生死锁崩溃时，当网络抖动引发重复扣费时，当业务规模增长 100 倍导致数据库瘫痪时，能够从蛛丝马迹中迅速洞察全链路矛盾、做出正确权衡取舍的，往往是那个在脑海中建立起完整软件系统图景的工程师。
 
 希望《Hello System》不仅为你解答了大学课程中的疑惑，更能在你心中埋下一颗追求严谨、追求优雅、追求透彻理解的种子。
 

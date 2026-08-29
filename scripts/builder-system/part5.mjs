@@ -11,7 +11,7 @@ part5Docs.push({
   title: "第五部分: 真实系统开始反抗 (47~55)",
   visibility: "public",
   authorEmail: "2251213429@qq.com",
-  sortOrder: 5,
+  sortOrder: 7,
   isBook: 0,
   coverHue: 215,
   summary: "",
@@ -135,7 +135,7 @@ flowchart TD
 
 ## 2. Spring 声明式事务（\`@Transactional\`）的回滚机制
 
-在 Spring 框架中，\`@Transactional\` 的底层是由 **AOP 动态代理（AOP Proxy）** 驱动的：
+在 Spring 框架**默认的代理模式（proxy-based transaction management）**下，\`@Transactional\` 由 **AOP 动态代理（AOP Proxy）** 驱动：
 
 \`\`\`mermaid
 flowchart TD
@@ -148,8 +148,8 @@ flowchart TD
 \`\`\`
 
 > **重要避坑指南**：
-> 1. Spring 的 \`@Transactional\` 默认**仅对 \`RuntimeException\` 和 \`Error\` 自动触发回滚**。若抛出检查型异常（如 \`SQLException\`），必须显式配置 \`@Transactional(rollbackFor = Exception.class)\`；
-> 2. **自调用陷阱**：在同一个类内部直接通过 \`this.method()\` 调用带有 \`@Transactional\` 的方法，会绕过 AOP 代理对象，导致事务注解完全失效！
+> 1. Spring 的 \`@Transactional\` 默认**仅对 \`RuntimeException\` 和 \`Error\` 自动触发回滚**。若抛出检查型异常（如 \`SQLException\`），必须显式配置 \`@Transactional(rollbackFor = Exception.class)\`。需要注意：Spring 的数据访问组件（如 JdbcTemplate、JPA 仓储）通常会把底层 checked 的 SQL 异常转换为 \`DataAccessException\` 等 unchecked 异常，因此在实际工程中 checked 异常直接穿透到业务层的情况并不常见；
+> 2. **自调用陷阱**：在默认代理模式中，同一个类内部通过 \`this.method()\` 调用带有 \`@Transactional\` 的方法属于 self-invocation，调用不经过外部代理对象，事务拦截器因此不会重新生效。Spring 也存在其他配置与织入方式（如 AspectJ weaving），其行为与默认代理模式不同。
 `
 });
 
@@ -179,7 +179,7 @@ part5Docs.push({
 
 ## 2. 全局异常处理器（\`@RestControllerAdvice\`）
 
-通过全局切面将业务异常统一映射为标准的 RFC 7807 错误响应结构：
+通过全局切面将业务异常统一映射为结构化的 JSON 错误响应。这种“机器可读的错误结构”思想与 Problem Details for HTTP APIs 一致——该规范最初由 RFC 7807 定义，当前版本为 RFC 9457。下面示例中的 \`ErrorResponse\` 是 Mini Campus 的自定义精简结构，并未完整实现 RFC 9457 的全部字段：
 
 \`\`\`java
 @RestControllerAdvice
@@ -350,16 +350,16 @@ part5Docs.push({
 
 ## 2. 经典的 ARIES 崩溃恢复三大阶段
 
-数据库重启时，存储引擎依据 **WAL（预写重做日志与回滚日志）** 执行标准的 ARIES 恢复流程：
+数据库重启时，存储引擎依据 **WAL（预写日志）** 执行经典的 ARIES 恢复流程（ARIES 是数据库恢复领域的经典算法框架，其日志记录同时支持重做与回滚）：
 
 \`\`\`mermaid
 flowchart TD
     Crash["服务器突然断电崩溃并重启"] --> Phase1["1. 分析阶段 (Analysis Phase)\n从最近的检查点 (Checkpoint) 开始正向扫描日志，识别出崩溃发生时处于活跃状态的未提交事务列表 (Active Trx Table) 与脏页表"]
-    Phase1 --> Phase2["2. 重做阶段 (Redo Phase - 重放历史)\n从最早的未落盘脏页日志序列号 (LSN) 开始，单向重放所有日志 (包含已提交与未提交事务的操作)，将数据页恢复到崩溃前最后一微秒的完全相同状态"]
+    Phase1 --> Phase2["2. 重做阶段 (Redo Phase - 重放历史)\n从最早的未落盘脏页日志序列号 (LSN) 开始，单向重放所有日志 (包含已提交与未提交事务的操作)，将数据页重放恢复至崩溃发生时的状态"]
     Phase2 --> Phase3["3. 回滚阶段 (Undo Phase - 撤销未竟事务)\n反向扫描日志，对崩溃前所有处于活跃状态但未 COMMIT 的事务执行 Undo 回滚操作，消除其对数据文件的部分写入"]
 \`\`\`
 
-通过 Redo（重放历史）与 Undo（撤销脏写），数据库在不稳定的物理硬件上实现了确定性的原子性与持久性保障。
+通过 Redo（重放历史）与 Undo（撤销脏写），数据库在不稳定的物理硬件上实现了原子性与持久性保障。与第 36 章一致：持久性的含义是——**在数据库所承诺的故障模型与持久化配置下，成功提交事务的效果应在系统恢复后保留**，而不是“数据在任何灾难下都绝对永存”。
 `
 });
 
@@ -518,7 +518,9 @@ flowchart LR
 
 为了避免在 CI 测试中使用与生产完全不同的内存伪数据库（如 H2，它无法测试 MySQL 专有的事务并发锁行为），现代工程采用 **Testcontainers** 技术：
 
-在单元测试启动时，由代码自动拉起一个临时的真实 MySQL Docker 容器，测试完成后自动销毁，确保了测试环境与生产环境的 100% 行为一致性。
+在**集成测试（Integration Test）**启动时（注意：拉起真实数据库容器的测试已不属于单元测试范畴），由代码自动拉起一个临时的真实 MySQL Docker 容器，测试完成后自动销毁。
+
+使用与生产相同数据库产品和接近版本的 Testcontainers，可以显著减少 H2 等替代数据库造成的语义差异，**但仍不能保证测试环境与生产环境完全一致**。生产差异仍可能来自：数据库小版本、参数配置、时区（timezone）、字符集与排序规则（charset / collation）、数据规模、存储设备、网络拓扑、主从/集群架构与操作系统等。
 `
 });
 
@@ -602,7 +604,7 @@ class CourseRepositoryTest {
 - **SQL 语句语法错误/表字段拼错** $\to$ 由 **Repository 集成测试** 发现；
 - **前端按钮点击事件没有绑上** $\to$ 由 **E2E 浏览器测试** 发现。
 
-通过构筑全方位的自动化测试防护网，我们才能在频繁迭代与重构时，拥有交付高质量系统的绝对底气！
+通过构筑全方位的自动化测试防护网，我们才能在频繁迭代与重构时，拥有交付高质量系统的坚实底气！
 `
 });
 
