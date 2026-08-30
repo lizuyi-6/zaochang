@@ -28,12 +28,12 @@ import {
   GalaxyOverlay,
 } from "./galaxy-panels";
 import { createGalaxyScene } from "./galaxy-scene";
+import { createCameraController } from "./galaxy-camera";
 import styles from "./galaxy.module.css";
 import {
   PLANET_ORBIT_DISTANCE_SCALE,
   setOrbitalPosition,
   getOrbitResidual,
-  cubicBezier,
   STELLAR_PROFILES,
 } from "./galaxy-scene-assets";
 
@@ -145,11 +145,11 @@ export function GalaxyExperience() {
     });
     if (!sceneRuntime) return;
     const {
-      scene, renderer, camera, currentLook, composer, bloom, bloomBaseStrength,
+      scene, renderer, camera, composer, bloom, bloomBaseStrength,
       universe, galaxy, system, animatedMaterials, targetAccent, targetFog, rimLight,
-      blackHoleRoot, eventHorizon, accretionDisk, lensedArcPlane, eventMaskPlane, horizonCrown,
+      blackHoleRoot, eventHorizon, horizonCrown,
       overviewCameraAnchor, overviewFocusAnchor, galaxySpaces, stellarRuntimes, bodies,
-      genericPlanetRuntimes, visualRadiusByTarget, pickables, planetaryOrbitLines,
+      genericPlanetRuntimes, visualRadiusByTarget, pickables,
       backgroundStars, dust, foregroundDust, constellationGroup,
       diffractionStars, lightEchoes, aurelia, planet, moonOrbit,
       nyx, nyxPlanet, nyxDebris, caelum, caelumPlanet, caelumHalo,
@@ -161,10 +161,7 @@ export function GalaxyExperience() {
     let dragX = 0;
     let dragY = 0;
     let dragDistance = 0;
-    let appliedTarget = targetRef.current;
     let appliedReset = resetRef.current;
-    const targetCamera = new THREE.Vector3();
-    const targetLook = new THREE.Vector3();
     const projectedTarget = new THREE.Vector3();
     const projectedBlackHole = new THREE.Vector3();
     const projectedHostStar = new THREE.Vector3();
@@ -175,91 +172,13 @@ export function GalaxyExperience() {
     const planetWorldPositions = PLANETS.map(() => new THREE.Vector3());
     const starWorldPositions = new Map<GalaxyId, THREE.Vector3>(GALAXIES.map((definition) => [definition.id, new THREE.Vector3()]));
     const cameraAxis = new THREE.Vector3();
-    let activeBody = bodies.get(targetRef.current) ?? bodies.get("singularity")!;
-    type CameraFlight = {
-      fromId: TargetId;
-      toId: TargetId;
-      startedAt: number;
-      duration: number;
-      startCamera: THREE.Vector3;
-      startLook: THREE.Vector3;
-      controlA: THREE.Vector3;
-      controlB: THREE.Vector3;
-    };
-    let cameraFlight: CameraFlight | null = null;
-    const flightCamera = new THREE.Vector3();
-    const flightDirection = new THREE.Vector3();
-    const flightSide = new THREE.Vector3();
-    const flightUp = new THREE.Vector3(0, 1, 0);
-    let zoom = 1;
+    const cameraController = createCameraController({ runtime: sceneRuntime, mobile, prefersReducedMotion });
     let elapsed = 0;
     let passage = 0;
     let frame = 0;
     let hidden = false;
 
-    function setFocusVisibility(id: TargetId, previousId: TargetId | null = null, flying = false) {
-      const expandedUniverseVisible = id !== "singularity" || flying;
-      const atlasVisible = id === "singularity" || (flying && previousId === "singularity");
-      const activeGalaxyId = id === "singularity" ? null : PLANET_BY_ID[id].galaxyId;
-
-      galaxySpaces.forEach((runtime, galaxyId) => {
-        runtime.planets.visible = expandedUniverseVisible;
-        runtime.visual.visible = atlasVisible;
-        runtime.visual.scale.setScalar(atlasVisible ? 1.65 : activeGalaxyId === galaxyId ? 0.72 : 0.9);
-      });
-      PLANETS.forEach((definition) => {
-        const runtime = bodies.get(definition.id);
-        if (runtime) runtime.group.visible = expandedUniverseVisible;
-      });
-      eventHorizon.visible = true;
-      accretionDisk.visible = true;
-      eventMaskPlane.visible = true;
-      lensedArcPlane.visible = true;
-      horizonCrown.visible = true;
-      galaxy.visible = atlasVisible;
-      foregroundDust.visible = atlasVisible;
-      planetaryOrbitLines.forEach((line) => { line.visible = false; });
-    }
-
-    function applyTarget(id: TargetId, startedAt?: number) {
-      const previousId = appliedTarget;
-      const target = id === "singularity" ? SINGULARITY : PLANET_BY_ID[id];
-      activeBody = bodies.get(id) ?? bodies.get("singularity")!;
-      const shouldFly = startedAt !== undefined && previousId !== id && frame > 0 && !prefersReducedMotion;
-      if (shouldFly) {
-        universe.updateMatrixWorld(true);
-        activeBody.cameraAnchor.getWorldPosition(targetCamera);
-        activeBody.focusAnchor.getWorldPosition(targetLook);
-        const isolationDistance = id === "singularity" ? 1 : mobile ? 1.1 : 1.16;
-        targetCamera.sub(targetLook).multiplyScalar(zoom * isolationDistance).add(targetLook);
-        flightDirection.copy(targetCamera).sub(camera.position);
-        const distance = flightDirection.length();
-        flightSide.copy(flightDirection).cross(flightUp);
-        if (flightSide.lengthSq() < 0.0001) flightSide.set(1, 0, 0);
-        else flightSide.normalize();
-        const lift = THREE.MathUtils.clamp(distance * 0.1, 4.5, 20);
-        const bend = THREE.MathUtils.clamp(distance * 0.045, 2.5, 12) * (previousId < id ? 1 : -1);
-        cameraFlight = {
-          fromId: previousId,
-          toId: id,
-          startedAt,
-          duration: THREE.MathUtils.clamp(2500 + distance * 18, 2800, 5200),
-          startCamera: camera.position.clone(),
-          startLook: currentLook.clone(),
-          controlA: camera.position.clone().addScaledVector(flightDirection, 0.28).addScaledVector(flightUp, lift).addScaledVector(flightSide, bend),
-          controlB: camera.position.clone().addScaledVector(flightDirection, 0.72).addScaledVector(flightUp, lift * 0.62).addScaledVector(flightSide, -bend * 0.3),
-        };
-        setFocusVisibility(id, previousId, true);
-      } else {
-        cameraFlight = null;
-        setFocusVisibility(id);
-      }
-      targetAccent.set(target.accent);
-      targetFog.set(0x04030b).lerp(targetAccent, 0.045);
-      appliedTarget = id;
-    }
-
-    applyTarget(targetRef.current);
+    cameraController.applyTarget(targetRef.current);
 
     function handlePointerDown(event: PointerEvent) {
       dragging = true;
@@ -298,7 +217,7 @@ export function GalaxyExperience() {
 
     function handleWheel(event: WheelEvent) {
       event.preventDefault();
-      zoom = THREE.MathUtils.clamp(zoom + event.deltaY * 0.00045, 0.76, 1.28);
+      cameraController.zoom = THREE.MathUtils.clamp(cameraController.zoom + event.deltaY * 0.00045, 0.76, 1.28);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -389,7 +308,7 @@ export function GalaxyExperience() {
     function animate(timestamp = 0) {
       animationFrame = window.requestAnimationFrame(animate);
       if (hidden) return;
-      const targetChanged = targetRef.current !== appliedTarget || resetRef.current !== appliedReset;
+      const targetChanged = targetRef.current !== cameraController.appliedTarget || resetRef.current !== appliedReset;
       const minimumFrameInterval = pausedRef.current || prefersReducedMotion ? 120 : 16;
       if (!targetChanged && timestamp - lastRenderTime < minimumFrameInterval) return;
       lastRenderTime = timestamp;
@@ -397,12 +316,12 @@ export function GalaxyExperience() {
       previousFrameTime = timestamp;
       if (!pausedRef.current) elapsed += delta;
 
-      if (targetRef.current !== appliedTarget) applyTarget(targetRef.current, timestamp);
+      if (targetRef.current !== cameraController.appliedTarget) cameraController.applyTarget(targetRef.current, timestamp, frame);
       if (resetRef.current !== appliedReset) {
         appliedReset = resetRef.current;
         dragRotation.set(0, 0);
-        zoom = 1;
-        applyTarget("singularity", timestamp);
+        cameraController.zoom = 1;
+        cameraController.applyTarget("singularity", timestamp, frame);
       }
 
       const warp = warpRef.current;
@@ -470,57 +389,21 @@ export function GalaxyExperience() {
       rimLight.color.lerp(targetAccent, 0.018);
       scene.fog?.color.lerp(targetFog, 0.012);
 
-      universe.updateMatrixWorld(true);
-      activeBody.cameraAnchor.getWorldPosition(targetCamera);
-      activeBody.focusAnchor.getWorldPosition(targetLook);
-      if (!cameraFlight && cruiseRef.current && !prefersReducedMotion) {
-        const radius = quietRef.current ? 0.05 : 0.12;
-        targetCamera.x += Math.sin(elapsed * 0.07) * radius;
-        targetCamera.y += Math.cos(elapsed * 0.052) * radius * 0.55;
-        targetCamera.z += Math.cos(elapsed * 0.07) * radius;
-      }
-      const isolationDistance = appliedTarget === "singularity" ? 1 : mobile ? 1.1 : 1.16;
-      targetCamera.sub(targetLook).multiplyScalar(zoom * isolationDistance).add(targetLook);
-      if (!cameraFlight) {
-        targetCamera.x += pointer.x * 0.22 * quietMotion;
-        targetCamera.y += pointer.y * 0.13 * quietMotion;
-      }
-      let transitionProgress = 1;
-      let flightFov = 0;
-      if (cameraFlight) {
-        const rawProgress = THREE.MathUtils.clamp((timestamp - cameraFlight.startedAt) / cameraFlight.duration, 0, 1);
-        transitionProgress = rawProgress;
-        const easedProgress = rawProgress * rawProgress * (3 - 2 * rawProgress);
-        cubicBezier(
-          flightCamera,
-          cameraFlight.startCamera,
-          cameraFlight.controlA,
-          cameraFlight.controlB,
-          targetCamera,
-          easedProgress,
-        );
-        camera.position.copy(flightCamera);
-        currentLook.lerpVectors(cameraFlight.startLook, targetLook, easedProgress);
-        flightFov = Math.sin(Math.PI * rawProgress) * 7;
-        if (rawProgress >= 1) {
-          camera.position.copy(targetCamera);
-          currentLook.copy(targetLook);
-          setFocusVisibility(cameraFlight.toId);
-          cameraFlight = null;
-        }
-      } else {
-        camera.position.lerp(targetCamera, prefersReducedMotion ? 0.16 : 0.045);
-        currentLook.lerp(targetLook, prefersReducedMotion ? 0.16 : 0.052);
-      }
-      camera.lookAt(currentLook);
-      blackHoleRoot.getWorldPosition(lensedArcPlane.position);
-      lensedArcPlane.quaternion.copy(camera.quaternion);
-      eventMaskPlane.position.copy(lensedArcPlane.position);
-      eventMaskPlane.quaternion.copy(camera.quaternion);
-      const baseFov = appliedTarget === "singularity" ? (compactScene ? 58 : 54) : 48;
-      camera.fov = THREE.MathUtils.lerp(camera.fov, baseFov + warp * 6 + passage * 9 + flightFov, cameraFlight ? 0.14 : 0.06);
-      camera.updateProjectionMatrix();
-      camera.updateMatrixWorld();
+      const { transitionProgress } = cameraController.updateCameraFrame({
+        timestamp,
+        elapsed,
+        quiet: quietRef.current,
+        quietMotion,
+        cruising: cruiseRef.current,
+        pointer,
+        warp,
+        passage,
+        compactScene,
+      });
+      const appliedTarget = cameraController.appliedTarget;
+      const activeBody = cameraController.activeBody;
+      const cameraFlight = cameraController.cameraFlight;
+      const targetCamera = cameraController.targetCamera;
       activeBody.group.getWorldPosition(projectedTarget).project(camera);
       blackHoleRoot.getWorldPosition(projectedBlackHole).project(camera);
       activeBody.group.getWorldPosition(worldCenter);
