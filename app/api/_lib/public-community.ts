@@ -1,3 +1,4 @@
+import { PUBLISHED_PRODUCT_SQL } from "../../lib/product-policy";
 import { database } from "./community";
 
 type CircleCount = { slug: string; members?: number; recentDiscussions?: number };
@@ -31,8 +32,7 @@ export async function loadPublicCommunityState(): Promise<PublicCommunityState> 
                 image_url AS imageUrl, cover_theme AS coverTheme, price,
                 pricing_model AS pricingModel, likes_count AS likes,
                 plays_count AS plays, created_at AS createdAt
-         FROM products WHERE status = 'published' AND moderation_status = 'visible'
-           AND review_status = 'approved' AND approved_version = review_version
+         FROM products WHERE ${PUBLISHED_PRODUCT_SQL}
          ORDER BY created_at DESC LIMIT 24`,
       )
       .all<Record<string, unknown>>(),
@@ -50,13 +50,9 @@ export async function loadPublicCommunityState(): Promise<PublicCommunityState> 
       .prepare(
         `SELECT
            (SELECT COUNT(*) FROM members) AS members,
-           (SELECT COUNT(*) FROM products
-              WHERE status = 'published' AND moderation_status = 'visible'
-                AND review_status = 'approved' AND approved_version = review_version) AS products,
+           (SELECT COUNT(*) FROM products WHERE ${PUBLISHED_PRODUCT_SQL}) AS products,
            (SELECT COUNT(*) FROM posts WHERE moderation_status = 'visible') AS posts,
-           (SELECT COALESCE(SUM(plays_count), 0) FROM products
-              WHERE status = 'published' AND moderation_status = 'visible'
-                AND review_status = 'approved' AND approved_version = review_version) AS productPlays,
+           (SELECT COALESCE(SUM(plays_count), 0) FROM products WHERE ${PUBLISHED_PRODUCT_SQL}) AS productPlays,
            (SELECT COALESCE(SUM(ABS(delta)), 0) FROM fruit_entries
               WHERE date(created_at, '+8 hours') = date('now', '+8 hours')) AS todayFruitMovement`,
       )
