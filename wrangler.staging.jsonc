@@ -32,7 +32,9 @@
   "r2_buckets": [
     {
       "binding": "UPLOADS",
-      "bucket_name": "zaochang-uploads"
+      // staging 独立 bucket:与生产 zaochang-uploads 彻底隔离,staging 上传扫描
+      // 验收写入的对象不会进入生产存储(见 CLOUDFLARE_RUNBOOK §8 与 STAGING_REPORT)。
+      "bucket_name": "zaochang-uploads-staging"
     }
   ],
   // 同 wrangler.prod.jsonc:邮箱验证码登录外发(本地 npm test 不受影响——
