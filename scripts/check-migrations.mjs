@@ -21,9 +21,10 @@ if (!entries.length) {
 // 本地有序账目:每条 journal entry → SQL 文件 sha256 + when(与 drizzle migrator
 // 写入 __drizzle_migrations 的 hash/created_at 同口径)。
 // 换行口径说明:drizzle 的 hash 是文件原始字节的 sha256,但本仓库历史回填不一致——
-// 0006-0009 按 CRLF 原样入帐,0010-0011 按 LF 归一入帐(已逐条实测)。因此每条本地
-// 同时计算"原样"与"LF 归一"两个 hash,远端命中任一即视为内容一致:换行差异不算
-// schema 漂移,但任何真实内容改动会同时改变两个 hash,仍然 fail-closed。
+// 0006-0009 按 CRLF 原样入帐,0010-0011 按 LF 归一入帐(已逐条实测)。因此不能
+// 依赖当前 OS checkout 的换行:先归一成 LF,再同时计算 LF 与重建 CRLF 两个 hash。
+// 远端命中任一即视为内容一致:换行差异不算 schema 漂移,但任何真实内容改动会
+// 同时改变两个 hash,仍然 fail-closed。
 // tag 口径说明(2026-08-30 生产实测):生产 0013-0018 六条的 hash 列存的是迁移
 // tag 文件名本身(另一批回填口径),不是内容 sha256。tag 精确相等仍能证明账目行
 // 对应唯一 journal 条目,但无法验证这六条的 SQL 字节——此类命中记入 limited
@@ -36,7 +37,8 @@ const local = entries.map((entry) => {
   }
   const sql = fs.readFileSync(file, "utf8");
   const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
-  const hashes = new Set([sha256(sql), sha256(sql.replace(/\r\n/g, "\n"))]);
+  const lf = sql.replace(/\r\n/g, "\n");
+  const hashes = new Set([sha256(lf), sha256(lf.replace(/\n/g, "\r\n"))]);
   return {
     tag: entry.tag,
     hashes,
@@ -98,7 +100,7 @@ if (failures.length) {
   for (const failure of failures) console.error(`  ${failure}`);
   console.error("  (注意:wrangler d1 execute --file 应用 SQL 不会写入 __drizzle_migrations,");
   console.error("   必须按 backups/_backfill_drizzle_migrations.sql 的方式手工回填 hash/created_at 行,");
-  console.error("   hash 为对应 SQL 文件字节的 sha256(CRLF 原样或 LF 归一;历史上亦有 tag 入帐批次),");
+  console.error("   hash 为对应 SQL 文件字节的 sha256(LF 归一或重建 CRLF;历史上亦有 tag 入帐批次),");
   console.error("   created_at 为 journal 的 when。) ");
   console.error("  请先备份生产 D1,再应用缺失迁移并回填迁移账目:");
   console.error(`    npx wrangler d1 export zaochang-db --remote --config wrangler.prod.jsonc --output backups/pre-NNNN.sql`);
