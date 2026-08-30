@@ -66,7 +66,7 @@ OIDC_SIGNING_PRIVATE_JWK
 ZAOCHANG_ADMIN_EMAILS
 ```
 
-`PUBLIC_APP_ORIGIN` 必须是没有路径、查询参数或凭据的 HTTPS origin；生产缺失或使用 HTTP 时 OAuth/OIDC 请求会失败闭锁。`GITHUB_OAUTH_CLIENT_SECRET` 与 `OIDC_SIGNING_PRIVATE_JWK` 必须作为 secret 保存。Google 登录当前暂停，可不配置。生产环境无条件不信任 `oai-authenticated-user-*` 请求头（fail-closed）；`TRUST_OAI_IDENTITY_HEADERS` 仅在非生产环境生效，不再提供生产逃逸门。
+`PUBLIC_APP_ORIGIN` 必须是没有路径、查询参数或凭据的 HTTPS origin；生产缺失或使用 HTTP 时 OAuth/OIDC 请求会失败闭锁。`GITHUB_OAUTH_CLIENT_SECRET` 与 `OIDC_SIGNING_PRIVATE_JWK` 必须作为 secret 保存。Google 登录当前暂停，可不配置。生产环境无条件不信任 `oai-authenticated-user-*` 请求头（fail-closed）；`TRUST_OAI_IDENTITY_HEADERS` 仅在非生产环境生效，不再提供生产逃逸门。完整的分环境 secret/var/binding 清单（生产 12 必需 + 2 可选、staging 专属 TURNSTILE_*、测试专属 EMAIL_SEND_*）以 [CLOUDFLARE_RUNBOOK.md](./CLOUDFLARE_RUNBOOK.md) §2 为准。
 
 详细配置见 [OAUTH_SETUP.md](./OAUTH_SETUP.md)，发布顺序与回滚条件见 [RELEASE_RUNBOOK.md](./RELEASE_RUNBOOK.md)，历次范围与缺口见 [PROJECT_STATUS.md](./PROJECT_STATUS.md)。
 

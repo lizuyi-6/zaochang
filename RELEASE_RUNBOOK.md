@@ -12,9 +12,11 @@ npm test
 npm run db:generate
 git diff --check
 npm audit --omit=dev --audit-level=high
+node scripts/check-env-split.mjs
+node scripts/check-migrations.mjs   # 需 CLOUDFLARE_API_TOKEN;有序逐条对账,CI deploy 阶段强制执行
 ```
 
-判定要求：测试 `failed=0`、`skipped=0`、`todo=0`；迁移生成器输出无结构变化；高危或严重依赖漏洞为发布阻断项。中危告警必须登记受影响依赖、可利用条件与暂缓原因。
+判定要求：测试 `failed=0`、`skipped=0`、`todo=0`（总数以 node:test 当次输出为准，当前 173）；迁移生成器输出无结构变化；迁移对账数量/hash/created_at 逐位一致；高危或严重依赖漏洞为发布阻断项。中危告警必须登记受影响依赖、可利用条件与暂缓原因。
 
 ## 2. 运行时配置
 
@@ -33,9 +35,9 @@ ZAOCHANG_ADMIN_EMAILS
 
 ## 3. 数据与迁移
 
-1. 确认待部署版本只包含预期的 `0006_release_readiness.sql`、`0007_product_like_counters.sql`、`0008_noisy_jazinda.sql`、`0009_moderation_remediation.sql` 与 `0010_invite_upload_security.sql` 新迁移。
+1. 迁移水位以 journal 为准（当前 `0000` 至 `0019_community_counter_triggers`，共 20 条，forward-only）。部署门禁是 `scripts/check-migrations.mjs` 的有序逐条对账（数量 + 每条 SQL hash + created_at），由 deploy 工作流自动执行；手工发布前也必须先跑通，任一错位即停止发布。
 2. 保存发布前 D1 数据导出或平台快照，并记录时间与版本。
-3. 在包含历史 `product_orders` 与 `product_likes` 引用的隔离数据库按 `0000` 至 `0009` 顺序重放，要求全部退出码为 0，且引用的 `product_id` 不变。
+3. 在包含历史 `product_orders` 与 `product_likes` 引用的隔离数据库按 `0000` 至 journal 最新顺序重放，要求全部退出码为 0，且引用的 `product_id` 不变。
 4. 核对所有迁移前用户产品均变为 `status=review_status=pending_review`、`review_version=1`、`approved_version=0`，并已进入管理员预审队列。
 5. 核对钱包物化余额与 `fruit_entries` 聚合余额；存在不一致时停止发布并转人工复核。
 6. 先保存站点版本，再执行迁移和部署；不要在未保存回退版本时修改生产数据结构。
@@ -43,6 +45,8 @@ ZAOCHANG_ADMIN_EMAILS
 `0008` 会在延期外键约束下重建 `products` 表，但不得删除订单、点赞或其他业务引用；任何外键错误都必须中止发布。代码回滚不会自动删除新结构；禁止直接反向删除列、审核决定或账本记录。
 
 `0009` 会让已有外部 `demoUrl` 的批准产品重新进入待审，并禁止外链版本再次批准。它还增加违规下架退款/补偿分录守门；回滚应用时不得删除这些触发器或已生成分录。
+
+`0018` 采用 **drop → rebuild → recreate** 方式重建邀请相关触发器（同时把 provider CHECK 放宽到 `'email'` 并新增 `email_login_codes`）：应用后必须显式核对邀请触发器已按新定义重建，否则邀请闸静默失效。`0019` 增加社区计数器触发器、隐藏帖过滤与时区约束；两者都只增不改历史数据。
 
 ## 4. 发布顺序
 
