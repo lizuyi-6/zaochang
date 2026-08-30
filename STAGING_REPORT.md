@@ -15,6 +15,10 @@
 | Worker | `zaochang-staging` | — | 已部署,11 secret 已设 |
 | D1 | `zaochang-db` / `d250a527-1e1e-4b7f-ac27-266c723581e3` | APAC/SIN | schema+data 已导入并校验 |
 | R2 | `zaochang-uploads` | WNAM | 0 对象(生产 blobs 为空) |
+
+> ⚠️ **边界(2026-08-30 补记)**:staging 的 R2 绑定指向**与生产同一个** `zaochang-uploads` bucket。
+> 因此在建独立 `zaochang-uploads-staging` 之前,staging 不得做真实上传对象写入验收——任何
+> staging 上传都会落进生产 bucket。本报告 §WARN 的「上传 live 未验证」状态在该隔离完成前保持不变。
 | Turnstile | widget `0x4AAAAAAEKsUkDbokWPOZp_`(managed,域名=staging URL) | — | 已建,sitekey+secret 已设为 Worker secret |
 | 绑定 | `DB`→D1, `UPLOADS`→R2, `ASSETS`→静态 | — | deploy 输出确认解析 |
 
@@ -84,3 +88,5 @@
 1. 在阿里云把 ClamAV 扫描器经 HTTPS 暴露给 CF 边缘,更新 `UPLOAD_SCANNER_URL`。
 2. 在 GitHub OAuth app `Ov23livgjlLc01RdgmuN` 添加 staging callback URL。
 3. cutover 前完成 §5 全部行为层认证冒烟 + Turnstile 真实浏览器正向验证。
+4. (2026-08-30 补记)建独立 `zaochang-uploads-staging` R2 bucket 并改 `wrangler.staging.jsonc`
+   绑定;在此之前 staging 不做真实上传写入验收。

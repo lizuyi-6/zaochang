@@ -107,7 +107,14 @@ TRUST_OAI_IDENTITY_HEADERS=true   # 仅非生产环境生效
 
 ## 迁移
 
-发布版本必须按顺序应用 `drizzle/0000` 至 `drizzle/0010_invite_upload_security.sql`。`0009` 阻止可变外部 Demo 获得批准，并约束违规下架退款/补偿分录只能引用真实的一次解锁订单；`0010` 增加邀请码原子消耗、OAuth 建号数据库守门和上传扫描状态机。
+发布版本必须按顺序应用 `drizzle/0000` 至 journal 当前水位 `drizzle/0019_community_counter_triggers.sql`（共 20 条，forward-only）。与登录/审核直接相关的后段迁移：
+
+- `0009` 阻止可变外部 Demo 获得批准，并约束违规下架退款/补偿分录只能引用真实的一次解锁订单。
+- `0010` 增加邀请码原子消耗、OAuth 建号数据库守门和上传扫描状态机。
+- `0018` 增加 `email_login_codes` 并把三个 provider CHECK 放宽到 `'email'`；它会 **drop → rebuild → recreate** 邀请相关触发器，应用后必须核对触发器已重建（见 SQL 内注释）。
+- `0019` 增加社区计数器触发器、隐藏帖过滤与时区约束。
+
+部署流水线会用 `scripts/check-migrations.mjs` 对生产 `__drizzle_migrations` 做**有序逐条对账**（数量 + 每条 SQL hash + created_at 水位），任一错位即 fail-closed 阻断部署。注意该表只由 drizzle migrator 写入：`wrangler d1 execute --file` 应用的 SQL 必须按 `backups/_backfill_drizzle_migrations.sql` 的方式手工回填账目行。
 
 发布前运行：
 

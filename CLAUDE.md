@@ -14,7 +14,7 @@ Requires Node `>=22.13.0` (tests use `node:sqlite` and `--experimental-strip-typ
 npm ci                          # install
 npm run dev                     # vinext dev server (local D1/R2 via @cloudflare/vite-plugin)
 npm run build                   # -> dist/server/index.js (Worker) + dist/client (assets)
-npm test                        # builds, then runs the full integration suite (~75 tests)
+npm test                        # builds, then runs the full suite (173 tests — 以 node:test 输出为准)
 npm run lint                    # eslint
 npx tsc --noEmit                # typecheck
 npm run db:generate             # should output "No schema changes"; new SQL = drift (see below)
@@ -67,14 +67,20 @@ All DB access in routes goes through `database()` in `app/api/_lib/community.ts`
 
 ## Tests
 
-There is one integration test file: `tests/rendered-html.test.mjs` (node:test). It spawns a **real Wrangler preview server** on port 4179 against a fresh local D1 (applies all migrations from empty), plus a fake upload scanner and a fake OpenAI-compatible chat upstream, and asserts real HTTP responses + DB field state against the live worker runtime and real triggers — not mocks. It imports `.ts` source directly (hence `--experimental-strip-types`). The suite must stay `failed=0 / skipped=0 / todo=0`; CI rejects disabled-test syntax. Tests cover auth, invite flow, OIDC, payments/refunds, review gating, uploads, and the galaxy showcase.
+`npm test` runs three node:test entry files (with `--experimental-strip-types`, so tests can import `.ts` source directly):
+
+- `tests/rendered-html.test.mjs` — a **thin runner** (`concurrency: false`) that drives the serial suites in `tests/suites/01..10` in order. All of them share one harness, `tests/harness/preview.mjs`: a **real Wrangler preview server** on port 4179 against a fresh local D1 (applies all migrations from empty), plus a fake upload scanner, fake AI chat upstream, and fake email transport — asserting real HTTP responses + DB field state against the live worker runtime and real triggers, not mocks. The suites are **not** runnable in parallel outside the runner (each file's before-hook would start its own preview server and collide on the port).
+- `tests/hello-system-freeze.test.mjs` — 《Hello System》book freeze contract (78 nodes / stable id-slug / UPSERT semantics / reading_progress preservation).
+- `tests/worker-contracts.test.mjs` — pure-Node contracts for the Worker pipeline (request-body guard, anonymous edge cache, security headers) plus the purge registry and OIDC discovery; no Wrangler startup.
+
+The suite must stay `failed=0 / skipped=0 / todo=0`; CI rejects disabled-test syntax. Tests cover auth, invite flow, OIDC, payments/refunds, review gating, uploads, and the galaxy showcase. The freeze test writes temporary SQL/local D1/backup artifacts and may rewrite `content/import-hellosystem.sql` — judge whether that diff is expected before resetting it.
 
 ## Deploy
 
-Push to `main` → `.github/workflows/ci.yml` (`release-gates`: tsc, lint, disabled-test scan, `npm test`, `git diff --check`, migration-drift check, `npm audit --audit-level=high`) → on success `.github/workflows/deploy.yml` (triggered by ci's `workflow_run`) verifies all migrations are applied to prod D1 via `scripts/check-migrations.mjs` (fail-closed), then runs `npx wrangler deploy --config wrangler.prod.jsonc` at the exact ci-approved SHA. A manual `workflow_dispatch` can deploy in an emergency but **bypasses the ci release-gates**. Local manual deploy: `npm run build && npx wrangler deploy --config wrangler.prod.jsonc`.
+Push to `main` → `.github/workflows/ci.yml` (`release-gates`: tsc, lint, disabled-test scan, `npm test`, `git diff --check`, migration-drift check, `npm audit --audit-level=high`) → on success `.github/workflows/deploy.yml` (triggered by ci's `workflow_run`) verifies all migrations are applied to prod D1 via `scripts/check-migrations.mjs` (ordered per-entry hash+created_at reconciliation, fail-closed), then runs `npx wrangler deploy --config wrangler.prod.jsonc` at the exact ci-approved SHA. Manual `workflow_dispatch` is **emergency-only**: it must still record the reason and owner, pin an exact SHA, run equivalent gates + migration check + smoke before opening paid writes — never treat it as a gates bypass. Local manual deploy: `npm run build && npx wrangler deploy --config wrangler.prod.jsonc`.
 
 - **Do not rename** `wrangler.prod.jsonc` / `wrangler.staging.jsonc` to the standard `wrangler.jsonc`/`wrangler.toml`. The non-standard names are deliberate: they prevent `@cloudflare/vite-plugin` from auto-discovering the config and double-binding `DB`/`UPLOADS`, which breaks `npm test` with binding-name conflicts.
-- Production secrets (10 Worker secrets) are sourced from the Alibaba box `/etc/zaochang/zaochang.env` — the only authoritative copy. See `CLOUDFLARE_RUNBOOK.md` §2 for the pipe-injection pattern (never print values).
+- Production secrets are sourced from the Alibaba box `/etc/zaochang/zaochang.env` — the only authoritative copy. The full per-environment list (12 required + 2 optional prod secrets, staging-only TURNSTILE_*, test-only EMAIL_SEND_*) is `CLOUDFLARE_RUNBOOK.md` §2 — that section is authoritative; see it for the pipe-injection pattern (never print values).
 - Production app is on Cloudflare (D1 `zaochang-db`, R2 `zaochang-uploads`). The old Alibaba host deployment in `RELEASE_RUNBOOK.md` §8 is **deprecated** (box is ClamAV-only now). Local DNS for `aetherstudio.top` is unreliable (VPN hijack → `198.18.x.x`); always verify via the box `--resolve`-ing to the CF edge IP.
 
 ## Conventions & gotchas

@@ -116,7 +116,7 @@ AI_CHAT_EXPERT_TRANSPORT(可选,=messages 时专家模型走 Anthropic Messages 
 
 ```bash
 cd X:/zaochang
-npm test                       # 必须 75/75(改 dist 前先跑)
+npm test                       # 必须 failed=0/skipped=0/todo=0(当前 173 条,以 node:test 输出为准;改 dist 前先跑)
 npm run build                  # 产出 dist/server/index.js + dist/client
 npx wrangler deploy --config wrangler.prod.jsonc
 ```
@@ -210,6 +210,11 @@ const r=await fetch("/api/uploads",{method:"POST",body:fd});console.log("UPLOAD"
 3. 盒子那次误传文件 `02207791-....png` 在盒子本地 state(`/var/lib/zaochang/state/v3/r2`),可忽略。
 4. **Turnstile 未上生产**(仅影响邀请码兑换路径);staging 已验证。
 5. 想彻底退阿里云:需先把扫描器迁到任意小 VPS(装 ClamAV + cloudflared,tunnel 重指),退前**先备份 `/var/lib/zaochang/state`**。
+6. **staging R2 与生产共享 `zaochang-uploads` bucket**(已接受风险,但有明确边界):staging D1 已分离,
+   R2 未分离。因此 staging 上的上传写入验收**禁止**做真实对象写入,只能验证页面/header/discovery
+   与 fail-closed 路径;任何 staging 上传对象会落进生产 bucket。要跑完整上传矩阵,必须先建独立
+   `zaochang-uploads-staging` 并改 `wrangler.staging.jsonc` 的 R2 绑定。
 
 ---
-*最后更新:2026-08-09 —— 切换至 Cloudflare 生产、上传经 Tunnel 扫描端到端验证通过、旧 workerd 退役。*
+*最后更新:2026-08-30 —— 迁移对账升级为有序 hash 校验;测试总数口径改为 node:test 实际输出;补记 staging R2 共享边界。*
+*此前更新:2026-08-09 —— 切换至 Cloudflare 生产、上传经 Tunnel 扫描端到端验证通过、旧 workerd 退役。*
