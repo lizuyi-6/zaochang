@@ -2,6 +2,7 @@ import { optionalMember } from "../_lib/access-control";
 import { database, jsonError } from "../_lib/community";
 import { guardWrite } from "../_lib/route-guards";
 import { findProduct } from "../../lib/community-data";
+import { PUBLISHED_PRODUCT_SQL } from "../../lib/product-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -89,8 +90,7 @@ async function productIsPublic(targetRef: string) {
   if (!/^\d+$/.test(targetRef)) return Boolean(findProduct(targetRef));
   const product = await database().prepare(
     `SELECT 1 AS found FROM products
-     WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
-       AND review_status = 'approved' AND approved_version = review_version`,
+     WHERE id = ? AND ${PUBLISHED_PRODUCT_SQL}`,
   ).bind(Number(targetRef)).first();
   return Boolean(product);
 }

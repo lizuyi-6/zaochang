@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { isAdminEmail, optionalMember } from "../../_lib/access-control";
 import { database } from "../../_lib/community";
+import { isCurrentApprovedProduct } from "../../../lib/product-policy";
 
 export async function GET(_request: Request, context: { params: Promise<{ key: string }> }) {
   const { key } = await context.params;
@@ -51,8 +52,7 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
       reviewer = member !== null && isAdminEmail(member.email) && product?.reviewStatus === "pending_review";
       approvedProductCover = product?.status === "published"
         && product.moderationStatus === "visible"
-        && product.reviewStatus === "approved"
-        && product.approvedVersion === product.reviewVersion;
+        && isCurrentApprovedProduct(product);
     }
     if (!owner && !reviewer && !approvedProductCover) {
       return new Response("Forbidden", { status: 403 });

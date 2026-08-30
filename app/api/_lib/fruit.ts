@@ -6,6 +6,10 @@ import {
   isWalletBalanceError as isBalanceError,
   isWalletPendingError as isPendingError,
 } from "./errors";
+import {
+  PUBLISHED_PRODUCT_SQL,
+  PUBLISHED_PRODUCT_SQL_QUALIFIED,
+} from "../../lib/product-policy";
 
 export const FRUIT_POLICY = {
   onboardingGrant: 0,
@@ -114,8 +118,7 @@ async function product(productId: number) {
   return database().prepare(
     `SELECT id, title, owner_email AS ownerEmail, price,
             pricing_model AS pricingModel
-     FROM products WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
-       AND review_status = 'approved' AND approved_version = review_version`,
+     FROM products WHERE id = ? AND ${PUBLISHED_PRODUCT_SQL}`,
   ).bind(productId).first<ProductRow>();
 }
 
@@ -144,8 +147,7 @@ async function orderByIdempotency(buyerEmail: string, key: string) {
      FROM product_orders o
      JOIN products p ON p.id = o.product_id
      WHERE o.buyer_email = ? AND o.idempotency_key = ?
-       AND p.status = 'published' AND p.moderation_status = 'visible'
-       AND p.review_status = 'approved' AND p.approved_version = p.review_version`,
+       AND ${PUBLISHED_PRODUCT_SQL_QUALIFIED}`,
   ).bind(buyerEmail, key).first<OrderRow>();
 }
 
@@ -167,8 +169,7 @@ async function activeEntitlement(buyerEmail: string, productId: number) {
      FROM product_entitlements e
      JOIN products p ON p.id = e.product_id
      WHERE e.buyer_email = ? AND e.product_id = ? AND e.status = 'active'
-       AND p.status = 'published' AND p.moderation_status = 'visible'
-       AND p.review_status = 'approved' AND p.approved_version = p.review_version`,
+       AND ${PUBLISHED_PRODUCT_SQL_QUALIFIED}`,
   ).bind(buyerEmail, productId).first<{ orderId: string }>();
 }
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatedNumber } from "../components/animated-number";
 import { Reveal } from "../components/reveal";
+import { isCurrentApprovedProduct } from "../lib/product-policy";
 import { reviewDisplayState } from "../lib/review-status";
 
 type StudioProduct = { id: number; title: string; category: string; imageUrl?: string | null; coverTheme: string; plays: number; likes: number; status: string; reviewStatus: "pending_review" | "approved" | "rejected"; reviewVersion: number; approvedVersion: number; reviewedAt?: string | null; reviewNote?: string; submittedAt: string; createdAt: string };
@@ -68,9 +69,9 @@ export function StudioClient() {
   const values = orderedProducts.map((item) => metric === "体验" ? item.plays : item.likes);
   const peak = Math.max(1, ...values);
   const bars = values.length ? values.map((value) => `${Math.max(10, Math.round(value / peak * 100))}%`) : ["8%", "8%", "8%", "8%"];
-  const approvedCount = products.filter((product) => product.reviewStatus === "approved" && product.approvedVersion === product.reviewVersion).length;
+  const approvedCount = products.filter(isCurrentApprovedProduct).length;
   const pendingCount = products.filter((product) => product.reviewStatus === "pending_review").length;
-  const publishedProducts = orderedProducts.filter((product) => product.reviewStatus === "approved" && product.approvedVersion === product.reviewVersion);
+  const publishedProducts = orderedProducts.filter(isCurrentApprovedProduct);
 
   return <div className="studio-page">
     <header className="route-hero studio-hero"><div><span className="deep-eyebrow"><Sparkles size={14} /> CREATOR STUDIO</span><h1>你的作品，正在怎样生长</h1><p>从发布、被体验到获得支持，所有信号都汇集在这里。</p></div><Link className="primary-action" href={signedIn === false ? "/signin?return_to=%2Fstudio%2Fnew" : "/studio/new"}><Plus size={17} /> 创建新作品</Link></header>

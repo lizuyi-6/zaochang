@@ -6,6 +6,7 @@ import { database } from "./community";
 import { awardProductLike, removeProductLike, tipProduct } from "./fruit";
 import { enforceRateLimit, rateLimitKey, requestActorKey } from "./rate-limit";
 import { findProduct } from "../../lib/community-data";
+import { PUBLISHED_PRODUCT_SQL } from "../../lib/product-policy";
 
 export async function handleExperienceAction(request: Request, input: Record<string, unknown>): Promise<Response> {
   const db = database();
@@ -17,8 +18,7 @@ export async function handleExperienceAction(request: Request, input: Record<str
   if (Number.isInteger(productId)) {
     const update = await db
       .prepare(`UPDATE products SET plays_count = plays_count + 1
-                WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
-                  AND review_status = 'approved' AND approved_version = review_version`)
+                WHERE id = ? AND ${PUBLISHED_PRODUCT_SQL}`)
       .bind(productId)
       .run();
     if ((update.meta?.changes ?? 0) === 0) {
@@ -58,8 +58,7 @@ export async function handleMemberAction(member: MemberIdentity, input: Record<s
       .first();
     const product = await db
       .prepare(`SELECT owner_email AS ownerEmail FROM products
-                WHERE id = ? AND status = 'published' AND moderation_status = 'visible'
-                  AND review_status = 'approved' AND approved_version = review_version`)
+                WHERE id = ? AND ${PUBLISHED_PRODUCT_SQL}`)
       .bind(productId)
       .first<{ ownerEmail: string }>();
     if (!product) return Response.json({ error: "product_not_found" }, { status: 404 });
