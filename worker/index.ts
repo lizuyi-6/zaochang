@@ -3,10 +3,8 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { resolvePublicAppOrigin } from "../app/lib/public-origin";
 import { withSecurityHeaders } from "../app/lib/security-policy";
-import { oidcDiscoveryDocument, purgeExpiredOauthProviderStatements } from "../app/api/_lib/oauth-provider";
-import { purgeExpiredExternalFruitStatements } from "../app/api/_lib/external-fruit";
-import { purgeExpiredEmailCodeStatements } from "../app/api/_lib/email-codes";
-import { purgeExpiredSessionStatements } from "../app/oauth-session";
+import { oidcDiscoveryDocument } from "../app/api/_lib/oauth-discovery";
+import { runPurgeRegistry } from "../app/api/_lib/purge";
 import { AGENT_WRITE_CAPABILITIES, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
 import { prepareRequestBody } from "./request-body";
 import { handleWithAnonCache } from "./anon-cache";
@@ -40,7 +38,7 @@ interface ExecutionContext {
 const worker = {
   // wrangler.prod.jsonc triggers.crons 触发;本地 dev/测试不会触发,行为零变化。
   async scheduled(_controller: unknown, env: Env): Promise<void> {
-    await purgeExpiredData(env);
+    if (env.DB) await runPurgeRegistry(env.DB);
   },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -90,30 +88,5 @@ const worker = {
     return withSecurityHeaders(request, await handler.fetch(prepared, env, ctx), origin);
   },
 };
-
-// P2-U:过期数据生命周期。此前全库除 api_rate_limits 外没有任何清理
-// (授权请求行/codes/tokens/payments/email codes/auth_sessions 只增不减)。
-// 由 wrangler crons 触发;各域模块通过 purgeExpired*Statements 注册自己的幂等
-// DELETE,漏跑一轮只影响存储增长,不影响正确性。
-const PURGE_REGISTRIES = [
-  purgeExpiredOauthProviderStatements,
-  purgeExpiredExternalFruitStatements,
-  purgeExpiredEmailCodeStatements,
-  purgeExpiredSessionStatements,
-];
-
-async function purgeExpiredData(env: Env) {
-  if (!env.DB) return;
-  for (const registry of PURGE_REGISTRIES) {
-    for (const statement of registry(env.DB)) {
-      // 逐条执行:某张表名在未来重构中不存在时,不影响其余清理(并让日志能定位)。
-      try {
-        await statement.run();
-      } catch (error) {
-        console.error("[cron-purge] statement failed:", error instanceof Error ? error.message : error);
-      }
-    }
-  }
-}
 
 export default worker;

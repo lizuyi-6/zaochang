@@ -456,9 +456,4 @@ export function externalPaymentReturnUrl(returnUri: string, payment: { id: strin
   return target.toString();
 }
 
-// 过期数据清理注册(worker cron 按域注册表):终态且过期的外部支付行。
-export function purgeExpiredExternalFruitStatements(db: D1Database) {
-  return [
-    db.prepare(`DELETE FROM external_fruit_payments WHERE status IN ('expired', 'cancelled') AND expires_at <= datetime('now', '-7 days')`),
-  ];
-}
+// 过期数据清理注册已抽离到 purge/external-fruit.ts(worker cron 不加载本状态机)。
