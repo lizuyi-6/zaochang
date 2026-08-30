@@ -1,4 +1,5 @@
 import { database, jsonError } from "../_lib/community";
+import { isUniqueConstraintError } from "../_lib/errors";
 import { guardWrite } from "../_lib/route-guards";
 
 const TARGET_TYPES = new Set(["post", "comment", "product", "profile", "circle"]);
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
          VALUES (?, ?, ?, ?, ?, ?)`,
       ).bind(`report:${crypto.randomUUID()}`, member.email, targetType, targetRef, reason, details).run();
     } catch (error) {
-      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+      if (isUniqueConstraintError(error)) {
         return Response.json({ reported: true, duplicate: true });
       }
       throw error;

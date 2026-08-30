@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { cookies, headers } from "next/headers";
 import { resolvePublicAppOrigin } from "./lib/public-origin";
+import { isInvitationRegistrationRequiredError, isInvitationUnavailableError } from "./api/_lib/errors";
 
 export type OAuthProvider = "github";
 // 会话签发可用的 provider:OAuth 登录走 OAuthProvider,邮箱验证码登录走 "email"。
@@ -240,10 +241,9 @@ export async function ensureOAuthUser(
       `SELECT email FROM oauth_accounts WHERE provider = ? AND provider_account_id = ?`,
     ).bind(provider, providerAccountId).first<{ email: string }>();
     if (!winner) {
-      const message = error instanceof Error ? error.message : String(error);
       // 仅匹配两个邀请闸触发器的 RAISE 消息;宽泛的表名匹配会把
       // invitation_redemptions 表上的 UNIQUE/FK 故障误报成 invitation_invalid。
-      if (message.includes("oauth_registration_invitation_required") || message.includes("invitation_not_available")) {
+      if (isInvitationRegistrationRequiredError(error) || isInvitationUnavailableError(error)) {
         throw new RegistrationInviteError("invitation_invalid");
       }
       throw error;
@@ -304,8 +304,7 @@ export async function ensureEmailUser(email: string, invitationHash: string | nu
        WHERE provider = 'email' AND provider_account_id = ?`,
     ).bind(email).first<{ email: string; displayName: string }>();
     if (!winner) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("oauth_registration_invitation_required") || message.includes("invitation_not_available")) {
+      if (isInvitationRegistrationRequiredError(error) || isInvitationUnavailableError(error)) {
         throw new RegistrationInviteError("invitation_invalid");
       }
       throw error;

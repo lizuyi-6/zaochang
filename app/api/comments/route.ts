@@ -1,5 +1,6 @@
 import { optionalMember } from "../_lib/access-control";
 import { database, jsonError } from "../_lib/community";
+import { isPostCommentNotVisibleError, isProductCommentNotApprovedError } from "../_lib/errors";
 import { guardWrite } from "../_lib/route-guards";
 import { findProduct } from "../../lib/community-data";
 import { PUBLISHED_PRODUCT_SQL } from "../../lib/product-policy";
@@ -69,11 +70,11 @@ export async function POST(request: Request) {
          RETURNING id, owner_name AS ownerName, content, created_at AS createdAt`,
       ).bind(member.email, member.displayName, targetType, targetRef, content).first();
     } catch (error) {
-      if (error instanceof Error && error.message.includes("product_comment_product_not_approved")) {
+      if (isProductCommentNotApprovedError(error)) {
         return Response.json({ error: "product_not_found" }, { status: 404 });
       }
       // 隐藏帖评论闸(0019 触发器):POST 侧校验与触发器之间帖子被隐藏的竞态在这里落地。
-      if (error instanceof Error && error.message.includes("post_comment_post_not_visible")) {
+      if (isPostCommentNotVisibleError(error)) {
         return Response.json({ error: "post_not_found" }, { status: 404 });
       }
       throw error;

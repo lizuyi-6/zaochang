@@ -5,7 +5,13 @@
 import type { MemberIdentity } from "./access-control";
 import { adminAuditStatement } from "./admin";
 import { database } from "./community";
-import { errorMessageIncludes } from "./errors";
+import {
+  isExternalDemoImmutableError,
+  isModerationRemediationNotAllowedError,
+  isProductReviewNotPendingError,
+  isUniqueConstraintError,
+  isWalletPendingError,
+} from "./errors";
 
 type ModerationInput = Record<string, unknown>;
 
@@ -49,11 +55,10 @@ export async function applyModerationAction(admin: MemberIdentity, input: Modera
         adminAuditStatement(admin.email, action, "product", targetRef, `version=${product.reviewVersion}; note=${note}`),
       ]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("external_demo_requires_immutable_package")) {
+      if (isExternalDemoImmutableError(error)) {
         return Response.json({ error: "external_demo_requires_immutable_package" }, { status: 409 });
       }
-      if (message.includes("product_review_not_pending") || message.includes("UNIQUE constraint failed")) {
+      if (isProductReviewNotPendingError(error) || isUniqueConstraintError(error)) {
         const decided = await db.prepare(
           `SELECT review_status AS reviewStatus, review_version AS reviewVersion,
                   review_note AS reviewNote, reviewed_by AS reviewedBy
@@ -233,7 +238,7 @@ export async function applyModerationAction(admin: MemberIdentity, input: Modera
     try {
       await db.batch(statements);
     } catch (error) {
-      if (errorMessageIncludes(error, "wallet_pending_nonnegative") || errorMessageIncludes(error, "moderation_remediation_not_allowed")) {
+      if (isWalletPendingError(error) || isModerationRemediationNotAllowedError(error)) {
         return Response.json({ error: "moderation_refund_reserve_unavailable" }, { status: 409 });
       }
       throw error;

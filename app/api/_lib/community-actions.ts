@@ -3,6 +3,7 @@
 // 由路由完成 guardWrite 后进入 handleMemberAction。SQL 与响应形状逐字不变。
 import type { MemberIdentity } from "./access-control";
 import { database } from "./community";
+import { isProductLikeNotApprovedError } from "./errors";
 import { awardProductLike, removeProductLike, tipProduct } from "./fruit";
 import { enforceRateLimit, rateLimitKey, requestActorKey } from "./rate-limit";
 import { findProduct } from "../../lib/community-data";
@@ -75,7 +76,7 @@ export async function handleMemberAction(member: MemberIdentity, input: Record<s
         .bind(productId, member.email)
         .run();
     } catch (error) {
-      if (error instanceof Error && error.message.includes("product_like_product_not_approved")) {
+      if (isProductLikeNotApprovedError(error)) {
         return Response.json({ error: "product_not_found" }, { status: 404 });
       }
       throw error;
