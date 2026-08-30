@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import * as THREE from "three";
 import {
   GALAXIES,
   PLANET_BY_ID,
@@ -30,13 +29,8 @@ import {
 import { createGalaxyScene } from "./galaxy-scene";
 import { createCameraController } from "./galaxy-camera";
 import { createGalaxyInteraction } from "./galaxy-interaction";
+import { createGalaxyAnimation } from "./galaxy-animation";
 import styles from "./galaxy.module.css";
-import {
-  PLANET_ORBIT_DISTANCE_SCALE,
-  setOrbitalPosition,
-  getOrbitResidual,
-  STELLAR_PROFILES,
-} from "./galaxy-scene-assets";
 
 export function GalaxyExperience() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -145,31 +139,7 @@ export function GalaxyExperience() {
       onRendererError: () => queueMicrotask(() => setWebglError(true)),
     });
     if (!sceneRuntime) return;
-    const {
-      scene, renderer, camera, composer, bloom, bloomBaseStrength,
-      universe, galaxy, system, animatedMaterials, targetAccent, targetFog, rimLight,
-      blackHoleRoot, eventHorizon, horizonCrown,
-      galaxySpaces, stellarRuntimes, bodies,
-      genericPlanetRuntimes, visualRadiusByTarget,
-      backgroundStars, dust, foregroundDust, constellationGroup,
-      diffractionStars, lightEchoes, aurelia, planet, moonOrbit,
-      nyx, nyxPlanet, nyxDebris, caelum, caelumPlanet, caelumHalo,
-    } = sceneRuntime;
-    let appliedReset = resetRef.current;
-    const projectedTarget = new THREE.Vector3();
-    const projectedBlackHole = new THREE.Vector3();
-    const projectedHostStar = new THREE.Vector3();
-    const projectedHostStarEdge = new THREE.Vector3();
-    const projectedEdge = new THREE.Vector3();
-    const worldCenter = new THREE.Vector3();
-    const blackHoleWorld = new THREE.Vector3();
-    const planetWorldPositions = PLANETS.map(() => new THREE.Vector3());
-    const starWorldPositions = new Map<GalaxyId, THREE.Vector3>(GALAXIES.map((definition) => [definition.id, new THREE.Vector3()]));
-    const cameraAxis = new THREE.Vector3();
     const cameraController = createCameraController({ runtime: sceneRuntime, mobile, prefersReducedMotion });
-    let elapsed = 0;
-    let passage = 0;
-    let frame = 0;
 
     cameraController.applyTarget(targetRef.current);
 
@@ -185,201 +155,25 @@ export function GalaxyExperience() {
       onToggleCruise: toggleCruise,
       onContextLost: () => setWebglError(true),
     });
-    const { pointer, dragRotation } = interaction;
 
-    let animationFrame = 0;
-    let lastRenderTime = 0;
-    let previousFrameTime = 0;
-
-    function animate(timestamp = 0) {
-      animationFrame = window.requestAnimationFrame(animate);
-      if (interaction.hidden) return;
-      const targetChanged = targetRef.current !== cameraController.appliedTarget || resetRef.current !== appliedReset;
-      const minimumFrameInterval = pausedRef.current || prefersReducedMotion ? 120 : 16;
-      if (!targetChanged && timestamp - lastRenderTime < minimumFrameInterval) return;
-      lastRenderTime = timestamp;
-      const delta = previousFrameTime === 0 ? 0 : Math.min((timestamp - previousFrameTime) / 1000, 0.05);
-      previousFrameTime = timestamp;
-      if (!pausedRef.current) elapsed += delta;
-
-      if (targetRef.current !== cameraController.appliedTarget) cameraController.applyTarget(targetRef.current, timestamp, frame);
-      if (resetRef.current !== appliedReset) {
-        appliedReset = resetRef.current;
-        dragRotation.set(0, 0);
-        cameraController.zoom = 1;
-        cameraController.applyTarget("singularity", timestamp, frame);
-      }
-
-      const warp = warpRef.current;
-      warpRef.current *= 0.94;
-      if (warpRef.current < 0.002) warpRef.current = 0;
-      passage = THREE.MathUtils.lerp(passage, passageRef.current, passageRef.current > passage ? 0.055 : 0.032);
-      animatedMaterials.forEach((material) => {
-        if (material.uniforms.uTime) material.uniforms.uTime.value = prefersReducedMotion ? 0 : elapsed;
-        if (material.uniforms.uWarp) material.uniforms.uWarp.value = warp;
-        if (material.uniforms.uPassage) material.uniforms.uPassage.value = prefersReducedMotion ? 0 : passage;
-      });
-
-      const quietMotion = quietRef.current ? 0.34 : 1;
-      if (!pausedRef.current && !prefersReducedMotion) {
-        setOrbitalPosition(aurelia, PLANET_BY_ID.aurelia.orbit, elapsed, PLANET_ORBIT_DISTANCE_SCALE);
-        setOrbitalPosition(nyx, PLANET_BY_ID.nyx.orbit, elapsed, PLANET_ORBIT_DISTANCE_SCALE);
-        setOrbitalPosition(caelum, PLANET_BY_ID.caelum.orbit, elapsed, PLANET_ORBIT_DISTANCE_SCALE);
-        genericPlanetRuntimes.forEach((runtime, index) => {
-          setOrbitalPosition(runtime.group, runtime.definition.orbit, elapsed, PLANET_ORBIT_DISTANCE_SCALE);
-          runtime.visual.rotation.y = (index % 2 ? -1 : 1) * elapsed * (0.018 + (runtime.definition.visual.seed % 1) * 0.02) * quietMotion;
-          runtime.moonOrbit.rotation.y = elapsed * (0.055 + index * 0.002) * quietMotion;
-        });
-        galaxy.rotation.y = elapsed * 0.004 * quietMotion;
-        dust.rotation.y = -elapsed * 0.003 * quietMotion;
-        horizonCrown.rotation.y = elapsed * 0.0035 * quietMotion;
-        horizonCrown.rotation.z = 0.15 + Math.sin(elapsed * 0.008) * 0.018 * quietMotion;
-        galaxySpaces.forEach((runtime, id) => {
-          const index = GALAXIES.findIndex((galaxyDefinition) => galaxyDefinition.id === id);
-          runtime.visual.rotation.y += (0.00016 + index * 0.000025) * quietMotion;
-        });
-        backgroundStars.rotation.y = elapsed * 0.0012 * quietMotion;
-        foregroundDust.position.z = Math.sin(elapsed * 0.028) * 0.42 * quietMotion;
-        constellationGroup.rotation.y = Math.sin(elapsed * 0.018) * 0.012;
-        planet.rotation.y = elapsed * 0.026 * quietMotion;
-        moonOrbit.rotation.y = elapsed * 0.11 * quietMotion;
-        nyxPlanet.rotation.y = elapsed * 0.034 * quietMotion;
-        nyxDebris.rotation.y = elapsed * 0.052 * quietMotion;
-        nyxDebris.rotation.z = Math.sin(elapsed * 0.027) * 0.08;
-        caelumPlanet.rotation.y = -elapsed * 0.024 * quietMotion;
-        caelumHalo.rotation.y = -elapsed * 0.031 * quietMotion;
-        caelumHalo.rotation.z = Math.sin(elapsed * 0.021) * 0.06;
-        stellarRuntimes.forEach((runtime, index) => {
-          runtime.surface.rotation.y = elapsed * (0.012 + index * 0.0035) * quietMotion;
-          runtime.surface.rotation.z = Math.sin(elapsed * 0.009 + runtime.phase) * 0.035;
-          if (runtime.corona) {
-            (runtime.corona.material as THREE.SpriteMaterial).opacity = runtime.baseCoronaOpacity * (0.9 + Math.sin(elapsed * 0.21 + runtime.phase) * 0.1);
-          }
-        });
-        system.rotation.y = Math.sin(elapsed * 0.034) * 0.012 * quietMotion;
-        diffractionStars.forEach((sprite) => {
-          const pulse = 0.88 + Math.sin(elapsed * 0.38 + sprite.userData.phase) * 0.12;
-          sprite.scale.setScalar(sprite.userData.baseScale * pulse);
-        });
-        lightEchoes.forEach((line) => {
-          const cycle = (elapsed * line.userData.speed + line.userData.phase) % 18;
-          const active = cycle > 12 ? Math.sin(((cycle - 12) / 6) * Math.PI) : 0;
-          line.position.x = -20 + Math.max(0, cycle - 12) * 7.4;
-          line.position.y = line.userData.baseY + Math.sin(elapsed * 0.13 + line.userData.phase) * 0.25;
-          (line.material as THREE.LineBasicMaterial).opacity = active * (quietRef.current ? 0.07 : 0.13);
-        });
-      }
-
-      universe.rotation.y = THREE.MathUtils.lerp(universe.rotation.y, dragRotation.x + pointer.x * 0.032 * quietMotion, 0.028);
-      universe.rotation.x = THREE.MathUtils.lerp(universe.rotation.x, dragRotation.y - pointer.y * 0.018 * quietMotion, 0.028);
-      rimLight.color.lerp(targetAccent, 0.018);
-      scene.fog?.color.lerp(targetFog, 0.012);
-
-      const { transitionProgress } = cameraController.updateCameraFrame({
-        timestamp,
-        elapsed,
-        quiet: quietRef.current,
-        quietMotion,
-        cruising: cruiseRef.current,
-        pointer,
-        warp,
-        passage,
-        compactScene: interaction.compactScene,
-      });
-      const renderedWidth = interaction.renderedWidth;
-      const appliedTarget = cameraController.appliedTarget;
-      const activeBody = cameraController.activeBody;
-      const cameraFlight = cameraController.cameraFlight;
-      const targetCamera = cameraController.targetCamera;
-      activeBody.group.getWorldPosition(projectedTarget).project(camera);
-      blackHoleRoot.getWorldPosition(projectedBlackHole).project(camera);
-      activeBody.group.getWorldPosition(worldCenter);
-      cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(visualRadiusByTarget.get(appliedTarget) ?? 1);
-      projectedEdge.copy(worldCenter).add(cameraAxis).project(camera);
-      const targetRadiusPx = Math.abs(projectedEdge.x - projectedTarget.x) * renderedWidth * 0.5;
-      const targetCenterPx = (projectedTarget.x + 1) * renderedWidth * 0.5;
-      blackHoleRoot.getWorldPosition(worldCenter);
-      cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(3.6);
-      projectedEdge.copy(worldCenter).add(cameraAxis).project(camera);
-      const blackHoleRadiusPx = Math.abs(projectedEdge.x - projectedBlackHole.x) * renderedWidth * 0.5;
-      cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(17.35);
-      projectedEdge.copy(worldCenter).add(cameraAxis).project(camera);
-      const crownOuterRadiusPx = Math.abs(projectedEdge.x - projectedBlackHole.x) * renderedWidth * 0.5;
-      cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(15.05);
-      projectedEdge.copy(worldCenter).add(cameraAxis).project(camera);
-      const crownInnerRadiusPx = Math.abs(projectedEdge.x - projectedBlackHole.x) * renderedWidth * 0.5;
-      renderer.domElement.dataset.target = appliedTarget;
-      renderer.domElement.dataset.focusKind = appliedTarget === "singularity" ? "singularity" : "planet";
-      renderer.domElement.dataset.lensingMode = "lensed-arcs";
-      renderer.domElement.dataset.sceneDensity = appliedTarget === "singularity" ? "atlas" : "solitude";
-      renderer.domElement.dataset.cameraTransition = cameraFlight ? "flying" : "settled";
-      renderer.domElement.dataset.transitionProgress = transitionProgress.toFixed(4);
-      renderer.domElement.dataset.transitionFrom = cameraFlight?.fromId ?? appliedTarget;
-      renderer.domElement.dataset.transitionTo = cameraFlight?.toId ?? appliedTarget;
-      renderer.domElement.dataset.cameraX = camera.position.x.toFixed(4);
-      renderer.domElement.dataset.cameraY = camera.position.y.toFixed(4);
-      renderer.domElement.dataset.cameraZ = camera.position.z.toFixed(4);
-      renderer.domElement.dataset.surfaceFamily = appliedTarget === "singularity" ? "singularity" : PLANET_BY_ID[appliedTarget].visual.surface;
-      renderer.domElement.dataset.parentGalaxy = appliedTarget === "singularity" ? "none" : PLANET_BY_ID[appliedTarget].galaxyId;
-      renderer.domElement.dataset.galaxyCount = String(GALAXIES.length);
-      renderer.domElement.dataset.planetCount = String(PLANETS.length);
-      renderer.domElement.dataset.visiblePlanetCount = String(PLANETS.filter((definition) => bodies.get(definition.id)?.group.visible).length);
-      renderer.domElement.dataset.hostStarCount = String(stellarRuntimes.length);
-      renderer.domElement.dataset.visibleHostStarCount = String(Array.from(galaxySpaces.values()).filter((runtime) => runtime.planets.visible && runtime.star.visible).length);
-      PLANETS.forEach((definition, index) => bodies.get(definition.id)?.group.getWorldPosition(planetWorldPositions[index]));
-      galaxySpaces.forEach((runtime, galaxyId) => runtime.star.getWorldPosition(starWorldPositions.get(galaxyId)!));
-      let minimumPlanetSeparation = Number.POSITIVE_INFINITY;
-      for (let first = 0; first < planetWorldPositions.length; first += 1) {
-        for (let second = first + 1; second < planetWorldPositions.length; second += 1) {
-          minimumPlanetSeparation = Math.min(minimumPlanetSeparation, planetWorldPositions[first].distanceTo(planetWorldPositions[second]));
-        }
-      }
-      blackHoleRoot.getWorldPosition(blackHoleWorld);
-      const activePlanetIndex = appliedTarget === "singularity" ? -1 : PLANETS.findIndex((definition) => definition.id === appliedTarget);
-      const activeHostStar = appliedTarget === "singularity" ? null : starWorldPositions.get(PLANET_BY_ID[appliedTarget].galaxyId);
-      let hostStarRadiusPx = 0;
-      if (activeHostStar && appliedTarget !== "singularity") {
-        projectedHostStar.copy(activeHostStar).project(camera);
-        cameraAxis.set(1, 0, 0).applyQuaternion(camera.quaternion).multiplyScalar(STELLAR_PROFILES[PLANET_BY_ID[appliedTarget].galaxyId].radius);
-        projectedHostStarEdge.copy(activeHostStar).add(cameraAxis).project(camera);
-        hostStarRadiusPx = Math.abs(projectedHostStarEdge.x - projectedHostStar.x) * renderedWidth * 0.5;
-      } else {
-        projectedHostStar.set(2, 2, 2);
-      }
-      renderer.domElement.dataset.minimumPlanetSeparation = minimumPlanetSeparation.toFixed(2);
-      renderer.domElement.dataset.targetBlackHoleDistance = activePlanetIndex < 0 ? "0.00" : planetWorldPositions[activePlanetIndex].distanceTo(blackHoleWorld).toFixed(2);
-      renderer.domElement.dataset.targetHostStarDistance = activePlanetIndex < 0 || !activeHostStar ? "0.00" : planetWorldPositions[activePlanetIndex].distanceTo(activeHostStar).toFixed(2);
-      renderer.domElement.dataset.hostStarNdcX = projectedHostStar.x.toFixed(4);
-      renderer.domElement.dataset.hostStarNdcY = projectedHostStar.y.toFixed(4);
-      renderer.domElement.dataset.hostStarRadiusPx = hostStarRadiusPx.toFixed(2);
-      renderer.domElement.dataset.targetNdcX = projectedTarget.x.toFixed(4);
-      renderer.domElement.dataset.targetNdcY = projectedTarget.y.toFixed(4);
-      renderer.domElement.dataset.targetRadiusPx = targetRadiusPx.toFixed(2);
-      renderer.domElement.dataset.targetLeftPx = (targetCenterPx - targetRadiusPx).toFixed(2);
-      renderer.domElement.dataset.cameraResidual = camera.position.distanceTo(targetCamera).toFixed(4);
-      renderer.domElement.dataset.blackHoleNdcX = projectedBlackHole.x.toFixed(4);
-      renderer.domElement.dataset.blackHoleNdcY = projectedBlackHole.y.toFixed(4);
-      renderer.domElement.dataset.blackHoleRadiusPx = blackHoleRadiusPx.toFixed(2);
-      renderer.domElement.dataset.crownInnerRadiusPx = crownInnerRadiusPx.toFixed(2);
-      renderer.domElement.dataset.crownOuterRadiusPx = crownOuterRadiusPx.toFixed(2);
-      renderer.domElement.dataset.blackHoleVisible = String(appliedTarget === "singularity" && Math.abs(projectedBlackHole.x) < 1.15 && Math.abs(projectedBlackHole.y) < 1.15 && projectedBlackHole.z > -1 && projectedBlackHole.z < 1);
-      renderer.domElement.dataset.blackHoleLayerVisible = String(eventHorizon.visible);
-      renderer.domElement.dataset.orbitResidual = Math.max(...PLANETS.map((definition) => {
-        const runtime = bodies.get(definition.id);
-        return runtime ? getOrbitResidual(runtime.group, definition.orbit, PLANET_ORBIT_DISTANCE_SCALE) : Number.POSITIVE_INFINITY;
-      })).toExponential(2);
-      bloom.strength = bloomBaseStrength - (quietRef.current ? 0.045 : 0) + warp * 0.18 + passage * 0.14;
-      composer.render();
-
-      frame += 1;
-      renderer.domElement.dataset.frame = String(frame);
-      if (frame === 2) setReady(true);
-    }
-
-    animate();
+    const animation = createGalaxyAnimation({
+      runtime: sceneRuntime,
+      cameraController,
+      interaction,
+      prefersReducedMotion,
+      targetRef,
+      resetRef,
+      warpRef,
+      pausedRef,
+      quietRef,
+      cruiseRef,
+      passageRef,
+      onReady: () => setReady(true),
+    });
+    animation.start();
 
     return () => {
-      window.cancelAnimationFrame(animationFrame);
+      animation.dispose();
       interaction.dispose();
       sceneRuntime.dispose();
     };
