@@ -16,9 +16,11 @@
 | D1 | `zaochang-db` / `d250a527-1e1e-4b7f-ac27-266c723581e3` | APAC/SIN | schema+data 已导入并校验 |
 | R2 | `zaochang-uploads` | WNAM | 0 对象(生产 blobs 为空) |
 
-> ⚠️ **边界(2026-08-30 补记)**:staging 的 R2 绑定指向**与生产同一个** `zaochang-uploads` bucket。
-> 因此在建独立 `zaochang-uploads-staging` 之前,staging 不得做真实上传对象写入验收——任何
-> staging 上传都会落进生产 bucket。本报告 §WARN 的「上传 live 未验证」状态在该隔离完成前保持不变。
+> ⚠️ **边界(2026-08-30 补记,已于同日解除)**:staging 的 R2 绑定曾指向**与生产同一个**
+> `zaochang-uploads` bucket。2026-08-30 模块化收口批次已建独立 `zaochang-uploads-staging`
+> 并改绑(commit `7002305`),deploy 输出确认 `UPLOADS → zaochang-uploads-staging`,
+> staging 上传对象不再进入生产存储。本报告 §WARN 的「上传 live 未验证」仍需在独立 bucket 上
+> 重跑一次真实上传写入验收后才可关闭。
 | Turnstile | widget `0x4AAAAAAEKsUkDbokWPOZp_`(managed,域名=staging URL) | — | 已建,sitekey+secret 已设为 Worker secret |
 | 绑定 | `DB`→D1, `UPLOADS`→R2, `ASSETS`→静态 | — | deploy 输出确认解析 |
 
@@ -88,5 +90,22 @@
 1. 在阿里云把 ClamAV 扫描器经 HTTPS 暴露给 CF 边缘,更新 `UPLOAD_SCANNER_URL`。
 2. 在 GitHub OAuth app `Ov23livgjlLc01RdgmuN` 添加 staging callback URL。
 3. cutover 前完成 §5 全部行为层认证冒烟 + Turnstile 真实浏览器正向验证。
-4. (2026-08-30 补记)建独立 `zaochang-uploads-staging` R2 bucket 并改 `wrangler.staging.jsonc`
-   绑定;在此之前 staging 不做真实上传写入验收。
+4. ~~(2026-08-30 补记)建独立 `zaochang-uploads-staging` R2 bucket 并改 `wrangler.staging.jsonc`
+   绑定;在此之前 staging 不做真实上传写入验收。~~ **已完成(2026-08-30)**:bucket 已建,
+   绑定已切换(commit `7002305`),deploy version `b8204b08-8160-4c1a-9516-9323e6385d50`
+   输出确认 `UPLOADS → zaochang-uploads-staging`。
+
+## 2026-08-30 模块化收口 canary(HEAD `819dac7`,分支 `refactor/modularization-quality`)
+
+- 部署:`npx wrangler deploy --config wrangler.staging.jsonc`,version `b8204b08-8160-4c1a-9516-9323e6385d50`,cron `23 */6 * * *`。
+- 门禁(部署前,exact SHA):tsc / lint / npm test 185/185 / build / db:generate no-op / audit 0 / diff check / env split 全绿。
+- staging D1 迁移水位:`__drizzle_migrations` 20 条,与 journal 0000—0019 一致,无需补迁移。
+- Smoke 结果:`/`、`/signin`、`/galaxy`、`/.well-known/openid-configuration`、`/api/community` 全 200;
+  `/product-apps/mori/index.html` 307→`/product-apps/mori/` 200(既有规范化行为);六个 app
+  (loops/minute/mori/sprout/typewave/wander)首页与各自 JS/CSS 及共享 `selection-a11y.js` 全 200。
+- OIDC issuer 为 staging origin,未串生产;`/` 为 XFO DENY + frame-ancestors 'none' + HSTS,
+  product-apps 为 SAMEORIGIN + frame-ancestors 'self';HTML cache-control 钳制
+  `public, max-age=0, s-maxage=60`;`/api/community` 无缓存头(与生产逐头对比一致)。
+- fail-closed 抽查:OAuth `invalid_client` 401;未认证上传初始化 401;email 空 body 400 `invalid_email`;
+  `/galaxy` SSR 含 `galaxy-page`/`galaxy-scene` 标记。全程无 5xx。
+- 未覆盖(需后续):独立 bucket 上的真实上传写入验收、Turnstile 真实浏览器正向验证、cron 周期日志抽查。
