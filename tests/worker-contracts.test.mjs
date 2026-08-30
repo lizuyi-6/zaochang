@@ -360,3 +360,90 @@ test("security: 非 HTML 响应不写 CSP,但保留 nosniff/XFO 与 body", async
   assert.equal(secured.headers.get("x-frame-options"), "DENY");
   assert.equal(await secured.text(), "{\"ok\":true}");
 });
+
+// ---- purge registry(纯 D1 工厂,worker cron 的唯一数据源)----
+
+const { purgeRegistry, runPurgeRegistry } = await import("../app/api/_lib/purge/index.ts");
+const { oidcDiscoveryDocument } = await import("../app/api/_lib/oauth-discovery.ts");
+
+function fakeD1(failLabels = []) {
+  const prepared = [];
+  return {
+    prepared,
+    prepare(sql) {
+      const statement = {
+        sql,
+        async run() {
+          if (failLabels.some((marker) => sql.includes(marker))) throw new Error("no such table: simulated");
+          return { meta: { changes: 3 } };
+        },
+      };
+      prepared.push(statement);
+      return statement;
+    },
+  };
+}
+
+test("purge: 四域七条 statement 全部注册,SQL 与标签逐字固定", () => {
+  const db = fakeD1();
+  const registry = purgeRegistry(db);
+  assert.equal(registry.length, 7);
+  assert.deepEqual(registry.map((entry) => entry.label), [
+    "oauth.authorization_requests",
+    "oauth.authorization_codes",
+    "oauth.access_tokens",
+    "oauth.refresh_tokens",
+    "external-fruit.payments",
+    "email-codes.login_codes",
+    "sessions.auth_sessions",
+  ]);
+  assert.deepEqual(db.prepared.map((entry) => entry.sql), [
+    "DELETE FROM oauth_provider_authorization_requests WHERE expires_at <= CURRENT_TIMESTAMP",
+    "DELETE FROM oauth_provider_authorization_codes WHERE expires_at <= CURRENT_TIMESTAMP",
+    "DELETE FROM oauth_provider_access_tokens WHERE expires_at <= CURRENT_TIMESTAMP AND revoked_at IS NULL",
+    "DELETE FROM oauth_provider_refresh_tokens WHERE expires_at <= CURRENT_TIMESTAMP AND revoked_at IS NULL AND replaced_by_hash IS NULL",
+    "DELETE FROM external_fruit_payments WHERE status IN ('expired', 'cancelled') AND expires_at <= datetime('now', '-7 days')",
+    "DELETE FROM email_login_codes WHERE expires_at <= datetime('now', '-1 day') OR consumed_at IS NOT NULL",
+    "DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP",
+  ]);
+});
+
+test("purge: 单条失败不阻断后续,日志含 label 且返回计数", async () => {
+  const db = fakeD1(["oauth_provider_authorization_codes"]);
+  const logs = [];
+  const errors = [];
+  const logger = { log: (message) => logs.push(message), error: (message) => errors.push(message) };
+  const result = await runPurgeRegistry(db, logger);
+  assert.deepEqual(result, { ok: 6, failed: 1 });
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0].startsWith("[cron-purge] failed oauth.authorization_codes:"));
+  assert.equal(logs.length, 6);
+  assert.ok(logs.every((message) => /^\[cron-purge\] ok [\w.-]+ changes=3$/.test(message)));
+  // 最后一条(sessions)在失败之后仍执行——注册表顺序不受影响。
+  assert.ok(logs.at(-1).includes("sessions.auth_sessions"));
+});
+
+// ---- OIDC discovery(轻量模块,worker 不再加载完整 provider)----
+
+test("oidc-discovery: 字段集与 endpoint 逐字固定,issuer 随 origin 注入", () => {
+  const doc = oidcDiscoveryDocument("https://aetherstudio.top");
+  assert.deepEqual(doc, {
+    issuer: "https://aetherstudio.top",
+    authorization_endpoint: "https://aetherstudio.top/oauth/authorize",
+    token_endpoint: "https://aetherstudio.top/api/oauth/token",
+    userinfo_endpoint: "https://aetherstudio.top/api/oauth/userinfo",
+    jwks_uri: "https://aetherstudio.top/api/oauth/jwks",
+    revocation_endpoint: "https://aetherstudio.top/api/oauth/revoke",
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    subject_types_supported: ["pairwise"],
+    id_token_signing_alg_values_supported: ["ES256"],
+    token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"],
+    code_challenge_methods_supported: ["S256"],
+    scopes_supported: ["openid", "profile", "email", "fruit:balance", "fruit:pay", "fruit:refund"],
+    claims_supported: ["sub", "name", "email", "email_verified"],
+  });
+  const staging = oidcDiscoveryDocument("https://zaochang-staging.example.workers.dev");
+  assert.equal(staging.issuer, "https://zaochang-staging.example.workers.dev");
+  assert.ok(!JSON.stringify(staging).includes("aetherstudio.top"));
+});

@@ -240,9 +240,4 @@ export async function verifyEmailCode(request: Request, body: Record<string, unk
   return NextResponse.json({ status: "ok", return_to: destination });
 }
 
-// 过期数据清理注册(worker cron 按域注册表):过期/已消费的验证码行。
-export function purgeExpiredEmailCodeStatements(db: D1Database) {
-  return [
-    db.prepare(`DELETE FROM email_login_codes WHERE expires_at <= datetime('now', '-1 day') OR consumed_at IS NOT NULL`),
-  ];
-}
+// 过期数据清理注册已抽离到 purge/email-codes.ts(worker cron 不加载本状态机)。

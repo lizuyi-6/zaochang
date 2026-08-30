@@ -717,35 +717,5 @@ export function publicTokenIdentity(identity: TokenIdentity) {
   };
 }
 
-// OIDC 发现文档(worker 入口的 /.well-known/openid-configuration 响应体)。
-// issuer 随部署 origin 注入;字段集与 RFC 8414 惯例一致,勿随意增删——
-// 第三方应用依赖此处的 endpoint 清单与 scope/claim 白名单。
-export function oidcDiscoveryDocument(origin: string) {
-  return {
-    issuer: origin,
-    authorization_endpoint: `${origin}/oauth/authorize`,
-    token_endpoint: `${origin}/api/oauth/token`,
-    userinfo_endpoint: `${origin}/api/oauth/userinfo`,
-    jwks_uri: `${origin}/api/oauth/jwks`,
-    revocation_endpoint: `${origin}/api/oauth/revoke`,
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    subject_types_supported: ["pairwise"],
-    id_token_signing_alg_values_supported: ["ES256"],
-    token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"],
-    code_challenge_methods_supported: ["S256"],
-    scopes_supported: ["openid", "profile", "email", "fruit:balance", "fruit:pay", "fruit:refund"],
-    claims_supported: ["sub", "name", "email", "email_verified"],
-  };
-}
-
-// 过期数据清理注册(worker cron 的按域注册表):本域各一张表,全部为幂等 DELETE;
-// 漏跑一轮只影响存储增长,不影响正确性。
-export function purgeExpiredOauthProviderStatements(db: D1Database) {
-  return [
-    db.prepare(`DELETE FROM oauth_provider_authorization_requests WHERE expires_at <= CURRENT_TIMESTAMP`),
-    db.prepare(`DELETE FROM oauth_provider_authorization_codes WHERE expires_at <= CURRENT_TIMESTAMP`),
-    db.prepare(`DELETE FROM oauth_provider_access_tokens WHERE expires_at <= CURRENT_TIMESTAMP AND revoked_at IS NULL`),
-    db.prepare(`DELETE FROM oauth_provider_refresh_tokens WHERE expires_at <= CURRENT_TIMESTAMP AND revoked_at IS NULL AND replaced_by_hash IS NULL`),
-  ];
-}
+// OIDC 发现文档与过期数据清理注册已分别抽离到 oauth-discovery.ts 与
+// purge/oauth-provider.ts:worker 不再需要为这两件事加载本模块(签名/DB 状态机)。

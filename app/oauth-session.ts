@@ -362,10 +362,4 @@ export class RegistrationInviteError extends Error {
   }
 }
 
-// 过期数据清理注册(worker cron 按域注册表):过期会话行。旧 Cookie 重放不受影响
-// (查表时 expires_at 条件已挡)。
-export function purgeExpiredSessionStatements(db: ReturnType<typeof database>) {
-  return [
-    db.prepare(`DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP`),
-  ];
-}
+// 过期会话清理注册已抽离到 api/_lib/purge/sessions.ts(worker cron 不加载本会话层)。
