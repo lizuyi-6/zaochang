@@ -114,7 +114,7 @@ TRUST_OAI_IDENTITY_HEADERS=true   # 仅非生产环境生效
 - `0018` 增加 `email_login_codes` 并把三个 provider CHECK 放宽到 `'email'`；它会 **drop → rebuild → recreate** 邀请相关触发器，应用后必须核对触发器已重建（见 SQL 内注释）。
 - `0019` 增加社区计数器触发器、隐藏帖过滤与时区约束。
 
-部署流水线会用 `scripts/check-migrations.mjs` 对生产 `__drizzle_migrations` 做**有序逐条对账**（数量 + 每条 SQL hash + created_at 水位），任一错位即 fail-closed 阻断部署。注意该表只由 drizzle migrator 写入：`wrangler d1 execute --file` 应用的 SQL 必须按 `backups/_backfill_drizzle_migrations.sql` 的方式手工回填账目行。
+部署流水线会用 `scripts/check-migrations.mjs` 对生产 `__drizzle_migrations` 做**有序逐条对账**（数量 + 每条账目 + created_at 水位），任一错位即 fail-closed 阻断部署。账目 hash 有三种历史口径，任一命中即通过：SQL 文件 sha256（CRLF 原样或 LF 归一），或迁移 tag 本身（生产 `0013`–`0018` 六条为 tag 入帐，检查器会输出 limited verification 通告；tag 必须与所在位置精确相等，错位仍被拒）。注意该表只由 drizzle migrator 写入：`wrangler d1 execute --file` 应用的 SQL 必须按 `backups/_backfill_drizzle_migrations.sql` 的方式手工回填账目行。
 
 发布前运行：
 

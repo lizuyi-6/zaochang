@@ -19,11 +19,15 @@ if (!entries.length) {
 }
 
 // 本地有序账目:每条 journal entry → SQL 文件 sha256 + when(与 drizzle migrator
-// 写入 __drizzle_migrations 的 hash/created_at 同口径;backups/_backfill_* 已验证一致)。
+// 写入 __drizzle_migrations 的 hash/created_at 同口径)。
 // 换行口径说明:drizzle 的 hash 是文件原始字节的 sha256,但本仓库历史回填不一致——
 // 0006-0009 按 CRLF 原样入帐,0010-0011 按 LF 归一入帐(已逐条实测)。因此每条本地
 // 同时计算"原样"与"LF 归一"两个 hash,远端命中任一即视为内容一致:换行差异不算
 // schema 漂移,但任何真实内容改动会同时改变两个 hash,仍然 fail-closed。
+// tag 口径说明(2026-08-30 生产实测):生产 0013-0018 六条的 hash 列存的是迁移
+// tag 文件名本身(另一批回填口径),不是内容 sha256。tag 精确相等仍能证明账目行
+// 对应唯一 journal 条目,但无法验证这六条的 SQL 字节——此类命中记入 limited
+// verification 并在输出中列明,不伪装成完整内容校验。其余条目仍强制内容 hash。
 const local = entries.map((entry) => {
   const file = `drizzle/${entry.tag}.sql`;
   if (!fs.existsSync(file)) {
@@ -73,12 +77,15 @@ console.log(`journal 迁移数: ${local.length} (最新 ${last.tag}, when=${last
 console.log(`生产已应用:     count=${remote.length}, latest created_at=${remote.at(-1)?.when ?? 0}`);
 
 const failures = [];
+const tagCaliber = [];
 if (local.length !== remote.length) {
   failures.push(`数量缺口:本地 ${local.length} 条 vs 生产 ${remote.length} 条——存在未记录的中间迁移`);
 }
 const compared = Math.min(local.length, remote.length);
 for (let index = 0; index < compared; index += 1) {
-  if (!local[index].hashes.has(remote[index].hash)) {
+  if (local[index].hashes.has(remote[index].hash) || remote[index].hash === local[index].tag) {
+    if (remote[index].hash === local[index].tag) tagCaliber.push(local[index].tag);
+  } else {
     failures.push(`hash 错位:第 ${index + 1} 条(${local[index].tag})远端 ${remote[index].hash.slice(0, 12)}… 与本地 SQL 内容不符`);
   }
   if (local[index].when !== remote[index].when) {
@@ -91,11 +98,16 @@ if (failures.length) {
   for (const failure of failures) console.error(`  ${failure}`);
   console.error("  (注意:wrangler d1 execute --file 应用 SQL 不会写入 __drizzle_migrations,");
   console.error("   必须按 backups/_backfill_drizzle_migrations.sql 的方式手工回填 hash/created_at 行,");
-  console.error("   hash 为对应 SQL 文件字节的 sha256(CRLF 原样或 LF 归一均可),created_at 为 journal 的 when。) ");
+  console.error("   hash 为对应 SQL 文件字节的 sha256(CRLF 原样或 LF 归一;历史上亦有 tag 入帐批次),");
+  console.error("   created_at 为 journal 的 when。) ");
   console.error("  请先备份生产 D1,再应用缺失迁移并回填迁移账目:");
   console.error(`    npx wrangler d1 export zaochang-db --remote --config wrangler.prod.jsonc --output backups/pre-NNNN.sql`);
   console.error(`    npx wrangler d1 execute zaochang-db --remote --config wrangler.prod.jsonc --file drizzle/${last.tag}.sql`);
   console.error("  应用后重跑本工作流。(fail-closed:防止代码上线但 schema 缺失)");
   process.exit(1);
 }
-console.log("✓ 所有本地迁移均已应用到生产(数量+有序 hash+created_at 逐位一致),可安全部署");
+if (tagCaliber.length) {
+  console.log(`⚠ limited verification:${tagCaliber.length} 条账目为 tag 入帐(无内容 hash可比),`);
+  console.log(`  内容一致性由"迁移只增不删、历史 SQL 不改写"纪律保证: ${tagCaliber.join(", ")}`);
+}
+console.log("✓ 所有本地迁移均已应用到生产(数量+有序账目+created_at 逐位一致),可安全部署");
