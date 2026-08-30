@@ -2,13 +2,14 @@
 // 15 行的 row→Product 转换,主题白名单散落 6 处、已发布 SQL 重复 2 处。
 // 集中后,新增字段或调整规则只改这里。纯策略常量的定义在 product-policy.ts,
 // 这里保留既有 import surface 供调用方继续使用。
-import type { Product } from "./community-data";
+// 显式 .ts 扩展名:本模块同时被 bundler 与纯 Node 契约测试加载,后者不做扩展名解析。
+import type { Product } from "./community-data.ts";
 import {
   normalizePricingModel,
   normalizeProductTheme,
   PRODUCT_IMAGE_FALLBACK,
   THEME_ACCENTS,
-} from "./product-policy";
+} from "./product-policy.ts";
 
 export {
   PRICING_MODELS,
@@ -19,8 +20,8 @@ export {
   THEME_ACCENTS,
   normalizePricingModel,
   normalizeProductTheme,
-} from "./product-policy";
-export type { PricingModel, ProductTheme } from "./product-policy";
+} from "./product-policy.ts";
+export type { PricingModel, ProductTheme } from "./product-policy.ts";
 
 export type ProductRowLike = {
   id?: unknown;

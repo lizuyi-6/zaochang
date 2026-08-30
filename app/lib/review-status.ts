@@ -2,7 +2,8 @@
 // 规则:只有 approved 且 批准版本 == 当前审核版本 才算"已发布/审核通过";
 // 陈旧批准版本(approvedVersion < reviewVersion,编辑会触发重审)不算已发布。
 // 缺少任一版本时必须 fail-closed 为 pending,不能把 undefined === undefined 误判为已发布。
-import { isCurrentApprovedProduct } from "./product-policy";
+import { isCurrentApprovedProduct } from "./product-policy.ts";
+// 显式 .ts 扩展名:本模块同时被 bundler 与纯 Node 契约测试加载,后者不做扩展名解析。
 
 export type ReviewDisplayState = "live" | "rejected" | "pending";
 
