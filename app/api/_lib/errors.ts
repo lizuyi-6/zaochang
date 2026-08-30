@@ -62,3 +62,38 @@ export function isWalletPendingError(error: unknown): boolean {
   return errorMessageIncludes(error, "wallet_pending_nonnegative")
     || errorMessageIncludes(error, "CHECK constraint failed: pending_balance");
 }
+
+// ---- 业务触发器 RAISE marker 的命名识别 ----
+// 新代码不得直接比较 D1 原始错误文本;marker 与映射在这里登记,避免各处散落字符串。
+
+export function isExternalDemoImmutableError(error: unknown): boolean {
+  return errorMessageIncludes(error, "external_demo_requires_immutable_package");
+}
+
+export function isProductReviewNotPendingError(error: unknown): boolean {
+  return errorMessageIncludes(error, "product_review_not_pending");
+}
+
+export function isModerationRemediationNotAllowedError(error: unknown): boolean {
+  return errorMessageIncludes(error, "moderation_remediation_not_allowed");
+}
+
+export function isInvitationRegistrationRequiredError(error: unknown): boolean {
+  return errorMessageIncludes(error, "oauth_registration_invitation_required");
+}
+
+export function isInvitationUnavailableError(error: unknown): boolean {
+  return errorMessageIncludes(error, "invitation_not_available");
+}
+
+export function isProductCommentNotApprovedError(error: unknown): boolean {
+  return errorMessageIncludes(error, "product_comment_product_not_approved");
+}
+
+export function isPostCommentNotVisibleError(error: unknown): boolean {
+  return errorMessageIncludes(error, "post_comment_post_not_visible");
+}
+
+export function isProductLikeNotApprovedError(error: unknown): boolean {
+  return errorMessageIncludes(error, "product_like_product_not_approved");
+}

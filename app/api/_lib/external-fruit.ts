@@ -1,7 +1,14 @@
 import { database } from "./community";
+import {
+  errorMessageIncludes as errorIncludes,
+  isUniqueConstraintError as isUniqueError,
+  isWalletBalanceError as isBalanceError,
+  isWalletPendingError as isPendingError,
+} from "./errors";
 import { FRUIT_POLICY } from "./fruit";
+import { oauthCorsJsonError } from "./oauth-http";
 import { hashToken, randomToken } from "../../oauth-session";
-import { oauthCorsHeaders, isClientRedirectUri, type requireBearer } from "./oauth-provider";
+import { isClientRedirectUri, type requireBearer } from "./oauth-provider";
 import { RateLimitError } from "./rate-limit";
 
 type ExternalIdentity = Awaited<ReturnType<typeof requireBearer>>;
@@ -50,8 +57,8 @@ export class ExternalFruitError extends Error {
 // (未知错误一律 server_error,不泄露内部细节)。approve 路由是浏览器重定向流,
 // 错误不带 CORS 头,不在此列。
 export function externalApiErrorResponse(error: unknown): Response | null {
-  if (error instanceof ExternalFruitError) return Response.json({ error: error.code }, { status: error.status, headers: oauthCorsHeaders() });
-  if (error instanceof RateLimitError) return Response.json({ error: error.code }, { status: error.status, headers: oauthCorsHeaders() });
+  if (error instanceof ExternalFruitError) return oauthCorsJsonError(error.code, error.status);
+  if (error instanceof RateLimitError) return oauthCorsJsonError(error.code, error.status);
   return null;
 }
 
@@ -61,22 +68,6 @@ function validIdempotencyKey(value: string) {
 
 function sqliteTimestamp(date: Date) {
   return date.toISOString().slice(0, 19).replace("T", " ");
-}
-
-function errorIncludes(error: unknown, marker: string) {
-  return error instanceof Error && error.message.includes(marker);
-}
-
-function isUniqueError(error: unknown) {
-  return errorIncludes(error, "UNIQUE constraint failed");
-}
-
-function isBalanceError(error: unknown) {
-  return errorIncludes(error, "wallet_balance_nonnegative") || errorIncludes(error, "CHECK constraint failed: balance");
-}
-
-function isPendingError(error: unknown) {
-  return errorIncludes(error, "wallet_pending_nonnegative") || errorIncludes(error, "CHECK constraint failed: pending_balance");
 }
 
 async function wallet(email: string) {
