@@ -113,6 +113,9 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
     return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
 
+  // 顶栏数据(帖子数/圈子统计/钱包/未读)与路由无关:只在硬加载与登录态变化时
+  // 拉一次,不再跟随 pathname 每次导航重拉(此前每次点击都多一次 ~0.5-1s 的
+  // no-store D1 聚合请求并触发一轮状态更新)。
   useEffect(() => {
     let active = true;
     fetch("/api/community", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
@@ -136,7 +139,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
       setHasUnread((payload.notifications ?? []).some((item) => !read.has(item.id)));
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [member.signedIn, pathname]);
+  }, [member.signedIn]);
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();
