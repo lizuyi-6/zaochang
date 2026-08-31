@@ -114,18 +114,16 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   }, [pathname]);
 
   // 顶栏数据(帖子数/圈子统计/钱包/未读)与路由无关:只在硬加载与登录态变化时
-  // 拉一次,不再跟随 pathname 每次导航重拉(此前每次点击都多一次 ~0.5-1s 的
-  // no-store D1 聚合请求并触发一轮状态更新)。
+  // 拉一次轻量聚合 /api/shell-state(只回这四类小数据,不再整份拉 /api/community)。
   useEffect(() => {
     let active = true;
-    fetch("/api/community", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
+    fetch("/api/shell-state", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
       if (!active || !data) return;
       const payload = data as {
-        wallet?: { balance: number } | null;
-        notifications?: { id: string }[];
-        actions?: { kind: string; targetRef: string }[];
         platformStats?: { posts: number };
         circleStats?: CircleStat[];
+        wallet?: { balance: number } | null;
+        hasUnread?: boolean;
       };
       setFeedCount(Number(payload.platformStats?.posts ?? 0));
       setCircleStats(Object.fromEntries((payload.circleStats ?? []).map((item) => [item.slug, item])));
@@ -135,8 +133,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         return;
       }
       setWalletBalance(payload.wallet?.balance ?? 0);
-      const read = new Set((payload.actions ?? []).filter((item) => item.kind === "read_notification").map((item) => item.targetRef));
-      setHasUnread((payload.notifications ?? []).some((item) => !read.has(item.id)));
+      setHasUnread(Boolean(payload.hasUnread));
     }).catch(() => undefined);
     return () => { active = false; };
   }, [member.signedIn]);

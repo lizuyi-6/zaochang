@@ -352,6 +352,67 @@ test("studio docs entry: isFounder flag + founder-gated docs pages", async () =>
   assert.equal((await fetch(`${baseUrl}/studio/docs`)).status, 404, "匿名进 /studio/docs 应 404");
 });
 
+test("/api/shell-state: 站壳轻量聚合的匿名/登录形状与未读语义", async () => {
+  const runId = crypto.randomUUID();
+  const memberEmail = `shell-${runId}@example.com`;
+  // 匿名:只有公开两样(帖子数/圈子统计),wallet 恒 null、hasUnread 恒 false,
+  // 且不泄露任何成员侧字段(notifications/actions/recentReading 等不得出现)。
+  const anon = await (await fetch(`${baseUrl}/api/shell-state`)).json();
+  assert.equal(typeof anon.platformStats.posts, "number", "匿名 posts 应为数字");
+  assert.ok(Array.isArray(anon.circleStats), "匿名 circleStats 应为数组");
+  assert.equal(anon.wallet, null, "匿名 wallet 应为 null");
+  assert.equal(anon.hasUnread, false, "匿名 hasUnread 应为 false");
+  for (const absent of ["notifications", "actions", "recentReading", "authoredBooks", "transactions", "orders"]) {
+    assert.ok(!(absent in anon), `匿名 shell-state 不应含成员字段 ${absent}`);
+  }
+
+  // 登录:wallet.balance 为数字;/api/community 同一成员的公开字段应与此一致
+  // (同一 SQL 助手,不漂移)。欢迎交易会产生一条通知(welcome 类型被通知流排除,
+  // 交易通知 type<>welcome 会入选)→ hasUnread 布尔即可,不锁定具体值,但必须是布尔。
+  const member = await (await fetch(`${baseUrl}/api/shell-state`, { headers: authHeaders("站壳成员", memberEmail) })).json();
+  assert.equal(typeof member.wallet?.balance, "number", "登录 wallet.balance 应为数字");
+  assert.equal(typeof member.hasUnread, "boolean", "登录 hasUnread 应为布尔");
+  const community = await (await fetch(`${baseUrl}/api/community`, { headers: authHeaders("站壳成员", memberEmail) })).json();
+  assert.equal(member.platformStats.posts, community.platformStats.posts, "posts 计数应与 /api/community 一致");
+  assert.deepEqual(
+    member.circleStats.map((c) => `${c.slug}:${c.members}:${c.recentDiscussions}`).sort(),
+    community.circleStats.map((c) => `${c.slug}:${c.members}:${c.recentDiscussions}`).sort(),
+    "circleStats 应与 /api/community 逐值一致",
+  );
+
+  // 未读语义:通知 UNION 流 + read_notification 标记的服务端推导,与站壳原客户端
+  // 推导一致。用全新成员做通知接收者(基线必为无未读,不受前序套件影响),并走
+  // "关注"通知源——不涉及产品,避开 pending 产品不可评论/点赞的 fail-closed
+  // 触发器(那正是要保住的不变量,测试不该绕)。基线 false → 被关注 true →
+  // 标记已读后 false。(community_actions 主键是 (user_email,kind,target_ref)。)
+  const notifyOwner = `shell-notify-${runId}@example.com`;
+  const ownerHeaders = authHeaders("通知接收者", notifyOwner);
+  await executeLocalD1(`
+    INSERT OR IGNORE INTO members (email, display_name) VALUES ('${notifyOwner}', '通知接收者'), ('${memberEmail}', '站壳成员');
+  `);
+  try {
+    // 先触发一次登录态(ensureMember 建钱包/欢迎交易),确立基线:无未读。
+    assert.equal((await (await fetch(`${baseUrl}/api/shell-state`, { headers: ownerHeaders })).json()).hasUnread, false, "基线:新成员应无未读");
+    await executeLocalD1(`
+      INSERT INTO community_actions (user_email, kind, target_ref)
+        VALUES ('${memberEmail}', 'follow_creator', '通知接收者');
+    `);
+    const unread = await (await fetch(`${baseUrl}/api/shell-state`, { headers: ownerHeaders })).json();
+    assert.equal(unread.hasUnread, true, "被他人关注后 hasUnread 应为 true");
+    await executeLocalD1(`
+      INSERT INTO community_actions (user_email, kind, target_ref)
+        VALUES ('${notifyOwner}', 'read_notification', 'follow:${memberEmail}');
+    `);
+    const read = await (await fetch(`${baseUrl}/api/shell-state`, { headers: ownerHeaders })).json();
+    assert.equal(read.hasUnread, false, "标记 read_notification 后 hasUnread 应为 false");
+  } finally {
+    await executeLocalD1(`
+      DELETE FROM community_actions WHERE (user_email = '${memberEmail}' AND kind = 'follow_creator' AND target_ref = '通知接收者')
+        OR (user_email = '${notifyOwner}' AND kind = 'read_notification' AND target_ref = 'follow:${memberEmail}');
+    `);
+  }
+});
+
 test("/api/community authoredBooks lists the signed-in member's books with chapter count", async () => {
   const runId = crypto.randomUUID();
   const tag = runId.slice(0, 8);
