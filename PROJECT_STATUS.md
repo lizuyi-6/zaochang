@@ -1,5 +1,15 @@
 # 造场项目账本
 
+## 2026-08-31(一)全站点击性能优化 + 三轮审查修复:文档元数据/正文拆读、生产 isolate 缓存、/api/shell-state 轻量聚合(已上线,生产复测通过)
+
+- 状态:已上线。8 个 commit(`3a21301`→`6735daf`,26 文件,+635/-162)fast-forward push → ci `release-gates@6735daf`(33355203558)success → deploy `deploy-production`(33355285179)success,Cloudflare version `f81342f4-e7c8-4244-838f-f7e72897c0b7`,部署 SHA 与 CI 通过 SHA 逐字一致。schema/migration/trigger 零变更(`db:generate` 仍 no-op)。
+- **性能修复(5 commit)**:①目录/树/面包屑/进度全部改用元数据列查询,正文按 id 单取——docs 表 190 行/790KB 正文不再随每次结构查询整表搬运;②书架书卡、继续阅读、下一章显式 `prefetch`(Vinext `auto` 不覆盖动态路由);③站壳不再按 pathname 整份拉 `/api/community`;④新增 `/api/shell-state` 轻量聚合(公开计数/圈子统计/钱包余额/未读四件,登录侧语义与 /api/community 对齐);⑤生产 isolate 级 60s 文档缓存(APP_ENV 门控,测试/本地仍每请求直读;不缓存任何用户数据,可见性仍按请求判定)。
+- **审查修复(3 commit)**:封面/横幅上传此前绕过缓存失效(写作 isolate 继续展示旧图满 TTL)——已接入统一失效;缓存失效与并发读存在旧值回填竞争——缓存核心抽为纯模块 `doc-data-cache.ts`,generation 机制拒绝失效前发起的查询回填;站壳 effect 依赖由 `signedIn` 布尔改为 `member.email`(同页账户 A→B 可区分,渲染期先清空旧账户余额/未读);新增 `shell-state-sync` 事件通道——已读/退款/打赏/解锁/发帖/入退圈成功后站壳主动对账,红点与余额不再滞留到硬刷新;`/api/shell-state` 未读判定只查 `read_notification` 行,不再搬运成员全部行为流水;手工 `workflow_dispatch` 部署补齐与 release-gates 等价门禁(tsc/lint/禁用测试/npm test/diff/schema 漂移/环境隔离/审计),不再能只构建即上线;迁移检查 tag 入账降级限定为 0013-0018 历史六条白名单,其余位置一律 fail-closed。
+- **生产实测(IAB 真实浏览器客户端导航)**:书架→《Hello System》封面 2845ms→**1817ms**(RSC 2815ms→779ms);封面→第一章 7616ms→**1645ms**(RSC 6895ms→734ms,负载 13.3KB);`/api/shell-state` 硬加载恰好 1 次(约 570-630ms),路由切换 0 次 `/api/community` 与 0 次重复 shell-state;匿名 shell-state 形状 `{posts, circleStats, wallet:null, hasUnread:false}` 正确;安全头无损(普通页 DENY+frame-ancestors none+HSTS,product-apps SAMEORIGIN),伪造 `oai-authenticated-user-*` 头仍按匿名处理(signedIn:false)。curl 热路径:书架/封面/章节 TTFB 稳定 1.4-1.8s(个别冷 isolate 5-6s 离群仍在)。
+- **测试 192→198**:doc-data-cache 命中/TTL/失效/竞争 3 例、docs 写入口失效源级契约、shell-state-sync 事件常量与六派发点契约、迁移 tag 白名单拒绝 2 例、匿名书架可见登录入口断言、shell-state 服务端三态保留。npm test 全绿(198/198),tsc/eslint/diff 干净。
+- 本轮改动可能引入的新风险:①生产 isolate 缓存使文档变更对其他 isolate 最多滞后 60s(与匿名边缘缓存同界,有意取舍);②预取链路静态证据齐全(RSC 负载含 `"prefetch":true`、bundle 逻辑完整、nodeEnv=production),但自动化标签页 visibilityState=hidden 会物理冻结 IntersectionObserver/requestIdleCallback,预取的真实网络触发只能在用户可见标签页生效,本轮无法在自动化环境取证;③EWR→SIN 跨洲执行未变,Smart Placement 5/5 采样仍 local-EWR,极端冷启动离群值仍需观察。
+- 未覆盖范围:登录态(阅读进度/继续阅读href)生产未实测;APP_ENV=production 的缓存 env 接线未做端到端双 preview 验证(核心逻辑已由纯契约测试覆盖);章节"下一章"预取的点击消费命中率待真实用户环境观察。
+
 ## 2026-08-29(十)《Hello System》书封上线:cover + banner 挂载书根节点(已上线,生产复验通过)
 
 - 状态:已上线。assets commit `a3fd9e0`(2 文件)push → ci `release-gates`(33234454853)success → deploy `deploy-production`(33234511587)success;生产 D1 对 `doc:book-hello-system` 一次性 UPDATE `cover_image`/`banner_image`(changes 1)并回读一致。
