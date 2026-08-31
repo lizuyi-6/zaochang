@@ -29,6 +29,16 @@ if (!entries.length) {
 // tag 文件名本身(另一批回填口径),不是内容 sha256。tag 精确相等仍能证明账目行
 // 对应唯一 journal 条目,但无法验证这六条的 SQL 字节——此类命中记入 limited
 // verification 并在输出中列明,不伪装成完整内容校验。其余条目仍强制内容 hash。
+// tag 入账是仅限历史六条的不可变白名单:其他任何位置(含 0019 及未来迁移)出现
+// tag 代替内容 hash 一律拒绝,防止"内容校验被意外降级"成为永久逃生门。
+const TAG_CALIBRATED_TAGS = new Set([
+  "0013_lovely_lord_hawal",
+  "0014_furry_vapor",
+  "0015_complex_eddie_brock",
+  "0016_wise_synch",
+  "0017_workable_wraith",
+  "0018_stale_speed_demon",
+]);
 const local = entries.map((entry) => {
   const file = `drizzle/${entry.tag}.sql`;
   if (!fs.existsSync(file)) {
@@ -85,8 +95,12 @@ if (local.length !== remote.length) {
 }
 const compared = Math.min(local.length, remote.length);
 for (let index = 0; index < compared; index += 1) {
-  if (local[index].hashes.has(remote[index].hash) || remote[index].hash === local[index].tag) {
-    if (remote[index].hash === local[index].tag) tagCaliber.push(local[index].tag);
+  if (local[index].hashes.has(remote[index].hash)) {
+    // 内容 hash 命中(LF/重建 CRLF 双口径)
+  } else if (remote[index].hash === local[index].tag && TAG_CALIBRATED_TAGS.has(local[index].tag)) {
+    tagCaliber.push(local[index].tag);
+  } else if (remote[index].hash === local[index].tag) {
+    failures.push(`tag 降级:第 ${index + 1} 条(${local[index].tag})远端以 tag 代替内容 hash,但不在历史白名单(0013-0018)内——内容一致性不可验证`);
   } else {
     failures.push(`hash 错位:第 ${index + 1} 条(${local[index].tag})远端 ${remote[index].hash.slice(0, 12)}… 与本地 SQL 内容不符`);
   }
