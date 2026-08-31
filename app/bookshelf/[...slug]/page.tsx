@@ -11,10 +11,11 @@ import {
   findInBook,
   getBookContinueReading,
   getChapterParagraph,
+  getDocBody,
   injectChapterHeadingIds,
   renderDocHtml,
+  type DocMeta,
   type DocNode,
-  type DocRow,
 } from "../../api/_lib/docs";
 import { MermaidRunner } from "../mermaid-runner";
 import { ReadingProgressTracker } from "../reading-progress-tracker";
@@ -83,16 +84,18 @@ export default async function BookPage({ params }: PageProps) {
   const tree = await bookTree(book, member);
   const isCover = doc.id === book.id;
   const base = `/bookshelf/${encodeURIComponent(book.slug)}`;
-  const crumbs: DocRow[] = isCover ? [] : await docBreadcrumbs(doc, member);
+  const crumbs: DocMeta[] = isCover ? [] : await docBreadcrumbs(doc, member);
   // 阅读进度:封面页算"继续阅读"点;章节页算当前章节的段落恢复点。仅登录用户。
   const continueReading = member && isCover ? await getBookContinueReading(member, book) : null;
   const initialParagraph = member && !isCover ? await getChapterParagraph(member, book.id, doc.id) : null;
 
+  // 正文只取当前这一篇(目录/面包屑走元数据,不再整表搬运全部书籍正文)。
+  const bodyMd = await getDocBody(doc.id);
   // 正文 HTML:章节页给 h2/h3 注入稳定 id(ch-N),供右栏本章目录锚定 + scroll-spy。
   // 书籍上下文:把 MkDocs 搬运来的 .md 相对链接重写成造场路由(路径表从目录树收集)。
   const pathByLeafSlug = buildPathByLeafSlug(tree);
-  let bodyHtml = doc.bodyMd.trim().length > 0
-    ? renderDocHtml(doc.bodyMd, { bookSlug: book.slug, pathByLeafSlug })
+  let bodyHtml = bodyMd.trim().length > 0
+    ? renderDocHtml(bodyMd, { bookSlug: book.slug, pathByLeafSlug })
     : "";
   const headings: { id: string; text: string; level: number }[] = [];
   if (!isCover && bodyHtml) {
@@ -143,7 +146,7 @@ export default async function BookPage({ params }: PageProps) {
 
       {continueReading && <Link className="book-continue-reading" href={continueReading.href}><Bookmark size={15} /> 继续阅读 · {continueReading.title} <ArrowRight size={15} /></Link>}
 
-      {doc.bodyMd.trim().length > 0 && <>
+      {bodyMd.trim().length > 0 && <>
         <div className="docs-body" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
         <MermaidRunner />
       </>}

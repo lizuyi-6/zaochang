@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ArrowLeft, ChevronRight, FileText, Lock } from "lucide-react";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
-import { currentMember, docBreadcrumbs, findDocByPath, listChildren, renderDocHtml, resolveBookRootSlug } from "../../api/_lib/docs";
+import { currentMember, docBreadcrumbs, findDocByPath, getDocBody, listChildren, renderDocHtml, resolveBookRootSlug } from "../../api/_lib/docs";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +38,10 @@ export default async function DocDetailPage({ params }: PageProps) {
   const doc = await findDocByPath(slugs, member);
   if (!doc) notFound();
 
-  const [crumbs, children] = await Promise.all([
+  const [crumbs, children, bodyHtml] = await Promise.all([
     docBreadcrumbs(doc, member),
     listChildren(doc.id, member),
+    getDocBody(doc.id).then(renderDocHtml),
   ]);
   const crumbHref = (index: number) => "/docs/" + crumbs.slice(0, index + 1).map((crumb) => encodeURIComponent(crumb.slug)).join("/");
 
@@ -57,7 +58,7 @@ export default async function DocDetailPage({ params }: PageProps) {
       <h1>{doc.title}</h1>
       <small>更新于 {doc.updatedAt.slice(0, 10)}{doc.visibility === "members" ? " · 登录可见" : doc.visibility === "private" ? " · 私有" : ""}</small>
     </header>
-    <article className="docs-body" dangerouslySetInnerHTML={{ __html: renderDocHtml(doc.bodyMd) }} />
+    <article className="docs-body" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
 
     {children.length > 0 && <section className="docs-children" aria-label="子文档">
       <h2>本节目录</h2>
