@@ -1,6 +1,6 @@
 import { requireMember } from "../../_lib/access-control";
 import { jsonError } from "../../_lib/community";
-import { findInBook } from "../../_lib/docs";
+import { findInBook, getDocBody } from "../../_lib/docs";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { AiNotConfiguredError, AiUpstreamError, getReadingAiConfig, streamReadingAiCompletion } from "../../_lib/reading-ai-provider";
 import {
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     await enforceRateLimit(await rateLimitKey(`ai-${action}`, member.email), limits.ratePerHour, 60 * 60);
 
     // 正文只从 DB 来:截断到上限 + 折叠 \r 与 3+ 连续换行(省 token,不改语义)。
-    const rawBody = found.doc.bodyMd.replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim();
+    const rawBody = (await getDocBody(found.doc.id)).replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim();
     const chapterText = rawBody.slice(0, READING_AI_LIMITS.chapterChars);
     const truncated = rawBody.length > READING_AI_LIMITS.chapterChars;
 

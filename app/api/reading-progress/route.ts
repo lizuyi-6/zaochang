@@ -1,6 +1,6 @@
 import { requireMember, type MemberIdentity } from "../_lib/access-control";
 import { database, jsonError } from "../_lib/community";
-import { canViewDoc, listAllDocs, type DocRow } from "../_lib/docs";
+import { canViewDoc, listAllDocMetas, type DocMeta } from "../_lib/docs";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +13,14 @@ async function validateProgressTarget(
   chapterId: string,
   member: MemberIdentity,
 ): Promise<boolean> {
-  const all = await listAllDocs();
-  const byId = new Map<string, DocRow>(all.map((row) => [row.id, row] as const));
+  const all = await listAllDocMetas();
+  const byId = new Map<string, DocMeta>(all.map((row) => [row.id, row] as const));
   const book = byId.get(bookId);
   const chapter = byId.get(chapterId);
   if (!book || book.isBook !== 1 || !canViewDoc(book, member)) return false;
   if (!chapter || !canViewDoc(chapter, member)) return false;
   if (chapterId === bookId) return true;
-  let cursor: DocRow | undefined = chapter;
+  let cursor: DocMeta | undefined = chapter;
   const seen = new Set<string>();
   while (cursor && cursor.parentId && !seen.has(cursor.id)) {
     seen.add(cursor.id);
