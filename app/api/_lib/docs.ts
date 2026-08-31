@@ -1,5 +1,6 @@
 import sanitizeHtml from "sanitize-html";
 import { cache } from "react";
+import { env } from "cloudflare:workers";
 import { renderMarkdownKatexHtml } from "@/app/lib/markdown-katex";
 import { canViewContent } from "./access-control";
 import { isUniqueConstraintError } from "./errors";
@@ -138,26 +139,66 @@ export function renderDocHtml(bodyMd: string, bookCtx?: BookLinkContext): string
   return clean;
 }
 
+// ---- 跨请求文档数据缓存(isolate 级,仅生产) ----
+// 背景:目录元数据/正文对同一 Worker isolate 是重复劳动,而 D1 主库在 APAC、
+// Worker 常跑在访客边缘,一次跨洋往返 ~150-250ms。缓存命中时完全跳过 D1 查询。
+// 新鲜度取舍(有意为之,与匿名页边缘缓存同界):书籍内容低频变更;写路径
+// (createDoc/updateDoc/deleteDoc)在写作 isolate 内即时失效,其他 isolate 最多
+// 滞后 TTL 秒——登录读者因此被纳入与匿名边缘缓存 fresh 窗口(60s)一致的上界。
+// 仅 APP_ENV=production 启用:本地 dev 与集成测试(APP_ENV=test,套件会直接 SQL
+// 改 docs 表)保持每请求直读,缓存前后行为完全一致(与 worker/anon-cache.ts 的
+// 环境门控同一先例)。缓存行按引用返回,调用方只读不得改写。
+// 不缓存任何用户数据:可见性过滤(canViewDoc)仍持 member 每请求判定,元数据行
+// 本身就是匿名页面会渲染的公开字段。
+const DOC_DATA_CACHE_TTL_MS = 60_000;
+const docDataCache: {
+  metas?: { at: number; rows: DocMeta[] };
+  bodies: Map<string, { at: number; body: string }>;
+} = { bodies: new Map() };
+
+function docDataCacheEnabled(): boolean {
+  return (env as unknown as Record<string, string | undefined>).APP_ENV === "production";
+}
+
+function invalidateDocDataCache(): void {
+  docDataCache.metas = undefined;
+  docDataCache.bodies.clear();
+}
+
 // 性能:本文件的所有"读整表"型目录查询(书架/章节/目录/面包屑)都收敛到这一个
 // per-request 缓存的 listAllDocMetas 上(React cache:同一请求内——含
 // generateMetadata 与页面组件的重复调用——只查一次 D1;元数据整表 ~40KB,不含
 // 正文)。正文按 id 走 getDocBody,单篇最大 ~15KB。D1 与 Worker 可能跨洋,一次
-// 往返取回小结果集远比整表正文搬运快。
+// 往返取回小结果集远比整表正文搬运快;生产环境再叠加 isolate 级 TTL 缓存,命中
+// 时连这一次往返也省掉。
 export const listAllDocMetas = cache(async (): Promise<DocMeta[]> => {
+  const enabled = docDataCacheEnabled();
+  if (enabled) {
+    const hit = docDataCache.metas;
+    if (hit && Date.now() - hit.at < DOC_DATA_CACHE_TTL_MS) return hit.rows;
+  }
   const result = await database().prepare(
     `SELECT ${DOC_META_COLUMNS} FROM docs ORDER BY sort_order ASC, created_at ASC, id ASC`,
   ).all<DocMeta>();
+  if (enabled) docDataCache.metas = { at: Date.now(), rows: result.results };
   return result.results;
 });
 
 // 单篇正文。id 必须来自已通过可见性校验的元数据行(findInBook/findDocByPath),
 // 这里不再重复鉴权;行不存在(理论上紧跟校验后不会发生)返回空串。
 export const getDocBody = cache(async (id: string): Promise<string> => {
+  const enabled = docDataCacheEnabled();
+  if (enabled) {
+    const hit = docDataCache.bodies.get(id);
+    if (hit && Date.now() - hit.at < DOC_DATA_CACHE_TTL_MS) return hit.body;
+  }
   const row = await database()
     .prepare(`SELECT body_md AS bodyMd FROM docs WHERE id = ?`)
     .bind(id)
     .first<{ bodyMd: string }>();
-  return row?.bodyMd ?? "";
+  const body = row?.bodyMd ?? "";
+  if (enabled) docDataCache.bodies.set(id, { at: Date.now(), body });
+  return body;
 });
 
 // /docs 文档目录专用:只返回独立文档(is_book=0),剔除所有书根(is_book=1)
@@ -557,6 +598,8 @@ export async function createDoc(editor: MemberIdentity, input: Record<string, un
     }
     throw error;
   }
+  // 写入成功后失效本 isolate 的文档数据缓存(其他 isolate 最多滞后 TTL 秒)。
+  invalidateDocDataCache();
   return Response.json({ doc: { id, slug, parentId, title, visibility } }, { status: 201 });
 }
 
@@ -616,6 +659,8 @@ export async function updateDoc(input: Record<string, unknown>): Promise<Respons
     }
     throw error;
   }
+  // 写入成功后失效本 isolate 的文档数据缓存(其他 isolate 最多滞后 TTL 秒)。
+  invalidateDocDataCache();
   return Response.json({ updated: true, id });
 }
 
@@ -626,6 +671,8 @@ export async function deleteDoc(input: Record<string, unknown>): Promise<Respons
   if (child) return Response.json({ error: "doc_has_children" }, { status: 409 });
   const result = await database().prepare(`DELETE FROM docs WHERE id = ?`).bind(id).run();
   if (result.meta.changes !== 1) return Response.json({ error: "doc_not_found" }, { status: 404 });
+  // 写入成功后失效本 isolate 的文档数据缓存(其他 isolate 最多滞后 TTL 秒)。
+  invalidateDocDataCache();
   return Response.json({ deleted: true, id });
 }
 
