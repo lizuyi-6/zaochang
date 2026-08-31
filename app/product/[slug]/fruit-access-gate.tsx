@@ -4,6 +4,7 @@ import { ArrowRight, Coins, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Product } from "../../lib/community-data";
+import { refreshShellState } from "../../components/shell-state-sync";
 
 type PaymentState = {
   wallet?: { balance: number; pendingBalance: number; status: string } | null;
@@ -66,6 +67,7 @@ export function FruitAccessGate({ product, children }: { product: Product; child
       setWallet(data.wallet ?? null);
       setAccess(true);
       idempotencyRef.current = null;
+      refreshShellState(); // 解锁扣减可用余额:站壳顶栏余额同步对账
     } catch {
       setError("网络中断，重试会沿用同一订单，不会重复扣款。");
     } finally {
