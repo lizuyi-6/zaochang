@@ -5,6 +5,7 @@ import { renderMarkdownKatexHtml } from "@/app/lib/markdown-katex";
 import { canViewContent } from "./access-control";
 import { isUniqueConstraintError } from "./errors";
 import { database, optionalMember, type MemberIdentity } from "./community";
+import { createDocDataCache } from "./doc-data-cache";
 
 export type DocVisibility = "public" | "members" | "private";
 
@@ -142,27 +143,26 @@ export function renderDocHtml(bodyMd: string, bookCtx?: BookLinkContext): string
 // ---- 跨请求文档数据缓存(isolate 级,仅生产) ----
 // 背景:目录元数据/正文对同一 Worker isolate 是重复劳动,而 D1 主库在 APAC、
 // Worker 常跑在访客边缘,一次跨洋往返 ~150-250ms。缓存命中时完全跳过 D1 查询。
-// 新鲜度取舍(有意为之,与匿名页边缘缓存同界):书籍内容低频变更;写路径
-// (createDoc/updateDoc/deleteDoc)在写作 isolate 内即时失效,其他 isolate 最多
-// 滞后 TTL 秒——登录读者因此被纳入与匿名边缘缓存 fresh 窗口(60s)一致的上界。
+// 新鲜度取舍(有意为之,与匿名页边缘缓存同界):书籍内容低频变更;所有 docs 写路径
+// (createDoc/updateDoc/deleteDoc/封面上传)在写作 isolate 内即时失效,其他 isolate
+// 最多滞后 TTL 秒——登录读者因此被纳入与匿名边缘缓存 fresh 窗口(60s)一致的上界。
 // 仅 APP_ENV=production 启用:本地 dev 与集成测试(APP_ENV=test,套件会直接 SQL
 // 改 docs 表)保持每请求直读,缓存前后行为完全一致(与 worker/anon-cache.ts 的
 // 环境门控同一先例)。缓存行按引用返回,调用方只读不得改写。
 // 不缓存任何用户数据:可见性过滤(canViewDoc)仍持 member 每请求判定,元数据行
-// 本身就是匿名页面会渲染的公开字段。
+// 本身就是匿名页面会渲染的公开字段。缓存本体(含 generation 防陈旧回填竞争)
+// 在纯模块 doc-data-cache.ts,由 worker 契约测试直接覆盖。
 const DOC_DATA_CACHE_TTL_MS = 60_000;
-const docDataCache: {
-  metas?: { at: number; rows: DocMeta[] };
-  bodies: Map<string, { at: number; body: string }>;
-} = { bodies: new Map() };
+const docDataCache = createDocDataCache<DocMeta>(DOC_DATA_CACHE_TTL_MS);
 
 function docDataCacheEnabled(): boolean {
   return (env as unknown as Record<string, string | undefined>).APP_ENV === "production";
 }
 
-function invalidateDocDataCache(): void {
-  docDataCache.metas = undefined;
-  docDataCache.bodies.clear();
+// 所有 docs 写入口(含 /api/docs/cover 的封面/横幅 UPDATE)成功后必须调用,
+// 让写作 isolate 立即丢弃旧元数据/正文;其他 isolate 仍最多滞后 TTL 秒。
+export function invalidateDocDataCache(): void {
+  docDataCache.invalidate();
 }
 
 // 性能:本文件的所有"读整表"型目录查询(书架/章节/目录/面包屑)都收敛到这一个
@@ -173,14 +173,16 @@ function invalidateDocDataCache(): void {
 // 时连这一次往返也省掉。
 export const listAllDocMetas = cache(async (): Promise<DocMeta[]> => {
   const enabled = docDataCacheEnabled();
+  // 查询前记下 generation:若 D1 往返期间有写路径失效,结果不得回填(陈旧回填竞争)。
+  const generation = enabled ? docDataCache.generation() : 0;
   if (enabled) {
-    const hit = docDataCache.metas;
-    if (hit && Date.now() - hit.at < DOC_DATA_CACHE_TTL_MS) return hit.rows;
+    const hit = docDataCache.getMetas(Date.now());
+    if (hit) return hit;
   }
   const result = await database().prepare(
     `SELECT ${DOC_META_COLUMNS} FROM docs ORDER BY sort_order ASC, created_at ASC, id ASC`,
   ).all<DocMeta>();
-  if (enabled) docDataCache.metas = { at: Date.now(), rows: result.results };
+  if (enabled) docDataCache.setMetas(result.results, generation, Date.now());
   return result.results;
 });
 
@@ -188,16 +190,17 @@ export const listAllDocMetas = cache(async (): Promise<DocMeta[]> => {
 // 这里不再重复鉴权;行不存在(理论上紧跟校验后不会发生)返回空串。
 export const getDocBody = cache(async (id: string): Promise<string> => {
   const enabled = docDataCacheEnabled();
+  const generation = enabled ? docDataCache.generation() : 0;
   if (enabled) {
-    const hit = docDataCache.bodies.get(id);
-    if (hit && Date.now() - hit.at < DOC_DATA_CACHE_TTL_MS) return hit.body;
+    const hit = docDataCache.getBody(id, Date.now());
+    if (hit !== null) return hit;
   }
   const row = await database()
     .prepare(`SELECT body_md AS bodyMd FROM docs WHERE id = ?`)
     .bind(id)
     .first<{ bodyMd: string }>();
   const body = row?.bodyMd ?? "";
-  if (enabled) docDataCache.bodies.set(id, { at: Date.now(), body });
+  if (enabled) docDataCache.setBody(id, body, generation, Date.now());
   return body;
 });
 

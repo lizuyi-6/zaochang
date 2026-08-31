@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_REQUEST_BYTES, prepareRequestBody } from "../worker/request-body.ts";
 import { withSecurityHeaders } from "../app/lib/security-policy.ts";
+import { createDocDataCache } from "../app/api/_lib/doc-data-cache.ts";
 
 const ORIGIN = "https://aetherstudio.top";
 const LIMIT = MAX_REQUEST_BYTES;
@@ -446,4 +447,45 @@ test("oidc-discovery: 字段集与 endpoint 逐字固定,issuer 随 origin 注�
   const staging = oidcDiscoveryDocument("https://zaochang-staging.example.workers.dev");
   assert.equal(staging.issuer, "https://zaochang-staging.example.workers.dev");
   assert.ok(!JSON.stringify(staging).includes("aetherstudio.top"));
+});
+
+// ---- doc-data-cache(生产 isolate 级文档缓存的纯核心)----
+
+test("doc-data-cache: miss→set→TTL 内 hit,过期后 miss", () => {
+  const cache = createDocDataCache(60_000);
+  assert.equal(cache.getMetas(1_000), null);
+  cache.setMetas([{ id: "a" }], cache.generation(), 1_000);
+  assert.deepEqual(cache.getMetas(1_001), [{ id: "a" }]);
+  assert.deepEqual(cache.getMetas(60_999), [{ id: "a" }]);
+  assert.equal(cache.getMetas(61_000), null, "TTL 边界(含)即过期");
+  assert.equal(cache.getBody("doc:1", 1_000), null);
+  cache.setBody("doc:1", "正文", cache.generation(), 2_000);
+  assert.equal(cache.getBody("doc:1", 2_001), "正文");
+  assert.equal(cache.getBody("doc:2", 2_001), null, "正文按 id 隔离");
+});
+
+test("doc-data-cache: invalidate 同时清空元数据与正文", () => {
+  const cache = createDocDataCache(60_000);
+  cache.setMetas([{ id: "a" }], cache.generation(), 1_000);
+  cache.setBody("doc:1", "正文", cache.generation(), 1_000);
+  cache.invalidate();
+  assert.equal(cache.getMetas(1_001), null);
+  assert.equal(cache.getBody("doc:1", 1_001), null);
+});
+
+test("doc-data-cache: 失效前发起的旧查询结果不得回填(generation 竞争)", () => {
+  const cache = createDocDataCache(60_000);
+  // 复现生产竞争:读方记下 generation 后发起 D1 查询;查询期间写方更新并失效;
+  // 旧查询返回时若仍写回,写入 isolate 会再陈旧一个完整 TTL。
+  const staleGeneration = cache.generation();
+  cache.invalidate();
+  cache.setMetas([{ id: "old" }], staleGeneration, 5_000);
+  cache.setBody("doc:1", "旧正文", staleGeneration, 5_000);
+  assert.equal(cache.getMetas(5_001), null, "失效前发起的元数据查询不得回填");
+  assert.equal(cache.getBody("doc:1", 5_001), null, "失效前发起的正文查询不得回填");
+  // 失效后发起的新查询(新 generation)正常写回。
+  cache.setMetas([{ id: "new" }], cache.generation(), 6_000);
+  cache.setBody("doc:1", "新正文", cache.generation(), 6_000);
+  assert.deepEqual(cache.getMetas(6_001), [{ id: "new" }]);
+  assert.equal(cache.getBody("doc:1", 6_001), "新正文");
 });
