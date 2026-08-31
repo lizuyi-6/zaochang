@@ -23,7 +23,10 @@ export default async function BookshelfPage() {
       ? <div className="bookshelf-grid">
         {books.map((book) => {
           const cr = progress?.get(book.id);
-          return <Link key={book.id} href={cr?.href ?? `/bookshelf/${encodeURIComponent(book.slug)}`} className="book-card">
+          // 书卡是动态路由(/bookshelf/[...slug]),Vinext 的 auto 预取只覆盖静态
+          // 路由;显式 prefetch 让卡片进入视口时预取目标 RSC,点击不再冷等数秒。
+          // 书数量少(个位数),预取开销可控。
+          return <Link key={book.id} href={cr?.href ?? `/bookshelf/${encodeURIComponent(book.slug)}`} className="book-card" prefetch>
           <span className="book-cover" style={{ background: `linear-gradient(150deg, hsl(${book.coverHue} 42% 88%), hsl(${book.coverHue} 48% 70%))` }}>
             {book.coverImage
               ? <img src={book.coverImage} alt={book.title} loading="lazy" />

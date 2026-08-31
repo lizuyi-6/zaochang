@@ -42,16 +42,16 @@ export const dynamic = "force-dynamic";
 
 type PageProps = { params: Promise<{ slug: string[] }> };
 
-function TocBranch({ nodes, base, activeId, depth = 0 }: { nodes: DocNode[]; base: string; activeId: string; depth?: number }) {
+function TocBranch({ nodes, base, activeId, depth = 0, prefetchId }: { nodes: DocNode[]; base: string; activeId: string; depth?: number; prefetchId: string | null }) {
   if (nodes.length === 0) return null;
   return <ul className="book-toc-list">
     {nodes.map((node) => <li key={node.id}>
-      <Link href={`${base}/${encodeURIComponent(node.slug)}`} className={node.id === activeId ? "active" : ""} data-depth={depth}>
+      <Link href={`${base}/${encodeURIComponent(node.slug)}`} className={node.id === activeId ? "active" : ""} data-depth={depth} prefetch={node.id === prefetchId ? true : undefined}>
         {depth === 0 && (node.children.length > 0 ? <Folder size={13} /> : <FileText size={13} />)}
         <span>{node.title}</span>
         {node.visibility !== "public" && <Lock size={11} aria-label="登录后可见" />}
       </Link>
-      <TocBranch nodes={node.children} base={`${base}/${encodeURIComponent(node.slug)}`} activeId={activeId} depth={depth + 1} />
+      <TocBranch nodes={node.children} base={`${base}/${encodeURIComponent(node.slug)}`} activeId={activeId} depth={depth + 1} prefetchId={prefetchId} />
     </li>)}
   </ul>;
 }
@@ -108,6 +108,9 @@ export default async function BookPage({ params }: PageProps) {
   const leaves = !isCover ? collectLeaves(tree) : [];
   const leafIdx = leaves.findIndex((l) => l.id === doc.id);
   const progress = !isCover && leafIdx >= 0 ? { current: leafIdx + 1, total: leaves.length } : null;
+  // 只预取下一章:目录是动态路由且动辄几十条,整表预取会触发几十个 RSC 请求;
+  // 顺序阅读的主路径是"读完点下一章",预取这一条收益最大、开销最小。
+  const nextLeaf = !isCover && leafIdx >= 0 && leafIdx + 1 < leaves.length ? leaves[leafIdx + 1] : null;
 
   return <div className={`book-page ${isCover ? "book-page-cover" : "book-page-chapter"}`}>
     <BookSideToggle />
@@ -122,7 +125,7 @@ export default async function BookPage({ params }: PageProps) {
         <strong>{book.title}</strong>
       </Link>
       <nav className="book-toc" aria-label="目录">
-        <TocBranch nodes={tree} base={base} activeId={doc.id} />
+        <TocBranch nodes={tree} base={base} activeId={doc.id} prefetchId={nextLeaf?.id ?? null} />
       </nav>
     </aside>
 
@@ -144,7 +147,7 @@ export default async function BookPage({ params }: PageProps) {
 
       {isCover && book.summary && <p className="book-summary">{book.summary}</p>}
 
-      {continueReading && <Link className="book-continue-reading" href={continueReading.href}><Bookmark size={15} /> 继续阅读 · {continueReading.title} <ArrowRight size={15} /></Link>}
+      {continueReading && <Link className="book-continue-reading" href={continueReading.href} prefetch><Bookmark size={15} /> 继续阅读 · {continueReading.title} <ArrowRight size={15} /></Link>}
 
       {bodyMd.trim().length > 0 && <>
         <div className="docs-body" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
