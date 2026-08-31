@@ -21,6 +21,71 @@ export type MemberCommunityState = {
   recentReading: unknown[];
 };
 
+// 成员行为流水(含已读标记):/api/community 与轻量站壳接口 /api/shell-state 共用,
+// 后者用它推导"是否有未读通知"。SQL 与返回形状逐字保持。
+export async function listMemberActions(
+  db: ReturnType<typeof database>,
+  email: string,
+): Promise<{ kind: string; targetRef: string; createdAt: string }[]> {
+  return (
+    await db
+      .prepare(
+        `SELECT kind, target_ref AS targetRef, created_at AS createdAt
+         FROM community_actions WHERE user_email = ?`,
+      )
+      .bind(email)
+      .all<{ kind: string; targetRef: string; createdAt: string }>()
+  ).results;
+}
+
+// 成员通知 UNION 流(评论/点赞/关注/交易):同上,两处共用一份 SQL。
+export async function listMemberNotifications(
+  db: ReturnType<typeof database>,
+  email: string,
+  displayName: string,
+): Promise<{ id: string; type: string; title: string; detail: string; createdAt: string; href: string }[]> {
+  return (
+    await db
+      .prepare(
+        `SELECT 'comment:' || c.id AS id, '讨论' AS type,
+                c.owner_name || ' 评论了你的作品' AS title,
+                substr(c.content, 1, 90) AS detail,
+                c.created_at AS createdAt, '/product/' || p.id AS href
+         FROM comments c
+         JOIN products p ON c.target_type = 'product' AND c.target_ref = CAST(p.id AS TEXT)
+         WHERE p.owner_email = ? AND c.user_email <> ? AND c.moderation_status = 'visible'
+         UNION ALL
+         SELECT 'like:' || pl.product_id || ':' || pl.user_email AS id, '互动' AS type,
+                m.display_name || ' 喜欢了你的作品' AS title,
+                p.title || ' 收到一次新的喜欢。' AS detail,
+                pl.created_at AS createdAt, '/product/' || p.id AS href
+         FROM product_likes pl
+         JOIN products p ON p.id = pl.product_id
+         JOIN members m ON m.email = pl.user_email
+         WHERE p.owner_email = ? AND pl.user_email <> ?
+         UNION ALL
+         SELECT 'follow:' || ca.user_email AS id, '关注' AS type,
+                m.display_name || ' 开始关注你' AS title,
+                '对方会在关注动态中看到你的新作品与版本记录。' AS detail,
+                ca.created_at AS createdAt, '/profile' AS href
+         FROM community_actions ca
+         JOIN members m ON m.email = ca.user_email
+         WHERE ca.kind = 'follow_creator' AND ca.target_ref = ? AND ca.user_email <> ?
+         UNION ALL
+         SELECT 'transaction:' || t.id AS id, '作品' AS type,
+                t.description AS title,
+                CASE WHEN t.delta > 0 THEN '+' || t.delta || ' 果已进入账户。'
+                     ELSE t.delta || ' 果已从账户支出。' END AS detail,
+                t.created_at AS createdAt, '/wallet' AS href
+         FROM transactions t
+         WHERE t.user_email = ? AND t.type <> 'welcome'
+         ORDER BY createdAt DESC LIMIT 20`,
+      )
+      .bind(email, email, email, email, displayName, email, email)
+      .all<{ id: string; type: string; title: string; detail: string; createdAt: string; href: string }>()
+  ).results;
+}
+
 export async function loadMemberCommunityState(member: MemberIdentity): Promise<MemberCommunityState> {
   const db = database();
   const wallet = await getWalletOverview(member.email);
@@ -48,15 +113,7 @@ export async function loadMemberCommunityState(member: MemberIdentity): Promise<
       .bind(member.email)
       .all()
   ).results;
-  const actions = (
-    await db
-      .prepare(
-        `SELECT kind, target_ref AS targetRef, created_at AS createdAt
-         FROM community_actions WHERE user_email = ?`,
-      )
-      .bind(member.email)
-      .all()
-  ).results;
+  const actions = await listMemberActions(db, member.email);
   const collections = (
     await db
       .prepare(
@@ -126,46 +183,7 @@ export async function loadMemberCommunityState(member: MemberIdentity): Promise<
   const orders = [...internalOrders, ...externalOrders]
     .sort((left, right) => String((right as { purchasedAt?: string }).purchasedAt ?? "").localeCompare(String((left as { purchasedAt?: string }).purchasedAt ?? "")))
     .slice(0, 20);
-  const notifications = (
-    await db
-      .prepare(
-        `SELECT 'comment:' || c.id AS id, '讨论' AS type,
-                c.owner_name || ' 评论了你的作品' AS title,
-                substr(c.content, 1, 90) AS detail,
-                c.created_at AS createdAt, '/product/' || p.id AS href
-         FROM comments c
-         JOIN products p ON c.target_type = 'product' AND c.target_ref = CAST(p.id AS TEXT)
-         WHERE p.owner_email = ? AND c.user_email <> ? AND c.moderation_status = 'visible'
-         UNION ALL
-         SELECT 'like:' || pl.product_id || ':' || pl.user_email AS id, '互动' AS type,
-                m.display_name || ' 喜欢了你的作品' AS title,
-                p.title || ' 收到一次新的喜欢。' AS detail,
-                pl.created_at AS createdAt, '/product/' || p.id AS href
-         FROM product_likes pl
-         JOIN products p ON p.id = pl.product_id
-         JOIN members m ON m.email = pl.user_email
-         WHERE p.owner_email = ? AND pl.user_email <> ?
-         UNION ALL
-         SELECT 'follow:' || ca.user_email AS id, '关注' AS type,
-                m.display_name || ' 开始关注你' AS title,
-                '对方会在关注动态中看到你的新作品与版本记录。' AS detail,
-                ca.created_at AS createdAt, '/profile' AS href
-         FROM community_actions ca
-         JOIN members m ON m.email = ca.user_email
-         WHERE ca.kind = 'follow_creator' AND ca.target_ref = ? AND ca.user_email <> ?
-         UNION ALL
-         SELECT 'transaction:' || t.id AS id, '作品' AS type,
-                t.description AS title,
-                CASE WHEN t.delta > 0 THEN '+' || t.delta || ' 果已进入账户。'
-                     ELSE t.delta || ' 果已从账户支出。' END AS detail,
-                t.created_at AS createdAt, '/wallet' AS href
-         FROM transactions t
-         WHERE t.user_email = ? AND t.type <> 'welcome'
-         ORDER BY createdAt DESC LIMIT 20`,
-      )
-      .bind(member.email, member.email, member.email, member.email, member.displayName, member.email, member.email)
-      .all()
-  ).results;
+  const notifications = await listMemberNotifications(db, member.email, member.displayName);
   const recentReading = await listRecentReading(member);
   // 当前账户名下的书(is_book=1 且 author_email 匹配)。章节数用递归 CTE 统计
   // 该书根的全部后代,与书架前台 listBooks 的 chapterCount 同语义。
