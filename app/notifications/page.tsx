@@ -3,6 +3,7 @@
 import { Bell, Check, Heart, LogIn, MessageCircle, PackageCheck, Sparkles, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { refreshShellState } from "../components/shell-state-sync";
 
 type Notification = { id: string; type: "互动" | "讨论" | "作品" | "关注"; title: string; detail: string; createdAt: string; href: string };
 const icons = { 互动: Heart, 讨论: MessageCircle, 作品: PackageCheck, 关注: UserPlus };
@@ -24,7 +25,11 @@ export default function NotificationsPage() {
   }, []);
 
   const visible = useMemo(() => filter === "全部" ? notifications : notifications.filter((item) => item.type === filter), [filter, notifications]);
-  const persistRead = (ids: string[]) => fetch("/api/actions", { method: "POST", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "mark_notifications_read", targetRefs: ids }) });
+  const persistRead = (ids: string[]) => fetch("/api/actions", { method: "POST", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "mark_notifications_read", targetRefs: ids }) }).then((response) => {
+    // 已读标记落库成功后让站壳重新对账,通知红点不再滞留到硬刷新。
+    if (response.ok) refreshShellState();
+    return response;
+  });
   const markRead = (ids: string[]) => {
     const unread = ids.filter((id) => !read.has(id));
     if (unread.length === 0) return;

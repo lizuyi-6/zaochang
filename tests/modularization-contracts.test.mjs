@@ -190,3 +190,30 @@ test("docs-cache: 全部 docs 写入口必须失效 isolate 文档缓存", async
   const calls = docs.match(/invalidateDocDataCache\(\);/g) ?? [];
   assert.equal(calls.length, 3, `docs.ts 应有 3 处写后失效调用,实际 ${calls.length}`);
 });
+
+// ---- 站壳状态同步契约 ----
+
+test("shell-state-sync: 站壳监听与全部写操作派发共用同一事件常量", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const sync = read("../app/components/shell-state-sync.ts");
+  assert.match(sync, /SHELL_STATE_REFRESH_EVENT = "zaochang:shell-state-refresh"/);
+  const shell = read("../app/components/site-shell.tsx");
+  assert.ok(shell.includes('from "./shell-state-sync"'), "站壳必须从共享模块导入事件常量");
+  assert.ok(shell.includes("SHELL_STATE_REFRESH_EVENT"), "站壳必须监听刷新事件(已读/支付后红点余额不失真)");
+  assert.ok(!shell.includes('"zaochang:shell-state-refresh"'), "站壳不得复制事件字符串字面量");
+  // 账户级隔离:effect 依赖必须含 member.email,signedIn 布尔无法区分同页账户 A→B。
+  assert.match(shell, /\[member\.signedIn, member\.email\]/, "站壳 effect 依赖必须包含 member.email");
+  for (const path of [
+    "../app/notifications/page.tsx",
+    "../app/wallet/wallet-client.tsx",
+    "../app/product/[slug]/product-experience.tsx",
+    "../app/product/[slug]/fruit-access-gate.tsx",
+    "../app/feed/feed-client.tsx",
+    "../app/circles/circles-client.tsx",
+  ]) {
+    const source = read(path);
+    assert.ok(source.includes("refreshShellState"), `${path} 写操作成功后必须派发站壳刷新`);
+    assert.ok(!source.includes('"zaochang:shell-state-refresh"'), `${path} 不得复制事件字符串字面量`);
+  }
+});

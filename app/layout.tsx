@@ -25,13 +25,16 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const member = user
     ? {
         signedIn: true,
+        // email 作为站壳会话键:signedIn 布尔无法区分同页账户 A→B 切换,
+        // 站壳 effect 依赖它做账户级数据隔离(仅本人邮箱,非新增信息暴露)。
+        email: user.email,
         displayName: user.displayName,
         initial: memberInitial(user.displayName),
         isAdmin: isAdminEmail(user.email),
         isFounder: isFounderEmail(user.email),
         memberNumber,
       }
-    : { signedIn: false, displayName: "游客", initial: "游", isAdmin: false, isFounder: false, memberNumber: null };
+    : { signedIn: false, email: null, displayName: "游客", initial: "游", isAdmin: false, isFounder: false, memberNumber: null };
 
   return (
     <html lang="zh-CN">

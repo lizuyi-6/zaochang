@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check, MessageCircle, Radio, Search, Send, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Reveal } from "../components/reveal";
+import { refreshShellState } from "../components/shell-state-sync";
 import { circles } from "../lib/community-data";
 
 type Circle = (typeof circles)[number];
@@ -62,6 +63,7 @@ export function CirclesClient() {
       return next;
     });
     setStats((current) => ({ ...current, [circle.slug]: { slug: circle.slug, recentDiscussions: current[circle.slug]?.recentDiscussions ?? 0, members: Math.max(0, (current[circle.slug]?.members ?? 0) + (data.active ? 1 : -1)) } }));
+    refreshShellState(); // 入退圈改变成员数:站壳圈子统计同步对账
   };
 
   return <div className="circles-page"><header className="route-hero circles-hero"><div><span className="deep-eyebrow"><Users size={14} /> {circles.length} TOPIC CIRCLES</span><h1>围绕做东西，形成关系</h1><p>成员数来自实际加入记录，讨论数统计最近七天公开回应；平台目前不展示无法可靠计算的“在线人数”。</p></div><label className="inline-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索圈子或话题" /></label></header>

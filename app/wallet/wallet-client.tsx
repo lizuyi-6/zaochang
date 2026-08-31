@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowDownLeft, Coins, Heart, History, LockKeyhole, RotateCcw, ShieldCheck, Sparkles, TrendingUp, WalletCards, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatedNumber } from "../components/animated-number";
+import { refreshShellState } from "../components/shell-state-sync";
 
 type Transaction = { id: number; delta: number; type: string; description: string; createdAt: string };
 type Wallet = { balance: number; pendingBalance: number; lifetimeEarned: number; lifetimeSpent: number; status: string };
@@ -57,6 +58,7 @@ export function WalletClient() {
         refundKeys.current.delete(order.id);
         setNotice(`${order.productTitle} 已退款，解锁权益同时撤销`);
         await load();
+        refreshShellState(); // 退款改变余额:站壳顶栏余额同步对账
       } else {
         setNotice(data.error === "refund_window_closed" ? "退款窗口已经关闭" : data.error === "per_use_not_refundable" ? "按次体验在进入后不可退款" : "退款没有生效");
       }

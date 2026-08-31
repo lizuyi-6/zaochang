@@ -38,6 +38,23 @@ export async function listMemberActions(
   ).results;
 }
 
+// 轻量站壳接口只需"哪些通知已读":只取 read_notification 标记,不把成员全部
+// 行为流水(关注/入圈/点赞,随账户历史线性增长)从 D1 搬到 Worker 再在 JS 里过滤。
+export async function listReadNotificationRefs(
+  db: ReturnType<typeof database>,
+  email: string,
+): Promise<Set<string>> {
+  const rows = (
+    await db
+      .prepare(
+        `SELECT target_ref AS targetRef FROM community_actions WHERE user_email = ? AND kind = 'read_notification'`,
+      )
+      .bind(email)
+      .all<{ targetRef: string }>()
+  ).results;
+  return new Set(rows.map((row) => String(row.targetRef)));
+}
+
 // 成员通知 UNION 流(评论/点赞/关注/交易):同上,两处共用一份 SQL。
 export async function listMemberNotifications(
   db: ReturnType<typeof database>,

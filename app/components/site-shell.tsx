@@ -31,8 +31,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { circles, products } from "../lib/community-data";
+import { SHELL_STATE_REFRESH_EVENT } from "./shell-state-sync";
 
-type Member = { signedIn: boolean; displayName: string; initial: string; isAdmin: boolean; isFounder: boolean; memberNumber: number | null };
+type Member = { signedIn: boolean; email: string | null; displayName: string; initial: string; isAdmin: boolean; isFounder: boolean; memberNumber: number | null };
 type CircleStat = { slug: string; members: number; recentDiscussions: number };
 
 const navItems = [
@@ -113,30 +114,46 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
     return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
 
-  // 顶栏数据(帖子数/圈子统计/钱包/未读)与路由无关:只在硬加载与登录态变化时
-  // 拉一次轻量聚合 /api/shell-state(只回这四类小数据,不再整份拉 /api/community)。
+  // 账户切换(含同页会话 A→B)时在渲染期清空上一账户的余额/未读,避免跨账户
+  // 数字残留;React 官方"prop 变化时在渲染中调整状态"模式,替代 effect 内同步 setState。
+  const [loadedEmail, setLoadedEmail] = useState(member.email);
+  if (loadedEmail !== member.email) {
+    setLoadedEmail(member.email);
+    setWalletBalance(null);
+    setHasUnread(false);
+  }
+
+  // 顶栏数据(帖子数/圈子统计/钱包/未读)与路由无关:硬加载与账户切换时拉一次轻量
+  // 聚合 /api/shell-state;各页面的成功写操作(已读/支付/打赏/退款/发帖/入退圈)通过
+  // SHELL_STATE_REFRESH_EVENT 主动让站壳重新对账,不再靠每次路由切换整份拉取
+  // /api/community。依赖是 member.email 而非 signedIn 布尔:同页会话 A→B 切换也能
+  // 区分,触发重新拉取。
   useEffect(() => {
     let active = true;
-    fetch("/api/shell-state", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
-      if (!active || !data) return;
-      const payload = data as {
-        platformStats?: { posts: number };
-        circleStats?: CircleStat[];
-        wallet?: { balance: number } | null;
-        hasUnread?: boolean;
-      };
-      setFeedCount(Number(payload.platformStats?.posts ?? 0));
-      setCircleStats(Object.fromEntries((payload.circleStats ?? []).map((item) => [item.slug, item])));
-      if (!member.signedIn) {
-        setWalletBalance(null);
-        setHasUnread(false);
-        return;
-      }
-      setWalletBalance(payload.wallet?.balance ?? 0);
-      setHasUnread(Boolean(payload.hasUnread));
-    }).catch(() => undefined);
-    return () => { active = false; };
-  }, [member.signedIn]);
+    const load = () => {
+      fetch("/api/shell-state", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
+        if (!active || !data) return;
+        const payload = data as {
+          platformStats?: { posts: number };
+          circleStats?: CircleStat[];
+          wallet?: { balance: number } | null;
+          hasUnread?: boolean;
+        };
+        setFeedCount(Number(payload.platformStats?.posts ?? 0));
+        setCircleStats(Object.fromEntries((payload.circleStats ?? []).map((item) => [item.slug, item])));
+        if (!member.signedIn) {
+          setWalletBalance(null);
+          setHasUnread(false);
+          return;
+        }
+        setWalletBalance(payload.wallet?.balance ?? 0);
+        setHasUnread(Boolean(payload.hasUnread));
+      }).catch(() => undefined);
+    };
+    load();
+    window.addEventListener(SHELL_STATE_REFRESH_EVENT, load);
+    return () => { active = false; window.removeEventListener(SHELL_STATE_REFRESH_EVENT, load); };
+  }, [member.signedIn, member.email]);
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();

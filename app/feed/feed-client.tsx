@@ -21,6 +21,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { products, type CommunityPost } from "../lib/community-data";
 import { formatZhDateTime } from "../lib/format";
+import { refreshShellState } from "../components/shell-state-sync";
 
 type Comment = {
   id: number;
@@ -176,6 +177,7 @@ export function FeedClient() {
         setExpanded(false);
         setTool(null);
         setNotice("动态已经发布");
+        refreshShellState(); // 发帖改变平台动态数:站壳计数同步对账
       } else setNotice("发布失败，请检查图片链接后重试");
     } catch {
       setNotice("网络异常，发布未成功，请重试");

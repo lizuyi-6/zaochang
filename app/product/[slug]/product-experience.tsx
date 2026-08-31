@@ -5,6 +5,7 @@ import { ArrowUpRight, Bookmark, Check, Coins, Eye, Heart, Pause, Play, RotateCc
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { compactNumber, type Product } from "../../lib/community-data";
+import { refreshShellState } from "../../components/shell-state-sync";
 import { EmbeddedProduct, hasEmbeddedProduct } from "./embedded-product";
 import { FruitAccessGate } from "./fruit-access-gate";
 
@@ -85,7 +86,10 @@ export function ProductExperience({ product }: { product: Product }) {
       return;
     }
     const data = await response.json() as { error?: string };
-    if (response.ok) tipKeyRef.current = null;
+    if (response.ok) {
+      tipKeyRef.current = null;
+      refreshShellState(); // 打赏扣减可用余额:站壳顶栏余额同步对账
+    }
     setNotice(response.ok ? `已用 ${amount} 果支持创作者` : data.error === "insufficient_balance" ? "果子余额不足" : "暂时无法完成支持");
   };
 
