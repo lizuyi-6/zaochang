@@ -1,6 +1,7 @@
 import { requireFounder } from "../../_lib/access-control";
 import { auditAdminAction } from "../../_lib/admin";
 import { database, jsonError } from "../../_lib/community";
+import { invalidateDocDataCache } from "../../_lib/docs";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { storeScannedUpload } from "../../_lib/upload-core";
 
@@ -52,6 +53,9 @@ export async function POST(request: Request) {
       await database().prepare(
         `UPDATE docs SET ${column} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       ).bind(stored.url, book.id).run();
+      // 封面/横幅字段在生产 isolate 元数据缓存内:写后必须失效本 isolate,
+      // 否则书架/封面页会继续展示旧图满一个 TTL(与 createDoc/updateDoc 同界)。
+      invalidateDocDataCache();
     }
     await auditAdminAction(founder.email, `book_cover_upload_${slot}`, "docs", book?.id ?? "", stored.key);
 

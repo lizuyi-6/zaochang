@@ -202,6 +202,8 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     assert.match(anonHtml, new RegExp(`图解测试书${tag}`));
     assert.match(anonHtml, /这是一本测试书的简介/);
     assert.doesNotMatch(anonHtml, new RegExp(`内部书${tag}`));
+    // 匿名站壳必须保留可见登录入口(阅读类页面也不得无入口化)。
+    assert.match(anonHtml, /deep-signin/, "匿名书架应渲染可见登录入口");
     // 1b) 封面图:书架卡片用 cover_image 渲染 <img>(有封面时不退回渐变占位)
     assert.match(anonHtml, new RegExp(`<img src="/api/uploads/cover-${tag}\\.png"`), "书架卡片应渲染封面图 img");
     // 2) 书封面页:目录树列出 Part 与章节;横幅位优先渲染 banner_image(横版)
@@ -266,7 +268,9 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     const authIndex = await fetch(`${baseUrl}/bookshelf`, { headers: authHeaders("书架成员", memberEmail) });
     assert.match(await authIndex.text(), new RegExp(`内部书${tag}`));
   } finally {
-    await executeLocalD1(`DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}', '${memBookId}')`);
+    // chap2Id 也必须清理:docs.parent_id 无外键级联,遗漏会把孤儿章节提升到后续
+    // 测试的目录根,造成跨测试污染。
+    await executeLocalD1(`DELETE FROM docs WHERE id IN ('${bookId}', '${partId}', '${chapId}', '${chap2Id}', '${memBookId}')`);
   }
 });
 
