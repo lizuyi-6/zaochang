@@ -86,3 +86,17 @@ test("migration gate rejects created_at drift even for tag-caliber rows", () => 
   assert.equal(result.status, 1);
   assert.match(result.output, /时间错位:第 16 条/);
 });
+
+test("migration gate rejects tag-caliber downgrade outside the 0013-0018 whitelist", () => {
+  // 0019 是内容 hash 入账条目:若远端被写成 tag,必须拒绝(内容校验不可降级)。
+  const latest = productionShape().map((row, index) => index === 19 ? { ...row, hash: journal[19].tag } : row);
+  const result = runChecker(latest);
+  assert.equal(result.status, 1);
+  assert.match(result.output, /tag 降级:第 20 条/);
+
+  // 0000(白名单前的历史条目)同样拒绝。
+  const first = productionShape().map((row, index) => index === 0 ? { ...row, hash: journal[0].tag } : row);
+  const firstResult = runChecker(first);
+  assert.equal(firstResult.status, 1);
+  assert.match(firstResult.output, /tag 降级:第 1 条/);
+});

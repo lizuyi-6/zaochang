@@ -1,7 +1,9 @@
 name: deploy-production
 
 # 仅在 release-gates(ci.yml)对 main 分支跑通后,才部署生产。
-# 手动 workflow_dispatch 可应急部署(会跳过 ci 门禁,仅在紧急时用)。
+# 手动 workflow_dispatch 仅应急使用:它同样跑通与 release-gates 等价的全部门禁
+# (tsc/lint/禁用测试检查/npm test/diff/schema 漂移/环境隔离/依赖审计),不允许
+# "能构建就上线"。checkout 始终锁定触发 CI 的 exact SHA(自动)或所选 ref(手动)。
 on:
   workflow_run:
     workflows: [release-gates]
@@ -19,7 +21,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # 自动触发:仅当触发的 ci 成功;手动触发:总是跑(应急)
+    # 自动触发:仅当触发的 ci 成功;手动触发:总是跑(应急,但下方等价门禁一项不过即中止)
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     timeout-minutes: 20
     env:
@@ -35,6 +37,27 @@ jobs:
           node-version: 22.13.0
           cache: npm
       - run: npm ci
+      # ---- 与 release-gates(ci.yml)等价的门禁,手动/自动路径一致 ----
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - name: Reject disabled tests
+        shell: bash
+        run: |
+          if git grep -nE '(^|[^[:alnum:]_])(test|it|describe)\.(skip|todo)|(^|[^[:alnum:]_])(xit|xtest|xdescribe)[[:space:]]*\(|[[:space:]]skip[[:space:]]*:' -- tests; then
+            echo "Disabled test mechanism found."
+            exit 1
+          fi
+      - run: npm test
+      - run: git diff --check
+      - name: Check migration metadata drift
+        run: |
+          npm run db:generate
+          git diff --exit-code -- db/schema.ts drizzle
+      - name: Require staging/prod database separation
+        run: node scripts/check-env-split.mjs
+      - name: Block high and critical production dependency findings
+        run: npm audit --omit=dev --audit-level=high
+      # ---- 部署专用门禁 ----
       - run: npm run build
       - name: Verify migrations applied (fail-closed)
         run: node scripts/check-migrations.mjs
