@@ -888,3 +888,47 @@ export const readingProgress = sqliteTable(
     index("reading_progress_user_updated_idx").on(table.userEmail, table.updatedAt),
   ],
 );
+
+// ── Hyperknow Agent(1:1 复刻 agent.hyperknow.io 的学习 Agent)───────────────
+// 三张表的归属列统一 FK → members.email(替代原复刻项目 store.json 的无归属
+// 单文件库);越权由 API 层 fail-closed 404 把关,不依赖 DB 触发器(无资金语义,
+// 无不可变账本需求)。
+// 学习对话:每会话一行,history_json 存完整 [{role, content}] 轮次(与原版
+// store.json 的 conversations 桶同构);列表/详情由 API 层按 user_email 隔离。
+export const hkConversations = sqliteTable(
+  "hk_conversations",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    title: text("title").notNull(),
+    starred: integer("starred").notNull().default(0),
+    historyJson: text("history_json").notNull().default("[]"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("hk_conversations_user_updated_idx").on(table.userEmail, table.updatedAt)],
+);
+
+// 生成的课程蓝图(原 courses 桶):course_json 存完整三级结构(Unit → Lecture →
+// Session,含 courseUuid);市场列表只出本人的课程,样例课程是代码内静态数据。
+export const hkCourses = sqliteTable(
+  "hk_courses",
+  {
+    uuid: text("uuid").primaryKey(),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    title: text("title").notNull().default(""),
+    courseJson: text("course_json").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("hk_courses_user_created_idx").on(table.userEmail, table.createdAt)],
+);
+
+// 白板讲座会话(原版存 WS 连接内存,Workers 无长连接 → 落库供举手插话端点
+// 跨请求取回计划并做归属校验;板书播放节奏由客户端驱动,服务端无状态)。
+export const hkWhiteboardSessions = sqliteTable("hk_whiteboard_sessions", {
+  id: text("id").primaryKey(),
+  userEmail: text("user_email").notNull().references(() => members.email),
+  topic: text("topic").notNull(),
+  planJson: text("plan_json").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
