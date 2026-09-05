@@ -10,6 +10,7 @@
 - 产品银河：公司中心、业务星系、产品目录、项目申请与孵化控制台。
 - 开发者生态：造场 OAuth 2.1 / OIDC 登录，以及需要用户逐笔确认的外部果子支付 API。
 - 运营后台：OAuth 客户端审核、内容举报处置、果子风险事件和孵化阶段管理。
+- Hyperknow 学习 Agent：对 agent.hyperknow.io 的 1:1 复刻（流式学习对话、白板授课与举手插话、全自动课程蓝图、6 大官方克隆音色 TTS），预构建 SPA 挂载 `/lattice/`，详见 [HYPERKNOW.md](./HYPERKNOW.md)。
 
 ## 产品预审
 
