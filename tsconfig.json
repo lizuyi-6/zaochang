@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "node_modules.xdrive-partial-*"]
+  "exclude": ["node_modules", "node_modules.xdrive-partial-*", "hyperknow-spa"]
 }
