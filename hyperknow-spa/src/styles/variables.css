@@ -1,0 +1,52 @@
+:root {
+  /* Typography */
+  --font-satoshi: "Satoshi-Medium", "MiSans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-satoshi-regular: "Satoshi-Regular", "MiSans Normal", "MiSans", sans-serif;
+  --font-satoshi-bold: "Satoshi-Bold", "MiSans Demibold", sans-serif;
+  --font-display: "EB Garamond", "ChillDuanHeiSong", "Songti SC", serif;
+  --font-board-handwriting: "Virgil", "Xiaolai", "Segoe UI Emoji", sans-serif;
+  --font-board-standard: var(--font-satoshi);
+
+  /* Color Palette */
+  --app-bg: #FAFAFA;
+  --panel-bg: #FFFFFF;
+  --sidebar-bg: #F9FAFB;
+  --border-color: #E5E7EB;
+  --border-muted: #EEF0F3;
+
+  /* Brand Accents */
+  --color-primary: #4C6694;
+  --color-primary-hover: #3D5377;
+  --color-primary-light: rgba(76, 102, 148, 0.08);
+
+  /* Text Colors */
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6B7280;
+  --text-tertiary: #9CA3AF;
+
+  /* Layout */
+  --sidebar-width: 250px;
+  --header-height: 64px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-satoshi);
+  background-color: var(--app-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
