@@ -32,10 +32,14 @@ export let aiServer;
 export let aiPort;
 export let lastChatCompletion = null;
 export let aiUpstreamCount = 0;
+export let lastTtsRequest = null;
+export let ttsUpstreamCount = 0;
 
 export function resetAiUpstream() {
   lastChatCompletion = null;
   aiUpstreamCount = 0;
+  lastTtsRequest = null;
+  ttsUpstreamCount = 0;
 }
 
 export async function startFakeAiUpstream() {
@@ -50,9 +54,11 @@ export async function startFakeAiUpstream() {
     return "";
   };
   aiServer = createServer(async (request, response) => {
-    // 两种传输:/v1/chat/completions(OpenAI 风格)与 /v1/messages(Anthropic 风格,专家模型专用)
+    // 三种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
+    // 专家模型与 Hyperknow Agent 共用)、/v1/audio/speech(Hyperknow TTS)。
     const isMessages = request.url === "/v1/messages";
-    if (request.method !== "POST" || (!isMessages && request.url !== "/v1/chat/completions")) {
+    const isTts = request.url === "/v1/audio/speech";
+    if (request.method !== "POST" || (!isMessages && !isTts && request.url !== "/v1/chat/completions")) {
       response.writeHead(404).end();
       return;
     }
@@ -64,6 +70,15 @@ export async function startFakeAiUpstream() {
     const chunks = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (isTts) {
+      // 假 StepFun TTS:记录请求体供字段级断言(model/input/voice/speed),
+      // 回确定性"音频"字节(内容里带 voice 标记,可证缓存 key 隔离)。
+      lastTtsRequest = body;
+      ttsUpstreamCount += 1;
+      response.writeHead(200, { "content-type": "audio/mpeg" });
+      response.end(Buffer.from(`fake-mp3-for-${body.voice}-${Buffer.byteLength(String(body.input ?? ""))}b`));
+      return;
+    }
     const rawContent = isMessages ? body.messages?.[0]?.content : body.messages?.[1]?.content;
     lastChatCompletion = {
       model: body.model,
@@ -259,6 +274,7 @@ export function previewServerArgs() {
     "--var", "AI_CHAT_MODEL_EXPERT:test-model-expert",
     "--var", "AI_CHAT_EXPERT_TRANSPORT:messages",
     "--var", "AI_CHAT_VISION:1",
+    "--var", `HYPERKNOW_TTS_BASE_URL:http://127.0.0.1:${aiPort}/v1`,
     "--var", `EMAIL_SEND_BASE_URL:http://127.0.0.1:${emailPort}`,
     "--var", "EMAIL_SEND_ACCOUNT_ID:test-email-account",
     "--var", "EMAIL_SEND_API_TOKEN:test-email-key",
@@ -512,7 +528,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))

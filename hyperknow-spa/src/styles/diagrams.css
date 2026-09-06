@@ -1,0 +1,98 @@
+/* Inline Diagrams & Radar Dot Skeletons */
+
+.inline-diagram {
+  margin: 18px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-muted);
+  background: #ffffff;
+}
+
+.inline-diagram--block {
+  width: 100%;
+  clear: both;
+}
+
+.inline-diagram--right {
+  float: right;
+  width: min(38%, 320px);
+  margin: 0 0 16px 20px;
+}
+
+@media (max-width: 768px) {
+  .inline-diagram--right {
+    float: none;
+    width: 100%;
+    margin: 16px 0;
+  }
+}
+
+/* Radar Scan Beam Skeleton */
+.inline-diagram-skeleton {
+  min-height: 280px;
+  background-color: #f7f9fa;
+  background-image: radial-gradient(circle, rgba(76, 102, 148, 0.22) 1.2px, transparent 1.2px);
+  background-size: 14px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.inline-diagram-skeleton::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  right: -50%;
+  bottom: -50%;
+  background: linear-gradient(
+    135deg,
+    transparent 40%,
+    rgba(76, 102, 148, 0.12) 50%,
+    transparent 60%
+  );
+  animation: ws-scan-beam 2.5s infinite linear;
+}
+
+@keyframes ws-scan-beam {
+  0% { transform: translateY(-30%) rotate(0deg); }
+  100% { transform: translateY(30%) rotate(0deg); }
+}
+
+.inline-diagram-skeleton-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 6px 14px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(76, 102, 148, 0.15);
+}
+
+.inline-diagram-content {
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.inline-diagram-caption {
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-muted);
+  background: #fafafa;
+}
+
+.mermaid-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
+}
