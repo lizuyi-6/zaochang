@@ -14,6 +14,14 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const localBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
+  // 本地开发变量(非 secret,与测试 harness 的 wrangler dev --var 同纪律):
+  // APP_ENV=development + LOCAL_DEV_LOGIN=1 打开 /api/auth/dev-login 模拟登录
+  // (dev-login-gate 双 fail-closed,生产即使误配也不可达);AI 上游密钥走
+  // gitignore 的 .dev.vars,绝不写进本文件。
+  vars: {
+    APP_ENV: "development",
+    LOCAL_DEV_LOGIN: "1",
+  },
   d1_databases: d1
     ? [
         {
