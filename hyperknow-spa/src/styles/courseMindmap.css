@@ -1,0 +1,128 @@
+/* Course Structure Mindmap Styles */
+
+.csm-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.csm-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.csm-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.csm-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.csm-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.csm-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.csm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.csm-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+/* Depth Tag Colors */
+.csm-chip--intuition { background: #f4faf7; border-color: #e2eee8; color: #4e8268; }
+.csm-chip--definition { background: #f3f8fd; border-color: #dfeaf5; color: #556fa0; }
+.csm-chip--derivation { background: #fbf9f4; border-color: #eeeae0; color: #8e8268; }
+.csm-chip--advanced { background: #fbf6f3; border-color: #efe6e1; color: #9a7266; }
+.csm-chip--application { background: #f8f5f9; border-color: #ebe6ed; color: #7e6b85; }
+
+/* Tree Nodes & Connectors */
+.csm-canvas {
+  width: 100%;
+  overflow-x: auto;
+  padding: 16px 8px;
+}
+
+.csm-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.csm-unit-group {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 16px;
+  margin-left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.csm-unit-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.csm-lectures-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-color);
+}
+
+.csm-lecture-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.csm-sessions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0 6px 12px;
+}
+
+.csm-session-node {
+  background: #f9fafb;
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+}
