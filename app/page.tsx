@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowUpRight, Eye, Flame, Heart, Radio, Sparkles, Users } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Bot, Eye, Flame, Heart, Radio, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { loadPublicCommunityState } from "./api/_lib/public-community";
 import { AnimatedNumber } from "./components/animated-number";
@@ -50,6 +50,7 @@ export default async function HomePage() {
             <p>这里没有“等待发布”的作品。每个想法都从一个能被试玩、被讨论的版本开始。</p>
             <div className="home-stage-actions">
               <Link className="primary-action" href="/discover">进入现场 <ArrowRight size={17} /></Link>
+              <a className="secondary-action" href="/lattice/"><Bot size={16} /> Hyperknow 研学 <ArrowUpRight size={14} /></a>
               <Link className="text-action" href="/studio/new">带一件作品来</Link>
             </div>
           </div>
@@ -60,6 +61,9 @@ export default async function HomePage() {
               <span>MORI / DEEP FOCUS</span><strong>42:18</strong><i><b /></i><small>森林正在生长</small>
             </div>
             <div className="floating-work work-type"><span>字浪</span><strong>呼<br />吸</strong><small>WEIGHT 72 / FLOW 48</small></div>
+            <a className="floating-work work-hyperknow" href="/lattice/" aria-label="进入 Hyperknow 学习 Agent">
+              <span>HYPERKNOW / AGENT</span><strong>AI<br />研学</strong><small>白板授课 · 举手插话 ↗</small>
+            </a>
             <div className="floating-work work-loop"><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>
             <div className="stage-orbit orbit-one" /><div className="stage-orbit orbit-two" />
             <span className="stage-coordinate coordinate-one">X 31.42 / Y 18.07</span>

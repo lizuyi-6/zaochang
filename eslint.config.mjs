@@ -13,6 +13,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "dist/**",
     "public/product-apps/**",
+    "public/lattice/**",
     // Hyperknow 复刻 SPA(独立 Vite 工程,不参与主站 lint)。
     "hyperknow-spa/**",
     ".wrangler/**",

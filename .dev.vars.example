@@ -1,0 +1,14 @@
+# 本地开发变量模板(npm run dev / vite 读取)。
+# 复制为 .dev.vars 并填入真实值;.dev.vars 已 gitignore,密钥绝不入库/进对话。
+#
+# Hyperknow 学习 Agent 的 LLM 走 Anthropic Messages 协议({base}/messages),
+# 上游必须支持 Messages(如 StepFun step-explore);阅读页「问 AI」共用同一密钥面。
+# 缺任一项时对应功能 fail-closed:问 AI 503 ai_not_configured,hyperknow 503。
+AI_CHAT_BASE_URL=https://api.stepfun.com/v1
+AI_CHAT_API_KEY=填入你的密钥
+# 缺省回落 step-explore(阅读 AI 需要;hyperknow 也会回落到它)
+AI_CHAT_MODEL=step-explore
+# Hyperknow 专属覆盖位(可选):上游与阅读 AI 不同时使用;TTS 缺省即 StepFun step-tts-mini
+# HYPERKNOW_AI_BASE_URL=
+# HYPERKNOW_AI_API_KEY=
+# HYPERKNOW_AI_MODEL=

@@ -89,6 +89,8 @@ test("server-renders the creator community", async () => {
   assert.match(html, /都在造什么/);
   assert.match(html, /发布作品/);
   assert.match(html, /果子钱包/);
+  assert.match(html, /Hyperknow/);
+  assert.match(html, /href="\/lattice\/"/);
   assert.match(html, /href="\/galaxy"/);
   assert.match(html, /产品银河/);
   assert.match(html, /1 位社区成员/);

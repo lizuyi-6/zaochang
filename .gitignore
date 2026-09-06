@@ -34,6 +34,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# wrangler/vite 本地开发变量(AI 上游密钥等,绝不入库;模板见 .dev.vars.example)
+.dev.vars
+
 # vercel
 .vercel
 
