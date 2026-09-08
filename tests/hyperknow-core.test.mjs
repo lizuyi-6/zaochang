@@ -56,8 +56,8 @@ test("consumeMessagesSse: 跨 chunk 断行与无尾换行的尾行都能解析",
 
 test("sanitizeTtsText: 剥 HTML/截 500 字/空兜底", () => {
   assert.equal(sanitizeTtsText("<p>Hello <strong>world</strong></p>"), "Hello world");
-  assert.equal(sanitizeTtsText("   "), "你好，我是你的 Hyperknow 学习导师。");
-  assert.equal(sanitizeTtsText("<div></div>"), "你好，我是你的 Hyperknow 学习导师。");
+  assert.equal(sanitizeTtsText("   "), "你好，我是你的见界学习导师。");
+  assert.equal(sanitizeTtsText("<div></div>"), "你好，我是你的见界学习导师。");
   assert.equal(sanitizeTtsText("x".repeat(600)).length, 500);
 });
 
