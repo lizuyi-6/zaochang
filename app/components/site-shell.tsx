@@ -45,7 +45,7 @@ const navItems = [
   { href: "/challenges", label: "挑战", icon: Trophy },
   { href: "/collections", label: "收藏", icon: Bookmark },
   { href: "/bookshelf", label: "书架", icon: Library },
-  { href: "/lattice/", label: "Hyperknow", icon: Bot, isExternal: true, badge: "AI" },
+  { href: "/lattice/", label: "见界", icon: Bot, isExternal: true, badge: "AI" },
   { href: "/docs", label: "文档", icon: BookOpen },
   { href: "/studio", label: "创作台", icon: Layers3 },
   { href: "/developers", label: "开发者", icon: Blocks },
@@ -63,7 +63,7 @@ const routeNames: Record<string, string> = {
   "/circles": "社区圈子",
   "/challenges": "造物挑战",
   "/collections": "灵感收藏",
-  "/lattice/": "Hyperknow 研学",
+  "/lattice/": "见界研学",
   "/docs": "造场文档",
   "/studio/docs": "文档管理",
   "/studio": "我的创作台",
@@ -351,7 +351,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
           <motion.div className="command-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => event.target === event.currentTarget && setCommandOpen(false)}>
             <motion.section className="command-palette" role="dialog" aria-modal="true" aria-label="搜索造场" initial={{ opacity: 0, y: -20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -14, scale: 0.98 }} transition={{ type: "spring", stiffness: 420, damping: 32 }}>
               <label><Search size={20} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入作品、作者或类别" /><button onClick={() => setCommandOpen(false)} aria-label="关闭搜索"><X size={18} /></button></label>
-              <div className="command-shortcuts"><button onClick={() => router.push("/discover")}><Compass size={15} />探索</button><button onClick={() => router.push("/challenges")}><Flame size={15} />挑战</button><button onClick={() => router.push("/profile")}><CircleUserRound size={15} />我的主页</button><a href="/lattice/"><Bot size={15} />Hyperknow 研学</a></div>
+              <div className="command-shortcuts"><button onClick={() => router.push("/discover")}><Compass size={15} />探索</button><button onClick={() => router.push("/challenges")}><Flame size={15} />挑战</button><button onClick={() => router.push("/profile")}><CircleUserRound size={15} />我的主页</button><a href="/lattice/"><Bot size={15} />见界研学</a></div>
               <div className="command-results">
                 <span>{query ? "搜索结果" : "此刻热门"}</span>
                 {results.map((product) => (
