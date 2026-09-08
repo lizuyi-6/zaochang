@@ -11,7 +11,7 @@ R2。像素级前端以预构建 SPA 挂载在 `/lattice/`(与 `public/product-a
 ```
 hyperknow-spa/                 # 复刻前端源码(React 19 + Vite,独立工程,CI 不安装其依赖)
   └── 构建产物提交在 public/lattice/(vite base=/lattice/,见其 vite.config.ts)
-app/api/hyperknow/**           # REST + SSE 端点(10 条路由,全部 requireMember)
+app/api/hyperknow/**           # REST + SSE 端点(12 条路由,全部 requireMember)
 app/api/_lib/hyperknow/        # 移植层:prompts(纯)/protocol(纯)/config/llm/agents/tts/store/guards
 db/schema.ts                   # hk_conversations / hk_courses / hk_whiteboard_sessions(迁移 0020)
 tests/hyperknow-core.test.mjs  # 纯逻辑单测(SSE 解析/fallback/缓存 key/节奏公式)
@@ -49,10 +49,22 @@ step-explore 原生协议),`thinking_delta` 增量映射为 directorAgent 思考
 注意:上游必须支持 Messages 协议(原复刻版的 OpenAI chat/completions 回退不移植——
 "上游必须说 Messages"是显式契约)。
 
+## 按钮接线:复刻界面 → 真实功能
+
+复刻 SPA 里每个可点控件都必须有真实行为或显式失败反馈,不留静默死按钮。实现分三类:
+
+| 类别 | 实现 |
+| --- | --- |
+| 真实后端能力 | 翻译(`POST /api/hyperknow/translate`,SSE 逐帧、服务端扣 2 积分、余额不足 402);模型探针(`POST /api/hyperknow/model-check`,`max_tokens:16` 的最小 ping,**不计费、不落库**,限流 20/h,只回 `{ok,latency_ms}`);连接面板延迟(ping 真实往返);音频自检(真拉 TTS 样本,量首字节延迟与下载码率,阈值 32 kbps,再真回放);白板课程旁白(每教学步随字幕真声朗读,**音频是时钟**:字幕等起声才起跑、音频播完字幕立即补全、步进等播完才前进,杜绝冷合成延迟下的声画错位与截断;中英文按音节密度分别估窗 180ms/汉字、65ms/英文字符,暂停为同元素断点续播) |
+| 浏览器本地能力 | 复制(execCommand 回退)、分享链接(navigator.share 回退剪贴板)、日历 `.ics` 下载、附件/材料/反馈附件上传(`/api/uploads`,visibility=private)、语音输入(Web Speech API 一次性识别)、朗读(TTS 单例)、反馈邮件(mailto) |
+| 复刻界面自绘 | 白板导出 JPG/PDF:Canvas 2D 按课堂数据重绘(Caveat/Handlee/Satoshi 用已加载 woff2,2200×1300 世界坐标,第 1/2 页按 x=1100 切分,表格波纹网格、荧光高亮带、红色圈注),非 DOM 截图;PDF 在点击内同步 `window.open` 再写 blob `<img>` 并 `print()` |
+
+未复刻的装饰性按钮统一给可见反馈(顶部 toast 或 `SOON` 徽章),如兑换码、Canvas/Google 日历集成、外部记忆同步、付费档预览。
+
 ## 安全与限流
 
-所有端点 `requireMember`;写端点(chat/plan/interject/course-generation)加 `assertSameOrigin`;
-限流(bucket/每小时):chat 30、tts 120、whiteboard plan 20、interject 30、course-gen 5。
+所有端点 `requireMember`;写端点(chat/plan/interject/course-generation/translate/model-check)加 `assertSameOrigin`;
+限流(bucket/每小时):chat 30、tts 120、whiteboard plan 20、interject 30、course-gen 5、translate 60、model-check 20。
 答案侧无资金/证据语义,不需要 DB 触发器。白板板书 HTML 由 LLM 生成、前端
 `dangerouslySetInnerHTML` 渲染——**复刻原版行为**,如实记录(内容只能由本人触发生成)。
 

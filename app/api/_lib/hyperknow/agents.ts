@@ -75,7 +75,7 @@ export async function planLecture(topic: string, signal?: AbortSignal): Promise<
       { role: "system", content: WHITEBOARD_INSTRUCTOR_PROMPT },
       { role: "user", content: `Create a step-by-step whiteboard lecture for: "${topic}"` },
     ],
-    { jsonMode: true, signal },
+    { jsonMode: true, signal, maxTokens: 8192 },
   ).catch(() => "");
   return parseLecturePlan(jsonStr, topic);
 }
@@ -98,7 +98,7 @@ export async function generateCourse(query: string, signal?: AbortSignal): Promi
       { role: "system", content: COURSE_ARCHITECT_PROMPT },
       { role: "user", content: `Design a comprehensive, structured course for: "${query}"` },
     ],
-    { jsonMode: true, signal },
+    { jsonMode: true, signal, maxTokens: 8192 },
   ).catch(() => "");
   return parseCourseStructure(jsonStr, query);
 }

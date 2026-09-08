@@ -1,0 +1,357 @@
+/* ============================================================
+   Marketplace page (screen 66) — 1600×900 calibrated
+   ============================================================ */
+
+.mp-page {
+  background: #FAFAFA;
+}
+
+.mp-container {
+  max-width: 990px;
+  margin: 0 auto;
+  padding: 56px 0 90px;
+}
+
+/* ---------------- Hero ---------------- */
+.mp-hero {
+  text-align: center;
+}
+.mp-hero h1 {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #131313;
+}
+
+.mp-search {
+  width: 380px;
+  height: 32px;
+  margin: 26px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 999px;
+  padding: 0 16px;
+}
+.mp-search svg {
+  color: #9CA3AF;
+  flex-shrink: 0;
+}
+.mp-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: #1F2937;
+}
+.mp-search input::placeholder {
+  color: #9CA3AF;
+}
+
+/* ---------------- Trending row ---------------- */
+.mp-trending-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.mp-trending-chip {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  background: #F7FAFC;
+  border: 1px solid #E7EBF1;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8A94A6;
+}
+.mp-editors {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+/* ---------------- Featured grid ---------------- */
+.mp-featured {
+  display: grid;
+  grid-template-columns: 488px 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.mp-feat-right {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: 200px 160px;
+  gap: 10px;
+}
+
+.mp-feat-card {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.mp-feat-card.large {
+  height: 370px;
+}
+.mp-feat-card.top {
+  grid-column: span 3;
+}
+.mp-feat-card.small {
+  grid-column: span 2;
+}
+
+.mp-cover-fill {
+  position: absolute;
+  inset: 0;
+}
+.mp-cover-fill > * {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.mp-cover-fill svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.mp-feat-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+}
+
+.mp-feat-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+}
+.mp-feat-card.large .mp-feat-overlay {
+  padding: 20px 24px;
+}
+
+.mp-feat-chips {
+  display: flex;
+  gap: 8px;
+}
+.mp-feat-chip {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mp-feat-title {
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+}
+.mp-feat-card.large .mp-feat-title {
+  font-size: 28px;
+}
+.mp-feat-card.top .mp-feat-title {
+  font-size: 18px;
+}
+.mp-feat-card.small .mp-feat-title {
+  font-size: 17px;
+}
+.mp-feat-sub {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------------- Category tab bar ---------------- */
+.mp-tabs {
+  display: flex;
+  gap: 32px;
+  margin-top: 34px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 92%, transparent 100%);
+}
+.mp-tabs::-webkit-scrollbar {
+  display: none;
+}
+.mp-tab {
+  position: relative;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #9CA3AF;
+  white-space: nowrap;
+  padding-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.mp-tab:hover {
+  color: #6B7280;
+}
+.mp-tab.active {
+  color: #1F1F20;
+  font-weight: 600;
+}
+.mp-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: #1F1F20;
+}
+
+/* ---------------- Course list grid ---------------- */
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.mp-card {
+  background: #fff;
+  border: 1px solid #F0F1F3;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.mp-card:hover {
+  border-color: #E2E5E9;
+}
+
+.mp-card-cover {
+  height: 110px;
+  border-radius: 14px 14px 0 0;
+  overflow: hidden;
+}
+.mp-card-cover > * {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.mp-card-cover svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.mp-card-body {
+  padding: 14px;
+}
+
+.mp-provider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6B7280;
+}
+/* Logo renders mark + wordmark; only the 14px mark is wanted here */
+.mp-logo-mark {
+  display: inline-flex;
+  align-items: center;
+}
+.mp-logo-mark > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+.mp-logo-mark > span > span {
+  display: none;
+}
+
+.mp-card-title {
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1F2937;
+  line-height: 1.3;
+}
+.mp-card-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6B7280;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mp-card-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.mp-card-chip {
+  background: #F3F4F6;
+  color: #4B5563;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.mp-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 12px;
+  color: #6B7280;
+}
+.mp-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.mp-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.mp-empty {
+  padding: 42px 0 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #9CA3AF;
+}

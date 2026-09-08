@@ -1,0 +1,345 @@
+/* ============================================================
+   CoursesPage — "Your Courses" empty shelf / course card + right
+   rail (THIS WEEK / PICK UP / Marketplace)  (prefix: cs-)
+   ============================================================ */
+
+.cs-page {
+  background: #FAFAFA;
+}
+
+.cs-layout {
+  display: flex;
+  gap: 40px;
+  max-width: 1048px;
+  margin: 0 auto;
+  padding: 44px 20px 90px;
+}
+
+/* ---------------- Main column ---------------- */
+.cs-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.cs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 26px;
+}
+
+.cs-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cs-tab {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6B7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.12s;
+}
+.cs-tab:hover:not(.active) { color: #374151; }
+.cs-tab.active {
+  background: #fff;
+  color: #111827;
+  font-weight: 600;
+  border: 1px solid #EFEFEF;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.cs-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 202px;
+  height: 36px;
+  padding: 0 14px;
+  background: #fff;
+  border: 1px solid #E8EAEE;
+  border-radius: 999px;
+  color: #9CA3AF;
+}
+.cs-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: #1F2937;
+}
+.cs-search input::placeholder { color: #9CA3AF; }
+
+/* ---------------- Empty state ---------------- */
+.cs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-top: 108px;
+}
+.cs-empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin-top: 26px;
+}
+.cs-empty-sub {
+  font-size: 13px;
+  color: #9CA3AF;
+  line-height: 1.6;
+  margin-top: 10px;
+}
+
+/* ---------------- Joined: course card ---------------- */
+.cs-course-grid {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 300px);
+  gap: 20px;
+}
+.cs-course-card {
+  width: 300px;
+  background: #fff;
+  border: 1px solid #F0F0F0;
+  border-radius: 16px;
+  padding: 16px;
+  cursor: default;
+  transition: box-shadow 0.15s;
+}
+.cs-course-card:hover { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06); }
+.cs-course-cover {
+  width: 268px;
+  height: 268px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.cs-course-body { padding: 14px 2px 2px; }
+.cs-course-titlerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cs-course-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* shared bits */
+.cs-official {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #9CA3AF;
+  margin-top: 5px;
+}
+.cs-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4B5563;
+  margin-top: 5px;
+}
+
+.cs-preview {
+  height: 24px;
+  padding: 0 8px;
+  background: #fff;
+  border: 1px solid #E3E5EA;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1F2937;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.cs-preview:hover { background: #F9FAFB; }
+
+/* ---------------- Right rail ---------------- */
+.cs-rail {
+  width: 320px;
+  flex-shrink: 0;
+}
+
+.cs-card {
+  background: #fff;
+  border: 1px solid #F0F0F0;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.cs-caps {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  color: #9AA1AC;
+  text-transform: uppercase;
+  }
+
+/* THIS WEEK */
+.cs-week-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cs-week-count-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.cs-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #4B5563;
+  cursor: pointer;
+}
+.cs-week-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.01em;
+}
+.cs-week-sub {
+  font-size: 12px;
+  color: #9CA3AF;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.cs-week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+  margin-top: 14px;
+}
+.cs-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 0 8px;
+  background: #F7F8FA;
+  border-radius: 8px;
+}
+.cs-day-l { font-size: 11px; font-weight: 600; color: #9AA1AC; }
+.cs-day-v { font-size: 13px; font-weight: 600; color: #4B5563; }
+.cs-day.dim { background: transparent; }
+.cs-day.dim .cs-day-l,
+.cs-day.dim .cs-day-v { color: #D6D9DE; }
+
+/* PICK UP WHERE YOU LEFT OFF */
+.cs-pickup-label {
+  display: block;
+  margin: 22px 0 8px 2px;
+}
+.cs-pickup {
+  background: #fff;
+  border: 1px solid #EDEFF2;
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.cs-pickup:hover { border-color: #E0E4EA; }
+.cs-pickup-title { font-size: 15px; font-weight: 700; color: #111827; }
+.cs-pickup-sub { font-size: 12px; color: #9CA3AF; margin-top: 5px; }
+
+/* Marketplace card */
+.cs-mkt { margin-top: 22px; padding: 20px 16px; }
+.cs-mkt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cs-mkt-title-h { font-size: 17px; font-weight: 700; color: #111827; }
+.cs-seemore {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6B7B94;
+  cursor: pointer;
+}
+.cs-seemore:hover { color: #4C6696; }
+.cs-mkt-sub-h {
+  font-size: 12px;
+  color: #9CA3AF;
+  margin-top: 5px;
+}
+.cs-mkt-rows {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.cs-mkt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+}
+.cs-mkt-row + .cs-mkt-row { border-top: 1px solid #F4F5F7; }
+.cs-mkt-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.cs-mkt-thumb > * {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cs-mkt-thumb svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.cs-mkt-info { flex: 1; min-width: 0; }
+.cs-mkt-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1F2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 交互补齐:周导航按钮 / 今日高亮 */
+.cs-week-nav button {
+  border: 0;
+  background: none;
+  padding: 2px;
+  display: flex;
+  color: #4B5563;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.cs-week-nav button:hover { background: #F3F4F6; color: #1F2937; }
+.cs-day.today { background: #E8F0F8; }
+.cs-day.today .cs-day-l,
+.cs-day.today .cs-day-v { color: #33507E; }

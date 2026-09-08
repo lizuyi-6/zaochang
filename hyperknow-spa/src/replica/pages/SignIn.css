@@ -1,0 +1,251 @@
+/* ============================================================
+   Sign-In page (1600×900 reference)
+   ============================================================ */
+
+.si-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: #FFFFFF;
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+/* ---------------- Left panel ---------------- */
+.si-left {
+  position: relative;
+  width: 52%;
+  height: 100%;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.si-logo {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+}
+.si-lang {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+  background: #FFFFFF;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.si-lang:hover { background: #F9FAFB; }
+
+.si-form {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+}
+.si-title {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0A0A0A;
+}
+.si-sub {
+  margin-top: 10px;
+  font-size: 15px;
+  color: #6B7280;
+}
+
+.si-google {
+  margin-top: 26px;
+  height: 40px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: background 0.12s;
+}
+.si-google:hover { background: #FAFAFA; }
+
+.si-divider {
+  margin: 24px 0 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.si-divider-line { flex: 1; height: 1px; background: #E5E7EB; }
+.si-divider-or { font-size: 12px; color: #9CA3AF; }
+
+.si-label {
+  font-size: 12px;
+  color: #6B7280;
+  margin-bottom: 8px;
+}
+.si-input {
+  width: 100%;
+  height: 38px;
+  border-radius: 10px;
+  background: #FAFAFA;
+  border: 1px solid #ECECEF;
+  padding: 0 12px;
+  font-size: 14px;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.si-input:focus { border-color: #D4D4D8; }
+
+.si-pw-row {
+  margin: 18px 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.si-forgot {
+  font-size: 12.5px;
+  color: #6B7280;
+  cursor: pointer;
+}
+.si-forgot:hover { color: #374151; }
+.si-pw-wrap { position: relative; }
+.si-pw-wrap .si-input { padding-right: 38px; }
+.si-pw-eye {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9CA3AF;
+  pointer-events: none;
+}
+
+.si-submit {
+  margin-top: 18px;
+  width: 100%;
+  height: 38px;
+  border-radius: 10px;
+  background: #0F0F10;
+  color: #FFFFFF;
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.si-submit:hover { background: #232326; }
+
+.si-signup {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #6B7280;
+}
+.si-signup-link {
+  color: #111827;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.si-fine {
+  margin-top: 26px;
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: #9CA3AF;
+}
+.si-fine-link {
+  color: #52525B;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* ---------------- Right panel ---------------- */
+.si-right {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  background: #F4F4F5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.si-stack {
+  position: relative;
+  width: 383px;
+  max-width: 80%;
+}
+.si-card-back {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: -10px;
+  height: 100%;
+  background: #FAFAFA;
+  border-radius: 20px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.05);
+}
+.si-card {
+  position: relative;
+  background: #FFFFFF;
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.10);
+  padding: 32px;
+}
+.si-quote {
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: #1F2937;
+}
+.si-attrib { margin-top: 24px; }
+.si-name { font-size: 14px; font-weight: 500; color: #374151; }
+.si-role { margin-top: 2px; font-size: 13px; color: #9CA3AF; }
+
+.si-status {
+  position: absolute;
+  right: 28px;
+  bottom: 24px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  font-size: 13px;
+  color: #374151;
+}
+.si-status-icon { color: #10B981; }
+
+/* 造场账户登录入口(替换原 Google 按钮/假表单):锚点需继承按钮观感 */
+a.si-google { text-decoration: none; }
+.si-google .lucide, a.si-google svg { flex: none; }
+.si-zc {
+  background: #111827;
+  border-color: #111827;
+  color: #FFFFFF;
+}
+.si-zc:hover { background: #1F2937; }
+.si-hint {
+  margin: 18px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #6B7280;
+  text-align: center;
+}
+.si-form .si-fine { margin-top: 22px; }

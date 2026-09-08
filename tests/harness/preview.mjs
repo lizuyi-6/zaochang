@@ -34,12 +34,19 @@ export let lastChatCompletion = null;
 export let aiUpstreamCount = 0;
 export let lastTtsRequest = null;
 export let ttsUpstreamCount = 0;
+/** 置 true 后假上游一律 500(测"上游故障"分支);resetAiUpstream 会复位。 */
+export let aiUpstreamForceFail = false;
+
+export function setAiUpstreamForceFail(value) {
+  aiUpstreamForceFail = Boolean(value);
+}
 
 export function resetAiUpstream() {
   lastChatCompletion = null;
   aiUpstreamCount = 0;
   lastTtsRequest = null;
   ttsUpstreamCount = 0;
+  aiUpstreamForceFail = false;
 }
 
 export async function startFakeAiUpstream() {
@@ -92,9 +99,15 @@ export async function startFakeAiUpstream() {
       transport: isMessages ? "messages" : "chat",
     };
     aiUpstreamCount += 1;
-    if ((lastChatCompletion.user ?? "").includes("AI-UPSTREAM-FAIL-TEST")) {
+    if (aiUpstreamForceFail || (lastChatCompletion.user ?? "").includes("AI-UPSTREAM-FAIL-TEST")) {
       response.writeHead(500, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "boom" }));
+      return;
+    }
+    // 非流式 Messages 调用(llm.chat,模型探针用):回 Anthropic 非流式 JSON 形状。
+    if (isMessages && body.stream !== true) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ id: "msg_fake", type: "message", role: "assistant", content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" }));
       return;
     }
     response.writeHead(200, { "content-type": "text/event-stream" });
@@ -528,7 +541,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))

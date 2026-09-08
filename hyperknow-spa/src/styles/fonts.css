@@ -1,0 +1,51 @@
+/* Self-hosted fonts for the Hyperknow 1:1 replica.
+   Files live in src/assets/fonts so vite hashes them into the build
+   and resolves URLs against the /lattice/ base automatically. */
+
+@font-face {
+  font-family: 'Satoshi';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/Satoshi-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Satoshi';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/Satoshi-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Satoshi';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../assets/fonts/Satoshi-Bold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/eb-garamond-600-latin.woff2') format('woff2');
+}
+
+/* Caveat is a variable font: one file serves 400–700. */
+@font-face {
+  font-family: 'Caveat';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../assets/fonts/caveat-latin.woff2') format('woff2');
+}
+
+/* Handlee — wider monoline handwriting used by the board table cells. */
+@font-face {
+  font-family: 'Handlee';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/handlee-latin-400.woff2') format('woff2');
+}
