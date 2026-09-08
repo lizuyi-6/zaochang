@@ -63,6 +63,26 @@ test("uses GitHub-only invite registration and keeps unconfigured providers fail
   assert.match(submitted.headers.get("location") ?? "", /\/signin\?error=not_configured&provider=github/);
 });
 
+test("lattice gate signin variant keeps GitHub login alongside email codes", async () => {
+  const res = await fetch(`${baseUrl}/signin?return_to=%2Flattice%2F&via=lattice`, { headers: { accept: "text/html" } });
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.match(html, /使用造场账户登录/);
+  assert.match(html, /使用 GitHub 登录/, "门禁登录页必须提供 GitHub 登录");
+  assert.match(html, /使用邀请码注册/);
+  assert.match(html, /action="\/api\/auth\/github\/start"/);
+  assert.match(html, /name="return_to" value="\/lattice\/"/);
+  // 测试环境未配置 GitHub → 入口渲染"待配置"占位(与主站同一条分支逻辑);
+  // 配置后同一处渲染为带 return_to 的授权链接,由下面的源码断言兜底。
+  assert.match(html, /class="auth-provider github is-disabled" aria-disabled="true"/);
+  // 主站与门禁变体共用同一登录方式区块:GitHub 入口与邀请码表单各只有一份定义,
+  // 防止将来只改一边导致两条路再次分叉。
+  const source = readFileSync(join(projectRoot, "app", "signin", "page.tsx"), "utf8");
+  assert.match(source, /<a className="auth-provider github" href=\{loginHref\}>/);
+  assert.equal((source.match(/<a className="auth-provider github" href=\{loginHref\}>/g) ?? []).length, 1);
+  assert.equal((source.match(/action="\/api\/auth\/github\/start" method="post"/g) ?? []).length, 1);
+});
+
 test("GitHub connection page fails visibly before OAuth navigation", () => {
   const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
   authorizeUrl.searchParams.set("client_id", "public-test-client");

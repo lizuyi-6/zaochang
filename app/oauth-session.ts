@@ -158,11 +158,12 @@ function database() {
   return env.DB;
 }
 
-export async function getOAuthSessionUser(): Promise<SessionUser | null> {
+// 会话校验核心:给定 cookie 原值查 D1(哈希比对 + 未过期),返回会话用户。
+// 与请求上下文解耦——除了 cookies() 路径外,worker/index.ts 的 /lattice 门禁
+// 在 next/headers 请求存储建立之前就要鉴权,直接喂 Request 头里的 cookie 值。
+export async function sessionUserFromTokenValue(raw: string | null | undefined): Promise<SessionUser | null> {
+  if (!raw) return null;
   try {
-    const cookieStore = await cookies();
-    const raw = cookieStore.get(SESSION_COOKIE)?.value;
-    if (!raw) return null;
     const tokenHash = await hashToken(raw);
     const row = await database().prepare(
       `SELECT m.display_name AS displayName, m.email AS email
@@ -171,6 +172,15 @@ export async function getOAuthSessionUser(): Promise<SessionUser | null> {
     ).bind(tokenHash).first<{ displayName: string; email: string }>();
     if (!row) return null;
     return { displayName: row.displayName, email: row.email, fullName: row.displayName };
+  } catch {
+    return null;
+  }
+}
+
+export async function getOAuthSessionUser(): Promise<SessionUser | null> {
+  try {
+    const cookieStore = await cookies();
+    return await sessionUserFromTokenValue(cookieStore.get(SESSION_COOKIE)?.value);
   } catch {
     return null;
   }

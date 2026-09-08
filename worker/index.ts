@@ -8,6 +8,8 @@ import { runPurgeRegistry } from "../app/api/_lib/purge";
 import { AGENT_WRITE_CAPABILITIES, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
 import { prepareRequestBody } from "./request-body";
 import { handleWithAnonCache } from "./anon-cache";
+import { isLatticePath, cookieValue, latticeGateRedirect } from "./lattice-gate";
+import { SESSION_COOKIE, sessionUserFromTokenValue, safeReturnPath } from "../app/oauth-session";
 
 interface Env {
   ASSETS: Fetcher;
@@ -63,6 +65,21 @@ const worker = {
     const prepared = await prepareRequestBody(request);
     if (prepared instanceof Response) return withSecurityHeaders(request, prepared, origin);
 
+    // 已登录访问登录页 → 直接 302 回到 return_to(经 safeReturnPath 校验)。
+    // 主站会话全站通用(/lattice/ 门禁认同一 cookie),不该让已登录用户再登一次。
+    // 必须在 Worker 层做:vinext 对登录态请求传给 RSC 页面的 searchParams 为空,
+    // 页面层拿不到 return_to(实测)。
+    if (url.pathname === "/signin" && request.method === "GET") {
+      const member = await sessionUserFromTokenValue(cookieValue(request.headers.get("cookie"), SESSION_COOKIE));
+      if (member) {
+        const target = safeReturnPath(url.searchParams.get("return_to"));
+        return withSecurityHeaders(request, new Response(null, {
+          status: 302,
+          headers: { location: new URL(target, url.origin).toString(), "cache-control": "no-store" },
+        }), origin);
+      }
+    }
+
     if (url.pathname === "/.well-known/openid-configuration") {
       return withSecurityHeaders(request, Response.json(
         oidcDiscoveryDocument(origin),
@@ -79,6 +96,18 @@ const worker = {
           return result.response();
         },
       }, allowedWidths), origin);
+    }
+
+    // /lattice/* 登录门禁(仅登录用户可见):wrangler assets 的 run_worker_first
+    // 把该前缀全部打进 Worker(否则静态层先于 Worker 直接返回,无门禁可做)。
+    // 在匿名边缘缓存之前短路——302 响应自带 no-store,已登录放行 ASSETS 取静态资源。
+    if (isLatticePath(url.pathname)) {
+      const raw = cookieValue(request.headers.get("cookie"), SESSION_COOKIE);
+      const user = await sessionUserFromTokenValue(raw);
+      if (!user) {
+        return withSecurityHeaders(request, latticeGateRedirect(request.url), origin);
+      }
+      return withSecurityHeaders(request, await env.ASSETS.fetch(request), origin);
     }
 
     // 匿访页面边缘缓存:命中直接返回(响应已含安全头,写入时经过同一管道)。
