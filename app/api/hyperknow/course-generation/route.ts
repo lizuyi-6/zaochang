@@ -5,6 +5,7 @@ import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { generateCourse } from "../../_lib/hyperknow/agents";
 import { resolveConfigOrThrow } from "../../_lib/hyperknow/config";
 import { saveCourse } from "../../_lib/hyperknow/store";
+import { consumeCredits, currentCredits, HK_COURSE_COST, HK_DAILY_CREDITS } from "../../_lib/hyperknow/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,17 @@ export async function POST(request: Request) {
       return Response.json({ error: (error as { code?: string }).code ?? "ai_not_configured" }, { status });
     }
 
+    // 扣费点:AI 配置校验通过之后、发流之前。配置缺失已在上面返回,不扣费;
+    // 流开始后的中途失败(大纲生成阶段)不退费。条件 UPDATE 原子扣减,不透支。
+    const remainingCredits = await consumeCredits(member.email, HK_COURSE_COST);
+    if (remainingCredits === null) {
+      const { remaining } = await currentCredits(member.email);
+      return Response.json(
+        { error: "insufficient_credits", credit_info: { remaining, max: HK_DAILY_CREDITS } },
+        { status: 402 },
+      );
+    }
+
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(180_000)]);
 
     const stream = new ReadableStream<Uint8Array>({
@@ -61,6 +73,7 @@ export async function POST(request: Request) {
 
             push({ type: "course_generation_step", step_id: "boot", status: "loading", title: "Starting course generation", placeholder: "Crafting Courses..." });
             push({ type: "course_generation_started", course_uuid: courseUuid, query });
+            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: HK_DAILY_CREDITS } });
 
             push({
               type: "course_generation_step",

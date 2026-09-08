@@ -6,6 +6,7 @@ import { contentGenerateStream, generateNextSteps } from "../../_lib/hyperknow/a
 import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/hyperknow/llm";
 import { FALLBACK_GUIDELINE } from "../../_lib/hyperknow/prompts";
 import { saveConversation, getConversation } from "../../_lib/hyperknow/store";
+import { consumeCredits, currentCredits, HK_CHAT_COST, HK_DAILY_CREDITS } from "../../_lib/hyperknow/credits";
 import type { StreamChunk } from "../../_lib/hyperknow/protocol";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +90,17 @@ export async function POST(request: Request) {
       throw error;
     }
 
+    // 扣费点:LLM 预取成功(上游可达)之后、发流之前。配置缺失/上游故障已在上面
+    // 返回,不扣费;流开始后的中途失败不退费。条件 UPDATE 原子扣减,不透支。
+    const remainingCredits = await consumeCredits(member.email, HK_CHAT_COST);
+    if (remainingCredits === null) {
+      const { remaining } = await currentCredits(member.email);
+      return Response.json(
+        { error: "insufficient_credits", credit_info: { remaining, max: HK_DAILY_CREDITS } },
+        { status: 402 },
+      );
+    }
+
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         void (async () => {
@@ -103,7 +115,7 @@ export async function POST(request: Request) {
           };
           try {
             push({ type: "conversation_created", data: { conversation_id: conversationId }, conversation_id: conversationId });
-            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: 20, max: 20 } });
+            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: HK_DAILY_CREDITS } });
             push({
               type: "tool_execution",
               tool_name: "directorAgent",

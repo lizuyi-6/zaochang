@@ -1,0 +1,514 @@
+/* ============================================================
+   Settings modal (screens 69 / 70 / 71) — 1600×900 calibrated
+   ============================================================ */
+
+/* Override the shared modal frame to match the reference */
+.hk-modal:has(> .sm-card) {
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+
+.sm-card {
+  display: flex;
+  height: 600px;
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* ---------------- Left rail ---------------- */
+.sm-rail {
+  width: 210px;
+  flex-shrink: 0;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sm-rail-title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+.sm-tab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4B5563;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.sm-tab svg {
+  color: #6B7280;
+  flex-shrink: 0;
+}
+.sm-tab:hover {
+  background: #F6F7F9;
+}
+.sm-tab.active {
+  background: #E8F0F8;
+  color: #4B6595;
+}
+.sm-tab.active svg {
+  color: #4B6595;
+}
+
+/* ---------------- Close ---------------- */
+.sm-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  padding: 4px;
+  border-radius: 6px;
+  color: #6B7280;
+  cursor: pointer;
+  z-index: 2;
+}
+.sm-close:hover {
+  background: #F3F4F6;
+}
+
+/* ---------------- Scrolling content column ---------------- */
+.sm-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 44px 45px 40px;
+}
+
+.sm-section {
+  margin-top: 28px;
+}
+.sm-section:first-child {
+  margin-top: 0;
+}
+.sm-section-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
+}
+.sm-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.sm-head-row .sm-section-title {
+  margin: 0;
+}
+
+.sm-panel {
+  background: #F8F9FA;
+  border-radius: 12px;
+  padding: 20px;
+}
+.sm-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.sm-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1F2937;
+}
+.sm-row-sub {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: #6B7280;
+  line-height: 1.45;
+}
+
+/* ---------------- Account ---------------- */
+.sm-account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.sm-account-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1F2937;
+}
+.sm-account-email {
+  margin-top: 2px;
+  font-size: 13px;
+  color: #6B7280;
+}
+
+/* ---------------- Subscription ---------------- */
+.sm-free-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6C7380;
+}
+.sm-sub-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.sm-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4B6595;
+  cursor: pointer;
+  padding: 0;
+}
+.sm-link:hover {
+  text-decoration: underline;
+}
+
+/* shared outline pill (View plans / Connect / Manage / Add / Edit) */
+.sm-outline-pill {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  background: #fff;
+  border: 1px solid #93A3C0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4B6595;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.sm-outline-pill:hover {
+  background: #F6F8FC;
+}
+
+/* ---------------- Coupon ---------------- */
+.sm-coupon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sm-input {
+  flex: 1;
+  height: 40px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 0 14px;
+  font-size: 13px;
+  color: #1F2937;
+  outline: none;
+}
+.sm-input:focus {
+  border-color: #C9D3E4;
+}
+.sm-input::placeholder {
+  color: #9CA3AF;
+}
+.sm-redeem {
+  height: 32px;
+  padding: 0 18px;
+  border: 1px solid #E5E7EB;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #BEC7D8;
+  cursor: default;
+}
+
+/* ---------------- Preferences ---------------- */
+.sm-pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 4px;
+}
+
+/* ---------------- Integrations ---------------- */
+.sm-integrations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sm-integration {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 72px;
+  padding: 0 16px;
+  background: #F8F9FA;
+  border-radius: 12px;
+}
+.sm-int-tile {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid #ECEEF2;
+  border-radius: 10px;
+}
+.sm-int-text {
+  flex: 1;
+  min-width: 0;
+}
+.sm-int-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+/* ---------------- Sign out / delete ---------------- */
+.sm-signout-pill {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.sm-signout-pill:hover {
+  background: #F9FAFB;
+}
+
+.sm-panel.sm-danger {
+  background: #FEF6F6;
+  border: 1px solid #F9E9E9;
+}
+.sm-delete-pill {
+  height: 32px;
+  padding: 0 16px;
+  background: transparent;
+  border: 1px solid #F2D3D1;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #D0665E;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.sm-delete-pill:hover {
+  background: #FBEBEA;
+}
+
+/* ---------------- Memory tab ---------------- */
+.sm-mem-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.sm-mem-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.sm-describes {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sm-describes-q {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
+}
+.sm-describes-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #374151;
+}
+
+.sm-desc {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: #6B7280;
+  line-height: 1.5;
+}
+
+.sm-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sm-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #F8F9FA;
+  border-radius: 10px;
+  padding: 16px;
+}
+.sm-entry-text {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.45;
+}
+.sm-entry-date {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: #9CA3AF;
+}
+.sm-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.sm-icon-btn {
+  display: flex;
+  padding: 2px;
+  color: #6B7280;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.sm-icon-btn:hover {
+  color: #374151;
+}
+
+.sm-empty-external {
+  margin-top: 28px;
+  text-align: center;
+  font-size: 12.5px;
+  font-style: italic;
+  color: #9CA3AF;
+}
+
+/* 造场账户首字母头像(与 AvatarCat 同尺寸同位;复刻演示回退仍用猫头像) */
+.sm-avatar-initial {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #F59E0B;
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+/* ===== 接线补充:记忆 CRUD 内联编辑 / 兑换码提示 / 删除账户确认 ===== */
+.sm-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #9CA3AF;
+}
+
+.sm-entry-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.sm-entry-textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  background: #fff;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #374151;
+  resize: vertical;
+  outline: none;
+}
+.sm-entry-textarea:focus {
+  border-color: #93A3C0;
+}
+.sm-entry-edit-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sm-save-pill {
+  height: 32px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 999px;
+  background: #1F2937;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.sm-save-pill:disabled {
+  background: #E5E7EB;
+  color: #9CA3AF;
+  cursor: default;
+}
+.sm-save-pill:not(:disabled):hover {
+  background: #374151;
+}
+
+.sm-confirm {
+  display: block;
+  padding: 4px 0 0;
+}
+.sm-confirm-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1F2937;
+}
+.sm-confirm-body {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #6B7280;
+}
+.sm-confirm-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.sm-spin {
+  animation: sm-spin 0.9s linear infinite;
+}
+@keyframes sm-spin {
+  to { transform: rotate(360deg); }
+}

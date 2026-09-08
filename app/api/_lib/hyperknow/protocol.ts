@@ -1,4 +1,4 @@
-// Hyperknow 运行时纯逻辑(零 import,单测直接加载):
+// 见界 运行时纯逻辑(零 import,单测直接加载):
 // - MessagesStreamParser:StepFun/Anthropic Messages SSE 的增量行解析器,把
 //   thinking_delta 与 text_delta 分流(与 reading-ai-provider 刻意丢弃思维链不同,
 //   复刻版把 thinking 增量映射为 directorAgent 思考过程实时展示,这是产品语义的一部分)。
@@ -68,7 +68,7 @@ export function stepDurationMs(spokenText: string): number {
 }
 
 // TTS 文本净化:剥 HTML 标签、截 500 字、空兜底(原 streamAudioPipe 逐字一致)。
-export function sanitizeTtsText(text: string, fallback = "你好，我是你的 Hyperknow 学习导师。"): string {
+export function sanitizeTtsText(text: string, fallback = "你好，我是你的见界学习导师。"): string {
   return text.replace(/<[^>]*>/g, "").trim().slice(0, 500) || fallback;
 }
 
@@ -79,3 +79,4 @@ export async function ttsCacheKey(text: string, voiceId: string, speed: number):
   const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
   return `${voiceId}_${hash}`;
 }
+

@@ -5,9 +5,10 @@ import { sanitizeTtsText, ttsCacheKey } from "./protocol";
 
 // StepFun 语音合成引擎 + Hyperknow 官方 6 大原声克隆音色(从原 ttsService.js 移植)。
 // 缓存两级:per-isolate 内存 Map → R2 UPLOADS 桶 tts-cache/ 前缀(替代原磁盘
-// data/audio_cache/)。与原版的差异(如实记录):
-// - 未命中时整段合成后返回(不再逐块 pipe):Workers 无 waitUntil 挂靠点时后台
-//   回填不可靠,而 ≤500 字的短文本整段延迟即首次合成延迟,命中后毫秒级不变;
+// data/audio_cache/)。MISS 路径为流式(与原版逐块 pipe 对齐):上游分块边收边发给
+// <audio>,首音延迟 = 上游首块到达时间而非整段合成时间;分块在 ReadableStream pull
+// 里同步收集,流关闭前完成内存/R2 回填——回填发生在本请求生命周期内,不依赖
+// waitUntil 挂靠点。其余与原版的差异(如实记录):
 // - 原版"启动预热 6 音色"改为惰性首次合成(Workers 无常驻启动钩子);
 // - md5 换 SHA-256(寻址 key,不影响语义);
 // - 内存缓存加 100 条 FIFO 上限(原版无界,Workers isolate 内存 128MB 需守卫)。
@@ -46,7 +47,7 @@ const TTS_R2_PREFIX = "tts-cache";
 
 type TtsEnv = { UPLOADS?: R2Bucket };
 
-export type SynthesizeResult = { cache: "HIT-MEMORY" | "HIT-R2" | "MISS"; audio: ArrayBuffer };
+export type SynthesizeResult = { cache: "HIT-MEMORY" | "HIT-R2" | "MISS"; audio: BodyInit };
 
 export async function synthesize(text: string, voiceId = "warm", speed = 1.0): Promise<SynthesizeResult> {
   const config = resolveConfigOrThrow();
@@ -93,16 +94,60 @@ export async function synthesize(text: string, voiceId = "warm", speed = 1.0): P
     // 上游状态不外泄:401/403 归配置问题,其余归上游故障。
     throw new HyperknowUpstreamError(upstream.status === 401 || upstream.status === 403 ? "ai_auth_failed" : "ai_upstream_error", 502);
   }
-  const audio = await upstream.arrayBuffer();
-  remember(key, audio);
-  if (r2) {
-    try {
-      await r2.put(`${TTS_R2_PREFIX}/${key}.mp3`, audio);
-    } catch {
-      // 缓存写失败不影响本次响应。
+  const body = upstream.body;
+  if (!body) {
+    // 上游未给流(理论上不发生):退回整段读取,缓存后返回。
+    const audio = await upstream.arrayBuffer();
+    remember(key, audio);
+    if (r2) {
+      try {
+        await r2.put(`${TTS_R2_PREFIX}/${key}.mp3`, audio);
+      } catch {
+        // 缓存写失败不影响本次响应。
+      }
     }
+    return { cache: "MISS", audio };
   }
-  return { cache: "MISS", audio };
+
+  const chunks: Uint8Array[] = [];
+  const reader = body.getReader();
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        // 全部音频字节已 enqueue 给客户端;回填完毕再 close,尾部仅差一个流结束帧,
+        // 不影响 <audio> 播放进度。客户端中途断开走 cancel,半成品绝不进缓存。
+        const audio = concatChunks(chunks);
+        remember(key, audio);
+        if (r2) {
+          try {
+            await r2.put(`${TTS_R2_PREFIX}/${key}.mp3`, audio);
+          } catch {
+            // 缓存写失败不影响本次响应。
+          }
+        }
+        controller.close();
+        return;
+      }
+      chunks.push(value);
+      controller.enqueue(value);
+    },
+    cancel(reason) {
+      void reader.cancel(reason);
+    },
+  });
+  return { cache: "MISS", audio: stream };
+}
+
+function concatChunks(chunks: Uint8Array[]): ArrayBuffer {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out.buffer;
 }
 
 function remember(key: string, audio: ArrayBuffer) {

@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   try {
     const member = await requireMember();
     const url = new URL(request.url);
-    const text = url.searchParams.get("text") || "欢迎体验 Hyperknow 智能教学系统。";
+    const text = url.searchParams.get("text") || "欢迎体验 见界 智能教学系统。";
     const voice = url.searchParams.get("voice") || "warm";
     const speed = Number.parseFloat(url.searchParams.get("speed") || "1.0") || 1.0;
 
@@ -43,3 +43,4 @@ export async function GET(request: Request) {
     return jsonError(error);
   }
 }
+

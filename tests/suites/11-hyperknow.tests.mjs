@@ -10,10 +10,13 @@ import assert from "node:assert/strict";
 import {
   baseUrl,
   runId,
+  lastChatCompletion,
   lastTtsRequest,
   ttsUpstreamCount,
   resetAiUpstream,
+  setAiUpstreamForceFail,
   authHeaders,
+  executeD1Sql,
   queryLocalD1,
 } from "../harness/preview.mjs";
 
@@ -42,7 +45,7 @@ async function readHkFrames(response) {
 }
 
 export function register() {
-  test("hyperknow user info: 匿名 401,登录返回造场身份 + 装饰性 credits", async () => {
+  test("hyperknow user info: 匿名 401,登录返回造场身份 + 真实积分(读取不扣减)", async () => {
     const anonymous = await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`);
     assert.equal(anonymous.status, 401, "匿名应为 401 auth_required");
     assert.equal((await anonymous.json()).error, "auth_required");
@@ -54,8 +57,12 @@ export function register() {
     assert.equal(body.success, true);
     assert.equal(body.data.email, email);
     assert.equal(body.data.user_id, email, "user_id 用造场身份(替代原复刻版假鉴权)");
-    assert.equal(body.data.subscription.remaining_credits, 20, "credits 为装饰性固定值(仅驱动徽章)");
+    assert.equal(body.data.subscription.remaining_credits, 20, "新账户每日额度 20(真实余额,懒重置建行)");
     assert.equal(body.data.subscription.max_credits, 20);
+
+    // 读取是幂等的:连续两次 get_user_info 不产生扣减。
+    const again = await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers: authHeaders("学Agent用户", email) })).json();
+    assert.equal(again.data.subscription.remaining_credits, 20, "读取不得扣减");
   });
 
   test("hyperknow chat SSE: 事件序列与原 WS 逐帧对齐,thinking 不入正文,会话落库", async () => {
@@ -74,6 +81,12 @@ export function register() {
     const types = frames.map((frame) => frame.type);
     const markers = types.filter((type) => ["conversation_created", "credit_status", "complete"].includes(type));
     assert.deepEqual(markers, ["conversation_created", "credit_status", "complete"], "骨架帧次序必须与原 WS 一致");
+    const creditFrame = frames.find((f) => f.type === "credit_status");
+    assert.deepEqual(
+      creditFrame.credit_info,
+      { remaining: 18, max: 20 },
+      "credit_status 必须携带真实余额(20 - 对话 2 = 18)",
+    );
 
     // directorAgent 思考:1 帧初始 + 假上游 4 个 thinking 增量映射,再 1 帧 completed
     const directorThinking = frames.filter((f) => f.type === "tool_execution" && f.tool_name === "directorAgent" && f.tool_status === "thinking");
@@ -245,5 +258,166 @@ export function register() {
     const stranger = await fetch(`${baseUrl}/api/hyperknow/courses/${ready.course_uuid}`, { headers: authHeaders("旁人", `hk-course-stranger-${runId}@example.com`) });
     assert.equal(stranger.status, 404, "课程详情越权 404");
     await stranger.body?.cancel();
+  });
+
+  test("hyperknow translate: SSE 逐帧、提示词契约、不落库、余额不足 402", async () => {
+    const email = `hk-translate-${runId}@example.com`;
+    const headers = authHeaders("翻译用户", email);
+
+    const anonymous = await fetch(`${baseUrl}/api/hyperknow/translate`, {
+      method: "POST",
+      body: JSON.stringify({ text: "hello", target_language: "zh-CN" }),
+    });
+    assert.equal(anonymous.status, 401, "翻译属登录态端点");
+    await anonymous.body?.cancel();
+
+    const badLang = await fetch(`${baseUrl}/api/hyperknow/translate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text: "hello", target_language: "fr" }),
+    });
+    assert.equal(badLang.status, 400);
+    assert.equal((await badLang.json()).error, "unsupported_language");
+
+    const empty = await fetch(`${baseUrl}/api/hyperknow/translate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text: "   ", target_language: "en" }),
+    });
+    assert.equal(empty.status, 400);
+    assert.equal((await empty.json()).error, "text_required");
+
+    const response = await fetch(`${baseUrl}/api/hyperknow/translate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text: "Attention is all you need", target_language: "zh-CN" }),
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") || "", /text\/event-stream/);
+
+    const frames = await readHkFrames(response);
+    assert.deepEqual(
+      frames.map((f) => f.type),
+      ["credit_status", "content_chunk", "content_chunk", "content_chunk", "content_chunk", "complete"],
+      "事件序列:credit_status → content_chunk×N → complete",
+    );
+    assert.deepEqual(frames[0].credit_info, { remaining: 18, max: 20 }, "翻译与对话同价:扣 2");
+    assert.equal(
+      frames.filter((f) => f.type === "content_chunk").map((f) => f.chunk).join(""),
+      "这是假定的模型增量输出。",
+      "译文由正文增量拼成,thinking 不得混入",
+    );
+    assert.match(lastChatCompletion.system, /translator/i, "system 必须是翻译指令");
+    assert.match(lastChatCompletion.system, /Simplified Chinese/, "目标语言名进提示词");
+    assert.equal(lastChatCompletion.user, "Attention is all you need", "原文原样作为 user 消息");
+
+    // 不落库:翻译是工具动作,不得出现在历史会话列表里。
+    const listed = await (await fetch(`${baseUrl}/api/hyperknow/conversations/list_past_conversations`, { headers })).json();
+    assert.equal(listed.conversations.length, 0, "翻译不得污染历史会话");
+
+    // 余额不足:402 在发流之前(纯 JSON,带 credit_info)。
+    await executeD1Sql(`UPDATE hk_credits SET balance = 1 WHERE user_email = '${email}'`);
+    const blocked = await fetch(`${baseUrl}/api/hyperknow/translate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text: "one more", target_language: "en" }),
+    });
+    assert.equal(blocked.status, 402);
+    assert.deepEqual((await blocked.json()).credit_info, { remaining: 1, max: 20 });
+  });
+
+  test("hyperknow model-check: 探针走非流式 Messages,不扣积分;上游故障回 ok:false", async () => {
+    resetAiUpstream();
+    const email = `hk-probe-${runId}@example.com`;
+    const headers = authHeaders("探针用户", email);
+
+    const anonymous = await fetch(`${baseUrl}/api/hyperknow/model-check`, { method: "POST", body: "{}" });
+    assert.equal(anonymous.status, 401, "探针属登录态端点");
+    await anonymous.body?.cancel();
+
+    const response = await fetch(`${baseUrl}/api/hyperknow/model-check`, { method: "POST", headers, body: "{}" });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(typeof body.latency_ms, "number", "探针必须回报往返耗时");
+    assert.equal(lastChatCompletion.transport, "messages");
+    assert.equal(lastChatCompletion.max_tokens, 16, "探针必须是最小代价调用");
+    assert.equal(lastChatCompletion.messageCount, 1, "system 抽到顶层,消息体只剩 user 一条");
+    assert.match(lastChatCompletion.system, /health probe/i);
+    assert.equal(lastChatCompletion.user, "ping");
+    assert.equal(lastChatCompletion.stream, undefined, "探针走 llm.chat(非流式)");
+
+    const info = await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json();
+    assert.equal(info.data.subscription.remaining_credits, 20, "健康探针不扣积分");
+
+    // 上游故障 → 仍 200 + ok:false(前端据此区分"模型没响应"与"检查没跑起来")。
+    setAiUpstreamForceFail(true);
+    const failed = await fetch(`${baseUrl}/api/hyperknow/model-check`, { method: "POST", headers, body: "{}" });
+    assert.equal(failed.status, 200);
+    const failedBody = await failed.json();
+    assert.equal(failedBody.ok, false);
+    assert.equal(failedBody.error, "ai_upstream_error");
+    setAiUpstreamForceFail(false);
+  });
+
+  test("hyperknow credits: 对话扣 2/课程扣 10,余额不足 402,跨北京日界懒重置", async () => {
+    const email = `hk-credit-${runId}@example.com`;
+    const headers = authHeaders("积分用户", email);
+    const beijingToday = new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10);
+
+    const info = async () =>
+      (await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json()).data.subscription.remaining_credits;
+    assert.equal(await info(), 20, "新账户每日额度 20");
+
+    // 余额 3:对话(2)成功 → 剩 1。
+    await executeD1Sql(`UPDATE hk_credits SET balance = 3 WHERE user_email = '${email}'`);
+    const chat = await fetch(`${baseUrl}/api/hyperknow/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ message: "one more chat" }),
+    });
+    assert.equal(chat.status, 200);
+    const frames = await readHkFrames(await chat);
+    assert.equal(frames.find((f) => f.type === "credit_status").credit_info.remaining, 1, "扣减后余额随帧下发");
+    assert.equal(await info(), 1);
+
+    // 余额 1 < 对话 2 → 402 insufficient_credits(JSON,非 SSE)。
+    const blocked = await fetch(`${baseUrl}/api/hyperknow/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ message: "should be blocked" }),
+    });
+    assert.equal(blocked.status, 402);
+    assert.deepEqual((await blocked.json()).credit_info, { remaining: 1, max: 20 });
+
+    // 余额 1 < 课程 10 → 课程生成同样 402,且不得产生伪生成兜底空间(纯 JSON 响应)。
+    await executeD1Sql(`UPDATE hk_credits SET balance = 1 WHERE user_email = '${email}'`);
+    const blockedCourse = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: "Anything" }),
+    });
+    assert.equal(blockedCourse.status, 402);
+    assert.match(blockedCourse.headers.get("content-type") || "", /application\/json/);
+    assert.equal((await blockedCourse.json()).error, "insufficient_credits");
+
+    // 跨北京日界懒重置:reset_date 落后 → 读取即整额续满,行日期翻到今天。
+    await executeD1Sql(`UPDATE hk_credits SET reset_date = '2000-01-01' WHERE user_email = '${email}'`);
+    assert.equal(await info(), 20, "跨天后读取触发懒重置,额度续满");
+    const rows = await queryLocalD1(`SELECT balance, reset_date FROM hk_credits WHERE user_email = '${email}'`);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].reset_date, beijingToday, "reset_date 必须是北京日期(UTC+8)");
+    assert.equal(rows[0].balance, 20);
+
+    // 重置后课程生成成功:扣 10 剩 10。
+    const okCourse = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: "Credit Reset Sanity" }),
+    });
+    assert.equal(okCourse.status, 200);
+    const okFrames = await readHkFrames(await okCourse);
+    assert.ok(okFrames.find((f) => f.type === "course_structure_ready"), "重置后应能真实生成");
+    assert.equal(await info(), 10, "课程生成扣 10");
   });
 }

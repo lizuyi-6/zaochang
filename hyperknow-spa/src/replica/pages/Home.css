@@ -1,0 +1,615 @@
+/* ============================================================
+   Home page — Craft Courses / Instant Assistance
+   (calibrated for the 1600×900 reference screenshots)
+   ============================================================ */
+
+.hm-inner {
+  padding-bottom: 140px;
+}
+
+/* ---------------- Mode tabs ---------------- */
+.hm-tabs-row {
+  display: flex;
+  justify-content: center;
+  padding-top: 66px;
+}
+
+/* ---------------- Craft heading ---------------- */
+.hm-h1 {
+  margin: 42px 24px 0;
+  font-size: 29px;
+  font-weight: 600;
+  color: #111827;
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+.hm-sub {
+  margin-top: 14px;
+  font-size: 15px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* ---------------- Prompt card ---------------- */
+.hm-prompt-card {
+  width: 777px;
+  max-width: calc(100% - 48px);
+  height: 123px;
+  margin: 24px auto 0;
+  background: #fff;
+  border: 1px solid #ececec;
+  border-radius: 20px;
+  box-shadow: 0 6px 24px rgba(16, 24, 40, 0.05);
+  padding: 20px 13px 10px;
+  display: flex;
+  flex-direction: column;
+}
+.hm-input-wrap {
+  position: relative;
+  flex: 1;
+  padding: 0 4px;
+}
+.hm-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  color: #111827;
+  padding: 4px 0;
+}
+.hm-placeholder {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: #9ca3af;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  animation: hm-ph-in 0.35s ease;
+}
+.hm-placeholder-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hm-kbd {
+  background: #f3f4f6;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: #9ca3af;
+  padding: 3px 8px 4px;
+  flex-shrink: 0;
+}
+@keyframes hm-ph-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* toolbar row */
+.hm-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hm-toolbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hm-circle-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #111827;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.hm-circle-btn:hover {
+  background: #f9fafb;
+}
+.hm-chip {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.hm-chip:hover {
+  background: #f9fafb;
+}
+.hm-chip.icon-only {
+  width: 40px;
+  padding: 0;
+  justify-content: center;
+  color: #374151;
+}
+.hm-ghost-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #374151;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.hm-ghost-icon:hover {
+  background: #f3f4f6;
+}
+.hm-cost {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+.hm-send {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #18181b;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.hm-send:hover {
+  background: #2a2a2e;
+}
+.hm-send:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: default;
+}
+.hm-speed {
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  transition: background 0.12s;
+}
+.hm-speed:hover {
+  background: #f3f4f6;
+}
+
+/* ---------------- Below-card helpers (Craft) ---------------- */
+.hm-lms {
+  margin-top: 22px;
+  text-align: center;
+  font-size: 14px;
+  color: #9ca3af;
+}
+.hm-lms-link {
+  color: #111827;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.hm-help {
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+.hm-help svg {
+  color: #9ca3af;
+}
+
+/* ---------------- Marketplace ---------------- */
+.hm-market {
+  width: 905px;
+  max-width: calc(100% - 48px);
+  margin: 112px auto 0;
+}
+.hm-market-head {
+  display: flex;
+  align-items: center;
+}
+.hm-market-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+.hm-viewall {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+}
+.hm-viewall:hover {
+  color: #111827;
+}
+.hm-market-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 265px);
+  justify-content: space-between;
+}
+@media (max-width: 1100px) {
+  .hm-market-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+}
+
+.hm-course {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+.hm-course-cover {
+  height: 145px;
+  overflow: hidden;
+}
+.hm-course-body {
+  padding: 14px 16px 14px;
+}
+.hm-provider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* shared Logo renders mark + wordmark; the provider row needs the mark only */
+.hm-provider-logo {
+  display: inline-flex;
+}
+.hm-provider-logo > span {
+  gap: 0;
+}
+.hm-provider-logo > span > span {
+  display: none;
+}
+.hm-provider-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+.hm-course-title {
+  margin-top: 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+.hm-course-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hm-course-meta {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hm-diff {
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.hm-lessons {
+  font-size: 12px;
+  color: #6b7280;
+}
+.hm-course-foot {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #6b7280;
+}
+.hm-onboard {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hm-onboard b {
+  color: #111827;
+  font-weight: 700;
+}
+.hm-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.hm-rating b {
+  color: #111827;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ---------------- Instant Assistance ---------------- */
+.hm-instant-head {
+  margin-top: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.hm-instant-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+}
+.hm-instant-card {
+  margin-top: 28px;
+}
+
+.hm-caps {
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.hm-caps-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.hm-cap {
+  height: 38px;
+  padding: 0 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  transition: background 0.12s;
+}
+.hm-cap:hover {
+  background: #f9fafb;
+}
+.hm-cap > svg {
+  color: #374151;
+}
+.hm-badge {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.hm-badge.upgraded {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.hm-badge.new {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+/* ---------------- News feed ---------------- */
+.hm-news {
+  width: 777px;
+  max-width: calc(100% - 48px);
+  margin: 132px auto 0;
+}
+.hm-news-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hm-news-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #9ca3af;
+  cursor: pointer;
+}
+.hm-news-pill.active {
+  background: #f3f4f6;
+  color: #111827;
+  font-weight: 600;
+}
+.hm-news-next {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+}
+.hm-news-next svg {
+  color: #9ca3af;
+}
+.hm-news-list {
+  margin-top: 12px;
+}
+.hm-news-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 47px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 15px;
+  color: #374151;
+  cursor: pointer;
+}
+.hm-news-row svg {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+/* ---------------- Affiliate banner (top right, below header) ---------------- */
+.hm-affiliate {
+  position: absolute;
+  top: 76px;
+  right: 24px;
+  width: 244px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  padding: 14px 14px 10px;
+  z-index: 10;
+}
+.hm-affiliate-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hm-affiliate-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.35;
+}
+.hm-affiliate-join {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+}
+.hm-affiliate-join:hover {
+  color: #111827;
+}
+
+/* ---------------- Easter egg (bottom right) ---------------- */
+.hm-easter {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  text-align: right;
+  z-index: 5;
+  pointer-events: none;
+}
+.hm-easter-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+.hm-easter-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* ---------------- Welcome-back takeover ---------------- */
+.hm-welcome {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: hk-fade-in 0.2s ease-out;
+}
+.hm-welcome-text {
+  margin-top: 88px;
+  text-align: center;
+}
+.hm-welcome-oh {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+}
+.hm-welcome-back {
+  margin-top: 4px;
+  font-size: 28px;
+  font-weight: 400;
+  color: #111827;
+}
+.hm-welcome .hk-btn-dark {
+  margin-top: 56px;
+}
+
+/* ---------------- 交互补齐:下拉菜单锚点 / 笔记框 ---------------- */
+.hm-menu-anchor { position: relative; display: inline-flex; }
+.hm-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 92; }
+.hm-menu-up { top: auto; bottom: calc(100% + 8px); left: auto; right: 0; }
+.hm-menu-notes { width: 300px; padding: 10px; }
+.hm-notes-text {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #1F2937;
+  resize: vertical;
+  outline: none;
+  margin: 4px 0 8px;
+}
+.hm-notes-text:focus { border-color: #B9C6D8; }
+.hm-menu .hk-menu-item:disabled { color: #C4C9D1; cursor: default; }
+.hm-ghost-icon.on { color: #4C6696; }

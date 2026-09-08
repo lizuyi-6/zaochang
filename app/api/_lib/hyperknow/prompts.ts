@@ -125,9 +125,9 @@ You break explanations into sequential visual STEPS, speaking with natural conve
 For each lesson step, you provide:
 1. "spoken_text": What you say to the student out loud (natural, engaging tone, suitable for TTS).
 2. "board_action": The visual element to render on the whiteboard:
-   - type: "card" (title, bullet points or definition)
-   - type: "formula" (LaTeX math expression)
-   - type: "diagram" (Mermaid flowchart code)
+   - type: "card" (title, bullet points or definition in "content" as HTML)
+   - type: "formula" (LaTeX math expression; put the bare LaTeX in "content" WITHOUT $ or $$ delimiters, keep it on one line)
+   - type: "diagram" (Mermaid flowchart code in "content"; every node label MUST stay on a single line — use <br> instead of line breaks inside [ ] or { })
 
 Output your response strictly as JSON:
 {
@@ -186,9 +186,43 @@ export function fallbackLecturePlan(topic: string): LecturePlan {
   };
 }
 
+// 上游即便在 jsonMode 下也偶发用 ```json 围栏包输出;剥掉再解析,减少误落 fallback。
+// 模型还经常在字符串值里直接写裸换行/制表符(mermaid 代码段尤其多),这在 JSON 里
+// 是非法控制字符——做一次"仅在字符串内转义控制字符"的清扫,否则整个计划被误判作废。
+function extractJsonPayload(jsonStr: string): string {
+  const fenced = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const payload = (fenced ? fenced[1] : jsonStr).trim();
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (const ch of payload) {
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    if (inString && (ch === "\n" || ch === "\r" || ch === "\t")) {
+      out += ch === "\t" ? "\\t" : "\\n";
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 export function parseLecturePlan(jsonStr: string, topic: string): LecturePlan {
   try {
-    const parsed = JSON.parse(jsonStr) as LecturePlan;
+    const parsed = JSON.parse(extractJsonPayload(jsonStr)) as LecturePlan;
     if (!Array.isArray(parsed.steps)) return fallbackLecturePlan(topic);
     return parsed;
   } catch {
@@ -208,7 +242,11 @@ export function fallbackInterjectionAnswer(): InterjectionAnswer {
 
 export function parseInterjectionAnswer(jsonStr: string): InterjectionAnswer {
   try {
-    return JSON.parse(jsonStr) as InterjectionAnswer;
+    const parsed = JSON.parse(extractJsonPayload(jsonStr)) as InterjectionAnswer;
+    if (typeof parsed.answer_text !== "string" || typeof parsed.resume_transition !== "string") {
+      return fallbackInterjectionAnswer();
+    }
+    return parsed;
   } catch {
     return fallbackInterjectionAnswer();
   }
@@ -313,7 +351,7 @@ export function fallbackCourseStructure(query: string): CourseStructure {
 
 export function parseCourseStructure(jsonStr: string, query: string): CourseStructure {
   try {
-    const parsed = JSON.parse(jsonStr) as CourseStructure;
+    const parsed = JSON.parse(extractJsonPayload(jsonStr)) as CourseStructure;
     if (!Array.isArray(parsed.units)) return fallbackCourseStructure(query);
     return parsed;
   } catch {

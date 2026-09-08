@@ -1,0 +1,399 @@
+/* ChatPage (cp-) — screenshots 19 / 20 / 21 */
+
+/* full-width page; content sits right of the globally-rendered sidebar */
+.cp-page {
+  padding-left: 262px;
+}
+
+/* veil covering the shell header (hidden on this screen in the real product) */
+.cp-header-veil {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 780px;
+  height: 76px;
+  background-color: var(--app-bg, #fafafa);
+  background-image: radial-gradient(#e4e4e7 1.2px, transparent 1.3px);
+  background-size: 14px 14px;
+  z-index: 26;
+}
+
+/* floating top-right utility cluster */
+.cp-utility {
+  position: fixed;
+  top: 22px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 27;
+}
+.cp-util-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #ebecf0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #374151;
+  transition: background 0.12s;
+}
+.cp-util-btn:hover {
+  background: #f9fafb;
+}
+.cp-issue {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #ebecf0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1f2937;
+  transition: background 0.12s;
+}
+.cp-issue:hover {
+  background: #f9fafb;
+}
+
+/* conversation column — centered in the region right of the sidebar */
+.cp-column {
+  max-width: 898px; /* 850px content + 24px side padding */
+  margin: 0 auto;
+  padding: 58px 24px 150px;
+}
+
+/* user message bubble */
+.cp-bubble-row {
+  display: flex;
+  justify-content: flex-end;
+  animation: cp-fade 0.35s ease both;
+}
+.cp-bubble {
+  background: #eff0f3;
+  border-radius: 16px;
+  padding: 14px 18px;
+  max-width: 590px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1f2937;
+}
+
+/* ---------------- pipeline markers ---------------- */
+.cp-pipeline {
+  margin-top: 46px;
+}
+.cp-pipeline > * {
+  opacity: 0;
+  animation: cp-fade 0.4s ease forwards;
+}
+.cp-pipeline > * + * {
+  margin-top: 14px;
+}
+@keyframes cp-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.cp-stage {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+.cp-stage svg {
+  color: #3b6ff6;
+}
+.cp-stage.dark {
+  color: #1f2937;
+}
+
+/* skill chips row */
+.cp-pipeline > .cp-chips {
+  margin-top: 6px;
+}
+.cp-chips {
+  display: flex;
+  gap: 10px;
+}
+.cp-chip {
+  background: #fff;
+  border: 1px solid #d8dce3;
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #5b6472;
+}
+.cp-pipeline > .cp-stage.dark {
+  margin-top: 16px;
+}
+
+/* memory sub-panel with vertical connector */
+.cp-pipeline > .cp-memory {
+  margin-top: 6px;
+}
+.cp-memory {
+  margin-left: 20px;
+  padding: 2px 0 4px 22px;
+  border-left: 2px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.cp-memory-note {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* forked parallel searches */
+.cp-pipeline > .cp-fork {
+  margin-top: 30px;
+}
+.cp-fork {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+/* tiny progress dot */
+.cp-pipeline > .cp-dot {
+  margin-top: 10px;
+}
+.cp-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #c4c8cf;
+  margin-left: 20px;
+}
+
+/* message action row */
+.cp-pipeline > .cp-actions {
+  margin-top: 24px;
+}
+.cp-actions {
+  display: flex;
+  gap: 18px;
+}
+.cp-actions button {
+  color: #6b7280;
+  display: flex;
+  padding: 2px;
+  border-radius: 6px;
+  transition: color 0.12s;
+}
+.cp-actions button:hover {
+  color: #374151;
+}
+
+/* ---------------- composer ---------------- */
+.cp-composer-wrap {
+  position: fixed;
+  left: 262px;
+  right: 0;
+  bottom: 20px;
+  display: flex;
+  justify-content: center;
+  z-index: 24;
+  pointer-events: none;
+}
+.cp-composer {
+  pointer-events: auto;
+  width: 850px;
+  max-width: calc(100% - 48px);
+  height: 44px;
+  background: #fff;
+  border: 1px solid #ebecf0;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 4px;
+}
+.cp-plus {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1f2937;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.cp-plus:hover {
+  background: #f3f4f6;
+}
+.cp-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.cp-icon:hover {
+  background: #f3f4f6;
+}
+.cp-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b5563;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.cp-tools:hover {
+  background: #f9fafb;
+}
+.cp-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: #1f2937;
+  padding: 0 10px;
+}
+.cp-input::placeholder {
+  color: #9ca3af;
+}
+.cp-mode {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1f2937;
+  flex-shrink: 0;
+}
+.cp-mode svg {
+  color: #6b7280;
+}
+.cp-status {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cp-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+}
+.cp-send {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.cp-send:hover {
+  background: #f9fafb;
+}
+
+/* ---------------- 交互补齐:消息操作行 / 译文 / 菜单 / 附件 ---------------- */
+.cp-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 2px 0 18px 2px;
+}
+.cp-msg-actions button {
+  display: flex;
+  padding: 3px;
+  border-radius: 6px;
+  color: #9ca3af;
+  transition: color 0.12s;
+}
+.cp-msg-actions button:hover { color: #374151; }
+.cp-msg-actions button.on { color: #4C6696; }
+
+.cp-bubble-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cp-bubble-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 11.5px;
+}
+.cp-bubble:not(.user) .cp-bubble-file { background: #F3F4F6; color: #4B5563; }
+
+.cp-translation {
+  max-width: 640px;
+  margin: 0 0 18px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: #FBFCFD;
+  overflow: hidden;
+}
+.cp-translation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #F0F1F3;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4C6696;
+}
+.cp-translation-head > span { display: inline-flex; align-items: center; gap: 6px; }
+.cp-translation-head button { display: flex; border: 0; background: none; color: #9ca3af; cursor: pointer; padding: 2px; }
+.cp-translation-head button:hover { color: #4B5563; }
+.cp-translation-dots { animation: cp-blink 1s steps(2) infinite; }
+@keyframes cp-blink { 50% { opacity: 0.25; } }
+.cp-translation-body {
+  padding: 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #374151;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cp-menu { position: fixed; }
+.cp-menu-veil { position: fixed; inset: 0; z-index: 88; }
+.cp-menu .hk-menu-item { font-size: 12.5px; }
+.hk-menu-hint.on { color: #4C6696; }
+.cp-icon.on { color: #4C6696; }
+.cp-status-dot.off { background: #D8DCE3; }

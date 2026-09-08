@@ -1,0 +1,271 @@
+/* LearningFeed (lf-) — screenshot 63 */
+
+.lf-layout {
+  display: flex;
+  gap: 25px;
+  padding: 30px 43px;
+  min-height: 100vh;
+}
+
+/* ---------------- left column ---------------- */
+.lf-left {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.lf-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.05);
+  padding: 20px;
+}
+.lf-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.lf-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+.lf-today-pill {
+  background: #e8f0fe;
+  color: #3b6ff6;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.lf-big-date {
+  font-size: 56px;
+  font-weight: 300;
+  color: #111827;
+  line-height: 1;
+  margin-top: 12px;
+}
+.lf-date-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 6px;
+}
+.lf-mini-pills {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.lf-mini-pill {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.lf-dots {
+  color: #9ca3af;
+  cursor: pointer;
+}
+.lf-todos {
+  flex: 1;
+}
+.lf-empty {
+  font-size: 13px;
+  color: #9ca3af;
+  text-align: center;
+  margin-top: 38px;
+  line-height: 1.5;
+}
+.lf-completed {
+  min-height: 150px;
+}
+.lf-completed .lf-empty {
+  margin-top: 26px;
+  padding: 0 20px;
+}
+
+/* ---------------- right column — calendar card ---------------- */
+.lf-cal-card {
+  flex: 1;
+  min-width: 0;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* toolbar */
+.lf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 24px 14px;
+}
+.lf-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lf-pill-filled {
+  background: #2e3a66;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+.lf-pill-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #d8dce3;
+  color: #5b6472;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.lf-quota {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+}
+.lf-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lf-nav-arrow {
+  color: #6b7280;
+  cursor: pointer;
+}
+.lf-month {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 4px;
+}
+.lf-view-text {
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  margin-left: 12px;
+}
+.lf-view-active {
+  background: #fff;
+  border: 1px solid #dde0e6;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1f2937;
+  cursor: pointer;
+}
+.lf-cal-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #2e3a66;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+/* weekday header */
+.lf-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 4px 0 10px;
+}
+.lf-weekdays span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: #9ca3af;
+  letter-spacing: 0.08em;
+}
+
+/* month grid */
+.lf-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  border-top: 1px solid #efefef;
+}
+.lf-cell {
+  position: relative;
+  border-right: 1px solid #efefef;
+  border-bottom: 1px solid #efefef;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+.lf-daynum {
+  font-size: 12px;
+  color: #374151;
+}
+.lf-cell.out .lf-daynum {
+  color: #c4c8cf;
+}
+.lf-today-outline {
+  position: absolute;
+  inset: 5px;
+  border: 1.5px solid #8da2c9;
+  border-radius: 12px;
+  pointer-events: none;
+}
+.lf-today-circle {
+  position: relative;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #4169e1;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 交互补齐:导航按钮 / 视图切换选中态 / 回到今天 */
+.lf-nav-arrow {
+  border: 0;
+  background: none;
+  padding: 2px;
+  display: flex;
+  border-radius: 6px;
+}
+.lf-nav-arrow:hover { background: #F3F4F6; color: #1F2937; }
+.lf-view-text.active {
+  background: #fff;
+  border: 1px solid #dde0e6;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+.lf-view-active { cursor: pointer; }
+.lf-cal-btn { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }

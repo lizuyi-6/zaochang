@@ -1,33 +1,68 @@
 :root {
   /* Typography */
-  --font-satoshi: "Satoshi-Medium", "MiSans", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-satoshi-regular: "Satoshi-Regular", "MiSans Normal", "MiSans", sans-serif;
-  --font-satoshi-bold: "Satoshi-Bold", "MiSans Demibold", sans-serif;
-  --font-display: "EB Garamond", "ChillDuanHeiSong", "Songti SC", serif;
-  --font-board-handwriting: "Virgil", "Xiaolai", "Segoe UI Emoji", sans-serif;
-  --font-board-standard: var(--font-satoshi);
+  --font-sans: "Satoshi", "MiSans", "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+  --font-display: "EB Garamond", "Songti SC", serif;
+  --font-board-handwriting: "Caveat", "Segoe Print", cursive;
+  --font-board-table: "Handlee", "Caveat", cursive;
+  --font-board-standard: var(--font-sans);
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* legacy aliases (old pages still reference these) */
+  --font-satoshi: var(--font-sans);
+  --font-satoshi-regular: var(--font-sans);
+  --font-satoshi-bold: var(--font-sans);
 
-  /* Color Palette */
+  /* Surfaces */
   --app-bg: #FAFAFA;
   --panel-bg: #FFFFFF;
-  --sidebar-bg: #F9FAFB;
-  --border-color: #E5E7EB;
-  --border-muted: #EEF0F3;
+  --sidebar-bg: #FFFFFF;
+  --border-color: #ECECEA;
+  --border-strong: #E4E4E0;
+  --border-muted: #F0F0F0;
+  --hairline: #F0F0F0;
 
-  /* Brand Accents */
-  --color-primary: #4C6694;
-  --color-primary-hover: #3D5377;
-  --color-primary-light: rgba(76, 102, 148, 0.08);
-
-  /* Text Colors */
-  --text-primary: #111827;
-  --text-secondary: #374151;
-  --text-muted: #6B7280;
+  /* Text */
+  --text-primary: #141A22;
+  --text-body: #2A2F36;
+  --text-secondary: #555C66;
+  --text-muted: #8A8F98;
   --text-tertiary: #9CA3AF;
+  --text-faint: #9AA0A6;
+  --text-ghost: #B4B9C0;
+
+  /* Brand / accents */
+  --color-primary: #1A2332;
+  --color-primary-hover: #10151F;
+  --color-primary-light: rgba(26, 35, 50, 0.08);
+  --dark-pill: #1A2332;
+  --accent-blue: #3B6FF6;
+  --accent-blue-deep: #4169E1;
+  --accent-blue-soft: #E8F0FE;
+  --accent-navy: #2E3A66;
+  --selected-blue-bg: #EEF2FF;
+  --selected-blue-border: #4C6EF5;
+  --selected-blue-text: #3B5BDB;
+  --accent-orange: #F97316;
+  --accent-green: #10B981;
+  --system-red: #E5484D;
+  --star-yellow: #FACC15;
+
+  /* Board */
+  --board-bg: #FAFAF8;
+  --board-dot: #E4E4DF;
+  --board-ink: #1F2430;
+  --board-violet: #6C5CE7;
+  --board-highlight: #F9E27D;
+  --board-red: #C2571B;
 
   /* Layout */
-  --sidebar-width: 250px;
+  --sidebar-width: 240px;
   --header-height: 64px;
+  --panel-width: 368px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.14);
 }
 
 * {
@@ -37,7 +72,7 @@
 }
 
 body {
-  font-family: var(--font-satoshi);
+  font-family: var(--font-sans);
   background-color: var(--app-bg);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -49,4 +84,8 @@ button {
   cursor: pointer;
   border: none;
   background: none;
+}
+
+input, textarea {
+  font-family: inherit;
 }

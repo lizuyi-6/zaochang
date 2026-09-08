@@ -932,3 +932,13 @@ export const hkWhiteboardSessions = sqliteTable("hk_whiteboard_sessions", {
   planJson: text("plan_json").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// hyperknow 独立积分(每日重置):balance 为今日剩余,reset_date 是额度归属的
+// 北京日期(UTC+8,YYYY-MM-DD)。懒重置:读取/消费时发现 reset_date 落后即整额
+// 续满(app/api/_lib/hyperknow/credits.ts),不需要定时任务。每用户一行(PK)。
+export const hkCredits = sqliteTable("hk_credits", {
+  userEmail: text("user_email").primaryKey().references(() => members.email),
+  balance: integer("balance").notNull(),
+  resetDate: text("reset_date").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

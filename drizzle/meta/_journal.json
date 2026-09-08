@@ -148,6 +148,13 @@
       "when": 1788606006843,
       "tag": "0020_exotic_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1788848893236,
+      "tag": "0021_brainy_jack_power",
+      "breakpoints": true
     }
   ]
 }
