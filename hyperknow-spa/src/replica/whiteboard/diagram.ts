@@ -236,20 +236,20 @@ export function renderDiagram(code: string): RenderedDiagram | null {
   const laneThickness: number[] = [];
   const laneOffset: number[] = [];
   for (const lane of layers) {
-    const thickness = laneSize(lane, g.dir === 'TD' ? 'w' : 'h');
+    const thickness = laneSize(lane, g.dir === 'TD' ? 'h' : 'w');
     laneThickness.push(thickness);
     laneOffset.push(cross);
-    cross += (g.dir === 'TD' ? laneSize(lane, 'h') : laneSize(lane, 'w')) + (g.dir === 'TD' ? GAP_Y : GAP_X);
+    cross += thickness + (g.dir === 'TD' ? GAP_Y : GAP_X);
   }
   layers.forEach((lane, li) => {
     let along = 10; // 副轴游标(TD 的 x / LR 的 y)
     for (const n of lane) {
       const s = sizes.get(n.id)!;
       if (g.dir === 'TD') {
-        pos.set(n.id, { x: along, y: laneOffset[li] + (laneThickness[li] - s.w) / 2, w: s.w, h: s.h });
+        pos.set(n.id, { x: along, y: laneOffset[li] + (laneThickness[li] - s.h) / 2, w: s.w, h: s.h });
         along += s.w + GAP_X;
       } else {
-        pos.set(n.id, { x: laneOffset[li] + (laneThickness[li] - s.h) / 2, y: along, w: s.w, h: s.h });
+        pos.set(n.id, { x: laneOffset[li] + (laneThickness[li] - s.w) / 2, y: along, w: s.w, h: s.h });
         along += s.h + GAP_X;
       }
     }
