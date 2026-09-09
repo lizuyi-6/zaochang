@@ -24,6 +24,7 @@ import {
   type NextStepsData,
 } from "./prompts";
 import type { StreamChunk } from "./protocol";
+import type { WebSearchHit } from "./websearch";
 
 export type ConversationHistory = Array<{ role: string; content: string }>;
 
@@ -69,22 +70,32 @@ export async function generateNextSteps(userQuery: string, responseText: string,
 }
 
 // ── Whiteboard Instructor(白板讲师)───────────────────────────────────────
-export async function planLecture(topic: string, signal?: AbortSignal): Promise<LecturePlan> {
+export async function planLecture(topic: string, signal?: AbortSignal, learnerName = ""): Promise<LecturePlan> {
+  // 学员称呼:旁白里用登录名打招呼/收尾(与前端演示课同一绑定);板书正文不写名字。
+  const nameNote = learnerName
+    ? `\nThe learner's name is "${learnerName}". Address them by this name in 2-3 narration lines only (e.g. the opening greeting and the closing line); never write the name into board card/diagram text.`
+    : "";
   const jsonStr = await chat(
     [
       { role: "system", content: WHITEBOARD_INSTRUCTOR_PROMPT },
-      { role: "user", content: `Create a step-by-step whiteboard lecture for: "${topic}"` },
+      { role: "user", content: `Create a step-by-step whiteboard lecture for: "${topic}"${nameNote}` },
     ],
     { jsonMode: true, signal, maxTokens: 8192 },
   ).catch(() => "");
-  return parseLecturePlan(jsonStr, topic);
+  return parseLecturePlan(jsonStr, topic, learnerName);
 }
 
-export async function answerInterjection(question: string, currentStep: unknown, signal?: AbortSignal): Promise<InterjectionAnswer> {
+export async function answerInterjection(
+  question: string,
+  currentStep: unknown,
+  signal?: AbortSignal,
+  learnerName = "",
+): Promise<InterjectionAnswer> {
+  const nameNote = learnerName ? `\nThe learner's name is "${learnerName}"; address them by name at most once in the answer.` : "";
   const jsonStr = await chat(
     [
       { role: "system", content: INTERJECTION_ANSWER_PROMPT },
-      { role: "user", content: `Current lecture step: "${JSON.stringify(currentStep)}"\nStudent interruption question: "${question}"` },
+      { role: "user", content: `Current lecture step: "${JSON.stringify(currentStep)}"\nStudent interruption question: "${question}"${nameNote}` },
     ],
     { jsonMode: true, signal },
   ).catch(() => "");
@@ -92,11 +103,22 @@ export async function answerInterjection(question: string, currentStep: unknown,
 }
 
 // ── Course Architect(三级课程大纲)────────────────────────────────────────
-export async function generateCourse(query: string, signal?: AbortSignal): Promise<CourseStructure> {
+export async function generateCourse(
+  query: string,
+  signal?: AbortSignal,
+  research: WebSearchHit[] = [],
+): Promise<CourseStructure> {
+  // 联网研学注入:摘要式并进提示词,指示模型消化而非照抄;搜索不可用时为空,
+  // 大纲退回纯模型知识(与原版行为一致)。
+  const researchNote = research.length
+    ? `\n\nVerified web research for this topic (digest where it strengthens the syllabus; silently skip stale or irrelevant hits):\n${research
+        .map((hit) => `- ${hit.title} — ${hit.url}\n  ${hit.snippet}`)
+        .join("\n")}`
+    : "";
   const jsonStr = await chat(
     [
       { role: "system", content: COURSE_ARCHITECT_PROMPT },
-      { role: "user", content: `Design a comprehensive, structured course for: "${query}"` },
+      { role: "user", content: `Design a comprehensive, structured course for: "${query}"${researchNote}` },
     ],
     { jsonMode: true, signal, maxTokens: 8192 },
   ).catch(() => "");

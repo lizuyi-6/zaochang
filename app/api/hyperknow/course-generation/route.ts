@@ -5,16 +5,18 @@ import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { generateCourse } from "../../_lib/hyperknow/agents";
 import { resolveConfigOrThrow } from "../../_lib/hyperknow/config";
 import { saveCourse } from "../../_lib/hyperknow/store";
+import { researchQueriesFor, resolveSearchConfig, searchOnce, type WebSearchHit } from "../../_lib/hyperknow/websearch";
 import { consumeCredits, currentCredits, HK_COURSE_COST, HK_DAILY_CREDITS } from "../../_lib/hyperknow/credits";
 
 export const dynamic = "force-dynamic";
 
 // 全自动课程蓝图生成端点(原 ws/courseGenWs.js 的 SSE 化)。事件序列与原 WS 逐帧
 // 一致:boot loading → course_generation_started → researching_the_web loading
-// → progress(round 1/3,装饰性研学节奏) → researching_the_web completed
+// → progress(round N/3,真搜索轮次) → researching_the_web completed
 // → generating_initial_syllabus loading →(课程树生成落库)→ completed
-// → course_structure_ready。原版的 1.2s/1s sleep 原样保留(wall-clock 等待在
-// Workers 无碍,且是官方流水线的节奏的一部分)。
+// → course_structure_ready。原版 researching_the_web 是装饰性 sleep——Workers 版
+// 在此真跑联网搜索(供应商可插拔,见 websearch.ts),研学命中注入大纲提示词;
+// 搜索未配置/失败降级为无研学上下文,课程照常生成(不虚报来源)。
 // 配置缺失在发流前回 503 JSON;上游故障发生在流中(大纲生成阶段)→ 补发
 // course_generation_error 帧后关闭(与原 WS catch 行为一致)。
 
@@ -83,15 +85,43 @@ export async function POST(request: Request) {
               placeholder: "Scouring the web for syllabus material...",
               course_uuid: courseUuid,
             });
-            await sleep(1200);
+            // 真研学:3 条派生查询逐轮真搜(轮次即原版 "round N/3" 节奏);搜索
+            // 未配置时保住原版 wall-clock 节奏继续放帧,但 sources:0,不虚报。
+            const researchQueries = researchQueriesFor(query);
+            const researchHits: WebSearchHit[] = [];
+            const seenUrls = new Set<string>();
+            if (resolveSearchConfig()) {
+              for (let round = 1; round <= researchQueries.length && researchHits.length < 12; round += 1) {
+                for (const hit of await searchOnce(researchQueries[round - 1], signal)) {
+                  const dedupeKey = hit.url.replace(/[#?].*$/, "");
+                  if (seenUrls.has(dedupeKey)) continue;
+                  seenUrls.add(dedupeKey);
+                  researchHits.push(hit);
+                }
+                push({
+                  type: "course_generation_progress",
+                  message: `Researching the web (round ${round}/${researchQueries.length})`,
+                  data: { round, keywords: researchQueries, sources: researchHits.length },
+                  course_uuid: courseUuid,
+                });
+              }
+            } else {
+              await sleep(1200);
+              push({
+                type: "course_generation_progress",
+                message: "Researching the web (round 1/3)",
+                data: { round: 1, keywords: researchQueries, sources: 0 },
+                course_uuid: courseUuid,
+              });
+              await sleep(1000);
+            }
             push({
-              type: "course_generation_progress",
-              message: "Researching the web (round 1/3)",
-              data: { round: 1, keywords: [`${query} curriculum`, `${query} core foundations`] },
+              type: "course_generation_step",
+              step_id: "researching_the_web",
+              status: "completed",
+              data: { sources: researchHits.length },
               course_uuid: courseUuid,
             });
-            await sleep(1000);
-            push({ type: "course_generation_step", step_id: "researching_the_web", status: "completed", course_uuid: courseUuid });
 
             push({
               type: "course_generation_step",
@@ -102,7 +132,7 @@ export async function POST(request: Request) {
               course_uuid: courseUuid,
             });
 
-            const course = await generateCourse(query, signal);
+            const course = await generateCourse(query, signal, researchHits.slice(0, 8));
             course.courseUuid = courseUuid;
             await saveCourse(courseUuid, member.email, course as unknown as Record<string, unknown>);
 

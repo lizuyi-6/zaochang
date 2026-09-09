@@ -247,6 +247,199 @@ export async function translateLive(
   }
 }
 
+/* ---------------- 白板讲座计划(直播放适配器) ---------------- */
+
+export interface LiveBoardAction {
+  type: 'card' | 'formula' | 'diagram' | 'quick_check';
+  title?: string;
+  content?: string;
+  latex?: string;
+  code?: string;
+  question?: string;
+  options?: string[];
+  answer?: number;
+}
+
+export interface LiveLectureStep {
+  step_id: string;
+  spoken_text: string;
+  board_action: LiveBoardAction;
+}
+
+export interface LiveLecturePlan {
+  session_id: string;
+  topic: string;
+  steps: LiveLectureStep[];
+}
+
+const ACTION_TYPES = ['card', 'formula', 'diagram', 'quick_check'] as const;
+
+/**
+ * 真实白板讲座计划(原 WS whiteboard/ws 的无状态化端点,见 HYPERKNOW.md)。
+ * 返回 null = 不可用(未登录/静态托管/限流/上游故障),调用方回退本地演示
+ * 脚本——与其余端点同一双轨纪律。不扣积分(限流 20/h)。
+ */
+export async function planLectureLive(topic: string, signal?: AbortSignal): Promise<LiveLecturePlan | null> {
+  let res: Response;
+  try {
+    res = await fetch('/api/hyperknow/whiteboard/plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ topic }),
+      signal,
+    });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  try {
+    const json = (await res.json()) as { session_id?: unknown; topic?: unknown; steps?: unknown };
+    if (!Array.isArray(json.steps) || !json.steps.length) return null;
+    const steps: LiveLectureStep[] = [];
+    for (const raw of json.steps) {
+      const step = raw as Record<string, unknown>;
+      if (typeof step.spoken_text !== 'string' || !step.spoken_text) continue;
+      const action = (step.board_action ?? {}) as Record<string, unknown>;
+      const type = String(action.type ?? 'card');
+      const board_action: LiveBoardAction = {
+        type: (ACTION_TYPES as readonly string[]).includes(type) ? (type as LiveBoardAction['type']) : 'card',
+        ...(typeof action.title === 'string' && action.title ? { title: action.title } : {}),
+        ...(typeof action.content === 'string' && action.content ? { content: action.content } : {}),
+        ...(typeof action.latex === 'string' && action.latex ? { latex: action.latex } : {}),
+        ...(typeof action.code === 'string' && action.code ? { code: action.code } : {}),
+        ...(typeof action.question === 'string' && action.question ? { question: action.question } : {}),
+        ...(Array.isArray(action.options)
+          ? { options: action.options.filter((o): o is string => typeof o === 'string' && !!o).slice(0, 4) }
+          : {}),
+        ...(typeof action.answer === 'number' ? { answer: action.answer } : {}),
+      };
+      steps.push({ step_id: String(step.step_id ?? `step_${steps.length + 1}`), spoken_text: step.spoken_text, board_action });
+    }
+    return steps.length
+      ? { session_id: typeof json.session_id === 'string' ? json.session_id : '', topic: String(json.topic ?? topic), steps }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ---------------- 白板举手插话(讲座进行中的自由提问) ---------------- */
+
+export interface InterjectAnswer {
+  answerText: string;
+  /** 答疑结束、主线恢复前的过渡句(原 WS interject 的 resume 事件) */
+  resumeTransition: string;
+}
+
+/**
+ * 真实举手插话:按讲座会话取上下文答疑。返回 null = 不可用(未登录/静态托管/
+ * 限流/上游故障),调用方给本地兜底反馈——绝不让提问静默落空。
+ */
+export async function interjectLive(
+  sessionId: string,
+  stepId: string,
+  question: string,
+  signal?: AbortSignal,
+): Promise<InterjectAnswer | null> {
+  let res: Response;
+  try {
+    res = await fetch('/api/hyperknow/whiteboard/interject', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, step_id: stepId, question: question.slice(0, 500) }),
+      signal,
+    });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  try {
+    const json = (await res.json()) as { answer_text?: unknown; resume_transition?: unknown };
+    if (typeof json.answer_text !== 'string' || !json.answer_text) return null;
+    return { answerText: json.answer_text, resumeTransition: typeof json.resume_transition === 'string' ? json.resume_transition : '' };
+  } catch {
+    return null;
+  }
+}
+
+/* ---------------- 课程市场与课程详情(D1 持久化) ---------------- */
+
+export interface MarketCourse {
+  /** 本人生成的课程(uuid 越权不可见);官方样例只有 marketplaceId */
+  uuid: string | null;
+  marketId: string;
+  title: string;
+  description: string;
+  unitCount: number | null;
+  sessionCount: number | null;
+  joinCount: number | null;
+}
+
+/**
+ * 课程市场列表:本人 D1 课程在前、两条官方样例在后(后端 1:1 复刻原版形状)。
+ * 返回 null = 不可用(纯静态托管/未登录),调用方回退演示卡片。
+ */
+export async function fetchMarketCourses(): Promise<MarketCourse[] | null> {
+  let res: Response;
+  try {
+    res = await fetch('/api/hyperknow/marketplace/courses');
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  try {
+    const json = (await res.json()) as { success?: boolean; courses?: unknown };
+    if (!json.success || !Array.isArray(json.courses)) return null;
+    const rows: MarketCourse[] = [];
+    for (const raw of json.courses) {
+      const c = raw as Record<string, unknown>;
+      const title = typeof c.courseTitle === 'string' ? c.courseTitle : '';
+      const uuid = typeof c.courseUuid === 'string' && c.courseUuid ? c.courseUuid : null;
+      const marketId = uuid ?? (typeof c.marketplaceId === 'string' ? c.marketplaceId : '');
+      if (!title || !marketId) continue;
+      /* 本人课程带完整 units 树:课节数现算;官方样例带 sessionCount/joinCount */
+      let sessionCount: number | null = typeof c.sessionCount === 'number' ? c.sessionCount : null;
+      if (sessionCount === null && Array.isArray(c.units)) {
+        sessionCount = (c.units as Array<{ lectures?: unknown[] }>).reduce(
+          (n, u) => n + (Array.isArray(u.lectures) ? u.lectures.length : 0),
+          0,
+        );
+      }
+      rows.push({
+        uuid,
+        marketId,
+        title,
+        description: typeof c.courseDescription === 'string' ? c.courseDescription : '',
+        unitCount: typeof c.unitCount === 'number' ? c.unitCount : Array.isArray(c.units) ? (c.units as unknown[]).length : null,
+        sessionCount,
+        joinCount: typeof c.joinCount === 'number' ? c.joinCount : null,
+      });
+    }
+    return rows;
+  } catch {
+    return null;
+  }
+}
+
+/** 课程详情(本人归属;越权/不存在 404)。不可用返回 null。 */
+export async function fetchCourseDetail(uuid: string, signal?: AbortSignal): Promise<BackendCourse | null> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/hyperknow/courses/${encodeURIComponent(uuid)}`, { signal });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  try {
+    const json = (await res.json()) as { success?: boolean; data?: unknown };
+    const cs = json.data as BackendCourse | undefined;
+    if (!json.success || !cs || !Array.isArray(cs.units) || !cs.units.length) return null;
+    return cs;
+  } catch {
+    return null;
+  }
+}
+
 /** 后端连通性探测:返回往返毫秒数;不可达返回 null(状态面板用)。 */
 export async function pingBackend(): Promise<number | null> {
   const started = performance.now();

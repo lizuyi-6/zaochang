@@ -2,6 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, ArrowUpRight, Star } from 'lucide-react';
 import type { PageProps } from '../types';
 import { CourseCover } from '../illustrations';
+import { coverForTitle } from '../data';
+import { buildGeneratedCourse, courseFromBackend } from '../generate';
+import { fetchCourseDetail } from '../backend';
 import { KandinskyCover, KnotMark } from './CourseJourney';
 import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
@@ -52,14 +55,27 @@ const MARKET_ROWS = [
   { title: 'Public Speaking', rating: '4.6', cover: 'kandinsky' as const },
   { title: 'Introduction to Sociology', rating: '4.4', cover: 'sociology' as const },
   { title: 'AP Psychology', rating: '4.3', cover: 'psych' as const },
-];
-
-const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
+];const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
   const { t, lng } = useI18n();
   const [tab, setTab] = useState<'all' | 'progress' | 'completed'>('all');
   const [query, setQuery] = useState('');
   const [weekOffset, setWeekOffset] = useState(0);
   const previewTarget = state.courseJoined ? ('courseJourney' as const) : ('coursePreview' as const);
+  /* 已加入的课程就是当前 generated(伪生成/后端课);无 generated 时回退演示公开演讲课 */
+  const joinedTitle = state.generated?.title ?? L('Public Speaking', '公开演讲');
+  const joinedCover = state.generated?.cover;
+  /* 集市行预览:kandinsky 行 = 演示公开演讲课(generated 置空),其余按书名伪生成 */
+  const openMarketRow = (row: (typeof MARKET_ROWS)[number]) =>
+    set(
+      row.cover === 'kandinsky'
+        ? { screen: previewTarget, generated: null, courseJoined: false, lectureDone: false }
+        : {
+            screen: previewTarget,
+            generated: { ...buildGeneratedCourse(row.title), cover: row.cover },
+            courseJoined: false,
+            lectureDone: false,
+          },
+    );
 
   /* 周条:真实日期按周偏移滚动(学习时长目前无后端记录,数值仍为 0) */
   const days = useMemo(() => {
@@ -83,7 +99,29 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
   const showJoinedCourse =
     state.courseJoined &&
     (tab === 'all' || (tab === 'progress' && !state.lectureDone) || (tab === 'completed' && state.lectureDone)) &&
-    (!q || L('Public Speaking', '公开演讲').toLowerCase().includes(q));
+    (!q || joinedTitle.toLowerCase().includes(q));
+  /* D1 里的本人课程(刷新不丢):先按书名占位进旅程,详情到达后换真课程树;
+   * 当前会话正在学的那门不重复出卡 */
+  const mineCourses = useMemo(
+    () => (state.marketCourses ?? []).filter((m) => m.uuid && m.title !== joinedTitle),
+    [state.marketCourses, joinedTitle],
+  );
+  const openMine = (uuid: string, title: string) => {
+    const cover = coverForTitle(title);
+    set({
+      screen: 'courseJourney',
+      courseJoined: true,
+      lectureDone: false,
+      generated: { ...buildGeneratedCourse(title), cover },
+    });
+    void fetchCourseDetail(uuid).then((cs) => {
+      if (cs) set({ generated: { ...courseFromBackend(cs, title), cover } });
+    });
+  };
+  const shelfMine =
+    tab !== 'completed'
+      ? mineCourses.filter((m) => !q || m.title.toLowerCase().includes(q))
+      : [];
   const marketRows = MARKET_ROWS.filter((row) => !q || row.title.toLowerCase().includes(q));
 
   return (
@@ -128,33 +166,62 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
               </div>
             </div>
 
-            {showJoinedCourse ? (
+            {showJoinedCourse || shelfMine.length > 0 ? (
               <div className="cs-course-grid">
-                <div className="cs-course-card">
-                  <div className="cs-course-cover">
-                    <KandinskyCover size={268} radius={12} />
+                {showJoinedCourse && (
+                  <div className="cs-course-card">
+                    <div className="cs-course-cover">
+                      {joinedCover ? <CourseCover kind={joinedCover} /> : <KandinskyCover size={268} radius={12} />}
+                    </div>
+                    <div className="cs-course-body">
+                      <div className="cs-course-titlerow">
+                        <span className="cs-course-title">{joinedTitle}</span>
+                        <button
+                          type="button"
+                          className="cs-preview"
+                          onClick={() => set({ screen: 'courseJourney' })}
+                        >
+                          {t('marketplacePage.previewCta')}
+                        </button>
+                      </div>
+                      <div className="cs-official">
+                        <KnotMark size={11} />
+                        <span>Hyperknow Official</span>
+                      </div>
+                      <div className="cs-rating">
+                        <Star size={12} fill="#F5C518" color="#F5C518" />
+                        <span>4.6</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="cs-course-body">
-                    <div className="cs-course-titlerow">
-                      <span className="cs-course-title">{L('Public Speaking', '公开演讲')}</span>
-                      <button
-                        type="button"
-                        className="cs-preview"
-                        onClick={() => set({ screen: 'courseJourney' })}
-                      >
-                        {t('marketplacePage.previewCta')}
-                      </button>
+                )}
+                {shelfMine.map((m) => (
+                  <div className="cs-course-card" key={m.uuid}>
+                    <div className="cs-course-cover">
+                      <CourseCover kind={coverForTitle(m.title)} />
                     </div>
-                    <div className="cs-official">
-                      <KnotMark size={11} />
-                      <span>Hyperknow Official</span>
-                    </div>
-                    <div className="cs-rating">
-                      <Star size={12} fill="#F5C518" color="#F5C518" />
-                      <span>4.6</span>
+                    <div className="cs-course-body">
+                      <div className="cs-course-titlerow">
+                        <span className="cs-course-title">{m.title}</span>
+                        <button
+                          type="button"
+                          className="cs-preview"
+                          onClick={() => openMine(m.uuid as string, m.title)}
+                        >
+                          {t('marketplacePage.previewCta')}
+                        </button>
+                      </div>
+                      <div className="cs-official">
+                        <KnotMark size={11} />
+                        <span>Hyperknow Official</span>
+                      </div>
+                      <div className="cs-rating">
+                        <Star size={12} fill="#F5C518" color="#F5C518" />
+                        <span>4.5</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
             ) : (
               <div className="cs-empty">
@@ -239,7 +306,7 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
                     <button
                       type="button"
                       className="cs-preview"
-                      onClick={() => set({ screen: previewTarget })}
+                      onClick={() => openMarketRow(row)}
                     >
                       {t('marketplacePage.previewCta')}
                     </button>

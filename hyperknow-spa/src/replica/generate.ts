@@ -22,6 +22,8 @@ export interface GeneratedCourse {
   units: Unit[];
   /** 由话题哈希决定的稳定展示细节 */
   enrolled: string;
+  /** 市场卡片带入的封面风格;缺省回退公开演讲课的 Kandinsky 封面 */
+  cover?: 'sociology' | 'bio' | 'ml' | 'ai' | 'history' | 'prompt' | 'psych' | 'sat' | 'philo' | 'stats';
 }
 
 /* ---------------- 话题提取:剥掉中英口令式包装,剩下的就是话题 ---------------- */

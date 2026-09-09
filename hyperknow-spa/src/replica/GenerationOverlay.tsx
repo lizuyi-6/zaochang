@@ -59,10 +59,17 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const cg = 'chatResponse.courseGeneration';
   const phase = PHASES[phaseIdx];
 
-  const finish = (gen: ReturnType<typeof buildGeneratedCourse>) => {
+  const finish = (gen: ReturnType<typeof buildGeneratedCourse>, persisted = false) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    set({ generating: false, generated: gen, screen: 'courseJourney', courseJoined: true });
+    /* persisted = 真 LLM 生成并已入 D1:集市/我的课程列表需要重拉才能看到新课 */
+    set({
+      generating: false,
+      generated: gen,
+      screen: 'courseJourney',
+      courseJoined: true,
+      ...(persisted ? { marketStale: true } : {}),
+    });
   };
   const cancel = () => {
     finishedRef.current = true;
@@ -96,7 +103,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
       if (result.ok) {
         setMode('live');
         setReady(true);
-        window.setTimeout(() => finish(courseFromBackend(result.course, query)), 1000);
+        window.setTimeout(() => finish(courseFromBackend(result.course, query), true), 1000);
       } else if (result.reason === 'insufficient') {
         /* 积分不足:显式提示并停住——绝不能落进伪生成,否则"没积分"反而白拿一门假课 */
         setInsufficient(true);

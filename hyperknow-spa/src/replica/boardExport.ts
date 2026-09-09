@@ -7,7 +7,8 @@
  * 当前视口、也不受 transform 过渡动画影响,导出结果稳定。
  * 字体用页面已加载的 Caveat/Handlee(先 await document.fonts)。
  */
-import { BOARD_ANNOTS, getBoardItems, getBoardTable, INK, type BoardItem, type Rich } from './whiteboard/lessonScript';
+import { BOARD_ANNOTS, getBoardItems, getBoardTable, INK, type BoardAnnot, type BoardItem, type BoardTable, type Rich } from './whiteboard/lessonScript';
+import { diagramBox, renderDiagram } from './whiteboard/diagram';
 import { L } from './i18n/content';
 import { downloadBlob } from './actions';
 import { toast } from './toast';
@@ -18,6 +19,12 @@ export interface BoardSnapshot {
   dots: boolean;
   tableRows: number;
   panX: number;
+  /** 板书数据源(演示脚本或直播计划);缺省回退演示脚本,老调用零改动 */
+  items?: BoardItem[];
+  table?: BoardTable | null;
+  annots?: BoardAnnot[];
+  /** 第二页起点 x;0/缺省 = 单页(演示课为 1132) */
+  pageSplitX?: number;
 }
 
 export type ExportFormat = 'jpg' | 'pdf';
@@ -113,8 +120,7 @@ function itemWidth(ctx: CanvasRenderingContext2D, item: BoardItem, standardFont:
 
 const wob = (v: number, i: number): number => v + (i % 2 ? 1.4 : -1.2);
 
-function drawTable(ctx: CanvasRenderingContext2D, standardFont: boolean, rowsShown: number): void {
-  const table = getBoardTable();
+function drawTable(ctx: CanvasRenderingContext2D, table: BoardTable, standardFont: boolean, rowsShown: number): void {
   const W = table.colW.reduce((a, b) => a + b, 0);
   const H = table.rowH.reduce((a, b) => a + b, 0);
   const xs = [0, table.colW[0], table.colW[0] + table.colW[1], W];
@@ -184,12 +190,12 @@ function wrapCell(ctx: CanvasRenderingContext2D, text: string, maxW: number, bre
   return lines;
 }
 
-function drawAnnots(ctx: CanvasRenderingContext2D, step: number): void {
+function drawAnnots(ctx: CanvasRenderingContext2D, annots: BoardAnnot[], step: number): void {
   ctx.save();
   ctx.strokeStyle = ANNOT_COLOR;
   ctx.lineWidth = 1.6;
   ctx.lineCap = 'round';
-  for (const an of BOARD_ANNOTS) {
+  for (const an of annots) {
     if (an.step > step) continue;
     ctx.beginPath();
     if (an.kind === 'circle') {
@@ -216,6 +222,9 @@ function drawAnnots(ctx: CanvasRenderingContext2D, step: number): void {
 }
 
 function contentCrop(ctx: CanvasRenderingContext2D, snap: BoardSnapshot): Crop {
+  const items = snap.items ?? getBoardItems();
+  const table = snap.table !== undefined ? snap.table : getBoardTable();
+  const annots = snap.annots ?? BOARD_ANNOTS;
   let x0 = Infinity;
   let y0 = Infinity;
   let x1 = -Infinity;
@@ -226,16 +235,23 @@ function contentCrop(ctx: CanvasRenderingContext2D, snap: BoardSnapshot): Crop {
     x1 = Math.max(x1, x + w);
     y1 = Math.max(y1, y + h);
   };
-  for (const item of getBoardItems()) {
+  for (const item of items) {
     if (item.step > snap.step) continue;
+    if (item.diagram) {
+      const r = renderDiagram(item.diagram);
+      if (r) {
+        const box = diagramBox(r);
+        grow(item.x, item.y, box.w, box.h);
+        continue;
+      }
+    }
     const lh = item.mono ? MONO_LH : item.size * 1.24;
     grow(item.x, item.y, itemWidth(ctx, item, snap.standardFont), item.lines.length * lh);
   }
-  const table = getBoardTable();
-  if (table.step <= snap.step) {
+  if (table && table.step <= snap.step) {
     grow(table.x, table.y, table.colW.reduce((a, b) => a + b, 0), table.rowH.reduce((a, b) => a + b, 0));
   }
-  for (const an of BOARD_ANNOTS) {
+  for (const an of annots) {
     if (an.step <= snap.step) grow(an.x, an.y, an.w, an.h);
   }
   if (!Number.isFinite(x0)) return { x: 0, y: 0, w: 900, h: 700 };
@@ -244,8 +260,9 @@ function contentCrop(ctx: CanvasRenderingContext2D, snap: BoardSnapshot): Crop {
 
 function cropFor(ctx: CanvasRenderingContext2D, page: ExportPage, snap: BoardSnapshot): Crop {
   const content = contentCrop(ctx, snap);
-  const x0 = page === 'all' ? 0 : snap.panX > 0 ? PAGE_SPLIT : 0;
-  const x1 = page === 'all' ? WORLD_W : snap.panX > 0 ? WORLD_W : PAGE_SPLIT;
+  const split = snap.pageSplitX ?? PAGE_SPLIT;
+  const x0 = page === 'all' ? 0 : snap.panX > 0 ? split : 0;
+  const x1 = page === 'all' ? WORLD_W : snap.panX > 0 ? WORLD_W : split;
   const left = Math.max(x0, Math.min(content.x - PAD, x1));
   const right = Math.min(x1, Math.max(content.x + content.w + PAD, x0));
   const top = Math.max(0, content.y - PAD);
@@ -253,7 +270,28 @@ function cropFor(ctx: CanvasRenderingContext2D, page: ExportPage, snap: BoardSna
   return { x: left, y: top, w: Math.max(120, right - left), h: Math.max(120, bottom - top) };
 }
 
-function renderBoard(page: ExportPage, snap: BoardSnapshot): HTMLCanvasElement {
+/* 插图光栅化:SVG data URL → Image(浏览器安全模型要求异步解码)。
+ * SVG-in-img 取不到文档 webfont,文字落系统 cursive 回退——如实记录。 */
+const diagramImgCache = new Map<string, HTMLImageElement>();
+
+async function diagramImage(svg: string): Promise<HTMLImageElement | null> {
+  const cached = diagramImgCache.get(svg);
+  if (cached) return cached;
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  try {
+    await img.decode();
+  } catch {
+    return null;
+  }
+  diagramImgCache.set(svg, img);
+  return img;
+}
+
+async function renderBoard(page: ExportPage, snap: BoardSnapshot): Promise<HTMLCanvasElement> {
+  const items = snap.items ?? getBoardItems();
+  const table = snap.table !== undefined ? snap.table : getBoardTable();
+  const annots = snap.annots ?? BOARD_ANNOTS;
   const measure = document.createElement('canvas').getContext('2d')!;
   const crop = cropFor(measure, page, snap);
   const canvas = document.createElement('canvas');
@@ -280,14 +318,29 @@ function renderBoard(page: ExportPage, snap: BoardSnapshot): HTMLCanvasElement {
     ctx.restore();
   }
 
-  for (const item of getBoardItems()) {
-    if (item.step <= snap.step) drawItem(ctx, item, snap.standardFont);
+  /* 插图先光栅化(异步),文本/表格/圈注同步画 */
+  const diagrams = new Map<string, HTMLImageElement | null>();
+  for (const item of items) {
+    if (!item.diagram || item.step > snap.step) continue;
+    const r = renderDiagram(item.diagram);
+    if (r) diagrams.set(item.id, await diagramImage(r.svg));
   }
-  const table = getBoardTable();
-  if (table.step <= snap.step) {
-    drawTable(ctx, snap.standardFont, snap.step > table.step ? 4 : snap.tableRows);
+
+  for (const item of items) {
+    if (item.step > snap.step) continue;
+    const img = item.diagram ? diagrams.get(item.id) : undefined;
+    if (item.diagram && img) {
+      const r = renderDiagram(item.diagram)!;
+      const box = diagramBox(r);
+      ctx.drawImage(img, item.x, item.y, box.w, box.h);
+    } else {
+      drawItem(ctx, item, snap.standardFont);
+    }
   }
-  drawAnnots(ctx, snap.step);
+  if (table && table.step <= snap.step) {
+    drawTable(ctx, table, snap.standardFont, snap.step > table.step ? 4 : snap.tableRows);
+  }
+  drawAnnots(ctx, annots, snap.step);
   return canvas;
 }
 
@@ -304,7 +357,7 @@ export async function exportBoard(format: ExportFormat, page: ExportPage, snap: 
   }
   toast(L('Preparing the board image…', '正在生成板书图片…'));
   await ensureFonts();
-  const canvas = renderBoard(page, snap);
+  const canvas = await renderBoard(page, snap);
   const blob = await toBlob(canvas, 'image/jpeg', 0.92);
   if (!blob) {
     toast(L('Export failed — please try again', '导出失败，请重试'));
