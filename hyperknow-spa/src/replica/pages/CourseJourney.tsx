@@ -441,24 +441,33 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
 
             <div className="cj-strip">
               <div className="cj-strip-nodes">
-                {Array.from({ length: 8 }, (_, i) =>
-                  i === 0 && done ? (
-                    <span key={`c${i}`} className="cj-node ringed">
-                      <Ring size={22} pct={35} />
-                    </span>
-                  ) : (
-                    <span key={`c${i}`} className="cj-node" />
-                  )
-                )}
-                <span className="cj-node sq">
-                  <ClipboardCheck size={11} />
-                </span>
-                {Array.from({ length: 4 }, (_, i) => (
-                  <span key={`d${i}`} className="cj-node" />
-                ))}
-                <span className="cj-node sq">
-                  <Award size={11} />
-                </span>
+                {/* 指示器按当前单元真实结构渲染:每小节一个圆点,项目/测验讲次一个方点 */}
+                {unit.lectures.flatMap((lec) => {
+                  if (lec.kind === 'project') {
+                    return [
+                      <span key={lec.id} className="cj-node sq">
+                        <ClipboardCheck size={11} />
+                      </span>,
+                    ];
+                  }
+                  if (lec.kind === 'exam') {
+                    return [
+                      <span key={lec.id} className="cj-node sq">
+                        <Award size={11} />
+                      </span>,
+                    ];
+                  }
+                  return lec.sessions.map((_, si) => {
+                    const isFirst = lec.id === 'l1' && si === 0;
+                    return isFirst && done ? (
+                      <span key={`${lec.id}-${si}`} className="cj-node ringed">
+                        <Ring size={22} pct={35} />
+                      </span>
+                    ) : (
+                      <span key={`${lec.id}-${si}`} className="cj-node" />
+                    );
+                  });
+                })}
               </div>
               <button className="cj-strip-pill" type="button" onClick={() => openLesson('lecture')}>
                 <span className="cj-strip-ico">
