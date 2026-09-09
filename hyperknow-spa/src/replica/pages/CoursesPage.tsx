@@ -14,38 +14,23 @@ import './CoursesPage.css';
 /* Local illustration: person beside an empty bookcase (ink + green)   */
 /* ------------------------------------------------------------------ */
 const EmptyShelf: React.FC<{ size?: number }> = ({ size = 200 }) => (
-  <svg width={size} height={size * 0.8} viewBox="0 0 200 160" fill="none">
-    {/* motion ticks near head */}
-    <path d="M38 40 l-6 -4 M42 32 l-3 -7" stroke="#1A1A1A" strokeWidth="1.8" strokeLinecap="round" />
-    {/* person: head + curly hair */}
-    <circle cx="60" cy="52" r="10" fill="#fff" stroke="#1A1A1A" strokeWidth="2.2" />
-    <path d="M50 48 q-3 -10 7 -13 q2 -6 9 -5 q7 -3 11 3 q6 2 4 9 q-13 -8 -27 0 z" fill="#1A1A1A" />
-    <circle cx="64" cy="52" r="1.3" fill="#1A1A1A" />
-    {/* hand on chin */}
-    <path d="M68 62 q4 0 6 -6" stroke="#1A1A1A" strokeWidth="2" fill="none" strokeLinecap="round" />
-    {/* cream sweater */}
-    <path d="M52 64 q10 -6 18 0 l3 26 q-12 6 -24 0 z" fill="#FDFCF7" stroke="#1A1A1A" strokeWidth="2.2" />
-    {/* arm holding box under left arm */}
-    <path d="M54 70 q-9 4 -11 12" stroke="#1A1A1A" strokeWidth="2" fill="none" strokeLinecap="round" />
-    <rect x="32" y="74" width="17" height="14" rx="1.5" fill="#DCE9C8" stroke="#1A1A1A" strokeWidth="1.8" transform="rotate(-6 40 81)" />
-    {/* baggy black pants, walking */}
-    <path d="M54 90 q-2 16 -10 26 q6 5 12 2 l6 -18 q4 12 12 18 q7 0 9 -6 q-10 -8 -12 -22" fill="#1F2937" stroke="#1A1A1A" strokeWidth="2" />
-    <path d="M40 118 q7 4 14 0 M72 116 q7 4 14 0" stroke="#1A1A1A" strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    {/* empty 4-shelf bookcase */}
-    <path d="M98 30 h70 v118 h-70 z" fill="#fff" stroke="#1A1A1A" strokeWidth="2.4" />
-    <path d="M98 60 h70 M98 89 h70 M98 118 h70" stroke="#1A1A1A" strokeWidth="2" />
-    <path d="M102 148 h62" stroke="#1A1A1A" strokeWidth="2.4" strokeLinecap="round" />
-    {/* potted sprout on top */}
-    <path d="M122 22 h15 l-2.5 8 h-10 z" fill="#fff" stroke="#1A1A1A" strokeWidth="1.8" />
-    <path d="M129 22 q-7 -8 -3 -15 q7 3 3 15 z" fill="#A9CB8E" stroke="#1A1A1A" strokeWidth="1.2" />
-    <path d="M131 22 q3 -10 11 -11 q1 9 -11 11 z" fill="#A9CB8E" stroke="#1A1A1A" strokeWidth="1.2" />
-    {/* snake plant at base right */}
-    <path d="M174 130 q-3 -16 2 -24 q5 10 2 24 z" fill="#A9CB8E" stroke="#1A1A1A" strokeWidth="1.3" />
-    <path d="M181 130 q0 -22 5 -28 q4 12 1 28 z" fill="#8FBF72" stroke="#1A1A1A" strokeWidth="1.3" />
-    <path d="M188 130 q4 -14 11 -17 q0 12 -6 17 z" fill="#A9CB8E" stroke="#1A1A1A" strokeWidth="1.3" />
-    <path d="M172 130 h24 l-3 16 h-18 z" fill="#fff" stroke="#1A1A1A" strokeWidth="2" />
-    {/* dotted ground strokes */}
-    <path d="M28 152 h9 M64 154 h11 M104 153 h12 M140 154 h9 M196 152 h6" stroke="#1A1A1A" strokeWidth="1.6" strokeLinecap="round" opacity="0.55" />
+  <svg width={size} height={size * 0.8} viewBox="0 0 200 160" fill="none" aria-hidden="true">
+    <circle cx="105" cy="77" r="66" fill="#E6EBDD" />
+    <path d="M23 146h162M155 23v-9M151 18h8" stroke="#164E46" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M78 35h77v107H78Z" fill="#F7F4EC" stroke="#164E46" strokeWidth="2" />
+    <path d="M85 43h63v29H85zM85 80h63v27H85zM85 115h63v19H85z" fill="#E6EBDD" />
+    <path d="M78 75h77M78 110h77M84 142v4M149 142v4" stroke="#164E46" strokeWidth="2" />
+    <path d="M101 61h18M110 52v18" stroke="#164E46" strokeOpacity=".35" strokeWidth="1.5" />
+    <circle cx="47" cy="64" r="10" fill="#D9A441" stroke="#164E46" strokeWidth="1.5" />
+    <path d="M37 63c-3-19 22-18 23-4l-11-4-12 8Z" fill="#164E46" />
+    <path d="M36 80q11-9 22 0l9 31H31Z" fill="#B7C9B6" stroke="#164E46" strokeWidth="1.8" />
+    <path d="m39 111-4 30h9l8-29 6 29h9l-5-30" fill="#164E46" />
+    <path d="m51 83 14 15 18-5" stroke="#164E46" strokeWidth="2" strokeLinecap="round" />
+    <path d="m70 86 15-4 6 20-15 4Z" fill="#D9A441" stroke="#164E46" strokeWidth="1.5" />
+    <path d="m74 88 10-3M77 98l9-3M32 143h13M57 143h12" stroke="#164E46" strokeWidth="2" strokeLinecap="round" />
+    <path d="M166 128h17l-3 16h-11Z" fill="#D9A441" stroke="#164E46" strokeWidth="1.5" />
+    <path d="M175 128v-21m0 12c-11 0-14-8-13-13 9 0 13 6 13 13Zm0-5c0-10 5-15 12-15 0 8-4 14-12 15Z" fill="#B7C9B6" stroke="#164E46" strokeWidth="1.5" />
+    <path d="M100 30h28M100 25h18" stroke="#164E46" strokeWidth="1.5" />
   </svg>
 );
 
@@ -186,7 +171,7 @@ const MARKET_ROWS = [
                       </div>
                       <div className="cs-official">
                         <KnotMark size={11} />
-                        <span>Hyperknow Official</span>
+                        <span>{L('Lattice Official', '见界官方')}</span>
                       </div>
                       <div className="cs-rating">
                         <Star size={12} fill="#F5C518" color="#F5C518" />
@@ -213,7 +198,7 @@ const MARKET_ROWS = [
                       </div>
                       <div className="cs-official">
                         <KnotMark size={11} />
-                        <span>Hyperknow Official</span>
+                        <span>{L('Lattice Official', '见界官方')}</span>
                       </div>
                       <div className="cs-rating">
                         <Star size={12} fill="#F5C518" color="#F5C518" />
@@ -296,7 +281,7 @@ const MARKET_ROWS = [
                       <div className="cs-mkt-title">{row.title}</div>
                       <div className="cs-official">
                         <KnotMark size={11} />
-                        <span>Hyperknow Official</span>
+                        <span>{L('Lattice Official', '见界官方')}</span>
                       </div>
                       <div className="cs-rating">
                         <Star size={12} fill="#F5C518" color="#F5C518" />

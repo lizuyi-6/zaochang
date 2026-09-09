@@ -18,7 +18,7 @@ export const ReplicaHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
   const s = state.screen;
   if (s === 'marketplace' || s === 'history' || s === 'feed') return null;
 
-  const energy = state.identity ? state.identity.credits : state.lectureDone ? 15 : 20;
+  const energy = state.identity?.credits ?? state.energy ?? (state.lectureDone ? 15 : 20);
   const showPlan = s !== 'chat';
   /* 邀请:复制造场链接(邀请码体系在主站注册侧,这里给的是可直接打开的入口) */
   const copyInvite = async () => {
@@ -64,7 +64,7 @@ export const ReplicaHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
           <button
             className="hk-icon-btn"
             title={t('chatResponse.share')}
-            onClick={() => void shareLink(window.location.href, L('Hyperknow conversation', 'Hyperknow 对话'))}
+            onClick={() => void shareLink(window.location.href, L('Lattice conversation', '见界对话'))}
           >
             <Upload size={16} />
           </button>

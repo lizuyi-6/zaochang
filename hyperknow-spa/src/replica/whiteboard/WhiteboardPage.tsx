@@ -264,21 +264,47 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         const how = await Promise.race([handle.started, wait(8000).then(() => 'timeout' as const)]);
         if (how === 'stopped' || how === 'error') handle = null;
       }
-      // 声画双向对齐:窗口按语言自适应估算;音频先播完 → 字幕立即补全,绝不留
-      // "音频已停、字幕还在爬"的空窗。
-      const per = narrateMs(plain, speed) / Math.max(1, total);
-      for (let i = 1; i <= total; i++) {
-        if (handle) {
-          const tick = wait(per).then(() => 'tick' as const);
-          const won = await Promise.race([tick, handle.ended.then(() => 'ended' as const)]);
-          if (won === 'ended') {
-            setCapShown(total);
-            break;
+      // 声画双向绝对对齐:以真实音频播放进度(currentTime / duration)作为核心时钟
+      // 驱动字幕字数,音频读到哪字就亮到哪;静音/上游无声音时平滑回退到估算时钟。
+      if (handle) {
+        let shownCount = 0;
+        let ended = false;
+        void handle.ended.then(() => {
+          ended = true;
+        });
+
+        const startTime = Date.now();
+        const estMs = narrateMs(plain, speed);
+
+        while (!ended) {
+          const prog = handle.getProgress();
+          if (prog && prog.duration > 0) {
+            const byAudio = Math.min(total, Math.floor(prog.ratio * total));
+            if (byAudio > shownCount) {
+              shownCount = byAudio;
+              setCapShown(shownCount);
+            }
+          } else {
+            const elapsed = Date.now() - startTime;
+            const byEst = Math.min(total, Math.floor((elapsed / estMs) * total));
+            if (byEst > shownCount) {
+              shownCount = byEst;
+              setCapShown(shownCount);
+            }
           }
-        } else {
-          await wait(per);
+          const won = await Promise.race([
+            wait(35).then(() => 'tick' as const),
+            handle.ended.then(() => 'ended' as const),
+          ]);
+          if (won === 'ended') break;
         }
-        setCapShown(i);
+        setCapShown(total);
+      } else {
+        const per = narrateMs(plain, speed) / Math.max(1, total);
+        for (let i = 1; i <= total; i++) {
+          await wait(per);
+          setCapShown(i);
+        }
       }
       setTyping(false);
       return handle;
@@ -612,8 +638,16 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const handleExit = useCallback(() => {
     ctl.current.cancelled = true;
-    set({ screen: 'courseJourney', lectureDone: finished, lectureCompletePrompt: finished });
-  }, [finished, set]);
+    const current = state.identity?.credits ?? state.energy ?? 20;
+    const nextEnergy = finished ? Math.max(0, current - 5) : current;
+    set({
+      screen: 'courseJourney',
+      lectureDone: finished,
+      lectureCompletePrompt: finished,
+      energy: nextEnergy,
+      ...(state.identity ? { identity: { ...state.identity, credits: nextEnergy } } : {}),
+    });
+  }, [finished, set, state.identity, state.energy]);
 
   const centerX = panelOpen ? 615 : 800;
   const choiceVisible = quickCheck !== null;
@@ -760,7 +794,15 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           onHome={() => {
             popupResolver.current?.();
             popupResolver.current = null;
-            set({ screen: 'home', lectureDone: true, lectureCompletePrompt: true });
+            const current = state.identity?.credits ?? state.energy ?? 20;
+            const nextEnergy = Math.max(0, current - 5);
+            set({
+              screen: 'home',
+              lectureDone: true,
+              lectureCompletePrompt: true,
+              energy: nextEnergy,
+              ...(state.identity ? { identity: { ...state.identity, credits: nextEnergy } } : {}),
+            });
           }}
         />
       )}

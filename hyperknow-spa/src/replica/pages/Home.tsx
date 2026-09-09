@@ -320,7 +320,7 @@ export const Home = ({ state, set }: PageProps) => {
                         <span className="hm-provider-logo">
                           <Logo size={18} />
                         </span>
-                        <span className="hm-provider-name">{t('home.courseTicket.defaultAuthor', { brand: 'Hyperknow' })}</span>
+                        <span className="hm-provider-name">{t('home.courseTicket.defaultAuthor', { brand: L('Lattice', '见界') })}</span>
                         <BadgeCheck size={15} style={{ fill: '#3B82F6', color: '#fff' }} />
                       </div>
                       <div className="hm-course-title">{c.title}</div>

@@ -163,3 +163,9 @@
 .hs-filter-veil { position: fixed; inset: 0; z-index: 88; }
 .hs-sort-menu { position: absolute; top: 40px; left: 190px; z-index: 92; }
 .hs-tabs { position: relative; }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.hs-search,.hs-card { background: var(--panel-bg); border-color: var(--border-color); }
+.hs-tab.active { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
+.hs-new-btn { background: var(--color-primary); color: var(--panel-bg); }
+.hs-title { font-family: var(--font-display); color: var(--color-primary); }

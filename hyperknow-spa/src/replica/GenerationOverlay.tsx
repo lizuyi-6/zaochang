@@ -55,6 +55,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const [lineIdx, setLineIdx] = useState(0);
   const [unitsDone, setUnitsDone] = useState(0);
   const finishedRef = useRef(false);
+  const remainingRef = useRef<number | null>(null);
 
   const cg = 'chatResponse.courseGeneration';
   const phase = PHASES[phaseIdx];
@@ -62,6 +63,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const finish = (gen: ReturnType<typeof buildGeneratedCourse>, persisted = false) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
+    const latestCredits = remainingRef.current;
     /* persisted = 真 LLM 生成并已入 D1:集市/我的课程列表需要重拉才能看到新课 */
     set({
       generating: false,
@@ -69,6 +71,17 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
       screen: 'courseJourney',
       courseJoined: true,
       ...(persisted ? { marketStale: true } : {}),
+      ...(typeof latestCredits === 'number'
+        ? {
+            energy: latestCredits,
+            identity: {
+              username: state.identity?.username || 'You',
+              email: state.identity?.email || '',
+              tier: state.identity?.tier || 'FREE',
+              credits: latestCredits,
+            },
+          }
+        : {}),
     });
   };
   const cancel = () => {
@@ -94,7 +107,16 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
             }
           },
           onRemaining: (remaining) => {
-            if (state.identity) set({ identity: { ...state.identity, credits: remaining } });
+            remainingRef.current = remaining;
+            set({
+              energy: remaining,
+              identity: {
+                username: state.identity?.username || 'You',
+                email: state.identity?.email || '',
+                tier: state.identity?.tier || 'FREE',
+                credits: remaining,
+              },
+            });
           },
         },
         ctrl.signal,

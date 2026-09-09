@@ -1089,3 +1089,13 @@
 }
 .ob-ia-chips2 { margin-top: 12px; opacity: 0.55; }
 .ob-bar { display: block; height: 8px; border-radius: 4px; background: #E8E8E4; }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.ob-root, .ob-screen { background: var(--app-bg); }
+.ob-chip.sel, .ob-card-opt.sel { box-shadow: inset 0 0 0 0.5px var(--selected-border); }
+.ob-lang-row.sel .ob-radio { border-color: var(--color-primary); }
+.ob-root .hk-btn-dark:hover:not(:disabled) { background: var(--color-primary-hover); }
+.ob-chip,.ob-card-opt,.ob-prompt,.ob-lec,.ob-ia-input { background: var(--panel-bg); border-color: var(--border-color); }
+.ob-lang-row.sel,.ob-chip.sel,.ob-card-opt.sel,.ob-l7-unit.active,.ob-ia-tab.active { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
+.ob-lang-row.sel .ob-radio,.ob-l7-unit.active .ob-l7-unit-n,.ob-learn { background: var(--color-primary); color: var(--panel-bg); }
+.ob-h,.ob-lang-q,.ob-talk,.ob-cap,.ob-cap-top,.ob-ia-h { font-family: var(--font-display); color: var(--color-primary); }

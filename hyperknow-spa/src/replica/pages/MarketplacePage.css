@@ -355,3 +355,15 @@
   font-size: 13px;
   color: #9CA3AF;
 }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.mp-page { background: var(--app-bg); }
+.mp-tab.active { color: var(--color-primary); }
+.mp-tab.active::after { background: var(--accent-amber); }
+.mp-trending-chip { background: var(--accent-amber-soft); color: var(--accent-amber-ink); border-color: var(--accent-amber); }
+.mp-card:hover { border-color: var(--border-strong); }
+.mp-search:focus-within { border-color: var(--focus-ring); }
+.mp-tab, .mp-empty { color: var(--text-muted); }
+.mp-tab.active { color: var(--color-primary); }
+.mp-search,.mp-card { background: var(--panel-bg); border-color: var(--border-color); }
+.mp-hero h1,.mp-editors { font-family: var(--font-display); color: var(--color-primary); }

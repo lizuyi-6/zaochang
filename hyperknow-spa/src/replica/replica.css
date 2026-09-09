@@ -765,3 +765,31 @@
 .hk-wn-lines li { display: flex; gap: 8px; font-size: 12.5px; line-height: 1.6; color: #4B5563; }
 .hk-wn-lines li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #C9CED6; margin-top: 7px; flex-shrink: 0; }
 .hk-root.sidebar-collapsed .cp-composer-wrap { left: 0; }
+
+/* 见界 LATTICE — shell theme; board ink remains independent. */
+.hk-dotfield { background-image: radial-gradient(var(--atlas-dot) 1.2px, transparent 1.3px); }
+.hk-sidebar { background: var(--sidebar-bg); border-color: var(--border-color); }
+.hk-more-flyout, .hk-continue-card, .hk-icon-btn, .hk-founders-btn, .hk-avatar-menu, .hk-btn-ghost, .hk-modal, .hk-sidebar-expand, .hk-menu, .gen-card, .language-dropdown { background: var(--panel-bg); border-color: var(--border-color); }
+.hk-nav-item, .hk-activity-row, .hk-menu-item, .language-option { color: var(--text-body); }
+.hk-nav-item.more, .hk-continue-sub, .hk-sidebar-footer, .hk-btn-text, .hk-menu-label, .hk-menu-hint, .gen-units, .gen-cancel, .gen-step { color: var(--text-muted); }
+.hk-nav-item:hover, .hk-activity-row:hover, .hk-menu-item:hover, .hk-sidebar-collapse:hover, .hk-nav-item.more.open, .hk-icon-btn:hover, .hk-founders-btn:hover, .hk-avatar-menu-item:hover, .hk-btn-ghost:hover, .hk-sidebar-expand:hover, .language-option:hover:not(:disabled) { background: var(--surface-hover); }
+.hk-nav-item.active, .hk-activity-row.active, .hk-mode-tab.active, .hk-menu-item.active, .hk-chip-lecture, .language-option.active { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
+.hk-nav-item.active { box-shadow: inset 3px 0 0 var(--color-primary); }
+.hk-free-badge { color: var(--accent-amber-ink); }
+.hk-continue-card:hover { border-color: var(--border-strong); }
+.hk-support-send, .gen-seg.done, .gen-seg.active::after, .gen-step.completed .gen-step-ico, .cp-bubble.user, .hk-toast { background: var(--color-primary); color: var(--panel-bg); }
+.hk-support-send:hover:not(:disabled) { background: var(--color-primary-hover); }
+.hk-support-send:disabled { background: var(--border-strong); color: var(--text-body); }
+.hk-support-text { background: var(--panel-bg); border-color: var(--border-color); color: var(--text-body); }
+.hk-support-text:focus { border-color: var(--focus-ring); }
+.hk-attach-chip, .hk-soon, .gen-orbie, .gen-orbie.busy { background: var(--surface-soft); }
+.gen-veil { background: rgba(247, 244, 236, 0.96); }
+.app-veil { background: var(--app-bg); }
+.hk-btn-dark { box-shadow: 0 4px 14px rgba(22, 78, 70, 0.16); }
+/* Two-tone ring remains visible against both pine and paper. */
+.hk-root :is(button, a, input, textarea, select, [tabindex]):focus-visible,
+.ob-root :is(button, a, input, textarea, select, [tabindex]):focus-visible,
+.si-root :is(button, a, input, textarea, select, [tabindex]):focus-visible,
+.hk-overlay :is(button, a, input, textarea, select, [tabindex]):focus-visible,
+.language-option:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; box-shadow: 0 0 0 3px var(--panel-bg); }
+.hk-sidebar-collapse:focus-visible { opacity: 1; }

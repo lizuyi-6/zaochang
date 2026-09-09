@@ -28,40 +28,37 @@ import { L } from '../i18n/content';
 import { downloadIcs, shareLink } from '../actions';
 import { toast } from '../toast';
 import { formatSize, loadMaterials, removeMaterial, uploadMaterial, type CourseMaterial } from '../materials';
-import coverPublicSpeaking from '../../assets/cover-public-speaking.png';
 import './CourseJourney.css';
 
 /* ------------------------------------------------------------------ */
-/* Local illustration: Hyperknow knot mark (no wordmark)               */
+/* Local illustration: Lattice open book and knowledge node            */
 /* ------------------------------------------------------------------ */
-export const KnotMark: React.FC<{ size?: number; color?: string }> = ({ size = 14, color = '#1A1A1A' }) => (
-  <svg width={size} height={size * 0.9} viewBox="0 0 37 33" fill="none" style={{ display: 'block' }}>
-    <path
-      d="M36.5 10.7L27.7 5.6c-.3-.2-.7-.2-1 0L18 10.7 9.8 15.4l-3-1.7c-.5-.3-1.1-.1-1.4.4-.3.5-.1 1.1.4 1.4l3 1.7v2.4c0 .6.4 1 .9 1s.9-.4.9-1v-2.4l5.5-3.1 5.4-3.1 5.1 2.9v5.9l-5.1 2.9-1.8-1c-.5-.3-1.1-.1-1.4.4-.3.5-.1 1.1.4 1.4l2.2 1.3c.2.1.5.1.7 0l5.8-3.3c.2-.1.3-.4.3-.6v-6.7c0-.3-.2-.5-.4-.6z"
-      fill={color}
-    />
-    <path
-      d="M17.9 10.7L9.2 5.6c-.3-.2-.7-.2-1 0L-.6 10.7v6.7c0 .3.2.5.4.6l8.8 5.1 5.5 3.1 3.8 2.2"
-      stroke={color}
-      strokeWidth="2"
-      fill="none"
-      strokeLinejoin="round"
-      transform="translate(1,0)"
-    />
+export const KnotMark: React.FC<{ size?: number; color?: string }> = ({ size = 14, color = '#164E46' }) => (
+  <svg width={size} height={size * 0.9} viewBox="0 0 32 32" fill="none" aria-hidden="true" style={{ display: 'block' }}>
+    <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+    <path d="M16 10v18M16 6v4" stroke={color} strokeWidth="2" />
+    <circle cx="16" cy="4" r="2" fill="#D9A441" />
   </svg>
 );
 
-/* ------------------------------------------------------------------ */
-/* Public Speaking course cover (matches the original's Kandinsky art) */
-/* ------------------------------------------------------------------ */
+/* Original editorial public-speaking plate; legacy export retained. */
 export const KandinskyCover: React.FC<{ size?: number; radius?: number }> = ({ size = 248, radius = 14 }) => (
-  <img
-    src={coverPublicSpeaking}
-    width={size}
-    height={size}
-    style={{ display: 'block', borderRadius: radius, flexShrink: 0, objectFit: 'cover' }}
-    alt=""
-  />
+  <svg width={size} height={size} viewBox="0 0 248 248" aria-hidden="true" style={{ display: 'block', borderRadius: radius, flexShrink: 0 }}>
+    <rect width="248" height="248" fill="#F7F4EC" />
+    <path d="M20 20h208v208H20zM20 64h208M64 20v208M184 20v208M20 184h208" fill="none" stroke="#164E46" strokeOpacity=".12" />
+    <circle cx="159" cy="86" r="57" fill="#D9A441" />
+    <path d="M110 160V95a42 42 0 0 1 84 0v65" fill="#B7C9B6" />
+    <path d="M190 78q23 16 0 32M201 66q37 28 0 56" fill="none" stroke="#164E46" strokeWidth="2" strokeLinecap="round" />
+    <path d="M112 82c0-20 28-20 28 0v21c0 20-28 20-28 0Z" fill="#164E46" />
+    <path d="M105 99v6a21 21 0 0 0 42 0v-6M126 126v31M111 158h30" fill="none" stroke="#164E46" strokeWidth="3" strokeLinecap="round" />
+    <path d="M49 174h122l-11 49H60Z" fill="#164E46" />
+    <path d="M47 165h128v10H47z" fill="#D9A441" />
+    <path d="M69 154v-19l22 7 22-7v19l-22 7Z" fill="#F7F4EC" stroke="#164E46" strokeWidth="2" />
+    <path d="M91 142v19" stroke="#164E46" strokeWidth="2" />
+    <circle cx="35" cy="35" r="4" fill="#164E46" />
+    <path d="M45 35h35M205 209h23M217 197v24" stroke="#164E46" strokeWidth="1.5" />
+    <path d="M74 194h66M74 201h45" stroke="#F7F4EC" strokeOpacity=".55" />
+  </svg>
 );
 
 /* ------------------------------------------------------------------ */
@@ -104,18 +101,18 @@ const Ring: React.FC<{ size?: number; pct?: number; color?: string; track?: stri
 
 /* Fanned DOC / XLS / PDF file icons for the "Add materials" card. */
 const FileFan: React.FC = () => (
-  <svg width="58" height="38" viewBox="0 0 58 38" style={{ display: 'block', flexShrink: 0 }}>
-    <g transform="rotate(-12 17 22)">
-      <rect x="8" y="9" width="18" height="24" rx="2.5" fill="#fff" stroke="#D8DCE3" />
-      <path d="M12 16h10M12 20h10M12 24h7" stroke="#4C6696" strokeWidth="1.6" />
+  <svg width="58" height="38" viewBox="0 0 58 38" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+    <g transform="rotate(-15 18 23)">
+      <path d="M7 8h15l5 5v21H7Z" fill="#B7C9B6" stroke="#164E46" />
+      <path d="M12 17h10M12 21h10M12 25h6" stroke="#164E46" />
     </g>
-    <g transform="rotate(1 29 20)">
-      <rect x="20" y="7" width="18" height="24" rx="2.5" fill="#fff" stroke="#D8DCE3" />
-      <path d="M24 13h10M24 18h10M24 23h10M27 13v10M31 13v10" stroke="#169F54" strokeWidth="1.2" />
+    <g transform="rotate(3 29 20)">
+      <path d="M19 4h15l5 5v24H19Z" fill="#F7F4EC" stroke="#164E46" />
+      <path d="M34 4v6h5M24 15h10M24 20h10M24 25h7" fill="none" stroke="#164E46" />
     </g>
-    <g transform="rotate(12 41 22)">
-      <rect x="32" y="9" width="18" height="24" rx="2.5" fill="#fff" stroke="#D8DCE3" />
-      <path d="M36 17h10M36 21h10M36 25h6" stroke="#C35426" strokeWidth="1.6" />
+    <g transform="rotate(17 42 24)">
+      <path d="M32 10h15l5 5v21H32Z" fill="#D9A441" stroke="#164E46" />
+      <path d="m37 28 4-9 5 9M38 25h7" fill="none" stroke="#164E46" strokeWidth="1.4" />
     </g>
   </svg>
 );
@@ -166,7 +163,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
   };
   /* "练习"标签列出当前单元的练习项(取自各讲的 session) */
   const practiceRows = unit.lectures.flatMap((lec) => lec.sessions.map((s) => s.title));
-  const onShareCourse = () => void shareLink(window.location.href, `${PS.title} · Hyperknow`);
+  const onShareCourse = () => void shareLink(window.location.href, `${PS.title} · ${L('Lattice', '见界')}`);
   const onAddToCalendar = () => {
     const start = new Date();
     start.setDate(start.getDate() + 1);
@@ -238,7 +235,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
               </span>
               <span className="cj-curated-text">
                 <span className="cj-curated-by">{t('courseJourney.curatedByPrefix')}</span>
-                <span className="cj-curated-name">Hyperknow Official</span>
+                <span className="cj-curated-name">{L('Lattice Official', '见界官方')}</span>
               </span>
             </div>
 
