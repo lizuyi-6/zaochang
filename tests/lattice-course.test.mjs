@@ -161,3 +161,9 @@ test("大纲 fallback 跟随查询语言,且结构含项目与测验讲次", () 
   /* 坏 JSON 仍走 fallback,课程标题保留查询词 */
   assert.deepEqual(parseCourseStructure("boom", "机器学习"), zh);
 });
+
+test("课程页进度指示器由单元真实结构驱动,不再写死节点数", () => {
+  const source = readFileSync(new URL("src/replica/pages/CourseJourney.tsx", spa), "utf8");
+  assert.doesNotMatch(source, /Array\.from\(\{\s*length:\s*\d+\s*\}/, "进度条节点不许再写死数量");
+  assert.match(source, /unit\.lectures\.flatMap/, "进度条节点必须来自当前单元的讲次/小节");
+});
