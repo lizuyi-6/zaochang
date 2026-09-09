@@ -431,11 +431,16 @@ export async function fetchMarketCourses(): Promise<MarketCourse[] | null> {
       const uuid = typeof c.courseUuid === 'string' && c.courseUuid ? c.courseUuid : null;
       const marketId = uuid ?? (typeof c.marketplaceId === 'string' ? c.marketplaceId : '');
       if (!title || !marketId) continue;
-      /* 本人课程带完整 units 树:课节数现算;官方样例带 sessionCount/joinCount */
+      /* 本人课程带完整 units 树:节数按 session(最小可学单元)现算,与详情页一致;
+       * 官方样例带服务端现算的 sessionCount/joinCount */
       let sessionCount: number | null = typeof c.sessionCount === 'number' ? c.sessionCount : null;
       if (sessionCount === null && Array.isArray(c.units)) {
-        sessionCount = (c.units as Array<{ lectures?: unknown[] }>).reduce(
-          (n, u) => n + (Array.isArray(u.lectures) ? u.lectures.length : 0),
+        sessionCount = (c.units as Array<{ lectures?: Array<{ sessions?: unknown[] }> }>).reduce(
+          (n, u) =>
+            n +
+            (Array.isArray(u.lectures)
+              ? u.lectures.reduce((m, l) => m + (Array.isArray(l?.sessions) ? l.sessions.length : 0), 0)
+              : 0),
           0,
         );
       }

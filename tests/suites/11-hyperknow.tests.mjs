@@ -311,12 +311,17 @@ export function register() {
     assert.ok(ready, "必须以 course_structure_ready 收尾");
     assert.equal(ready.course.courseUuid, ready.course_uuid);
     assert.equal(ready.course.courseTitle, query, "假上游非 JSON → fallback 结构标题取查询词");
-    assert.equal(ready.course.units.length, 1);
+    assert.equal(ready.course.units.length, 3, "fallback 结构为 3 单元(基础/实践/综合)");
+    const fallbackTitles = ready.course.units.flatMap((u) => u.lectures.map((l) => l.title));
+    assert.ok(fallbackTitles.some((title) => title.startsWith("Project:")), "fallback 必须含项目讲次");
+    assert.ok(fallbackTitles.some((title) => title.startsWith("Exam:")), "fallback 必须含测验讲次");
 
     const market = await (await fetch(`${baseUrl}/api/hyperknow/marketplace/courses`, { headers: authHeaders("建课用户", email) })).json();
     assert.equal(market.courses[0].courseUuid, ready.course_uuid, "本人课程排最前");
     assert.equal(market.courses.length, 3, "2 条官方样例课程始终在列");
-    assert.ok(market.courses.some((course) => course.courseTitle === "Introduction to Sociology"));
+    assert.ok(market.courses.some((course) => course.courseTitle === "社会学导论"), "官方样例为中文课程名");
+    const sampleRow = market.courses.find((course) => course.courseTitle === "社会学导论");
+    assert.equal(sampleRow.sessionCount, 60, "样例节数由结构现算(5 单元 × 12 节)");
 
     const strangerMarket = await (await fetch(`${baseUrl}/api/hyperknow/marketplace/courses`, { headers: authHeaders("旁人", `hk-course-stranger-${runId}@example.com`) })).json();
     assert.equal(strangerMarket.courses.length, 2, "他人看不到我的课程,样例照旧");
@@ -327,6 +332,16 @@ export function register() {
     const stranger = await fetch(`${baseUrl}/api/hyperknow/courses/${ready.course_uuid}`, { headers: authHeaders("旁人", `hk-course-stranger-${runId}@example.com`) });
     assert.equal(stranger.status, 404, "课程详情越权 404");
     await stranger.body?.cancel();
+
+    // 官方示例课详情按 marketplaceId 兜底:全员可见,不再是 404 死链。
+    const sample = await fetch(`${baseUrl}/api/hyperknow/courses/${sampleRow.marketplaceId}`, { headers: authHeaders("旁人", `hk-course-stranger-${runId}@example.com`) });
+    assert.equal(sample.status, 200, "示例课详情全员可见");
+    const sampleData = (await sample.json()).data;
+    assert.equal(sampleData.courseTitle, "社会学导论");
+    assert.equal(sampleData.units.length, 5, "示例课为完整课程树");
+    const sampleLectureTitles = sampleData.units[0].lectures.map((l) => l.title);
+    assert.ok(sampleLectureTitles.some((t) => t.startsWith("项目")), "示例课单元含项目");
+    assert.ok(sampleLectureTitles.some((t) => t.startsWith("测验")), "示例课单元含测验");
   });
 
   test("hyperknow translate: SSE 逐帧、提示词契约、不落库、余额不足 402", async () => {
