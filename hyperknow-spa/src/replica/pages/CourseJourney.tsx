@@ -465,7 +465,9 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                   {done ? <PenLine size={11} /> : <Play size={10} fill="currentColor" />}
                 </span>
                 <span className="cj-strip-text">
-                  {done ? 'Next: Unit 1 • Speaker, Message…' : "It's the new course, please start…"}
+                  {done
+                    ? L('Next: Unit 1 • Speaker, Message…', '接下来：第 1 单元 · 演讲者、信息…')
+                    : L("It's the new course, please start…", '这是新课程，请开始…')}
                 </span>
                 <ChevronRight size={14} />
               </button>
@@ -669,7 +671,11 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
               <div className="cj-lc-kicker">{t('practiceReminder.eyebrow')}</div>
               <div className="cj-lc-title">{t('practiceReminder.title')}</div>
               <p className="cj-lc-text">
-                <TRich text={t('practiceReminder.description', { target: 'Unit 1 • Speaker, Message, and Audience' })} />
+                <TRich
+                  text={t('practiceReminder.description', {
+                    target: L('Unit 1 • Speaker, Message, and Audience', '第 1 单元 · 演讲者、信息与听众'),
+                  })}
+                />
               </p>
               <div className="cj-lc-btns">
                 <button

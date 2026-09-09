@@ -275,12 +275,24 @@ You design university-grade, scaffolding-driven interactive course structures.
 For any given subject query, you structure a comprehensive curriculum into a 3-tier hierarchy:
 Unit -> Lecture -> Session.
 
+Language rule (highest priority): write EVERY title, description, tag, unit/lecture/session
+name in the SAME language as the subject query. A Chinese query means Simplified Chinese
+output everywhere; an English query means English output. Never mix languages except for
+untranslatable proper nouns.
+
 Cognitive Depth Tags for each session:
 - "intuition": Conceptual intuition, real-world analogies.
 - "definition": Rigorous definitions and fundamental theorems.
 - "derivation": Mathematical derivations and logical proofs.
 - "application": Practical code, lab projects, and case studies.
 - "advanced": Optimization, edge cases, and modern research.
+
+Structural requirements:
+- 3 to 5 units, each with 3 to 5 lectures, each lecture with 2 to 4 sessions.
+- Every unit MUST contain at least one hands-on project lecture (title prefixed
+  "Project: " in English or "项目：" in Chinese) and exactly one closing exam/quiz
+  lecture (title prefixed "Exam: " in English or "测验：" in Chinese).
+- sessionTime is minutes (10-45). Every session carries 1-2 depth tags.
 
 Output strictly as a valid JSON object conforming to:
 {
@@ -335,30 +347,90 @@ export type CourseStructure = {
   }>;
 };
 
-// 课程结构的确定性 fallback(原 courseArchitect.generateCourse catch 分支逐字一致)。
+// 课程结构的确定性 fallback(大纲 LLM 失败时兜底)。跟随查询语言输出中文/英文,
+// 结构完整:3 单元,含项目与测验讲次(前端按标题前缀推导 kind 渲染图标)。
 export function fallbackCourseStructure(query: string): CourseStructure {
+  const zh = /[一-鿿]/.test(query);
+  const T = (en: string, zhText: string) => (zh ? zhText : en);
+  let si = 0;
+  const session = (enTitle: string, zhTitle: string, sessionTime: number, depthTags: string[]) => {
+    si += 1;
+    return { sessionId: `sess-f-${si}`, sessionIndex: si, title: T(enTitle, zhTitle), sessionTime, depthTags };
+  };
   return {
     courseTitle: query,
-    courseDescription: `A comprehensive exploration of ${query}.`,
-    targetLearner: "Curious learners and students seeking deep mastery.",
-    tags: [query, "Foundations", "Interactive"],
+    courseDescription: T(
+      `A comprehensive exploration of ${query}.`,
+      `一次关于${query}的系统探索。`,
+    ),
+    targetLearner: T(
+      "Curious learners and students seeking deep mastery.",
+      "希望系统掌握该主题的学习者。",
+    ),
+    tags: [query, T("Foundations", "基础"), T("Interactive", "互动")],
     units: [
       {
         unitId: "unit-1",
-        title: "Foundations and Intuition",
+        title: T("Foundations and Intuition", "基础与直觉"),
         lectures: [
           {
             lectureId: "lec-1-1",
-            title: "Core Mechanics",
+            title: T("Core Mechanics", "核心机制"),
             sessions: [
-              {
-                sessionId: "sess-1-1-1",
-                sessionIndex: 1,
-                title: `Introduction to ${query}`,
-                sessionTime: 40,
-                depthTags: ["intuition", "definition"],
-              },
+              session(`Introduction to ${query}`, `${query} 导论`, 40, ["intuition", "definition"]),
+              session(T("Mental Models", "思维模型"), T("Mental Models", "思维模型"), 30, ["intuition"]),
             ],
+          },
+          {
+            lectureId: "lec-1-2",
+            title: T("Project: First Hands-On", "项目：第一次动手"),
+            sessions: [
+              session(T("Project Brief", "项目说明"), T("Project Brief", "项目说明"), 15, ["application"]),
+              session(T("Build and Submit", "动手实现与提交"), T("Build and Submit", "动手实现与提交"), 30, ["application"]),
+            ],
+          },
+          {
+            lectureId: "lec-1-3",
+            title: T("Exam: Unit 1 Check", "测验：第 1 单元测验"),
+            sessions: [session(T("Timed Quiz", "限时测验"), T("Timed Quiz", "限时测验"), 20, ["definition", "application"])],
+          },
+        ],
+      },
+      {
+        unitId: "unit-2",
+        title: T("Methods in Practice", "方法与实践"),
+        lectures: [
+          {
+            lectureId: "lec-2-1",
+            title: T("Worked Examples", "典型示例拆解"),
+            sessions: [
+              session(T("Step-by-Step Walkthrough", "逐步拆解"), T("Step-by-Step Walkthrough", "逐步拆解"), 35, ["derivation"]),
+              session(T("Common Traps", "常见陷阱"), T("Common Traps", "常见陷阱"), 20, ["advanced"]),
+            ],
+          },
+          {
+            lectureId: "lec-2-2",
+            title: T("Exam: Unit 2 Check", "测验：第 2 单元测验"),
+            sessions: [session(T("Timed Quiz", "限时测验"), T("Timed Quiz", "限时测验"), 20, ["definition", "application"])],
+          },
+        ],
+      },
+      {
+        unitId: "unit-3",
+        title: T("Mastery and Outlook", "融会贯通与展望"),
+        lectures: [
+          {
+            lectureId: "lec-3-1",
+            title: T("Capstone Review", "综合复盘"),
+            sessions: [
+              session(T("Tying It All Together", "融会贯通"), T("Tying It All Together", "融会贯通"), 30, ["intuition", "advanced"]),
+              session(T("Where to Go Next", "下一步怎么走"), T("Where to Go Next", "下一步怎么走"), 15, ["advanced"]),
+            ],
+          },
+          {
+            lectureId: "lec-3-2",
+            title: T("Exam: Final Check", "测验：结课综合测验"),
+            sessions: [session(T("Final Timed Quiz", "结课限时测验"), T("Final Timed Quiz", "结课限时测验"), 30, ["definition", "application"])],
           },
         ],
       },

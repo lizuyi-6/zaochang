@@ -9,8 +9,8 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/hello-system-freeze.test.mjs tests/worker-contracts.test.mjs tests/modularization-contracts.test.mjs tests/migration-gate.test.mjs tests/hyperknow-core.test.mjs tests/lattice-gate.test.mjs tests/lattice-backend.test.mjs tests/hyperknow-diagram.test.mjs tests/lattice-brand.test.mjs",
-    "test:lattice": "node --experimental-strip-types --test tests/hyperknow-core.test.mjs tests/lattice-gate.test.mjs tests/lattice-backend.test.mjs tests/hyperknow-diagram.test.mjs tests/lattice-brand.test.mjs",
+    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/hello-system-freeze.test.mjs tests/worker-contracts.test.mjs tests/modularization-contracts.test.mjs tests/migration-gate.test.mjs tests/hyperknow-core.test.mjs tests/lattice-gate.test.mjs tests/lattice-backend.test.mjs tests/hyperknow-diagram.test.mjs tests/lattice-brand.test.mjs tests/lattice-course.test.mjs",
+    "test:lattice": "node --experimental-strip-types --test tests/hyperknow-core.test.mjs tests/lattice-gate.test.mjs tests/lattice-backend.test.mjs tests/hyperknow-diagram.test.mjs tests/lattice-brand.test.mjs tests/lattice-course.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
