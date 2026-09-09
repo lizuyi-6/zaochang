@@ -62,7 +62,9 @@ export const IntroOverlay: React.FC<{
   /** 伪生成课程时由调用方注入话题化标题/正文 */
   title?: string;
   body?: string;
-}> = ({ onStart, onClose, title, body }) => {
+  /** 直播放讲座计划生成中:CTA 变"准备板书"等待态(不可开讲) */
+  preparing?: boolean;
+}> = ({ onStart, onClose, title, body, preparing }) => {
   const intro = { ...getIntroCopy(), ...(title ? { title } : {}), ...(body ? { body } : {}) };
   return (
     <div className="wb-intro">
@@ -77,8 +79,15 @@ export const IntroOverlay: React.FC<{
           <div className="wb-intro-eyebrow">{intro.eyebrow}</div>
           <h2 className="wb-intro-title">{intro.title}</h2>
           <p className="wb-intro-text">{intro.body}</p>
-          <button className="wb-intro-cta" onClick={onStart}>
-            {intro.cta}
+          <button className="wb-intro-cta" onClick={onStart} disabled={preparing}>
+            {preparing ? (
+              <>
+                <Loader2 size={15} className="wb-spin" />
+                {L('Preparing this lecture…', '正在准备本讲板书…')}
+              </>
+            ) : (
+              intro.cta
+            )}
           </button>
         </div>
       </div>

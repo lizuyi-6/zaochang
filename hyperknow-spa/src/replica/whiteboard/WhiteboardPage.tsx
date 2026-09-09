@@ -19,22 +19,25 @@ import {
   type SessionSettingsValue,
 } from './Popups';
 import {
-  BOARD_ANNOTS,
-  PAN_X,
   getBoardItems,
   getBoardTable,
   getLessonSteps,
   getUserAnswers,
+  setLearnerName,
+  PAN_X,
+  BOARD_ANNOTS as DEMO_ANNOTS,
   type LessonStep,
   type PanelEntry,
   type PopupKind,
   type Rich,
 } from './lessonScript';
+import { liveLessonFromPlan, type LessonScript } from './liveLesson';
+import { interjectLive, planLectureLive } from '../backend';
 import { L } from '../i18n/content';
 import { exportBoard, type ExportFormat, type ExportPage } from '../boardExport';
 import { uploadFile } from '../materials';
 import { toast } from '../toast';
-import { tts, type SpeakHandle } from '../actions';
+import { listenOnce, tts, type SpeakHandle } from '../actions';
 import './whiteboard.css';
 
 type Stage = 'intro' | 'talk' | 'play';
@@ -50,10 +53,7 @@ const narrateMs = (text: string, speed = 1) => {
 const BOARD_CPS = 24; // handwriting chars/sec
 
 const userBubble = (id: string, text: string): PanelEntry => ({ id, kind: 'user', text: [{ t: text }] });
-
-/* canned "voice transcription" utterances (refs 50/51: user spoke gibberish during the step-15 answer) */
-const VOICE_LINE_1 = '我会我会我会我会我会我会我会，第一点第一点我会，第一点第一点我会，我会';
-const VOICE_LINE_2 = '图画的是我的擦板，上面的上面的那个擦过以后就是我的。마지막 카드 왔습니다. 카드에서 왔어요. 그게你也要睡觉了。睡觉吧。晚安，明天见。';
+const tutorBubble = (id: string, text: string): PanelEntry => ({ id, kind: 'msg', text: [{ t: text }] });
 
 function hashParams(): { ff: number | null; auto: boolean; hold: boolean; idle: boolean } {
   const m = window.location.hash.match(/[?&]ff=(\d+)/);
@@ -66,29 +66,80 @@ function hashParams(): { ff: number | null; auto: boolean; hold: boolean; idle: 
 }
 
 export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
-  /* 伪生成课程:壳层(课节 chip/介绍页)话题化;板书正文保持预生成的演示课 */
+  /* 伪生成课程:壳层(课节 chip/介绍页)话题化;演示脚本作直播放的后备 */
   const GEN = state.generated;
-  const genLectureTitle = GEN ? GEN.units[0].lectures[0].title : undefined;
+  const genLectureTitle = GEN ? GEN.units[0].lectures[0]?.title : undefined;
   const genIntroBody = GEN
     ? L(
         `This session opens ${GEN.topic} the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today.`,
         `本节课用 Hyperknow 的标准方式开启「${GEN.topic}」：看板书逐步成形，回答一次快速检查，带着一个马上能用的想法离开。`,
       )
     : undefined;
-  /* lesson content for the current language (fresh on every mount) */
-  const LESSON_STEPS = getLessonSteps();
-  const BOARD_ITEMS = getBoardItems();
-  const BOARD_TABLE = getBoardTable();
-  const USER_ANSWERS = getUserAnswers();
-  const CHOICE_STEP = LESSON_STEPS.find((s) => s.awaitChoice)!;
+
+  /* 演示脚本(参考录课逐字复刻,语言随挂载时点);直播课成功后整体替换。
+   * 旁白称呼先绑定登录用户名(邮箱取 @ 前缀)再构建脚本;匿名/离线保底
+   * 录课原版 "Ryan"。名字只在开场/过渡/收尾几处,重建也只发生在开场前。 */
+  const learnerName = (() => {
+    const raw = state.identity?.username ?? '';
+    return (raw.includes('@') ? raw.slice(0, raw.indexOf('@')) : raw).trim();
+  })();
+  const DEMO_SCRIPT = useMemo<LessonScript>(
+    () => {
+      setLearnerName(learnerName);
+      return {
+        steps: getLessonSteps(),
+        items: getBoardItems(),
+        table: getBoardTable(),
+        annots: DEMO_ANNOTS,
+        userAnswers: getUserAnswers(),
+        pageSplitX: 1132, // 第二页列起点(D 列),与 boardExport 的 PAGE_SPLIT 同义
+      };
+    },
+    [learnerName],
+  );
+
+  /* 直播放:生成课(伪生成/后端课)进白板 → 按课节话题真拉讲座计划;失败静默
+   * 回退演示课(与其余端点同一双轨纪律)。演示公开演讲课不走直播,保住像素复刻。 */
+  const liveTopic = GEN ? (genLectureTitle ?? GEN.topic) : null;
+  const [liveScript, setLiveScript] = useState<LessonScript | null>(null);
+  const [planPending, setPlanPending] = useState(liveTopic !== null);
+  useEffect(() => {
+    if (!liveTopic) return;
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 65_000); // 服务端 60s 超时 + 余量
+    let alive = true;
+    void planLectureLive(liveTopic, ctrl.signal)
+      .then((plan) => {
+        if (!alive) return;
+        setPlanPending(false);
+        if (plan) setLiveScript(liveLessonFromPlan(plan));
+      })
+      .catch(() => {
+        if (alive) setPlanPending(false);
+      });
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+      ctrl.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTopic]);
+
+  const lesson = liveScript ?? DEMO_SCRIPT;
+  const LESSON_STEPS = lesson.steps;
+  const BOARD_ITEMS = lesson.items;
+  const BOARD_TABLE = lesson.table;
+  const BOARD_ANNOTS = lesson.annots;
+  const USER_ANSWERS = lesson.userAnswers;
+  const CHOICE_STEP = LESSON_STEPS.find((s) => s.awaitChoice) ?? null;
 
   const [{ ff: ffParam, auto, hold, idle: idleParam }] = useState(hashParams);
-  /* 课程页"练习"进入 → 直接跳到随堂练习(quick check)那一步;否则从头讲 */
-  const ff = state.whiteboardMode === 'practice' ? CHOICE_STEP.id : ffParam;
-  const [stage, setStage] = useState<Stage>(ff !== null ? 'play' : 'intro');
+  /* 课程页"练习"进入 → 直跳随堂练习(quick check)那一步;直播计划未决时启动瞬再求值 */
+  const practiceEntry = state.whiteboardMode === 'practice';
+  const [stage, setStage] = useState<Stage>(practiceEntry || ffParam !== null ? 'play' : 'intro');
 
   // ----- engine-visible state -----
-  const [step, setStep] = useState(ff ?? 1);
+  const [step, setStep] = useState(1);
   const [entries, setEntries] = useState<PanelEntry[]>([]);
   const [caption, setCaption] = useState<Rich | null>(null);
   const [capShown, setCapShown] = useState(0);
@@ -103,6 +154,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const [systemEnd, setSystemEnd] = useState(false);
   const [popup, setPopup] = useState<PopupKind | null>(null);
   const [quickCheck, setQuickCheck] = useState<{ selected: number | null } | null>(null);
+  /* 举手插话进行中(导师取答案;面板/药丸展示"聆听中") */
+  const [asking, setAsking] = useState(false);
 
   // ----- chrome / ui state -----
   const [panelOpen, setPanelOpen] = useState(true);
@@ -126,6 +179,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const started = useRef(false);
   const voiceTimer = useRef<number | null>(null);
   const voiceTimers = useRef<number[]>([]);
+  /* 当前步(插话按它取服务端 step_id 上下文)与插话互斥标记 */
+  const stepRef = useRef(1);
+  stepRef.current = step;
+  const askingRef = useRef(false);
   // 授课语音:step runner 是稳定回调,经 ref 读最新音色/语速/静音。
   const narrationRef = useRef({ voice: settings.voice, speed: settings.speed, muted });
   narrationRef.current = { voice: settings.voice, speed: settings.speed, muted };
@@ -174,7 +231,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     }
     for (const it of BOARD_ITEMS) if (it.step < upto) prog[it.id] = itemCharCount(it);
     for (const an of BOARD_ANNOTS) if (an.step < upto) done.add(an.id);
-    if (BOARD_TABLE.step < upto) rows = 4;
+    if (BOARD_TABLE && BOARD_TABLE.step < upto) rows = 4;
     setEntries(es);
     setProgress(prog);
     setAnnotsDone(done);
@@ -276,7 +333,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
       const items = BOARD_ITEMS.filter((b) => b.step === s.id);
       const capTask: Promise<SpeakHandle | null> = s.caption ? typeCaption(s.caption) : Promise.resolve(null);
-      if (BOARD_TABLE.step === s.id) await revealTable();
+      if (BOARD_TABLE?.step === s.id) await revealTable();
       for (const it of items) await writeItem(it.id);
       for (const an of BOARD_ANNOTS.filter((a) => a.step === s.id)) await drawAnnot(an.id);
       const narration = await capTask;
@@ -365,8 +422,13 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   /* ---------------- engine boot ---------------- */
   useEffect(() => {
-    if (stage !== 'play' || started.current) return;
+    /* 直播放计划未决(生成中)不开讲——练习直入也要等课程内容定稿再 ff;
+     * 演示课再等启动身份结算(bootReady),确保旁白称呼绑定本次登录名
+     * 而不是保底名;纯静态托管下 boot 同样会结算(只是 identity 为 null)。 */
+    if (stage !== 'play' || started.current || planPending) return;
+    if (liveTopic === null && !state.bootReady) return;
     started.current = true;
+    const ff = practiceEntry ? (CHOICE_STEP?.id ?? ffParam ?? 1) : ffParam;
     const startFrom = ff ?? 1;
     if (ff !== null) applyFastForward(ff);
     (async () => {
@@ -383,7 +445,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage]);
+  }, [stage, planPending, state.bootReady, liveTopic]);
 
   /* cancel on unmount */
   useEffect(
@@ -399,9 +461,73 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const finished = systemEnd;
 
+  /* 举手插话:自由提问(非答题步)暂停主线,导师答案回流对话面板,答疑后 5s
+   * 恢复主线——原 WS interject 语义。直播课调真实端点;演示课/端点不可用给
+   * 本地可见反馈,绝不静默落空。 */
+  const askTutor = useCallback(
+    async (question: string) => {
+      const sessionId = liveScript?.sessionId;
+      if (!sessionId) {
+        setEntries((prev) => [
+          ...prev,
+          {
+            id: `sys-${Date.now()}`,
+            kind: 'system',
+            text: [
+              {
+                t: L(
+                  'Live Q&A needs an online lecture — this is the scripted demo lesson.',
+                  '实时答疑需要在线讲座——当前是演示课，答疑不可用。',
+                ),
+              },
+            ],
+          },
+        ]);
+        return;
+      }
+      askingRef.current = true;
+      setAsking(true);
+      ctl.current.paused = true; // 主线暂停(声画同步,与暂停键同语义)
+      tts.pauseAudio();
+      const sid = LESSON_STEPS.find((s) => s.id === stepRef.current)?.sid ?? '';
+      const ans = await interjectLive(sessionId, sid, question);
+      if (ctl.current.cancelled) return;
+      askingRef.current = false;
+      setAsking(false);
+      const answerText =
+        ans?.answerText ?? L('(The tutor could not be reached — the lecture continues.)', '(暂时联系不上导师——课程继续。)');
+      setEntries((prev) => [...prev, tutorBubble(`a-${Date.now()}`, answerText)]);
+      const resume = ans?.resumeTransition ?? '';
+      if (resume) {
+        window.setTimeout(() => {
+          if (!ctl.current.cancelled) setEntries((prev) => [...prev, tutorBubble(`r-${Date.now()}`, resume)]);
+        }, 1200);
+      }
+      /* 答疑朗读(TTS 单例:插话会打断当前旁白,字幕随之补全);尊重静音 */
+      const { voice: vk, speed, muted: silent } = narrationRef.current;
+      const spoken = ans && !silent ? tts.speakTrack(answerText, vk, speed) : null;
+      try {
+        /* 原版节奏:答疑后 5s 恢复主线;连不上导师缩短等待 */
+        await wait(ans ? 5000 : 1500);
+        if (spoken) await Promise.race([spoken.ended, wait(8000)]);
+      } catch {
+        return; // unmount cancelled
+      }
+      if (!ctl.current.cancelled) {
+        ctl.current.paused = false;
+        tts.resumeAudio();
+      }
+    },
+    [LESSON_STEPS, liveScript, wait],
+  );
+
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text) return;
+    if (askingRef.current) {
+      toast(L('The tutor is still answering your last question', '导师还在回答上一个问题'));
+      return;
+    }
     setInput('');
     if (answerResolver.current) {
       const res = answerResolver.current;
@@ -409,47 +535,39 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       res(text); // runner appends the user bubble
     } else {
       setEntries((prev) => [...prev, userBubble(`free-${Date.now()}`, text)]);
+      void askTutor(text);
     }
-  }, [input]);
+  }, [input, askTutor]);
 
+  /* 语音提问/作答:Web Speech API 一次性真转写(替代旧版 canned 台词)。
+   * 等答案时转写即答案;自由时段转写即举手插话。 */
   const handleMic = useCallback(() => {
-    setVoice((v) => {
-      if (v === 'off') {
-        if (voiceTimer.current) window.clearTimeout(voiceTimer.current);
-        voiceTimers.current.forEach((t) => window.clearTimeout(t));
-        voiceTimers.current = [];
-        voiceTimer.current = window.setTimeout(() => {
-          setVoice('listening');
-          // answering by voice: the tutor transcribes the utterance into user bubbles,
-          // then the lesson advances as if the answer had been typed (refs 50/51)
-          if (answerResolver.current) {
-            voiceTimers.current = [
-              window.setTimeout(() => setEntries((p) => [...p, userBubble('v1', VOICE_LINE_1)]), 900),
-              window.setTimeout(() => setEntries((p) => [...p, userBubble('v2', VOICE_LINE_2)]), 1700),
-              window.setTimeout(() => {
-                const res = answerResolver.current;
-                if (res) {
-                  answerResolver.current = null;
-                  res(''); // bubbles already appended above
-                }
-              }, 1800),
-            ];
-            // transcription keeps refining after the reply starts ("...明天见。" → "...明天见。叔儿");
-            // intentionally NOT cancelled by Stop listening (ref 51 shows the refinement landed)
-            window.setTimeout(
-              () => setEntries((p) => p.map((e) => (e.id === 'v2' ? { ...e, text: [{ t: VOICE_LINE_2 + '叔儿' }] } : e))),
-              2800,
-            );
-          }
-        }, 700);
-        return 'preparing';
-      }
+    if (voice !== 'off') {
+      /* 二次点击复位监听指示(识别本身一次性,自然结束) */
       if (voiceTimer.current) window.clearTimeout(voiceTimer.current);
       voiceTimers.current.forEach((t) => window.clearTimeout(t));
       voiceTimers.current = [];
-      return 'off';
-    });
-  }, []);
+      setVoice('off');
+      return;
+    }
+    const startedListening = listenOnce(
+      (text) => {
+        setEntries((prev) => [...prev, userBubble(`v-${Date.now()}`, text)]);
+        const res = answerResolver.current;
+        if (res) {
+          answerResolver.current = null;
+          res(''); // 气泡已按转写落上面,课程继续
+        } else {
+          void askTutor(text);
+        }
+      },
+      () => setVoice('off'),
+    );
+    if (!startedListening) return;
+    if (voiceTimer.current) window.clearTimeout(voiceTimer.current);
+    voiceTimer.current = window.setTimeout(() => setVoice('listening'), 700);
+    setVoice('preparing');
+  }, [voice, askTutor]);
 
   const handleTogglePause = useCallback(() => {
     ctl.current.paused = !ctl.current.paused;
@@ -474,7 +592,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     ]);
   }, []);
 
-  /* 板书导出:当前页 = 左/右半页(按是否已翻页),全部 = 整块板书 */
+  /* 板书导出:当前页 = 左/右半页(按是否已翻页),全部 = 整块板书;直播课传数据源覆盖 */
   const handleExport = useCallback(
     (format: ExportFormat, page: ExportPage) => {
       void exportBoard(format, page, {
@@ -483,9 +601,13 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         dots: settings.dots,
         tableRows,
         panX,
+        items: BOARD_ITEMS,
+        table: BOARD_TABLE,
+        annots: BOARD_ANNOTS,
+        pageSplitX: lesson.pageSplitX,
       });
     },
-    [step, settings.font, settings.dots, tableRows, panX],
+    [step, settings.font, settings.dots, tableRows, panX, BOARD_ITEMS, BOARD_TABLE, BOARD_ANNOTS, lesson.pageSplitX],
   );
 
   const handleExit = useCallback(() => {
@@ -513,12 +635,15 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           tableRows={tableRows}
           annotsDone={annotsDone}
           annotActive={annotActive}
+          items={BOARD_ITEMS}
+          table={BOARD_TABLE}
+          annots={BOARD_ANNOTS}
         />
         <CaptionBar caption={caption} shown={capShown} typing={typing} centerX={centerX} raised={choiceVisible} />
-        {quickCheck && (
+        {quickCheck && CHOICE_STEP?.awaitChoice && (
           <QuickCheck
-            question={CHOICE_STEP.awaitChoice!.question}
-            options={CHOICE_STEP.awaitChoice!.options}
+            question={CHOICE_STEP.awaitChoice.question}
+            options={CHOICE_STEP.awaitChoice.options}
             selected={quickCheck.selected}
             onSelect={(i) => {
               if (quickCheck.selected === null && choiceResolver.current) {
@@ -530,10 +655,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
             centerX={centerX}
           />
         )}
-        {voice === 'listening' && <ListenPill centerX={centerX} />}
+        {(voice === 'listening' || asking) && <ListenPill centerX={centerX} />}
       </>
     ),
-    [step, progress, writingId, panX, zoom, settings.font, settings.dots, tableRows, annotsDone, annotActive, caption, capShown, typing, centerX, choiceVisible, quickCheck, voice],
+    [step, progress, writingId, panX, zoom, settings.font, settings.dots, tableRows, annotsDone, annotActive, caption, capShown, typing, centerX, choiceVisible, quickCheck, voice, asking, BOARD_ITEMS, BOARD_TABLE, BOARD_ANNOTS, CHOICE_STEP],
   );
 
   return (
@@ -573,7 +698,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         zoom={zoom}
         onZoom={setZoom}
         page={panX > 0 ? 2 : 1}
-        pageCount={2}
+        pageCount={lesson.pageSplitX ? 2 : 1}
         onPage={(p) => setPanX(p <= 1 ? 0 : PAN_X)}
         onExport={handleExport}
         paused={paused}
@@ -655,6 +780,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           onClose={() => set({ screen: 'courseJourney' })}
           title={genLectureTitle}
           body={genIntroBody}
+          preparing={planPending}
         />
       )}
       {stage === 'talk' && <TalkModeOverlay onStart={() => setStage('play')} />}

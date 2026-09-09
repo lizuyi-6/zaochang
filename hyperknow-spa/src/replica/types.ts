@@ -1,6 +1,6 @@
 import React from 'react';
 import type { GeneratedCourse } from './generate';
-import type { ConvRow, MeInfo } from './backend';
+import type { ConvRow, MarketCourse, MeInfo } from './backend';
 
 /** Top-level screens of the Hyperknow 1:1 replica. */
 export type Screen =
@@ -46,10 +46,16 @@ export interface AppState {
   chatNote: string;
   /** 造场账户身份(启动时 get_user_info 拉取;null = 拉取失败/纯静态演示) */
   identity: MeInfo | null;
+  /** true = 启动身份拉取已结算(无论成败);演示课开播前等它,旁白称呼绑定本次登录名 */
+  bootReady: boolean;
   /** 订阅档位(展示态;backend 目前统一 FREE,兑换码/付款尚未接通) */
   plan: 'FREE' | 'PRO' | 'MAX';
   /** 当前成员历史会话(null = 拉取失败,回退复刻演示列表;[] = 真实为空) */
   conversations: ConvRow[] | null;
+  /** 课程市场(D1 本人课程 + 官方样例;null = 未拉到/不可用,集市与我的课程回退演示卡) */
+  marketCourses: MarketCourse[] | null;
+  /** true = 列表已过期(新生成了一门课),进集市/我的课程页时重拉 */
+  marketStale: boolean;
   /** 从历史打开的会话 ID(空 = 新对话) */
   activeConversationId: string | null;
   /** 朗读音色与语速(TTS);聊天/首页的语音与速度菜单共用 */
@@ -98,8 +104,11 @@ export const initialAppState: AppState = {
   generated: null,
   chatNote: '',
   identity: null,
+  bootReady: false,
   plan: 'FREE',
   conversations: null,
+  marketCourses: null,
+  marketStale: false,
   activeConversationId: null,
   voice: 'warm',
   speed: 1,

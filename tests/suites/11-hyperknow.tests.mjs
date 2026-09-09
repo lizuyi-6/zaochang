@@ -15,9 +15,11 @@ import {
   ttsUpstreamCount,
   resetAiUpstream,
   setAiUpstreamForceFail,
+  setAiUpstreamJsonResponse,
   authHeaders,
   executeD1Sql,
   queryLocalD1,
+  searchRequests,
 } from "../harness/preview.mjs";
 
 // Hyperknow SSE 帧(`event: frame\ndata: {...}\n\n`)→ 按序解析出原始事件对象
@@ -217,7 +219,53 @@ export function register() {
     await missing.body?.cancel();
   });
 
+  test("hyperknow whiteboard: 直播放计划(card/diagram/quick_check)逐字段透传 + prompt 契约", async () => {
+    const email = `hk-board-live-${runId}@example.com`;
+    const mermaid = "graph TD\n  D[Dendrite] --> S[Soma]\n  S --> A[Axon]";
+    setAiUpstreamJsonResponse({
+      steps: [
+        {
+          step_id: "step_1",
+          spoken_text: "A neuron passes signals in one direction.",
+          board_action: { type: "card", title: "Neuron", content: "<p><strong>Dendrite</strong> receives input.</p>" },
+        },
+        { step_id: "step_2", spoken_text: "The signal flows like this.", board_action: { type: "diagram", code: mermaid } },
+        {
+          step_id: "step_3",
+          spoken_text: "Let's check your understanding.",
+          board_action: { type: "quick_check", question: "Which carries the signal out?", options: ["Axon", "Soma"], answer: 0 },
+        },
+      ],
+    });
+    try {
+      const res = await fetch(`${baseUrl}/api/hyperknow/whiteboard/plan`, {
+        method: "POST",
+        headers: authHeaders("直播用户", email),
+        body: JSON.stringify({ topic: "Neuron Signaling" }),
+      });
+      assert.equal(res.status, 200);
+      const plan = await res.json();
+      assert.equal(plan.steps.length, 3, "上游合法 JSON → 原样透传,不落 fallback");
+      assert.equal(plan.steps[0].board_action.type, "card");
+      assert.equal(plan.steps[0].board_action.title, "Neuron");
+      // mermaid 源码换行必须原样存活(前端手绘渲染器按行解析)
+      assert.equal(plan.steps[1].board_action.code, mermaid);
+      const check = plan.steps[2].board_action;
+      assert.equal(check.type, "quick_check");
+      assert.deepEqual(check.options, ["Axon", "Soma"]);
+      assert.equal(check.answer, 0);
+      assert.equal(check.question, "Which carries the signal out?");
+      // prompt 契约:插图(diagram)与收尾快测(quick_check)必须写进系统提示词
+      assert.match(lastChatCompletion.system, /quick_check/, "prompt 必须约定收尾 quick_check");
+      assert.match(lastChatCompletion.system, /diagram/, "prompt 必须约定 diagram 板书动作");
+      assert.match(lastChatCompletion.user, /Neuron Signaling/, "话题必须送达上游");
+    } finally {
+      resetAiUpstream();
+    }
+  });
+
   test("hyperknow course-generation: 事件序列与原 WS 一致,市场与详情按归属隔离", async () => {
+    resetAiUpstream();
     const email = `hk-course-${runId}@example.com`;
     const query = "Quantum Computing Foundations";
     const response = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
@@ -237,6 +285,27 @@ export function register() {
     );
     const progress = frames.find((f) => f.type === "course_generation_progress");
     assert.match(progress.message, /round 1\/3/);
+
+    // 联网研学是真搜索:3 条派生查询逐轮打到假 Tavily(错 key 会 401 → sources=0,
+    // 断言即失败,可证鉴权接线);轮次帧/来源计数真实;研学命中注入大纲提示词。
+    assert.equal(searchRequests.length, 3, "3 条派生查询逐轮真搜");
+    assert.deepEqual(
+      searchRequests.map((request) => request.query),
+      [
+        "Quantum Computing Foundations curriculum",
+        "Quantum Computing Foundations core foundations",
+        "Quantum Computing Foundations beginner guide",
+      ],
+      "派生查询与原版假帧关键词一致",
+    );
+    const researchRounds = frames.filter((f) => f.type === "course_generation_progress");
+    assert.deepEqual(researchRounds.map((frame) => frame.data.round), [1, 2, 3], "轮次帧按真实轮数发");
+    assert.ok((researchRounds.at(-1).data.sources ?? 0) >= 3, "轮次帧携带累计来源数");
+    const researchDone = frames.find(
+      (frame) => frame.type === "course_generation_step" && frame.step_id === "researching_the_web" && frame.status === "completed",
+    );
+    assert.equal(researchDone.data.sources, 3, "完成帧报告真实来源数");
+    assert.match(lastChatCompletion.user, /research\.test\//, "研学命中必须注入大纲提示词");
 
     const ready = frames.find((f) => f.type === "course_structure_ready");
     assert.ok(ready, "必须以 course_structure_ready 收尾");

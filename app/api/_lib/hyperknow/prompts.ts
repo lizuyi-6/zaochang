@@ -129,6 +129,11 @@ For each lesson step, you provide:
    - type: "formula" (LaTeX math expression; put the bare LaTeX in "content" WITHOUT $ or $$ delimiters, keep it on one line)
    - type: "diagram" (Mermaid flowchart code in "content"; every node label MUST stay on a single line — use <br> instead of line breaks inside [ ] or { })
 
+Add a diagram whenever the explanation benefits from an illustration — workflows, pipelines, relationships, taxonomies, cycles, or step-by-step processes. A lecture with no diagram at all is a failed lecture.
+
+The FINAL step must always be a quick check:
+   - type: "quick_check" with "question", "options" (array of 2-4 strings), "answer" (0-based index of the correct option)
+
 Output your response strictly as JSON:
 {
   "steps": [
@@ -139,6 +144,16 @@ Output your response strictly as JSON:
         "type": "card",
         "title": "Title",
         "content": "HTML/Markdown content"
+      }
+    },
+    {
+      "step_id": "step_N",
+      "spoken_text": "Let's check your understanding.",
+      "board_action": {
+        "type": "quick_check",
+        "question": "Question text",
+        "options": ["Option A", "Option B"],
+        "answer": 0
       }
     }
   ]
@@ -156,18 +171,20 @@ Respond strictly in JSON:
 export type BoardAction =
   | { type: "card"; title?: string; content?: string }
   | { type: "formula"; latex?: string }
-  | { type: "diagram"; code?: string };
+  | { type: "diagram"; code?: string }
+  | { type: "quick_check"; question?: string; options?: string[]; answer?: number };
 
 export type LectureStep = { step_id: string; spoken_text: string; board_action: BoardAction };
 export type LecturePlan = { steps: LectureStep[] };
 
 // 讲座计划的确定性 fallback(原 whiteboardAgent.planLecture catch 分支逐字一致)。
-export function fallbackLecturePlan(topic: string): LecturePlan {
+export function fallbackLecturePlan(topic: string, learnerName = ""): LecturePlan {
+  const greet = learnerName ? `Welcome, ${learnerName}!` : "Welcome!";
   return {
     steps: [
       {
         step_id: "step_1",
-        spoken_text: `Welcome! Today we are exploring ${topic}. Let's first establish the core intuition.`,
+        spoken_text: `${greet} Today we are exploring ${topic}. Let's first establish the core intuition.`,
         board_action: {
           type: "card",
           title: topic,
@@ -220,13 +237,13 @@ function extractJsonPayload(jsonStr: string): string {
   return out;
 }
 
-export function parseLecturePlan(jsonStr: string, topic: string): LecturePlan {
+export function parseLecturePlan(jsonStr: string, topic: string, learnerName = ""): LecturePlan {
   try {
     const parsed = JSON.parse(extractJsonPayload(jsonStr)) as LecturePlan;
-    if (!Array.isArray(parsed.steps)) return fallbackLecturePlan(topic);
+    if (!Array.isArray(parsed.steps)) return fallbackLecturePlan(topic, learnerName);
     return parsed;
   } catch {
-    return fallbackLecturePlan(topic);
+    return fallbackLecturePlan(topic, learnerName);
   }
 }
 

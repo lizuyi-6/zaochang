@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const signal = AbortSignal.timeout(60_000);
     let plan;
     try {
-      plan = await planLecture(topic, signal);
+      plan = await planLecture(topic, signal, member.displayName);
     } catch (error) {
       if (error instanceof HyperknowNotConfiguredError) {
         return Response.json({ error: error.code }, { status: error.status });

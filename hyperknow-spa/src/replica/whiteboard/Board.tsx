@@ -1,14 +1,13 @@
 import React, { useMemo } from 'react';
 import {
-  BOARD_ANNOTS,
   INK,
-  getBoardItems,
-  getBoardTable,
   type BoardAnnot,
   type BoardItem,
+  type BoardTable,
   type Rich,
   type Seg,
 } from './lessonScript';
+import { diagramBox, renderDiagram } from './diagram';
 import { BoardCircle, BoardPencil, BoardUnderline } from '../illustrations';
 
 /** Flatten rich lines into styled chars for progressive reveal. */
@@ -84,6 +83,10 @@ export interface BoardProps {
   annotsDone: Set<string>;
   /** annotation currently animating */
   annotActive: string | null;
+  /** 板书数据源:演示脚本或直播计划(同一形态,见 liveLesson.ts) */
+  items: BoardItem[];
+  table: BoardTable | null;
+  annots: BoardAnnot[];
 }
 
 export const Board: React.FC<BoardProps> = ({
@@ -97,26 +100,40 @@ export const Board: React.FC<BoardProps> = ({
   tableRows,
   annotsDone,
   annotActive,
+  items,
+  table,
+  annots,
 }) => {
-  const BOARD_ITEMS = getBoardItems();
-  const BOARD_TABLE = getBoardTable();
   const flats = useMemo(() => {
     const m = new Map<string, Flat>();
-    for (const it of BOARD_ITEMS) m.set(it.id, flatten(it));
+    for (const it of items) m.set(it.id, flatten(it));
     return m;
-  }, []);
+  }, [items]);
+
+  /* 手绘图按代码串缓存渲染结果(确定性渲染,同一代码同一 SVG) */
+  const diagrams = useMemo(() => {
+    const m = new Map<string, { svg: string; w: number; h: number } | null>();
+    for (const it of items) {
+      if (it.diagram && !m.has(it.id)) {
+        const r = renderDiagram(it.diagram);
+        m.set(it.id, r ? { svg: r.svg, ...diagramBox(r) } : null);
+      }
+    }
+    return m;
+  }, [items]);
 
   const pencilPos = useMemo(() => {
     if (!writingId) return null;
-    const item = BOARD_ITEMS.find((i) => i.id === writingId);
+    const item = items.find((i) => i.id === writingId);
     const flat = flats.get(writingId);
     if (!item || !flat) return null;
+    if (item.diagram && diagrams.get(item.id)) return null; // 图不用铅笔逐字
     const shown = progress[writingId] ?? 0;
     const c = flat.chars[Math.max(0, shown - 1)];
     const lh = item.mono ? MONO_LH : item.size * 1.24;
     if (!c) return { x: item.x, y: item.y };
     return { x: item.x + c.xInLine + 6, y: item.y + c.lineIdx * lh + item.size * 0.55 };
-  }, [writingId, progress, flats]);
+  }, [writingId, progress, flats, items, diagrams]);
 
   return (
     <div
@@ -125,12 +142,28 @@ export const Board: React.FC<BoardProps> = ({
     >
       <div className={`wb-dots${dots ? '' : ' off'}`} style={{ width: 2200, height: 1300 }} />
       <div className={`wb-board${standardFont ? ' wb-standard' : ''}`}>
-        {BOARD_ITEMS.map((item) => {
+        {items.map((item) => {
           if (item.step > step) return null;
           const flat = flats.get(item.id)!;
-          const isWriting = item.step === step && (progress[item.id] ?? 0) < flat.total;
+          /* 显隐节奏与引擎 writeItem 同源(itemCharCount):插图 42 拍,文本逐字 */
+          const writeTotal = itemCharCount(item);
+          const isWriting = item.step === step && (progress[item.id] ?? 0) < writeTotal;
           const shown = item.step < step ? flat.total : progress[item.id] ?? 0;
           const lh = item.mono ? MONO_LH : item.size * 1.24;
+
+          const diagram = item.diagram ? diagrams.get(item.id) : undefined;
+          if (diagram) {
+            // 插图:整图落板(写完前半透明,写完后 CSS 手绘入场)
+            return (
+              <div
+                key={item.id}
+                className={`wb-item wb-diagram${isWriting ? ' writing' : ' drawn'}`}
+                style={{ left: item.x, top: item.y, width: diagram.w, height: diagram.h }}
+                dangerouslySetInnerHTML={{ __html: diagram.svg }}
+              />
+            );
+          }
+
           return (
             <div
               key={item.id}
@@ -149,27 +182,27 @@ export const Board: React.FC<BoardProps> = ({
               }}
             >
               {flat.lines.map((line, li) => {
-              // chars before this line = cumulative length of previous lines
-              let before = 0;
-              for (let k = 0; k < li; k++) before += flat.lines[k].chars.length;
-              const shownHere = Math.max(0, Math.min(line.chars.length, shown - before));
-              return (
-                <span className="wb-line" key={li}>
-                  {renderLine(line.chars, shownHere, isWriting, item)}
-                </span>
-              );
-            })}
+                // chars before this line = cumulative length of previous lines
+                let before = 0;
+                for (let k = 0; k < li; k++) before += flat.lines[k].chars.length;
+                const shownHere = Math.max(0, Math.min(line.chars.length, shown - before));
+                return (
+                  <span className="wb-line" key={li}>
+                    {renderLine(line.chars, shownHere, isWriting, item)}
+                  </span>
+                );
+              })}
             </div>
           );
         })}
 
         {/* table */}
-        {step >= BOARD_TABLE.step && (
-          <TableBlock rowsShown={step > BOARD_TABLE.step ? 4 : tableRows} standard={standardFont} />
+        {table && step >= table.step && (
+          <TableBlock table={table} rowsShown={step > table.step ? 4 : tableRows} standard={standardFont} />
         )}
 
         {/* annotations */}
-        {BOARD_ANNOTS.map((an) => {
+        {annots.map((an) => {
           if (an.step > step) return null;
           const done = an.step < step || annotsDone.has(an.id);
           const active = annotActive === an.id;
@@ -220,8 +253,8 @@ function renderLine(lineChars: FlatChar[], shown: number, isWriting: boolean, it
   return <>{out}</>;
 }
 
-const TableBlock: React.FC<{ rowsShown: number; standard: boolean }> = ({ rowsShown, standard }) => {
-  const { x, y, colW, rowH, cells } = getBoardTable();
+const TableBlock: React.FC<{ table: BoardTable; rowsShown: number; standard: boolean }> = ({ table, rowsShown, standard }) => {
+  const { x, y, colW, rowH, cells } = table;
   const W = colW.reduce((a, b) => a + b, 0);
   const H = rowH.reduce((a, b) => a + b, 0);
   // wavy grid path
@@ -275,6 +308,8 @@ const AnnotView: React.FC<{ an: BoardAnnot; animate: boolean }> = ({ an, animate
 
 /** Helper for the player: total char count of an item. */
 export function itemCharCount(item: BoardItem): number {
+  /* 插图按固定节奏"画"(约 1.7s),不按代码字数逐字爬 */
+  if (item.diagram) return 42;
   return item.lines.reduce((n, line) => n + line.reduce((m, s) => m + s.t.length, 0), 0);
 }
 

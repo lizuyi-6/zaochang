@@ -18,8 +18,8 @@ import { WhiteboardPage } from './replica/whiteboard/WhiteboardPage';
 import { I18nProvider } from './replica/i18n';
 import { GenerationOverlay } from './replica/GenerationOverlay';
 import { ToastHost } from './replica/toast';
-import { buildGeneratedCourse } from './replica/generate';
-import { fetchConversations, fetchMe } from './replica/backend';
+import { buildGeneratedCourse, type GeneratedCourse } from './replica/generate';
+import { fetchConversations, fetchMarketCourses, fetchMe } from './replica/backend';
 import './replica/replica.css';
 
 /* ---------------- hash routing ---------------- */
@@ -49,8 +49,19 @@ function stateFromHash(): Partial<AppState> | null {
       return { screen: 'feed', ...done, ...extras };
     case '/courses':
       return { screen: 'courses', ...done, ...extras };
-    case '/course/preview':
-      return { screen: 'coursePreview', ...extras };
+    case '/course/preview': {
+      /* ?topic= — 从集市/课程页点开的伪生成课程深链(同一话题重建同一份课程) */
+      const genPreview = q.has('topic') ? buildGeneratedCourse(decodeURIComponent(q.get('topic') ?? '')) : null;
+      const coverKeys = ['sociology', 'bio', 'ml', 'ai', 'history', 'prompt', 'psych', 'sat', 'philo', 'stats'];
+      const coverParam = q.get('cover');
+      return {
+        screen: 'coursePreview',
+        ...(genPreview
+          ? { generated: { ...genPreview, ...(coverParam && coverKeys.includes(coverParam) ? { cover: coverParam as GeneratedCourse['cover'] } : {}) } }
+          : {}),
+        ...extras,
+      };
+    }
     case '/course/journey':
       return {
         screen: 'courseJourney',
@@ -58,8 +69,17 @@ function stateFromHash(): Partial<AppState> | null {
         ...(q.has('done') ? { lectureDone: true } : {}),
         /* ?prompt=1 = lecture-complete practice modal (ref 61) */
         ...(q.has('prompt') ? { lectureDone: true, lectureCompletePrompt: true } : {}),
-        /* ?topic= — 伪生成课程深链(同一话题重建同一份课程) */
-        ...(q.has('topic') ? { generated: buildGeneratedCourse(decodeURIComponent(q.get('topic') ?? '')) } : {}),
+        /* ?topic= — 伪生成课程深链(同一话题重建同一份课程);cover 让封面风格一并还原 */
+        ...(q.has('topic')
+          ? {
+              generated: (() => {
+                const g = buildGeneratedCourse(decodeURIComponent(q.get('topic') ?? ''));
+                const coverKeys = ['sociology', 'bio', 'ml', 'ai', 'history', 'prompt', 'psych', 'sat', 'philo', 'stats'];
+                const coverParam = q.get('cover');
+                return coverParam && coverKeys.includes(coverParam) ? { ...g, cover: coverParam as GeneratedCourse['cover'] } : g;
+              })(),
+            }
+          : {}),
         ...extras,
       };
     case '/marketplace':
@@ -83,10 +103,12 @@ function hashFor(s: AppState): string {
     case 'onboarding':
       return `#/onboarding/${s.onboardingStep}`;
     case 'coursePreview':
-      return '#/course/preview';
+      return s.generated
+        ? `#/course/preview?topic=${encodeURIComponent(s.generated.topic)}${s.generated.cover ? `&cover=${s.generated.cover}` : ''}`
+        : '#/course/preview';
     case 'courseJourney':
       return s.generated
-        ? `#/course/journey?topic=${encodeURIComponent(s.generated.topic)}`
+        ? `#/course/journey?topic=${encodeURIComponent(s.generated.topic)}${s.generated.cover ? `&cover=${s.generated.cover}` : ''}`
         : '#/course/journey';
     case 'whiteboard':
       return s.whiteboardMode === 'practice' ? '#/whiteboard?practice=1' : '#/whiteboard';
@@ -138,18 +160,38 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', onHash);
   }, [set]);
 
-  /* 启动即同步造场账户:身份(get_user_info)+ 历史会话(list_past_conversations)。
-   * 后端按会话成员隔离;两接口在纯静态托管下 fetch 失败 → null,UI 回退复刻演示数据。 */
+  /* 启动即同步造场账户:身份(get_user_info)+ 历史会话(list_past_conversations)
+   * + 课程市场(marketplace/courses,本人 D1 课程 + 官方样例)。
+   * 后端按会话成员隔离;纯静态托管下 fetch 失败 → null,UI 回退复刻演示数据。 */
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [identity, conversations] = await Promise.all([fetchMe(), fetchConversations()]);
-      if (alive) set({ identity, conversations });
+      const [identity, conversations, marketCourses] = await Promise.all([
+        fetchMe(),
+        fetchConversations(),
+        fetchMarketCourses(),
+      ]);
+      if (alive) set({ identity, conversations, bootReady: true, ...(marketCourses ? { marketCourses, marketStale: false } : {}) });
     })();
     return () => {
       alive = false;
     };
   }, [set]);
+
+  /* 进集市/我的课程页时按需重拉市场列表(新生成过课 → marketStale) */
+  useEffect(() => {
+    const screen = state.screen;
+    if (screen !== 'marketplace' && screen !== 'courses') return;
+    if (!state.marketStale && state.marketCourses !== null) return;
+    let alive = true;
+    void (async () => {
+      const marketCourses = await fetchMarketCourses();
+      if (alive && marketCourses) set({ marketCourses, marketStale: false });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [state.screen, state.marketStale, state.marketCourses, set]);
 
   const s = state.screen;
   const shell = s !== 'signin' && s !== 'onboarding' && s !== 'whiteboard';

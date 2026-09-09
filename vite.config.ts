@@ -22,6 +22,13 @@ const localBindingConfig = {
     APP_ENV: "development",
     LOCAL_DEV_LOGIN: "1",
   },
+  // /lattice/* 在 worker 里做登录门禁后经 env.ASSETS 取静态资源(与生产
+  // wrangler.prod.jsonc 的 assets.binding=ASSETS 同语义);dev 下以 public/
+  // 为源,免得门禁放行后 fetch 撞上 undefined。
+  assets: {
+    directory: "public",
+    binding: "ASSETS",
+  },
   d1_databases: d1
     ? [
         {

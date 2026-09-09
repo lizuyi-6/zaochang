@@ -34,11 +34,20 @@ export let lastChatCompletion = null;
 export let aiUpstreamCount = 0;
 export let lastTtsRequest = null;
 export let ttsUpstreamCount = 0;
+/** 假 Tavily 搜索上游收到的 /search 请求体(课程生成联网研学断言用)。 */
+export const searchRequests = [];
 /** 置 true 后假上游一律 500(测"上游故障"分支);resetAiUpstream 会复位。 */
 export let aiUpstreamForceFail = false;
+/** 置对象后,非流式 Messages 调用(llm.chat)以该对象的 JSON 串作为回复文本
+ * (白板讲座计划 quick_check/diagram 透传断言用);resetAiUpstream 会复位。 */
+export let aiUpstreamJsonOverride = null;
 
 export function setAiUpstreamForceFail(value) {
   aiUpstreamForceFail = Boolean(value);
+}
+
+export function setAiUpstreamJsonResponse(value) {
+  aiUpstreamJsonOverride = value === null || value === undefined ? null : JSON.stringify(value);
 }
 
 export function resetAiUpstream() {
@@ -46,7 +55,9 @@ export function resetAiUpstream() {
   aiUpstreamCount = 0;
   lastTtsRequest = null;
   ttsUpstreamCount = 0;
+  searchRequests.length = 0;
   aiUpstreamForceFail = false;
+  aiUpstreamJsonOverride = null;
 }
 
 export async function startFakeAiUpstream() {
@@ -61,15 +72,20 @@ export async function startFakeAiUpstream() {
     return "";
   };
   aiServer = createServer(async (request, response) => {
-    // 三种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
-    // 专家模型与 Hyperknow Agent 共用)、/v1/audio/speech(Hyperknow TTS)。
+    // 四种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
+    // 专家模型与 Hyperknow Agent 共用)、/v1/audio/speech(Hyperknow TTS)、
+    // /search(假 Tavily——课程生成的联网研学)。
     const isMessages = request.url === "/v1/messages";
     const isTts = request.url === "/v1/audio/speech";
-    if (request.method !== "POST" || (!isMessages && !isTts && request.url !== "/v1/chat/completions")) {
+    const isSearch = request.url === "/search";
+    if (
+      request.method !== "POST" ||
+      (!isMessages && !isTts && !isSearch && request.url !== "/v1/chat/completions")
+    ) {
       response.writeHead(404).end();
       return;
     }
-    if (request.headers.authorization !== "Bearer test-ai-key") {
+    if (request.headers.authorization !== `Bearer ${isSearch ? "test-search-key" : "test-ai-key"}`) {
       response.writeHead(401, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "unauthorized" }));
       return;
@@ -77,6 +93,25 @@ export async function startFakeAiUpstream() {
     const chunks = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (isSearch) {
+      // 假 Tavily:记录查询供课程研学断言;回 1 条确定性命中(URL 含查询词,可证
+      // 提示词注入与 sources 计数)。
+      searchRequests.push({ query: body.query, maxResults: body.max_results });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          query: body.query,
+          results: [
+            {
+              title: `Syllabus map: ${body.query}`,
+              url: `https://research.test/${encodeURIComponent(body.query)}`,
+              content: `Canonical learning path for ${body.query}: fundamentals, core foundations, capstone practice.`,
+            },
+          ],
+        }),
+      );
+      return;
+    }
     if (isTts) {
       // 假 StepFun TTS:记录请求体供字段级断言(model/input/voice/speed),
       // 回确定性"音频"字节(内容里带 voice 标记,可证缓存 key 隔离)。
@@ -104,10 +139,12 @@ export async function startFakeAiUpstream() {
       response.end(JSON.stringify({ error: "boom" }));
       return;
     }
-    // 非流式 Messages 调用(llm.chat,模型探针用):回 Anthropic 非流式 JSON 形状。
+    // 非流式 Messages 调用(llm.chat,模型探针/讲座规划用):回 Anthropic 非流式
+    // JSON 形状;aiUpstreamJsonOverride 置值时以该 JSON 串作正文(计划透传断言)。
     if (isMessages && body.stream !== true) {
+      const text = aiUpstreamJsonOverride ?? "ok";
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ id: "msg_fake", type: "message", role: "assistant", content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" }));
+      response.end(JSON.stringify({ id: "msg_fake", type: "message", role: "assistant", content: [{ type: "text", text }], stop_reason: "end_turn" }));
       return;
     }
     response.writeHead(200, { "content-type": "text/event-stream" });
@@ -288,6 +325,9 @@ export function previewServerArgs() {
     "--var", "AI_CHAT_EXPERT_TRANSPORT:messages",
     "--var", "AI_CHAT_VISION:1",
     "--var", `HYPERKNOW_TTS_BASE_URL:http://127.0.0.1:${aiPort}/v1`,
+    "--var", "HK_WEB_SEARCH_PROVIDER:tavily",
+    "--var", "HK_TAVILY_API_KEY:test-search-key",
+    "--var", `HK_WEB_SEARCH_BASE_URL:http://127.0.0.1:${aiPort}`,
     "--var", `EMAIL_SEND_BASE_URL:http://127.0.0.1:${emailPort}`,
     "--var", "EMAIL_SEND_ACCOUNT_ID:test-email-account",
     "--var", "EMAIL_SEND_API_TOKEN:test-email-key",

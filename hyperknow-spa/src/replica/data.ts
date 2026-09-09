@@ -53,6 +53,14 @@ export interface CourseCard {
   provider?: string;
 }
 
+/** D1 课程无封面字段:按标题稳定哈希挑一种封面风格(同一门课每次同款)。 */
+export const coverForTitle = (title: string): CourseCard['cover'] => {
+  const keys: CourseCard['cover'][] = ['sociology', 'bio', 'ml', 'ai', 'history', 'prompt', 'psych', 'sat', 'philo', 'stats'];
+  let h = 0;
+  for (let i = 0; i < title.length; i++) h = (Math.imul(h, 31) + title.charCodeAt(i)) >>> 0;
+  return keys[h % keys.length];
+};
+
 export const homeCourses = (): CourseCard[] => [
   {
     id: 'sociology',

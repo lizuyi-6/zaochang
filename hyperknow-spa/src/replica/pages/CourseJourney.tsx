@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import type { PageProps } from '../types';
 import { Modal } from '../ui';
-import { SkaterKid } from '../illustrations';
+import { SkaterKid, CourseCover } from '../illustrations';
 import { publicSpeaking, psCourse } from '../data';
 import { useI18n, TRich } from '../i18n';
 import { L } from '../i18n/content';
@@ -208,7 +208,13 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
             </button>
 
             <div className="cj-cover">
-              <KandinskyCover size={248} />
+              {state.generated?.cover ? (
+                <div style={{ width: 248, height: 248 }}>
+                  <CourseCover kind={state.generated.cover} />
+                </div>
+              ) : (
+                <KandinskyCover size={248} />
+              )}
               {joined && (
                 <div className="cj-cover-actions">
                   <button className="cj-cover-btn" type="button" title={L('Share', '分享')} onClick={onShareCourse}>
@@ -580,7 +586,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
               <X size={17} />
             </button>
             <div className="cj-dialog-title">{t('home.marketplace.confirmTitle')}</div>
-            <div className="cj-dialog-course">{t('home.marketplace.confirmCourseName', { title: 'Public Speaking' })}</div>
+            <div className="cj-dialog-course">{t('home.marketplace.confirmCourseName', { title: PS.title })}</div>
             <p className="cj-dialog-body">
               {t('home.marketplace.confirmDesc')}
             </p>

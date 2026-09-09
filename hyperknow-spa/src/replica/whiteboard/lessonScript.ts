@@ -34,6 +34,8 @@ export interface BoardItem {
   align?: 'left' | 'center';
   lines: Rich[]; // pre-wrapped lines
   mono?: boolean; // mermaid code block
+  /** mermaid flowchart 源码:可渲染时以手绘图呈现,lines 作为不可渲染时的回退文本 */
+  diagram?: string;
 }
 
 /** Freehand annotation attached to an item (or free-standing). */
@@ -78,6 +80,8 @@ export type PopupKind = 'award1' | 'award2' | 'award3' | 'unitComplete';
 
 export interface LessonStep {
   id: number;
+  /** 服务端讲座计划里的 step_id(直播课专属;举手插话按它带上下文) */
+  sid?: string;
   /** panel entries appended at step start (in order) */
   panel?: PanelEntry[];
   /** caption spoken during this step (serif bar) */
@@ -158,7 +162,11 @@ export const getBoardItems = (): BoardItem[] => [
     ),
   },
   {
+    // 修辞三角:按手绘图渲染(diagram.ts);lines 是渲染不可用时的等宽回退
     id: 'b6', step: 3, x: 402, y: 244, size: 13, mono: true, color: MONO,
+    diagram: isZh()
+      ? 'graph TD\n  S[演讲者] --- M[信息]\n  M --- A[听众]\n  A --- S'
+      : 'graph TD\n  S[Speaker] --- M[Message]\n  M --- A[Audience]\n  A --- S',
     lines: [
       [{ t: 'graph TD' }],
       [{ t: L('  S[Speaker] --- M[Message]', '  S[演讲者] --- M[信息]') }],
@@ -461,11 +469,19 @@ const chip = (chipIcon: PanelEntry['chipIcon'], chipText: string): PanelEntry =>
 });
 const msg = (id: string, text: Rich): PanelEntry => ({ id, kind: 'msg', text });
 
+/* 旁白对学员的称呼:演示录课原版是 "Ryan";WhiteboardPage 挂载时用登录用户名
+ * 覆盖(邮箱则取 @ 前缀),匿名/离线保底原版称呼。 */
+let learnerName = 'Ryan';
+export const setLearnerName = (name: string): void => {
+  const trimmed = name.trim();
+  if (trimmed) learnerName = trimmed;
+};
+
 const T1 = (): Rich => [
   {
     t: L(
-      "Hi Ryan! Welcome to the course. Today, we're starting at the very root of public speaking. By the end of this session, you'll see speaking not as a 'performance' but as a strategic bridge. This 'Rhetorical Triangle' we're about to draw is the foundation for everything else we'll do—from managing your nerves to designing killer slides.",
-      '你好，Ryan！欢迎来到这门课程。今天，我们从公开演讲最根本的地方讲起。在这节课结束时，你会明白演讲不是一场「表演」，而是一座策略性的桥梁。我们即将画出的这个「修辞三角」，是我们后续一切内容的基础——从管理紧张情绪，到设计出色的幻灯片。',
+      `Hi ${learnerName}! Welcome to the course. Today, we're starting at the very root of public speaking. By the end of this session, you'll see speaking not as a 'performance' but as a strategic bridge. This 'Rhetorical Triangle' we're about to draw is the foundation for everything else we'll do—from managing your nerves to designing killer slides.`,
+      `你好，${learnerName}！欢迎来到这门课程。今天，我们从公开演讲最根本的地方讲起。在这节课结束时，你会明白演讲不是一场「表演」，而是一座策略性的桥梁。我们即将画出的这个「修辞三角」，是我们后续一切内容的基础——从管理紧张情绪，到设计出色的幻灯片。`,
     ),
   },
 ];
@@ -486,7 +502,7 @@ const T3 = (): Rich => [
   },
 ];
 const T4 = (): Rich => [
-  { t: L('This shift is vital, Ryan. When you focus on the ', '这种转变至关重要，Ryan。当你聚焦于这个三角的') },
+  { t: L(`This shift is vital, ${learnerName}. When you focus on the `, `这种转变至关重要，${learnerName}。当你聚焦于这个三角的`) },
   { t: L('mechanics', '机制'), i: true },
   { t: L(' of this triangle, you stop worrying so much about yourself and start focusing on the ', '，你就不再那么担心自己，而是开始关注') },
   { t: L('connection.', '「连接」。'), i: true },
@@ -510,16 +526,16 @@ const T7 = (): Rich => [
 const T8 = (): Rich => [
   {
     t: L(
-      "Before we move to the next corner, tell me Ryan: have you ever felt like you had to 'act' like someone else when speaking in public, or do you feel comfortable bringing your own perspective to a topic?",
-      '在进入下一个顶点之前，先问问你，Ryan：你有没有过在公开场合讲话时必须「扮演」别人的感觉？还是说，你能自在地在这个话题上带入自己的视角？',
+      `Before we move to the next corner, tell me ${learnerName}: have you ever felt like you had to 'act' like someone else when speaking in public, or do you feel comfortable bringing your own perspective to a topic?`,
+      `在进入下一个顶点之前，先问问你，${learnerName}：你有没有过在公开场合讲话时必须「扮演」别人的感觉？还是说，你能自在地在这个话题上带入自己的视角？`,
     ),
   },
 ];
 const T9 = (): Rich => [
   {
     t: L(
-      "That's a very common feeling, Ryan. We often put on this 'formal mask' because we think it makes us look more competent. But here's the secret: if you're 'acting,' the audience feels the disconnect.",
-      '这是非常普遍的感受，Ryan。我们常常戴上这层「正式的面具」，因为我们觉得它让我们显得更有能力。但秘诀在于：如果你在「演」，听众会感觉到那种割裂。',
+      `That's a very common feeling, ${learnerName}. We often put on this 'formal mask' because we think it makes us look more competent. But here's the secret: if you're 'acting,' the audience feels the disconnect.`,
+      `这是非常普遍的感受，${learnerName}。我们常常戴上这层「正式的面具」，因为我们觉得它让我们显得更有能力。但秘诀在于：如果你在「演」，听众会感觉到那种割裂。`,
     ),
   },
 ];
@@ -665,8 +681,8 @@ const T26 = (): Rich => [
 const T28 = (): Rich => [
   {
     t: L(
-      "You've done great today, Ryan. We've built the foundation. In our next session, we'll start looking at how to take this intent and turn it into a structured, powerful script. See you then!",
-      '你今天做得很棒，Ryan。我们已经打好了基础。下一节课，我们会开始研究如何把这份意图变成一份结构化、有力量的讲稿。到时候见！',
+      `You've done great today, ${learnerName}. We've built the foundation. In our next session, we'll start looking at how to take this intent and turn it into a structured, powerful script. See you then!`,
+      `你今天做得很棒，${learnerName}。我们已经打好了基础。下一节课，我们会开始研究如何把这份意图变成一份结构化、有力量的讲稿。到时候见！`,
     ),
   },
 ];
