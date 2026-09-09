@@ -11,29 +11,41 @@
   --font-satoshi-regular: var(--font-sans);
   --font-satoshi-bold: var(--font-sans);
 
-  /* Surfaces */
-  --app-bg: #FAFAFA;
-  --panel-bg: #FFFFFF;
-  --sidebar-bg: #FFFFFF;
-  --border-color: #ECECEA;
-  --border-strong: #E4E4E0;
-  --border-muted: #F0F0F0;
-  --hairline: #F0F0F0;
+  /* 见界 LATTICE — paper, pine, sage and amber */
+  --app-bg: #F7F4EC;
+  --panel-bg: #FFFDF7;
+  --sidebar-bg: #F1EFE5;
+  --border-color: #DADCCE;
+  --border-strong: #A9B5A6;
+  --border-muted: #E5E5D9;
+  --hairline: #E5E5D9;
+  --surface-soft: #EFEDE3;
+  --surface-hover: #E8EADF;
+  --selected-bg: #E2EADD;
+  --selected-border: #6F8B73;
+  --selected-text: #164E46;
+  --accent-amber: #D9A441;
+  --accent-amber-ink: #79571D;
+  --accent-amber-soft: #F4E8C9;
+  --accent-sage: #8FA58A;
+  --focus-ring: #164E46;
+  --atlas-dot: #DCE0D2;
 
   /* Text */
-  --text-primary: #141A22;
-  --text-body: #2A2F36;
-  --text-secondary: #555C66;
-  --text-muted: #8A8F98;
-  --text-tertiary: #9CA3AF;
-  --text-faint: #9AA0A6;
-  --text-ghost: #B4B9C0;
+  --text-primary: #203C35;
+  --text-body: #34483F;
+  --text-secondary: #536158;
+  --text-muted: #687268;
+  --text-tertiary: #687268;
+  --text-faint: #687268;
+  --text-ghost: #A4AA9C;
 
-  /* Brand / accents */
-  --color-primary: #1A2332;
-  --color-primary-hover: #10151F;
-  --color-primary-light: rgba(26, 35, 50, 0.08);
-  --dark-pill: #1A2332;
+  /* Brand / accents; semantic and board colors remain independent. */
+  --color-primary: #164E46;
+  --color-primary-hover: #103D36;
+  --color-primary-light: rgba(22, 78, 70, 0.08);
+  --dark-pill: #164E46;
+  --dark-pill-hover: #103D36;
   --accent-blue: #3B6FF6;
   --accent-blue-deep: #4169E1;
   --accent-blue-soft: #E8F0FE;

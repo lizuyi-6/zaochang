@@ -124,7 +124,15 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
             convIdRef.current = id;
           },
           onRemaining: (remaining) => {
-            if (state.identity) set({ identity: { ...state.identity, credits: remaining } });
+            set({
+              energy: remaining,
+              identity: {
+                username: state.identity?.username || 'You',
+                email: state.identity?.email || '',
+                tier: state.identity?.tier || 'FREE',
+                credits: remaining,
+              },
+            });
           },
         },
         { signal: ctrl.signal, conversationId: convIdRef.current ?? undefined, mode: state.replyMode },
@@ -204,7 +212,15 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           return { ...prev, [idx]: { ...cur, text: cur.text + chunk } };
         }),
       onRemaining: (remaining) => {
-        if (state.identity) set({ identity: { ...state.identity, credits: remaining } });
+        set({
+          energy: remaining,
+          identity: {
+            username: state.identity?.username || 'You',
+            email: state.identity?.email || '',
+            tier: state.identity?.tier || 'FREE',
+            credits: remaining,
+          },
+        });
       },
     });
     if (result.ok) {
@@ -277,7 +293,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         className="cp-util-btn"
         type="button"
         title={t('chatResponse.share')}
-        onClick={() => void shareLink(window.location.href, L('Hyperknow conversation', 'Hyperknow 对话'))}
+        onClick={() => void shareLink(window.location.href, L('Lattice conversation', '见界对话'))}
       >
         <Share size={15} />
       </button>

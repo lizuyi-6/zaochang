@@ -343,3 +343,13 @@
 .cs-day.today { background: #E8F0F8; }
 .cs-day.today .cs-day-l,
 .cs-day.today .cs-day-v { color: #33507E; }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.cs-page { background: var(--app-bg); }
+.cs-day.today .cs-day-l, .cs-day.today .cs-day-v { color: var(--color-primary); }
+.cs-caps { color: var(--accent-amber-ink); }
+.cs-search:focus-within { border-color: var(--focus-ring); }
+.cs-empty-sub, .cs-week-sub, .cs-pickup-sub { color: var(--text-muted); }
+.cs-search,.cs-course-card,.cs-preview,.cs-card,.cs-pickup { background: var(--panel-bg); border-color: var(--border-color); }
+.cs-tab.active,.cs-day.today { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
+.cs-title,.cs-empty-title,.cs-mkt-title-h { font-family: var(--font-display); color: var(--color-primary); }

@@ -738,3 +738,12 @@
   color: #9CA3AF;
   background: #fff;
 }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.cj-page { background: var(--app-bg); }
+.cj-join:hover, .cj-btn-confirm:hover, .cj-btn-big.filled:hover, .cj-lc-now:hover { background: var(--color-primary-hover); }
+.cj-panel-label { color: var(--accent-amber-ink); border-color: var(--border-color); }
+.cj-issue-pill,.cj-cover-btn,.cj-curated-icon,.cj-addmat,.cj-strip-pill,.cj-card,.cj-btn-think,.cj-btn-big.ghost,.cj-lc,.cj-lc-later,.cj-tl-empty { background: var(--panel-bg); border-color: var(--border-color); }
+.cj-unit.active,.cj-unit-chip,.cj-strip-ico,.cj-pill.learn,.cj-pill.practice,.cj-pill.revisit,.cj-seg-opt.active { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
+.cj-join,.cj-unit.active .cj-unit-badge,.cj-pill.learn-filled,.cj-pill.practice-filled,.cj-btn-confirm,.cj-btn-big.filled,.cj-lc-now { background: var(--color-primary); color: var(--panel-bg); }
+.cj-course-title,.cj-unit-heading,.cj-dialog-title,.cj-lc-title { font-family: var(--font-display); color: var(--color-primary); }

@@ -177,9 +177,15 @@ const notifyTts = (on: boolean) => ttsListeners.forEach((l) => l(on));
 
 /** 旁白句柄:started = 发声是否开始(stopped=被主动停止,error=失败);ended = 播完/停止/失败。均不 reject。 */
 export type SpeakStart = 'started' | 'stopped' | 'error';
+export interface AudioProgress {
+  currentTime: number;
+  duration: number;
+  ratio: number;
+}
 export interface SpeakHandle {
   started: Promise<SpeakStart>;
   ended: Promise<void>;
+  getProgress: () => AudioProgress | null;
 }
 
 type Track = { settleStarted: (v: SpeakStart) => void; settleEnded: () => void };
@@ -220,7 +226,7 @@ export const tts = {
    */
   speakTrack(text: string, voice = 'warm', speed = 1): SpeakHandle {
     const body = text.trim();
-    if (!body) return { started: Promise.resolve('stopped'), ended: Promise.resolve() };
+    if (!body) return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
     stopAudio();
     const url = `/api/hyperknow/tts/stream?text=${encodeURIComponent(body.slice(0, 1500))}&voice=${encodeURIComponent(voice)}&speed=${speed}`;
     const el = new Audio(url);
@@ -263,7 +269,14 @@ export const tts = {
         track.settleEnded();
       },
     );
-    return { started, ended };
+    const getProgress = (): AudioProgress | null => {
+      if (!el || isNaN(el.duration) || el.duration <= 0) return null;
+      const cur = el.currentTime;
+      const dur = el.duration;
+      const ratio = Math.max(0, Math.min(1, cur / dur));
+      return { currentTime: cur, duration: dur, ratio };
+    };
+    return { started, ended, getProgress };
   },
   /** 暂停当前旁白(课程暂停):不销毁元素,恢复时从断点继续。 */
   pauseAudio(): void {

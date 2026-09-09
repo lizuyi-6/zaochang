@@ -269,3 +269,9 @@
 }
 .lf-view-active { cursor: pointer; }
 .lf-cal-btn { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.lf-card,.lf-cal-card,.lf-pill-outline { background: var(--panel-bg); border-color: var(--border-color); }
+.lf-today-pill,.lf-view-active,.lf-view-text.active { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
+.lf-pill-filled,.lf-cal-btn,.lf-today-circle { background: var(--color-primary); color: var(--panel-bg); }
+.lf-big-date,.lf-month { font-family: var(--font-display); color: var(--color-primary); }

@@ -18,11 +18,12 @@ import './Onboarding.css';
 
 /* ================= shared bits ================= */
 
-/** Tiny cube logo used next to "Hyperknow Learning Lab" / "Hyperknow Official". */
+/** Compact open-book/node mark beside course providers. */
 const MiniCube: React.FC = () => (
-  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-    <path d="M5 0.8 L9.2 3.1 V7 L5 9.2 L0.8 7 V3.1 Z" stroke="#9CA3AF" strokeWidth="1" strokeLinejoin="round" />
-    <path d="M5 0.8 V4.9 M0.8 3.1 L5 4.9 L9.2 3.1" stroke="#9CA3AF" strokeWidth="0.7" fill="none" />
+  <svg width="10" height="10" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke="#164E46" strokeWidth="2" strokeLinejoin="round" />
+    <path d="M16 10v18M16 6v4" stroke="#164E46" strokeWidth="2" />
+    <circle cx="16" cy="4" r="2" fill="#D9A441" />
   </svg>
 );
 
@@ -261,7 +262,7 @@ const MktCard: React.FC<{
         {enrolled && <span className="ob-enrolled">{t('home.courseTicket.status.enrolled')}</span>}
       </div>
       <div className="ob-mcard-lab">
-        <MiniCube /> {t('home.courseTicket.defaultAuthor', { brand: 'Hyperknow' })}
+        <MiniCube /> {t('home.courseTicket.defaultAuthor', { brand: L('Lattice', '见界') })}
       </div>
       <div className="ob-mcard-title">{title}</div>
       <div className="ob-mcard-desc">{desc}</div>
@@ -496,7 +497,7 @@ const StepCourse: React.FC = () => {
             </span>
           </div>
           <div className="ob-l7-curated">
-            {t('courseJourney.curatedByPrefix')} <MiniCube /> <b>Hyperknow Official</b>
+            {t('courseJourney.curatedByPrefix')} <MiniCube /> <b>{L('Lattice Official', '见界官方')}</b>
           </div>
           <div className="ob-l7-name">{L('AP Stats', 'AP 统计')}</div>
           <div className="ob-l7-desc">

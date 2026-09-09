@@ -397,3 +397,6 @@
 .hk-menu-hint.on { color: #4C6696; }
 .cp-icon.on { color: #4C6696; }
 .cp-status-dot.off { background: #D8DCE3; }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.cp-util-btn,.cp-issue,.cp-chip,.cp-composer,.cp-translation { background: var(--panel-bg); border-color: var(--border-color); }

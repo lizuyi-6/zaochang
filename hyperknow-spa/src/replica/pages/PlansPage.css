@@ -208,3 +208,14 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.pp-page { background: var(--app-bg); }
+.pp-card.featured { border-color: var(--color-primary); }
+.pp-popular { background: var(--accent-amber); color: var(--text-primary); }
+.pp-cta { border-color: var(--color-primary); }
+.pp-cta.current { background: var(--panel-bg); color: var(--text-secondary); border-color: var(--border-color); }
+.pp-cta:hover:not(:disabled):not(.current) { background: var(--color-primary-hover); }
+.pp-card,.pp-credits-line { background: var(--panel-bg); border-color: var(--border-color); }
+.pp-cta,.pp-cta.featured:not(.current) { background: var(--color-primary); color: var(--panel-bg); }
+.pp-title { font-family: var(--font-display); color: var(--color-primary); }

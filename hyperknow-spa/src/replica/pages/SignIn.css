@@ -249,3 +249,13 @@ a.si-google { text-decoration: none; }
   text-align: center;
 }
 .si-form .si-fine { margin-top: 22px; }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.si-root, .si-left { background: var(--app-bg); }
+.si-right { background: var(--selected-bg); }
+.si-zc { border-color: var(--color-primary); }
+.si-submit:hover, .si-zc:hover { background: var(--color-primary-hover); }
+.si-fine, .si-role { color: var(--text-muted); }
+.si-lang,.si-google,.si-card,.si-status { background: var(--panel-bg); border-color: var(--border-color); }
+.si-submit,.si-zc { background: var(--color-primary); color: var(--panel-bg); }
+.si-title { font-family: var(--font-display); color: var(--color-primary); }

@@ -613,3 +613,14 @@
 .hm-notes-text:focus { border-color: #B9C6D8; }
 .hm-menu .hk-menu-item:disabled { color: #C4C9D1; cursor: default; }
 .hm-ghost-icon.on { color: #4C6696; }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.hm-prompt-card,.hm-circle-btn,.hm-chip,.hm-course,.hm-cap,.hm-affiliate { background: var(--panel-bg); border-color: var(--border-color); }
+.hm-news-pill.active,.hm-badge.new { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
+.hm-send { background: var(--color-primary); color: var(--panel-bg); }
+.hm-send:hover:not(:disabled) { background: var(--color-primary-hover); }
+.hm-send:disabled { background: var(--surface-soft); color: var(--text-muted); }
+.hm-prompt-card:focus-within { border-color: var(--focus-ring); }
+.hm-welcome { background: var(--app-bg); }
+.hm-placeholder, .hm-lms, .hm-easter-sub { color: var(--text-muted); }
+.hm-h1,.hm-instant-title,.hm-market-title,.hm-welcome-oh,.hm-welcome-back { font-family: var(--font-display); color: var(--color-primary); }
