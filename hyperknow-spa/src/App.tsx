@@ -122,7 +122,7 @@ function hashFor(s: AppState): string {
 type Veil = 'idle' | 'cover' | 'fade';
 
 export const App: React.FC = () => {
-  const [state, setState] = useState<AppState>(() => ({ ...initialAppState, ...(stateFromHash() ?? {}) }));
+  const [state, setState] = useState<AppState>(() => ({ ...initialAppState, ...stateFromHash() }));
   const [veil, setVeil] = useState<Veil>('idle');
   const stateRef = useRef(state);
   stateRef.current = state;

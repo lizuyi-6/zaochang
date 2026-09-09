@@ -5,6 +5,8 @@
  * SSE 帧格式:event: frame\ndata: {...}(与 Workers 路由的 frame() 逐字对应)。
  */
 
+import { normalizeBackendCourse } from './backend-course.ts';
+
 export interface BackendCourseSession {
   sessionId?: string;
   sessionIndex?: number;
@@ -51,7 +53,8 @@ function parseDataLine(line: string): Record<string, unknown> | null {
   const jsonStr = line.slice(6).trim();
   if (!jsonStr || jsonStr === '[DONE]') return null;
   try {
-    return JSON.parse(jsonStr) as Record<string, unknown>;
+    const data: unknown = JSON.parse(jsonStr);
+    return typeof data === 'object' && data !== null && !Array.isArray(data) ? data as Record<string, unknown> : null;
   } catch {
     return null;
   }
@@ -61,19 +64,23 @@ async function consumeSse(body: ReadableStream<Uint8Array>, onFrame: (data: Reco
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      const data = parseDataLine(line);
-      if (data) onFrame(data);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const data = parseDataLine(line);
+        if (data) onFrame(data);
+      }
     }
+    const tail = parseDataLine(buffer + decoder.decode());
+    if (tail) onFrame(tail);
+  } finally {
+    reader.releaseLock();
   }
-  const tail = parseDataLine(buffer);
-  if (tail) onFrame(tail);
 }
 
 /** SSE 错误响应 → 失败原因二分:402 insufficient_credits 单独成类,其余归 error。 */
@@ -117,7 +124,7 @@ export async function generateCourseLive(query: string, handlers: GenHandlers, s
 
   try {
     /* 用容器规避 TS 对闭包内赋值的收窄(直接 let 会被推断为 never) */
-    const found: { course: BackendCourse | null } = { course: null };
+    const found: { course: BackendCourse | null; failed: boolean } = { course: null, failed: false };
     await consumeSse(res.body, (data) => {
       const type = data.type as string | undefined;
       if (type === 'course_generation_step') {
@@ -125,16 +132,17 @@ export async function generateCourseLive(query: string, handlers: GenHandlers, s
       } else if (type === 'course_generation_progress') {
         handlers.onProgress?.(String(data.message ?? ''));
       } else if (type === 'course_structure_ready') {
-        found.course = (data.course as BackendCourse) ?? null;
-      } else if (type === 'course_generation_error') {
-        found.course = null;
+        found.course = normalizeBackendCourse(data.course);
+        if (!found.course) found.failed = true;
+      } else if (type === 'course_generation_error' || type === 'error') {
+        found.failed = true;
       } else {
         const info = creditInfoOf(data);
         if (info) handlers.onRemaining?.(info.remaining, info.max);
       }
     });
     const course = found.course;
-    return course && course.units?.length ? { ok: true, course } : { ok: false, reason: 'error' };
+    return course && !found.failed ? { ok: true, course } : { ok: false, reason: 'error' };
   } catch {
     return { ok: false, reason: 'error' };
   }
@@ -181,8 +189,21 @@ export async function chatLive(message: string, handlers: ChatHandlers, options:
 
   try {
     let acc = '';
+    let complete = false;
+    let failed = false;
     await consumeSse(res.body, (data) => {
-      const type = data.type as string | undefined;
+      const type = data.type;
+      // 服务端 error 不得被之前的正文或之后的 complete 掩盖。
+      if (type === 'error') {
+        failed = true;
+        return;
+      }
+      if (failed) return;
+      if (type === 'complete') {
+        complete = true;
+        return;
+      }
+      if (complete) return;
       if (type === 'content_chunk' && typeof data.chunk === 'string' && data.chunk) {
         acc += data.chunk;
         handlers.onChunk?.(data.chunk);
@@ -193,7 +214,7 @@ export async function chatLive(message: string, handlers: ChatHandlers, options:
         if (info) handlers.onRemaining?.(info.remaining, info.max);
       }
     });
-    return acc.length ? { ok: true, text: acc } : { ok: false, reason: 'error' };
+    return complete && !failed && acc.length ? { ok: true, text: acc } : { ok: false, reason: 'error' };
   } catch {
     return { ok: false, reason: 'error' };
   }
@@ -231,8 +252,21 @@ export async function translateLive(
 
   try {
     let acc = '';
+    let complete = false;
+    let failed = false;
     await consumeSse(res.body, (data) => {
-      const type = data.type as string | undefined;
+      const type = data.type;
+      // 服务端 error 不得被之前的正文或之后的 complete 掩盖。
+      if (type === 'error') {
+        failed = true;
+        return;
+      }
+      if (failed) return;
+      if (type === 'complete') {
+        complete = true;
+        return;
+      }
+      if (complete) return;
       if (type === 'content_chunk' && typeof data.chunk === 'string' && data.chunk) {
         acc += data.chunk;
         handlers.onChunk?.(data.chunk);
@@ -241,7 +275,7 @@ export async function translateLive(
         if (info) handlers.onRemaining?.(info.remaining, info.max);
       }
     });
-    return acc.length ? { ok: true, text: acc } : { ok: false, reason: 'error' };
+    return complete && !failed && acc.length ? { ok: true, text: acc } : { ok: false, reason: 'error' };
   } catch {
     return { ok: false, reason: 'error' };
   }
@@ -432,9 +466,7 @@ export async function fetchCourseDetail(uuid: string, signal?: AbortSignal): Pro
   if (!res.ok) return null;
   try {
     const json = (await res.json()) as { success?: boolean; data?: unknown };
-    const cs = json.data as BackendCourse | undefined;
-    if (!json.success || !cs || !Array.isArray(cs.units) || !cs.units.length) return null;
-    return cs;
+    return json?.success ? normalizeBackendCourse(json.data) : null;
   } catch {
     return null;
   }
