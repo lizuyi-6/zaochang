@@ -19,7 +19,7 @@ export async function GET() {
         username: member.displayName,
         email: member.email,
         subscription: {
-          tier: "FREE",
+          tier: credits.tier,
           remaining_credits: credits.remaining,
           max_credits: credits.max,
         },

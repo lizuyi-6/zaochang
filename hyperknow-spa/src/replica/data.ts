@@ -54,9 +54,21 @@ export interface CourseCard {
   provider?: string;
 }
 
-/** D1 课程无封面字段:按标题稳定哈希挑一种封面风格(同一门课每次同款)。 */
+/** 封面分配策略：按主题分类匹配已有矢量封面，无明确分类则按标题稳定哈希，不一律显示话筒封面。 */
 export const coverForTitle = (title: string): CourseCard['cover'] => {
-  const keys: CourseCard['cover'][] = ['sociology', 'bio', 'ml', 'ai', 'history', 'prompt', 'psych', 'sat', 'philo', 'stats'];
+  const t = (title || '').toLowerCase();
+  if (/(machine\s*learning|算法|机器学习|数据科学|深度强化|model|pytorch|tensorflow)/i.test(t)) return 'ml';
+  if (/(\bai\b|llm|agent|gpt|prompt|人工智能|大模型|深度学习|神经网络)/i.test(t)) return 'ai';
+  if (/(code|programming|python|javascript|typescript|react|vue|node|web|前端|编程|代码|工程)/i.test(t)) return 'prompt';
+  if (/(bio|gene|cell|dna|medical|生物|遗传|细胞|进化|医学)/i.test(t)) return 'bio';
+  if (/(psych|mind|brain|mental|心理|情绪|认知|抑郁|意识)/i.test(t)) return 'psych';
+  if (/(philo|logic|think|wisdom|哲学|思考|伦理|逻辑|第一性原理)/i.test(t)) return 'philo';
+  if (/(history|ancient|war|civilization|历史|考古|文明|近代史)/i.test(t)) return 'history';
+  if (/(stat|math|calculus|physics|统计|概率|微积分|数学|物理|高数)/i.test(t)) return 'stats';
+  if (/(exam|sat|gre|gmat|toefl|ielts|考试|考研|备考|冲刺)/i.test(t)) return 'sat';
+  if (/(soci|culture|public|media|社会|政治|文化|传播|社科)/i.test(t)) return 'sociology';
+
+  const keys: CourseCard['cover'][] = ['prompt', 'philo', 'stats', 'ml', 'sociology', 'ai', 'psych', 'bio', 'history', 'sat'];
   let h = 0;
   for (let i = 0; i < title.length; i++) h = (Math.imul(h, 31) + title.charCodeAt(i)) >>> 0;
   return keys[h % keys.length];
@@ -185,6 +197,7 @@ export const marketplaceCategories = (): MarketCategory[] => [
 
 /** Public Speaking 完整课程结构:5 单元,每单元 3 讲 + 1 项目 + 1 测验,讲内若干小节。 */
 export interface SessionRow {
+  sessionId?: string;
   title: string;
   sub?: string;
   upNext?: boolean;

@@ -152,7 +152,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
   const push = (item: Omit<BoardItem, 'x' | 'y'>): void => {
     items.push({ ...item, x: COL_X[cursor.col], y: cursor.y });
     const lh = item.size * 1.24;
-    advance(item.diagram ? 440 : (item.lines?.length ?? 1) * lh);
+    advance(item.diagram ? 440 : item.image ? 280 : (item.lines?.length ?? 1) * lh);
   };
 
   plan.steps.forEach((step, idx) => {
@@ -173,15 +173,69 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
     } else if (action.type === 'formula') {
       push({ id: `f${id}`, step: id, size: 16, mono: true, w: COL_W, lines: [plain(action.latex ?? action.content ?? '')] });
     } else if (action.type === 'diagram') {
-      const code = action.code ?? action.content ?? '';
+      let code = action.code ?? action.content ?? '';
+      const rawNodes = (action as { nodes?: Array<{ id: string; label: string }> }).nodes;
+      const rawEdges = (action as { edges?: Array<{ from: string; to: string; label?: string }> }).edges;
+      if (!code && Array.isArray(rawNodes) && rawNodes.length) {
+        // 结构化节点边转化为标准 Mermaid 语法
+        const nodeLines = rawNodes.map((n) => `  ${n.id}["${n.label}"]`);
+        const edgeLines = (rawEdges ?? []).map((e) => `  ${e.from} -->${e.label ? `|${e.label}| ` : ' '}${e.to}`);
+        code = `graph TD\n${nodeLines.join('\n')}\n${edgeLines.join('\n')}`;
+      }
+
+      // 提取友好降级自然文字，绝不向学员输出原生代码
+      const naturalFallbackText: string[] = [];
+      if (code) {
+        const rawLines = code.split('\n');
+        for (const line of rawLines) {
+          const trimmed = line.trim();
+          if (!trimmed || /^(graph|flowchart|subgraph|end|style|class)/i.test(trimmed)) continue;
+          const cleaned = trimmed
+            .replace(/-->|---|==>/g, ' → ')
+            .replace(/[\[\]\(\)\{\}\"\']/g, '')
+            .trim();
+          if (cleaned) naturalFallbackText.push(cleaned);
+        }
+      }
+      const fallbackDisplayLines = naturalFallbackText.length
+        ? naturalFallbackText.slice(0, 5).map(plain)
+        : [plain(action.title || step.spoken_text || 'Structured Concept Flow')];
+
       push({
         id: `d${id}`,
         step: id,
-        size: 13,
-        mono: true,
+        size: 14,
         w: 360,
         diagram: code,
-        lines: code.split('\n').slice(0, 8).map(plain),
+        lines: fallbackDisplayLines,
+      });
+    } else if (action.type === 'image') {
+      const caption = action.caption ?? action.title ?? '';
+      const prompt = action.prompt ?? '';
+      const isFailed = Boolean((action as { failed?: boolean }).failed);
+      const status: 'pending' | 'ready' | 'failed' = action.url
+        ? 'ready'
+        : isFailed
+        ? 'failed'
+        : 'pending';
+
+      push({
+        id: `img${id}`,
+        step: id,
+        size: 14,
+        w: 360,
+        image: {
+          url: action.url,
+          status,
+          caption: caption || prompt,
+          prompt,
+          width: action.width ?? 340,
+          height: action.height ?? 240,
+        },
+        lines: [
+          plain(caption ? `[${caption}]` : '[Visual Note]'),
+          plain(prompt || step.spoken_text),
+        ],
       });
     }
 

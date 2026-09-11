@@ -18,8 +18,8 @@ import { WhiteboardPage } from './replica/whiteboard/WhiteboardPage';
 import { I18nProvider } from './replica/i18n';
 import { GenerationOverlay } from './replica/GenerationOverlay';
 import { ToastHost } from './replica/toast';
-import { buildGeneratedCourse, type GeneratedCourse } from './replica/generate';
-import { fetchConversations, fetchMarketCourses, fetchMe } from './replica/backend';
+import { courseFromBackend } from './replica/generate';
+import { fetchConversations, fetchCourseDetail, fetchMarketCourses, fetchMe } from './replica/backend';
 import './replica/replica.css';
 
 /* ---------------- hash routing ---------------- */
@@ -50,38 +50,36 @@ function stateFromHash(): Partial<AppState> | null {
     case '/courses':
       return { screen: 'courses', ...done, ...extras };
     case '/course/preview': {
-      /* ?topic= — 从集市/课程页点开的伪生成课程深链(同一话题重建同一份课程) */
-      const genPreview = q.has('topic') ? buildGeneratedCourse(decodeURIComponent(q.get('topic') ?? '')) : null;
-      const coverKeys = ['sociology', 'bio', 'ml', 'ai', 'history', 'prompt', 'psych', 'sat', 'philo', 'stats'];
-      const coverParam = q.get('cover');
-      return {
-        screen: 'coursePreview',
-        ...(genPreview
-          ? { generated: { ...genPreview, ...(coverParam && coverKeys.includes(coverParam) ? { cover: coverParam as GeneratedCourse['cover'] } : {}) } }
-          : {}),
-        ...extras,
-      };
+      // 路由层严禁 buildGeneratedCourse 伪造课程。必须依赖真实 UUID，旧 topic 安全回退课程列表
+      const uuid = q.get('uuid') || q.get('id');
+      if (uuid) {
+        return {
+          screen: 'coursePreview',
+          activeCourseUuid: uuid,
+          courseLoading: true,
+          courseError: null,
+          courseJoined: false,
+          ...extras,
+        };
+      }
+      return { screen: 'courses', courseLoading: false, courseError: null, ...extras };
     }
-    case '/course/journey':
-      return {
-        screen: 'courseJourney',
-        courseJoined: true,
-        ...(q.has('done') ? { lectureDone: true } : {}),
-        /* ?prompt=1 = lecture-complete practice modal (ref 61) */
-        ...(q.has('prompt') ? { lectureDone: true, lectureCompletePrompt: true } : {}),
-        /* ?topic= — 伪生成课程深链(同一话题重建同一份课程);cover 让封面风格一并还原 */
-        ...(q.has('topic')
-          ? {
-              generated: (() => {
-                const g = buildGeneratedCourse(decodeURIComponent(q.get('topic') ?? ''));
-                const coverKeys = ['sociology', 'bio', 'ml', 'ai', 'history', 'prompt', 'psych', 'sat', 'philo', 'stats'];
-                const coverParam = q.get('cover');
-                return coverParam && coverKeys.includes(coverParam) ? { ...g, cover: coverParam as GeneratedCourse['cover'] } : g;
-              })(),
-            }
-          : {}),
-        ...extras,
-      };
+    case '/course/journey': {
+      const uuid = q.get('uuid') || q.get('id');
+      if (uuid) {
+        return {
+          screen: 'courseJourney',
+          activeCourseUuid: uuid,
+          courseJoined: true,
+          courseLoading: true,
+          courseError: null,
+          ...(q.has('done') ? { lectureDone: true } : {}),
+          ...(q.has('prompt') ? { lectureDone: true, lectureCompletePrompt: true } : {}),
+          ...extras,
+        };
+      }
+      return { screen: 'courses', courseLoading: false, courseError: null, ...extras };
+    }
     case '/marketplace':
       return { screen: 'marketplace', ...done, ...extras };
     case '/plans':
@@ -102,14 +100,14 @@ function hashFor(s: AppState): string {
   switch (s.screen) {
     case 'onboarding':
       return `#/onboarding/${s.onboardingStep}`;
-    case 'coursePreview':
-      return s.generated
-        ? `#/course/preview?topic=${encodeURIComponent(s.generated.topic)}${s.generated.cover ? `&cover=${s.generated.cover}` : ''}`
-        : '#/course/preview';
-    case 'courseJourney':
-      return s.generated
-        ? `#/course/journey?topic=${encodeURIComponent(s.generated.topic)}${s.generated.cover ? `&cover=${s.generated.cover}` : ''}`
-        : '#/course/journey';
+    case 'coursePreview': {
+      const uuid = s.activeCourseUuid || (s.generated as { courseUuid?: string })?.courseUuid;
+      return uuid ? `#/course/preview?uuid=${encodeURIComponent(uuid)}` : '#/courses';
+    }
+    case 'courseJourney': {
+      const uuid = s.activeCourseUuid || (s.generated as { courseUuid?: string })?.courseUuid;
+      return uuid ? `#/course/journey?uuid=${encodeURIComponent(uuid)}` : '#/courses';
+    }
     case 'whiteboard':
       return s.whiteboardMode === 'practice' ? '#/whiteboard?practice=1' : '#/whiteboard';
     default:
@@ -171,7 +169,13 @@ export const App: React.FC = () => {
         fetchConversations(),
         fetchMarketCourses(),
       ]);
-      if (alive) set({ identity, conversations, bootReady: true, ...(marketCourses ? { marketCourses, marketStale: false } : {}) });
+      if (alive) set({
+        identity,
+        plan: (identity?.tier as AppState['plan']) || 'FREE',
+        conversations,
+        bootReady: true,
+        ...(marketCourses ? { marketCourses, marketStale: false } : {}),
+      });
     })();
     return () => {
       alive = false;
@@ -193,12 +197,61 @@ export const App: React.FC = () => {
     };
   }, [state.screen, state.marketStale, state.marketCourses, set]);
 
+  /* 真实课程 UUID 深链与详情加载，带 loading / error 状态保护，彻底废除伪造课程 */
+  useEffect(() => {
+    const isCourseScreen = state.screen === 'coursePreview' || state.screen === 'courseJourney';
+    const uuid = state.activeCourseUuid;
+    if (!isCourseScreen || !uuid) return;
+    // 如果已有对应的真实课程树则无需重复拉取
+    if (state.generated && (state.generated as { courseUuid?: string }).courseUuid === uuid) return;
+
+    let alive = true;
+    const ctrl = new AbortController();
+    void (async () => {
+      try {
+        set({ courseLoading: true, courseError: null });
+        const detail = await fetchCourseDetail(uuid, ctrl.signal);
+        if (!alive) return;
+        if (detail) {
+          const generated = {
+            ...courseFromBackend(detail, detail.courseTitle),
+            courseUuid: uuid,
+          };
+          set({
+            generated,
+            courseLoading: false,
+            courseError: null,
+          });
+        } else {
+          // 404 或未授权安全报错，回退 courses 屏避免白屏或伪造
+          set({
+            courseLoading: false,
+            courseError: 'course_not_found',
+            screen: 'courses',
+          });
+        }
+      } catch {
+        if (!alive) return;
+        set({
+          courseLoading: false,
+          courseError: 'network_error',
+          screen: 'courses',
+        });
+      }
+    })();
+
+    return () => {
+      alive = false;
+      ctrl.abort();
+    };
+  }, [state.screen, state.activeCourseUuid, state.generated, set]);
+
   const s = state.screen;
   const shell = s !== 'signin' && s !== 'onboarding' && s !== 'whiteboard';
 
   return (
     <I18nProvider>
-      <div className={`hk-root${state.sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+      <div className={`hk-root${shell ? ' hk-shell' : ''}${state.sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <div className="hk-dotfield" />
 
         {shell && <ReplicaSidebar state={state} set={set} />}

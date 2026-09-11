@@ -245,6 +245,10 @@ function contentCrop(ctx: CanvasRenderingContext2D, snap: BoardSnapshot): Crop {
         continue;
       }
     }
+    if (item.image) {
+      grow(item.x, item.y, item.image.width ?? 340, item.image.height ?? 240);
+      continue;
+    }
     const lh = item.mono ? MONO_LH : item.size * 1.24;
     grow(item.x, item.y, itemWidth(ctx, item, snap.standardFont), item.lines.length * lh);
   }
@@ -333,6 +337,22 @@ async function renderBoard(page: ExportPage, snap: BoardSnapshot): Promise<HTMLC
       const r = renderDiagram(item.diagram)!;
       const box = diagramBox(r);
       ctx.drawImage(img, item.x, item.y, box.w, box.h);
+    } else if (item.image) {
+      // 真实生图在 Canvas 导出时绘制占位或已加载图像
+      ctx.save();
+      ctx.fillStyle = '#F3F4F6';
+      ctx.strokeStyle = '#D1D5DB';
+      ctx.lineWidth = 1;
+      const w = item.image.width ?? 340;
+      const h = item.image.height ?? 240;
+      ctx.fillRect(item.x, item.y, w, h);
+      ctx.strokeRect(item.x, item.y, w, h);
+      if (item.image.caption) {
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '13px ' + SANS;
+        ctx.fillText(item.image.caption, item.x + 8, item.y + h - 10);
+      }
+      ctx.restore();
     } else {
       drawItem(ctx, item, snap.standardFont);
     }

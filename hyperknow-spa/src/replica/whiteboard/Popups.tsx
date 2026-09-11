@@ -647,11 +647,11 @@ export const QuickCheck: React.FC<{
   options: string[];
   selected: number | null;
   onSelect: (i: number) => void;
-  centerX: number;
-}> = ({ question, options, selected, onSelect, centerX }) => {
+  centerX?: number;
+}> = ({ question, options, selected, onSelect }) => {
   const { t } = useI18n();
   return (
-  <div className="wb-quickcheck" style={{ left: centerX }}>
+  <div className="wb-quickcheck">
     <div className="q">{question}</div>
     <div className="opts">
       {options.map((o, i) => (
@@ -672,10 +672,10 @@ export const QuickCheck: React.FC<{
 
 /* ---------------- Listening pill ---------------- */
 
-export const ListenPill: React.FC<{ centerX: number }> = ({ centerX }) => {
+export const ListenPill: React.FC<{ centerX?: number }> = () => {
   const { t } = useI18n();
   return (
-  <div className="wb-listen-pill" style={{ left: centerX }}>
+  <div className="wb-listen-pill">
     <span className="dot" /> {t('courseSession.interjectListening')}
   </div>
   );

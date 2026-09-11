@@ -3,8 +3,6 @@ import { Search, ChevronLeft, ChevronRight, ArrowUpRight, Star } from 'lucide-re
 import type { PageProps } from '../types';
 import { CourseCover } from '../illustrations';
 import { coverForTitle } from '../data';
-import { buildGeneratedCourse, courseFromBackend } from '../generate';
-import { fetchCourseDetail } from '../backend';
 import { KandinskyCover, KnotMark } from './CourseJourney';
 import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
@@ -49,18 +47,26 @@ const MARKET_ROWS = [
   /* 已加入的课程就是当前 generated(伪生成/后端课);无 generated 时回退演示公开演讲课 */
   const joinedTitle = state.generated?.title ?? L('Public Speaking', '公开演讲');
   const joinedCover = state.generated?.cover;
-  /* 集市行预览:kandinsky 行 = 演示公开演讲课(generated 置空),其余按书名伪生成 */
-  const openMarketRow = (row: (typeof MARKET_ROWS)[number]) =>
-    set(
-      row.cover === 'kandinsky'
-        ? { screen: previewTarget, generated: null, courseJoined: false, lectureDone: false }
-        : {
-            screen: previewTarget,
-            generated: { ...buildGeneratedCourse(row.title), cover: row.cover },
-            courseJoined: false,
-            lectureDone: false,
-          },
-    );
+  /* 集市行预览:kandinsky 行 = 演示公开演讲课(generated 置空),其余根据市场课程真实 UUID 进入 */
+  const openMarketRow = (row: (typeof MARKET_ROWS)[number]) => {
+    if (row.cover === 'kandinsky') {
+      set({ screen: previewTarget, generated: null, activeCourseUuid: undefined, courseJoined: false, lectureDone: false });
+    } else {
+      // 匹配市场真实课程
+      const matched = state.marketCourses?.find((m) => m.title.toLowerCase().includes(row.title.toLowerCase()));
+      if (matched?.uuid) {
+        set({
+          screen: previewTarget,
+          activeCourseUuid: matched.uuid,
+          courseJoined: false,
+          lectureDone: false,
+        });
+      } else {
+        // 无真实课程时进入课程市场挑选真实课程
+        set({ screen: 'marketplace' });
+      }
+    }
+  };
 
   /* 周条:真实日期按周偏移滚动(学习时长目前无后端记录,数值仍为 0) */
   const days = useMemo(() => {
@@ -85,22 +91,17 @@ const MARKET_ROWS = [
     state.courseJoined &&
     (tab === 'all' || (tab === 'progress' && !state.lectureDone) || (tab === 'completed' && state.lectureDone)) &&
     (!q || joinedTitle.toLowerCase().includes(q));
-  /* D1 里的本人课程(刷新不丢):先按书名占位进旅程,详情到达后换真课程树;
-   * 当前会话正在学的那门不重复出卡 */
+  /* D1 里的本人课程(刷新不丢): 直接以 activeCourseUuid 驱动加载真课程，彻底杜绝伪生成占位与异步串课 */
   const mineCourses = useMemo(
     () => (state.marketCourses ?? []).filter((m) => m.uuid && m.title !== joinedTitle),
     [state.marketCourses, joinedTitle],
   );
-  const openMine = (uuid: string, title: string) => {
-    const cover = coverForTitle(title);
+  const openMine = (uuid: string) => {
     set({
       screen: 'courseJourney',
+      activeCourseUuid: uuid,
       courseJoined: true,
       lectureDone: false,
-      generated: { ...buildGeneratedCourse(title), cover },
-    });
-    void fetchCourseDetail(uuid).then((cs) => {
-      if (cs) set({ generated: { ...courseFromBackend(cs, title), cover } });
     });
   };
   const shelfMine =
@@ -191,7 +192,7 @@ const MARKET_ROWS = [
                         <button
                           type="button"
                           className="cs-preview"
-                          onClick={() => openMine(m.uuid as string, m.title)}
+                          onClick={() => openMine(m.uuid as string)}
                         >
                           {t('marketplacePage.previewCta')}
                         </button>

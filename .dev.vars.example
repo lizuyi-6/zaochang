@@ -12,3 +12,23 @@ AI_CHAT_MODEL=step-explore
 # HYPERKNOW_AI_BASE_URL=
 # HYPERKNOW_AI_API_KEY=
 # HYPERKNOW_AI_MODEL=
+#
+# 课程生成联网研学配置(可选):
+# 供应商 HK_WEB_SEARCH_PROVIDER 可选 stepfun / tavily / brave / cloudflare / off。
+# 默认优先现有 AI 渠道 (stepfun),复用 AI_CHAT_BASE_URL/API_KEY,使用独立 HK_WEB_SEARCH_MODEL,
+# 绝不硬编码官方地址或回退,且 stepfun 忽略 HK_WEB_SEARCH_BASE_URL。
+# HK_WEB_SEARCH_PROVIDER=stepfun
+# HK_WEB_SEARCH_MODEL=step-3.7-flash
+# 外部传统搜索供应商密钥(保留显式配置):
+# HK_TAVILY_API_KEY=
+# HK_BRAVE_SEARCH_API_KEY=
+# HK_SEARCH_ACCOUNT_ID=
+# HK_SEARCH_API_TOKEN=
+# HK_WEB_SEARCH_BASE_URL=
+#
+# Hyperknow 白板按需生图 (StepFun 阶跃星辰图像生成):
+# 复用 AI_CHAT_BASE_URL / AI_CHAT_API_KEY (自动规范化终端为 images/generations, 绝不回退官方地址)
+# 总开关: true / false (默认 true)
+# HK_IMAGE_ENABLED=true
+# 阶跃生图模型配置: 默认 step-image-edit-2 (官方 2026-10-10 下线旧模型风险)
+# HK_IMAGE_MODEL=step-image-edit-2

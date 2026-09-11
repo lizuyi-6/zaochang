@@ -35,17 +35,138 @@ export interface BackendCourse {
 
 export type GenStepId = 'boot' | 'researching_the_web' | 'generating_initial_syllabus';
 
+export interface CourseGenProgressData {
+  round?: number;
+  total_rounds?: number;
+  sources?: number;
+  status?: string;
+  provider?: string;
+  titles?: string[];
+  links?: string[];
+  reason?: string;
+  keywords?: string[];
+}
+
+export interface CourseUnitProgressData {
+  unit_index: number;
+  total_units: number;
+  unit_id?: string;
+  title?: string;
+  completed?: boolean;
+  loading?: boolean;
+  cached?: boolean;
+}
+
 export interface GenHandlers {
-  onStep?: (stepId: GenStepId, status: 'loading' | 'completed') => void;
-  onProgress?: (message: string) => void;
+  onStep?: (stepId: GenStepId, status: 'loading' | 'completed', data?: Record<string, unknown>) => void;
+  onProgress?: (message: string, data?: CourseGenProgressData) => void;
+  onBlueprint?: (blueprint: BlueprintData, requiresConfirmation?: boolean, courseUuid?: string) => void;
+  onUnitProgress?: (data: CourseUnitProgressData) => void;
   /** credit_status 帧:后端扣费后的真实余额(每日 20,课程 10/次) */
   onRemaining?: (remaining: number, max: number) => void;
+}
+
+export type CourseDepth = 'overview' | 'systematic' | 'deep';
+
+export function normalizeDepth(depth?: string): CourseDepth {
+  if (!depth) return 'systematic';
+  const d = depth.trim().toLowerCase();
+  if (d === 'overview' || d.includes('overview') || d.includes('通识') || d.includes('入门') || d.includes('速成')) {
+    return 'overview';
+  }
+  if (d === 'deep' || d.includes('deep') || d.includes('严谨') || d.includes('工业') || d.includes('深度') || d.includes('学术')) {
+    return 'deep';
+  }
+  return 'systematic';
+}
+
+export interface CourseBriefParams {
+  version?: number;
+  goal?: string;
+  background?: string;
+  duration?: string;
+  depth?: CourseDepth | string;
+  preference?: string;
+  language?: string;
+  visual?: string;
+}
+
+export interface InquiryQuestion {
+  id: string;
+  field: keyof Omit<CourseBriefParams, 'version'>;
+  prompt: string;
+  recommended: string;
+  options: string[];
+}
+
+export interface InquiryResult {
+  brief: CourseBriefParams;
+  questions: InquiryQuestion[];
+  followUpAllowed: boolean;
+  followUpRound: number;
+}
+
+/** 课程前置问询与最多 2 轮智能追问 (带 5s 严格超时防卡死) */
+export async function fetchCourseInquiry(args: {
+  topic: string;
+  brief?: CourseBriefParams;
+  answers?: Record<string, string>;
+  followUpRound?: number;
+}): Promise<InquiryResult | null> {
+  try {
+    const timeout = AbortSignal.timeout(5000);
+    const res = await fetch('/api/hyperknow/course-inquiry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: timeout,
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as InquiryResult;
+  } catch {
+    return null;
+  }
+}
+
+export interface CourseGenParams {
+  query?: string;
+  brief?: CourseBriefParams;
+  idempotencyKey?: string;
+  resumeUuid?: string;
+  action?: 'confirm_blueprint' | 'generate_units';
+  selectedUnits?: string[];
+  requireConfirmation?: boolean;
 }
 
 /** 在线调用失败原因:offline=静态托管/断网(可伪生成兜底);insufficient=积分不足(绝不可兜底);error=后端/上游故障。 */
 export type LiveFailureReason = 'offline' | 'insufficient' | 'error';
 
-export type CourseGenResult = { ok: true; course: BackendCourse } | { ok: false; reason: LiveFailureReason };
+export interface BlueprintData {
+  courseTitle?: string;
+  courseDescription?: string;
+  targetLearner?: string;
+  tags?: string[];
+  totalUnits?: number;
+  totalLectures?: number;
+  totalSessions?: number;
+  estimatedMinutes?: number;
+  estimatedHours?: number;
+  units?: Array<{
+    unitId?: string;
+    title?: string;
+    prerequisites?: string[];
+    objectives?: string[];
+    completionCriteria?: string[];
+    lectureCount?: number;
+    sessionCount?: number;
+    estimatedMinutes?: number;
+  }>;
+}
+
+export type CourseGenResult =
+  | { ok: true; course: BackendCourse }
+  | { ok: true; blueprint: BlueprintData; courseUuid: string; requiresConfirmation: true }
+  | { ok: false; reason: LiveFailureReason };
 
 /** 解析一条 "data: {...}" 行;非 data 行返回 null。 */
 function parseDataLine(line: string): Record<string, unknown> | null {
@@ -106,13 +227,18 @@ function creditInfoOf(data: Record<string, unknown>): { remaining: number; max: 
  * 真实课程生成。积分不足(insufficient)必须由调用方显式提示,绝不能落进伪生成
  * 兜底——否则"没积分"反而白拿一门假课。断网/静态托管(offline)才允许伪生成。
  */
-export async function generateCourseLive(query: string, handlers: GenHandlers, signal?: AbortSignal): Promise<CourseGenResult> {
+export async function generateCourseLive(
+  input: string | CourseGenParams,
+  handlers: GenHandlers,
+  signal?: AbortSignal,
+): Promise<CourseGenResult> {
+  const reqBody = typeof input === 'string' ? { query: input } : input;
   let res: Response;
   try {
     res = await fetch('/api/hyperknow/course-generation', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(reqBody),
       signal,
     });
   } catch {
@@ -123,14 +249,32 @@ export async function generateCourseLive(query: string, handlers: GenHandlers, s
   if (!ct.includes('text/event-stream') || !res.body) return { ok: false, reason: 'error' };
 
   try {
-    /* 用容器规避 TS 对闭包内赋值的收窄(直接 let 会被推断为 never) */
-    const found: { course: BackendCourse | null; failed: boolean } = { course: null, failed: false };
+    const found: {
+      course: BackendCourse | null;
+      blueprint: BlueprintData | null;
+      courseUuid: string;
+      requiresConfirmation: boolean;
+      failed: boolean;
+    } = { course: null, blueprint: null, courseUuid: '', requiresConfirmation: false, failed: false };
+
     await consumeSse(res.body, (data) => {
       const type = data.type as string | undefined;
       if (type === 'course_generation_step') {
         handlers.onStep?.(data.step_id as GenStepId, data.status as 'loading' | 'completed');
       } else if (type === 'course_generation_progress') {
-        handlers.onProgress?.(String(data.message ?? ''));
+        handlers.onProgress?.(String(data.message ?? ''), data.data as CourseGenProgressData | undefined);
+      } else if (type === 'blueprint_ready') {
+        const bp = data.blueprint as BlueprintData | undefined;
+        const reqConfirm = Boolean(data.requires_confirmation);
+        const uuid = String(data.course_uuid ?? '');
+        if (bp) {
+          found.blueprint = bp;
+          found.courseUuid = uuid;
+          found.requiresConfirmation = reqConfirm;
+          handlers.onBlueprint?.(bp, reqConfirm, uuid);
+        }
+      } else if (type === 'course_unit_progress') {
+        handlers.onUnitProgress?.(data.data as CourseUnitProgressData);
       } else if (type === 'course_structure_ready') {
         found.course = normalizeBackendCourse(data.course);
         if (!found.course) found.failed = true;
@@ -141,8 +285,13 @@ export async function generateCourseLive(query: string, handlers: GenHandlers, s
         if (info) handlers.onRemaining?.(info.remaining, info.max);
       }
     });
-    const course = found.course;
-    return course && !found.failed ? { ok: true, course } : { ok: false, reason: 'error' };
+
+    if (found.failed) return { ok: false, reason: 'error' };
+    if (found.course) return { ok: true, course: found.course };
+    if (found.blueprint && found.requiresConfirmation) {
+      return { ok: true, blueprint: found.blueprint, courseUuid: found.courseUuid, requiresConfirmation: true };
+    }
+    return { ok: false, reason: 'error' };
   } catch {
     return { ok: false, reason: 'error' };
   }
@@ -283,15 +432,24 @@ export async function translateLive(
 
 /* ---------------- 白板讲座计划(直播放适配器) ---------------- */
 
+const ACTION_TYPES = ['card', 'formula', 'diagram', 'image', 'quick_check'] as const;
+
 export interface LiveBoardAction {
-  type: 'card' | 'formula' | 'diagram' | 'quick_check';
+  type: (typeof ACTION_TYPES)[number];
   title?: string;
   content?: string;
   latex?: string;
   code?: string;
+  prompt?: string;
+  caption?: string;
+  url?: string;
+  width?: number;
+  height?: number;
   question?: string;
   options?: string[];
   answer?: number;
+  nodes?: Array<{ id: string; label: string }>;
+  edges?: Array<{ from: string; to: string; label?: string }>;
 }
 
 export interface LiveLectureStep {
@@ -306,20 +464,35 @@ export interface LiveLecturePlan {
   steps: LiveLectureStep[];
 }
 
-const ACTION_TYPES = ['card', 'formula', 'diagram', 'quick_check'] as const;
+export interface PlanLectureParams {
+  topic: string;
+  courseUuid?: string;
+  unitId?: string;
+  lectureId?: string;
+  sessionId?: string;
+  language?: string;
+}
 
 /**
  * 真实白板讲座计划(原 WS whiteboard/ws 的无状态化端点,见 HYPERKNOW.md)。
+ * 支持 courseUuid/unitId/lectureId/sessionId 严密锁定，拒绝默认第一讲。
+ * 支持 language 字段供白板代理传入，默认 zh-CN。
  * 返回 null = 不可用(未登录/静态托管/限流/上游故障),调用方回退本地演示
  * 脚本——与其余端点同一双轨纪律。不扣积分(限流 20/h)。
  */
-export async function planLectureLive(topic: string, signal?: AbortSignal): Promise<LiveLecturePlan | null> {
+export async function planLectureLive(
+  params: string | PlanLectureParams,
+  signal?: AbortSignal,
+): Promise<LiveLecturePlan | null> {
+  const reqBody = typeof params === 'string'
+    ? { topic: params, language: 'zh-CN' }
+    : { language: 'zh-CN', ...params };
   let res: Response;
   try {
     res = await fetch('/api/hyperknow/whiteboard/plan', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ topic }),
+      body: JSON.stringify(reqBody),
       signal,
     });
   } catch {
@@ -341,6 +514,11 @@ export async function planLectureLive(topic: string, signal?: AbortSignal): Prom
         ...(typeof action.content === 'string' && action.content ? { content: action.content } : {}),
         ...(typeof action.latex === 'string' && action.latex ? { latex: action.latex } : {}),
         ...(typeof action.code === 'string' && action.code ? { code: action.code } : {}),
+        ...(typeof action.prompt === 'string' && action.prompt ? { prompt: action.prompt } : {}),
+        ...(typeof action.caption === 'string' && action.caption ? { caption: action.caption } : {}),
+        ...(typeof action.url === 'string' && action.url ? { url: action.url } : {}),
+        ...(typeof action.width === 'number' ? { width: action.width } : {}),
+        ...(typeof action.height === 'number' ? { height: action.height } : {}),
         ...(typeof action.question === 'string' && action.question ? { question: action.question } : {}),
         ...(Array.isArray(action.options)
           ? { options: action.options.filter((o): o is string => typeof o === 'string' && !!o).slice(0, 4) }
@@ -350,8 +528,55 @@ export async function planLectureLive(topic: string, signal?: AbortSignal): Prom
       steps.push({ step_id: String(step.step_id ?? `step_${steps.length + 1}`), spoken_text: step.spoken_text, board_action });
     }
     return steps.length
-      ? { session_id: typeof json.session_id === 'string' ? json.session_id : '', topic: String(json.topic ?? topic), steps }
+      ? { session_id: typeof json.session_id === 'string' ? json.session_id : '', topic: String(json.topic ?? reqBody.topic), steps }
       : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ---------------- 白板课堂按需生图(阶跃生图接入) ---------------- */
+
+export interface FetchImageParams {
+  prompt: string;
+  caption?: string;
+  courseUuid?: string;
+  unitId?: string;
+  lectureId?: string;
+  sessionId?: string;
+}
+
+export interface FetchImageResult {
+  url: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+  cached?: boolean;
+}
+
+export async function fetchLectureImageLive(
+  params: FetchImageParams,
+  signal?: AbortSignal,
+): Promise<FetchImageResult | null> {
+  try {
+    const res = await fetch('/api/hyperknow/whiteboard/image', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(params),
+      signal,
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { url?: string; caption?: string; width?: number; height?: number; cached?: boolean };
+    if (typeof json.url === 'string' && json.url) {
+      return {
+        url: json.url,
+        caption: json.caption ?? params.caption,
+        width: json.width,
+        height: json.height,
+        cached: json.cached,
+      };
+    }
+    return null;
   } catch {
     return null;
   }

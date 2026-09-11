@@ -52,7 +52,11 @@ export const ReplicaHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
       <div className="hk-header">
         {showPlan && (
           <>
-            <span className="hk-free-badge">{state.identity?.tier ?? 'FREE'}</span>
+            <span
+              className={`hk-free-badge${(state.identity?.tier || state.plan) === 'MAX' ? ' hk-tier-max' : ''}`}
+            >
+              {(state.identity?.tier || state.plan) === 'MAX' ? '✦ MAX' : (state.identity?.tier ?? 'FREE')}
+            </span>
             <span className="hk-energy" title={L('Energy', '能量')}>
               <Sparkles size={16} />
               <span>{energy}</span>

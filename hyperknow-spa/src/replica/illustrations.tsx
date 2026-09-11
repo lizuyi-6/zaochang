@@ -361,218 +361,90 @@ export type CoverKind =
   | 'sociology' | 'bio' | 'ml' | 'ai' | 'history' | 'prompt' | 'psych' | 'sat' | 'philo' | 'stats';
 
 const coverBg: Record<CoverKind, string> = {
-  sociology: '#F2F1EC',
-  bio: '#F5F6D8',
-  ml: '#F3E9D2',
-  ai: 'linear-gradient(180deg, #E5EEDC 0%, #8E968A 55%, #474B4B 100%)',
-  history: 'linear-gradient(180deg, #DDDFF5 0%, #8A8DA6 55%, #484B57 100%)',
-  prompt: 'linear-gradient(180deg, #E5EEDC 0%, #8E968A 55%, #474B4B 100%)',
-  psych: 'linear-gradient(180deg, #FBF2D2 0%, #A79F7E 55%, #4A4636 100%)',
-  sat: 'linear-gradient(180deg, #D6E8F8 0%, #7E8CA8 55%, #3E4450 100%)',
-  philo: '#C7BFA8',
-  stats: '#DCEBDC',
+  sociology: '#E8EBDD', bio: '#EDF0DF', ml: '#F2E7CD', ai: '#DFE9E2',
+  history: '#EEE4D3', prompt: '#E5EBDF', psych: '#F1E7D8', sat: '#E6EBE4',
+  philo: '#EEEADF', stats: '#E5ECDA',
+};
+
+const plates: Record<CoverKind, React.ReactNode> = {
+  sociology: <>
+    <circle cx="100" cy="67" r="39" fill={'#A9BCA5'} stroke="none" />
+    <path d="m60 43 40 48 40-48M60 43h80M60 43v48h80V43M60 91l40-48 40 48" />
+    <circle cx="60" cy="43" r="12" fill={'#F7F4EC'} /><circle cx="140" cy="43" r="12" fill={'#D9A441'} />
+    <circle cx="100" cy="91" r="12" fill={ink} /><circle cx="60" cy="91" r="7" fill={'#F7F4EC'} /><circle cx="140" cy="91" r="7" fill={'#F7F4EC'} />
+  </>,
+  bio: <>
+    <circle cx="104" cy="67" r="43" fill={'#A9BCA5'} stroke="none" />
+    <path d="M71 28c0 26 58 50 58 78M129 28c0 26-58 50-58 78" strokeWidth="3" />
+    <path d="M74 36h52M84 48h32M91 60h18M82 78h36M73 94h54" />
+    <path d="M144 83c0-20 14-27 27-25-1 17-12 27-27 25Z" fill={'#D9A441'} />
+    <path d="m143 91 17-22" /><circle cx="51" cy="52" r="10" fill={'#F7F4EC'} /><circle cx="51" cy="52" r="3" fill={ink} />
+  </>,
+  ml: <>
+    <path d="M44 30v75h118" /><path d="m48 97 25-14 24 1 24-32 33-14" strokeWidth="3" />
+    <path d="M53 104V85h16v19M83 104V72h16v32M113 104V56h16v48M143 104V35h16v69" fill={'#A9BCA5'} stroke="none" />
+    <path d="m48 97 25-14 24 1 24-32 33-14" />
+    <circle cx="73" cy="83" r="5" fill={'#F7F4EC'} /><circle cx="97" cy="84" r="5" fill={'#F7F4EC'} /><circle cx="121" cy="52" r="5" fill={'#D9A441'} /><circle cx="154" cy="38" r="7" fill={'#D9A441'} />
+  </>,
+  ai: <>
+    <circle cx="100" cy="67" r="43" fill={'#A9BCA5'} stroke="none" />
+    <path d="m49 40 51 27-51 27M151 40l-51 27 51 27M100 24v86M49 40h102M49 94h102" />
+    <rect x="80" y="47" width="40" height="40" rx="7" fill={ink} />
+    <path d="m90 68 7 7 14-17" stroke={'#F7F4EC'} strokeWidth="3" />
+    <circle cx="49" cy="40" r="8" fill={'#F7F4EC'} /><circle cx="151" cy="40" r="8" fill={'#D9A441'} /><circle cx="49" cy="94" r="8" fill={'#D9A441'} /><circle cx="151" cy="94" r="8" fill={'#F7F4EC'} />
+  </>,
+  history: <>
+    <circle cx="137" cy="47" r="26" fill={'#D9A441'} stroke="none" />
+    <path d="M50 102V58a34 34 0 0 1 68 0v44" fill={'#A9BCA5'} />
+    <path d="M69 102V59a15 15 0 0 1 30 0v43" fill={'#F7F4EC'} />
+    <path d="M44 104h118M48 110h118M127 78h28v25h-28zM133 71h16v7h-16" />
+    <path d="M50 58h19M99 58h19M55 40l17 8M96 48l17-8M84 25v19" />
+  </>,
+  prompt: <>
+    <rect x="40" y="30" width="105" height="59" rx="7" fill={'#A9BCA5'} />
+    <path d="m57 48 10 9-10 9M78 66h28" strokeWidth="3" />
+    <path d="M88 73h73v30h-15l-13 11v-11H88Z" fill={'#F7F4EC'} />
+    <circle cx="105" cy="88" r="3" fill={ink} /><circle cx="124" cy="88" r="3" fill={ink} /><circle cx="143" cy="88" r="3" fill={ink} />
+    <path d="m154 26 4 9 10 3-10 4-4 10-4-10-10-4 10-3Z" fill={'#D9A441'} stroke="none" />
+  </>,
+  psych: <>
+    <circle cx="108" cy="66" r="43" fill={'#A9BCA5'} stroke="none" />
+    <path d="M66 107V88l-15-9 12-20a35 35 0 0 1 70-2c0 19-12 28-12 50Z" fill={'#F7F4EC'} />
+    <path d="M83 67c-17-13 8-34 23-20 13 13-6 29-16 17-8-10 9-19 13-7M87 81h25M92 88h15" />
+    <circle cx="155" cy="51" r="9" fill={'#D9A441'} /><path d="M146 51h-14M155 60v21h-18" />
+  </>,
+  sat: <>
+    <path d="M54 27h76l19 19v63H54Z" fill={'#F7F4EC'} />
+    <path d="M130 27v20h19" fill={'#A9BCA5'} />
+    <path d="m67 54 4 4 8-10m-12 27 4 4 8-10m-12 27 4 4 8-10M89 54h27M89 75h40M89 96h30" />
+    <path d="m139 98 21-55 8 3-21 55-9 10Z" fill={'#D9A441'} /><path d="m156 55 8 3" />
+    <circle cx="44" cy="36" r="10" fill={'#A9BCA5'} stroke="none" />
+  </>,
+  philo: <>
+    <circle cx="75" cy="64" r="34" fill={'#A9BCA5'} /><circle cx="121" cy="64" r="34" fill={'#F7F4EC'} />
+    <path d="M98 39a34 34 0 0 1 0 50 34 34 0 0 1 0-50Z" fill={'#D9A441'} />
+    <path d="M49 107h100M98 91v16M89 103h18" />
+    <circle cx="98" cy="59" r="4" fill={ink} /><path d="M98 71v7" strokeWidth="3" />
+  </>,
+  stats: <>
+    <path d="M37 105h130M43 105V32" />
+    <path d="M55 105V88h17v17M77 105V62h17v43M99 105V41h17v64M121 105V70h17v35M143 105V91h17v14" fill={'#A9BCA5'} stroke="none" />
+    <path d="M43 101c28 0 29-66 57-66s28 66 61 66" strokeWidth="3" />
+    <path d="M100 35v70" strokeDasharray="3 4" /><circle cx="100" cy="35" r="7" fill={'#D9A441'} />
+  </>,
 };
 
 const CoverArt: React.FC<{ kind: CoverKind }> = ({ kind }) => {
-  switch (kind) {
-    case 'bio':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140">
-          {/* DNA double helix: two crossing strands + rungs */}
-          <g stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round">
-            <path d="M124.0 12.0 L 123.8 14.0 L 123.3 16.0 L 122.5 17.9 L 121.3 19.9 L 119.8 21.9 L 118.0 23.9 L 116.0 25.9 L 113.8 27.8 L 111.3 29.8 L 108.7 31.8 L 106.0 33.8 L 103.1 35.8 L 100.3 37.7 L 97.4 39.7 L 94.5 41.7 L 91.8 43.7 L 89.1 45.7 L 86.7 47.6 L 84.4 49.6 L 82.3 51.6 L 80.5 53.6 L 79.0 55.6 L 77.7 57.5 L 76.8 59.5 L 76.2 61.5 L 76.0 63.5 L 76.1 65.5 L 76.6 67.4 L 77.4 69.4 L 78.5 71.4 L 79.9 73.4 L 81.6 75.4 L 83.6 77.3 L 85.8 79.3 L 88.2 81.3 L 90.8 83.3 L 93.5 85.3 L 96.4 87.2 L 99.2 89.2 L 102.1 91.2 L 104.9 93.2 L 107.7 95.2 L 110.4 97.1 L 112.9 99.1 L 115.2 101.1 L 117.3 103.1 L 119.2 105.1 L 120.8 107.0 L 122.1 109.0 L 123.0 111.0 L 123.7 113.0 L 124.0 115.0 L 123.9 116.9 L 123.5 118.9 L 122.8 120.9 L 121.7 122.9 L 120.4 124.9" />
-            <path d="M76.0 12.0 L 76.2 14.0 L 76.7 16.0 L 77.5 17.9 L 78.7 19.9 L 80.2 21.9 L 82.0 23.9 L 84.0 25.9 L 86.2 27.8 L 88.7 29.8 L 91.3 31.8 L 94.0 33.8 L 96.9 35.8 L 99.7 37.7 L 102.6 39.7 L 105.5 41.7 L 108.2 43.7 L 110.9 45.7 L 113.3 47.6 L 115.6 49.6 L 117.7 51.6 L 119.5 53.6 L 121.0 55.6 L 122.3 57.5 L 123.2 59.5 L 123.8 61.5 L 124.0 63.5 L 123.9 65.5 L 123.4 67.4 L 122.6 69.4 L 121.5 71.4 L 120.1 73.4 L 118.4 75.4 L 116.4 77.3 L 114.2 79.3 L 111.8 81.3 L 109.2 83.3 L 106.5 85.3 L 103.6 87.2 L 100.8 89.2 L 97.9 91.2 L 95.1 93.2 L 92.3 95.2 L 89.6 97.1 L 87.1 99.1 L 84.8 101.1 L 82.7 103.1 L 80.8 105.1 L 79.2 107.0 L 77.9 109.0 L 77.0 111.0 L 76.3 113.0 L 76.0 115.0 L 76.1 116.9 L 76.5 118.9 L 77.2 120.9 L 78.3 122.9 L 79.6 124.9" />
-          </g>
-          <g stroke={ink} strokeWidth="1.5" strokeLinecap="round">
-            <path d="M77.5 17.8 h45.1 M88.1 29.3 h23.9 M95.7 40.9 h8.6 M81.5 52.4 h37.0 M76.0 64.0 h48.0 M81.8 75.5 h36.5 M96.1 87.1 h7.8 M87.7 98.6 h24.6 M77.3 110.2 h45.4 M77.6 121.7 h44.8" />
-          </g>
-          {/* cell / organelle at right */}
-          <path d="M148 88 q16 -12 26 2 q-12 12 -26 -2 z" fill="#F7F4EC" stroke={ink} strokeWidth="1.8" />
-          <circle cx="160" cy="89" r="2.6" stroke={ink} strokeWidth="1.3" fill="none" />
-          <circle cx="152" cy="91" r="1.2" fill={ink} /><circle cx="167" cy="92" r="1.2" fill={ink} />
-          {/* motion ticks top-left */}
-          <path d="M46 40 q6 -8 14 -6 M42 52 q4 -6 12 -5" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-          <Sparkle x={40} y={24} s={6} /><Sparkle x={162} y={30} s={5} /><Sparkle x={52} y={112} s={4} />
-        </svg>
-      );
-    case 'sociology':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 120" width="200" height="120">
-          <g stroke={ink} strokeWidth="1.8" fill="none" strokeLinejoin="round">
-            <path d="M40 88 l20 -10 20 10 -20 10 z" fill="#E8E4D8" />
-            <path d="M40 88 v-24 l20 -10 v24 M80 88 v-24 l-20 -10 v24" />
-            <path d="M60 54 v-18 l14 7 v18" fill="#DCE4EC" />
-            <path d="M94 92 l18 -9 18 9 -18 9 z" fill="#E4DCD0" />
-            <path d="M94 92 v-20 l18 -9 v20 M130 92 v-20 l-18 -9 v20" />
-            <path d="M112 63 v-26 l12 6 v26" fill="#D8E2D8" />
-            <path d="M130 70 l14 -7 14 7 -14 7 z" fill="#E8E4D8" />
-            <path d="M130 70 v-16 l14 -7 v16 M158 70 v-16 l-14 -7 v16" />
-          </g>
-          <circle cx="52" cy="30" r="6" stroke={ink} strokeWidth="1.6" fill="#F2D8C8" />
-          <Sparkle x={150} y={26} s={5} /><Sparkle x={36} y={52} s={4} />
-        </svg>
-      );
-    case 'ml':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 120" width="200" height="120">
-          {/* presenter at whiteboard */}
-          <rect x="96" y="22" width="72" height="48" rx="4" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-          <path d="M104 60 l14 -16 8 8 12 -14 12 10" stroke={ink} strokeWidth="1.8" fill="none" />
-          <circle cx="118" cy="44" r="3" fill="#D9A441" stroke={ink} strokeWidth="1.4" />
-          <path d="M104 34 h20 M104 40 h14" stroke={ink} strokeWidth="1.4" />
-          <circle cx="58" cy="42" r="10" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-          <path d="M48 38 q8 -12 20 -4" fill={ink} />
-          <path d="M50 54 q10 -6 18 0 l2 24 q-12 5 -22 0 z" fill="#E8B4A0" stroke={ink} strokeWidth="2" />
-          <path d="M68 58 q12 -4 22 -10" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
-          <path d="M52 82 v22 M66 82 v22" stroke={ink} strokeWidth="2.2" strokeLinecap="round" />
-          <Sparkle x={176} y={20} s={5} /><Sparkle x={26} y={24} s={4} />
-        </svg>
-      );
-    case 'ai':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140">
-          <g stroke={ink} strokeWidth="1.1" opacity="0.75">
-            {/* connections */}
-            <path d="M46 30 L86 24 M46 30 L86 56 M46 30 L86 88 M46 62 L86 24 M46 62 L86 56 M46 62 L86 88 M46 62 L86 116 M46 94 L86 56 M46 94 L86 88 M46 94 L86 116 M86 24 L126 36 M86 56 L126 36 M86 56 L126 70 M86 88 L126 70 M86 88 L126 104 M86 116 L126 104 M126 36 L162 56 M126 70 L162 56 M126 70 L162 88 M126 104 L162 88" fill="none" />
-          </g>
-          <g stroke={ink} strokeWidth="1.8">
-            <circle cx="46" cy="30" r="6" fill="#3E4A42" /><circle cx="46" cy="62" r="6" fill="#F7F4EC" /><circle cx="46" cy="94" r="6" fill="#3E4A42" />
-            <circle cx="86" cy="24" r="6" fill="#F7F4EC" /><circle cx="86" cy="56" r="6" fill="#3E4A42" /><circle cx="86" cy="88" r="6" fill="#F7F4EC" /><circle cx="86" cy="116" r="6" fill="#3E4A42" />
-            <circle cx="126" cy="36" r="6" fill="#3E4A42" /><circle cx="126" cy="70" r="6" fill="#F7F4EC" /><circle cx="126" cy="104" r="6" fill="#3E4A42" />
-            <circle cx="162" cy="56" r="7" fill="#F7F4EC" /><circle cx="162" cy="88" r="7" fill="#3E4A42" />
-          </g>
-          <circle cx="20" cy="116" r="4" fill="#F7F4EC" stroke={ink} strokeWidth="1.6" />
-          <path d="M26 108 q6 -6 12 -4" stroke={ink} strokeWidth="1.4" fill="none" />
-          <Sparkle x={178} y={24} s={5} color="#D9A441" /><Sparkle x={182} y={118} s={4} color="#D9A441" />
-        </svg>
-      );
-    case 'history':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140">
-          {/* globe */}
-          <circle cx="118" cy="76" r="34" fill="#F7F4EC" stroke={ink} strokeWidth="2.2" />
-          <path d="M118 42 q-20 18 0 68 M118 42 q20 18 0 68 M88 66 q30 10 60 0 M90 90 q28 8 56 0" stroke={ink} strokeWidth="1.4" fill="none" />
-          {/* ship */}
-          <path d="M148 34 q10 8 20 0 l-3 10 h-14 z" fill="#F7F4EC" stroke={ink} strokeWidth="1.8" />
-          <path d="M156 34 v-14 M163 34 v-10 M156 22 h14" stroke={ink} strokeWidth="1.4" />
-          {/* crown */}
-          <path d="M88 34 l6 -12 6 8 6 -8 6 12 z" fill="#D9A441" stroke={ink} strokeWidth="1.8" />
-          {/* person pushing */}
-          <circle cx="46" cy="56" r="9" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-          <circle cx="46" cy="48" r="7" fill={ink} />
-          <path d="M40 68 q12 -4 18 4 l14 -6" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-          <path d="M44 86 l-6 22 M52 86 l6 22" stroke={ink} strokeWidth="2.2" strokeLinecap="round" />
-          <Sparkle x={180} y={110} s={5} color="#D9A441" />
-        </svg>
-      );
-    case 'prompt':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140">
-          {/* robot head from speech bubbles */}
-          <rect x="66" y="30" width="66" height="46" rx="12" fill="#F7F4EC" stroke={ink} strokeWidth="2.2" />
-          <rect x="80" y="44" width="52" height="34" rx="10" fill="#E5EEDC" stroke={ink} strokeWidth="1.8" />
-          <circle cx="96" cy="60" r="4" fill={ink} /><circle cx="116" cy="60" r="4" fill={ink} />
-          <path d="M100 70 q6 4 12 0" stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" />
-          <path d="M98 30 v-12 M98 14 l-3 -4 M98 14 l3 -4" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
-          <circle cx="98" cy="8" r="3" fill="#D9A441" stroke={ink} strokeWidth="1.6" />
-          {/* rivets */}
-          <circle cx="72" cy="36" r="1.2" fill={ink} /><circle cx="126" cy="36" r="1.2" fill={ink} />
-          {/* gear */}
-          <circle cx="150" cy="100" r="10" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-          <circle cx="150" cy="100" r="3.5" stroke={ink} strokeWidth="1.6" fill="none" />
-          {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
-            <rect key={a} x="147.5" y="86" width="5" height="5" fill={ink} transform={`rotate(${a} 150 100)`} />
-          ))}
-          {/* lever */}
-          <path d="M44 108 v-24" stroke={ink} strokeWidth="2.2" strokeLinecap="round" />
-          <circle cx="44" cy="80" r="5" fill="#D9A441" stroke={ink} strokeWidth="1.8" />
-          <Sparkle x={60} y={116} s={4} /><Sparkle x={170} y={30} s={5} color="#D9A441" />
-        </svg>
-      );
-    case 'psych':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140">
-          {/* brain: left + right hemispheres with squiggle folds */}
-          <g stroke={ink} strokeWidth="2" fill="#F7F4EC" strokeLinejoin="round">
-            <path d="M98 30 q-12 -12 -28 -6 q-18 -6 -26 8 q-14 0 -14 16 q-12 6 -6 20 q-8 10 2 18 q-4 14 10 18 q2 14 18 12 q10 8 22 2 q14 4 22 -6 l0 -76 q0 -4 0 -6 z" />
-          </g>
-          <path d="M98 30 v82" stroke={ink} strokeWidth="1.8" />
-          <g stroke={ink} strokeWidth="1.4" fill="none" strokeLinecap="round">
-            <path d="M66 40 q10 -6 18 2 q-12 2 -10 12" />
-            <path d="M48 52 q12 -4 14 8 q-14 0 -12 12" />
-            <path d="M70 78 q10 -4 14 6 q-10 4 -8 14" />
-            <path d="M46 88 q10 -2 12 8" />
-            <path d="M126 40 q-10 -6 -18 2 q12 2 10 12" />
-            <path d="M144 52 q-12 -4 -14 8 q14 0 12 12" />
-            <path d="M122 78 q-10 -4 -14 6 q10 4 8 14" />
-            <path d="M146 88 q-10 -2 -12 8" />
-          </g>
-          {/* brain stem */}
-          <path d="M92 116 q0 10 -8 12 M104 116 q2 8 8 10" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
-          {/* neuron sparkle at right */}
-          <circle cx="168" cy="52" r="5" fill="#D9A441" stroke={ink} strokeWidth="1.6" />
-          <path d="M168 40 v-8 M176 58 l8 6 M161 57 l-7 7" stroke={ink} strokeWidth="1.5" strokeLinecap="round" />
-          <circle cx="168" cy="29" r="2.2" fill={ink} /><circle cx="187" cy="66" r="2.2" fill={ink} /><circle cx="151" cy="66" r="2.2" fill={ink} />
-          <Sparkle x={34} y={110} s={5} /><Sparkle x={180} y={100} s={4} color="#D9A441" />
-        </svg>
-      );
-    case 'sat':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140">
-          <g transform="translate(0,-16)">
-          {/* person leaning in from the left */}
-          <circle cx="52" cy="66" r="10" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-          <path d="M42 62 q2 -12 14 -12 q10 0 10 8 q-8 -4 -14 0 q-6 1 -10 4 z" fill={ink} />
-          <path d="M44 78 q14 -4 20 6 l6 26 q-14 6 -26 0 l-4 -22 q0 -8 4 -10 z" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-          <path d="M62 84 q16 -6 26 -16" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-          <path d="M50 110 l-8 18 M64 110 l6 18" stroke={ink} strokeWidth="2.2" strokeLinecap="round" />
-          {/* checklist: stacked radio circles with grad cap on top */}
-          <g stroke={ink} strokeWidth="1.8" fill="#F7F4EC">
-            <circle cx="150" cy="58" r="7" />
-            <circle cx="150" cy="78" r="7" />
-            <circle cx="150" cy="98" r="7" />
-            <circle cx="150" cy="118" r="7" />
-          </g>
-          <circle cx="150" cy="78" r="3" fill={ink} />
-          <path d="M162 58 h20 M162 78 h14 M162 98 h20 M162 118 h14" stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
-          {/* graduation cap */}
-          <path d="M150 26 l26 10 -26 10 -26 -10 z" fill={ink} />
-          <path d="M150 36 v10 M168 40 v12 q-6 6 -12 2" stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" />
-          <circle cx="170" cy="56" r="2.6" fill="#D9A441" stroke={ink} strokeWidth="1.4" />
-          <path d="M112 40 q6 -8 14 -6 M110 52 q4 -6 12 -4" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-          <Sparkle x={120} y={112} s={5} /><Sparkle x={186} y={30} s={4} color="#D9A441" />
-          </g>
-        </svg>
-      );
-    case 'philo':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 120" width="200" height="120">
-          {/* Kandinsky-style geometric composition */}
-          <circle cx="60" cy="52" r="26" fill="#172A54" />
-          <circle cx="60" cy="52" r="13" fill="#C8B394" />
-          <path d="M104 78 a26 26 0 0 1 52 0 z" fill="#C35426" />
-          <path d="M104 78 a26 26 0 0 1 26 -26 v26 z" fill="#F8B61A" />
-          <g fill="#1A1A1A">{[0, 1, 2, 3, 4, 5].map((i) => <rect key={i} x={14 + i * 9} y={94} width="4.5" height={i % 2 ? 14 : 20} />)}</g>
-          <path d="M150 24 l16 0 0 16 -16 0 z" fill="#20557F" />
-          <path d="M158 66 q14 6 10 22 q-16 2 -20 -12 q2 -10 10 -10 z" fill="#F7F4EC" stroke="#1A1A1A" strokeWidth="2" />
-          <circle cx="154" cy="74" r="1.8" fill="#1A1A1A" /><circle cx="161" cy="78" r="1.8" fill="#1A1A1A" /><circle cx="156" cy="83" r="1.8" fill="#1A1A1A" />
-          <path d="M30 24 q10 -8 20 0 q-10 8 -20 0 z" fill="#C35426" />
-        </svg>
-      );
-    case 'stats':
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 200 120" width="200" height="120">
-          {/* bell curve + bars */}
-          <path d="M30 96 q40 -8 52 -44 q6 -18 18 -18 q12 0 18 18 q12 36 52 44" fill="none" stroke={ink} strokeWidth="2.2" />
-          <path d="M100 34 v62" stroke={ink} strokeWidth="1.2" strokeDasharray="3 4" />
-          <g stroke={ink} strokeWidth="1.6" fill="#F7F4EC">
-            <rect x="40" y="76" width="12" height="20" /><rect x="56" y="66" width="12" height="30" fill="#C9DEC9" />
-            <rect x="132" y="70" width="12" height="26" fill="#C9DEC9" /><rect x="148" y="80" width="12" height="16" />
-          </g>
-          <Sparkle x={170} y={26} s={5} /><Sparkle x={30} y={40} s={4} />
-        </svg>
-      );
-  }
+  if (!Object.prototype.hasOwnProperty.call(plates, kind)) return null;
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140" fill="none">
+      <path d="M18 17h164v106H18Z" stroke={ink} strokeOpacity=".15" />
+      <path d="M18 29h164M30 17v106" stroke={ink} strokeOpacity=".1" />
+      <circle cx="25" cy="23" r="2" fill={'#D9A441'} />
+      <path d="M35 23h24M162 116h14" stroke={ink} strokeWidth="1.2" />
+      <g stroke={ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{plates[kind]}</g>
+    </svg>
+  );
 };
 
 /** Course cover: hand-drawn art on a tinted (or gradient) ground. `flat` = no radius/shadow chrome of its own. */

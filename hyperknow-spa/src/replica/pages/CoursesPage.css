@@ -5,6 +5,8 @@
 
 .cs-page {
   background: #FAFAFA;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .cs-layout {
@@ -353,3 +355,33 @@
 .cs-search,.cs-course-card,.cs-preview,.cs-card,.cs-pickup { background: var(--panel-bg); border-color: var(--border-color); }
 .cs-tab.active,.cs-day.today { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
 .cs-title,.cs-empty-title,.cs-mkt-title-h { font-family: var(--font-display); color: var(--color-primary); }
+
+@media (max-width: 900px) {
+  .cs-layout {
+    flex-direction: column;
+    padding: 24px 16px 60px;
+    gap: 32px;
+  }
+
+  .cs-rail {
+    width: 100% !important;
+  }
+
+  .cs-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .cs-search {
+    width: 100% !important;
+  }
+
+  .cs-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cs-course-card {
+    width: 100% !important;
+  }
+}

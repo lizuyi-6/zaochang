@@ -132,6 +132,173 @@ export async function getWhiteboardSession(id: string, userEmail: string): Promi
   return { id: row.id, topic: row.topic, createdAt: row.created_at, plan };
 }
 
+export type StoredCourseTask = {
+  id: string;
+  userEmail: string;
+  query: string;
+  briefJson: string | null;
+  researchHitsJson: string | null;
+  blueprintJson: string | null;
+  selectedUnitsJson: string | null;
+  unitsJson: string;
+  currentUnitIndex: number;
+  totalUnits: number;
+  status: "pending" | "blueprint_ready" | "generating_units" | "completed" | "failed";
+  leaseToken: string | null;
+  leaseExpiresAt: string | null;
+  errorMessage: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function createCourseTask(task: {
+  id: string;
+  userEmail: string;
+  query: string;
+  briefJson?: string | null;
+  researchHitsJson?: string | null;
+  blueprintJson?: string | null;
+  status?: string;
+  totalUnits?: number;
+}): Promise<void> {
+  await database()
+    .prepare(
+      `INSERT INTO hk_course_tasks (id, user_email, query, brief_json, research_hits_json, blueprint_json, status, total_units)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         query = excluded.query,
+         brief_json = excluded.brief_json,
+         research_hits_json = excluded.research_hits_json,
+         blueprint_json = excluded.blueprint_json,
+         status = excluded.status,
+         total_units = excluded.total_units,
+         updated_at = CURRENT_TIMESTAMP`,
+    )
+    .bind(
+      task.id,
+      task.userEmail,
+      task.query,
+      task.briefJson ?? null,
+      task.researchHitsJson ?? null,
+      task.blueprintJson ?? null,
+      task.status ?? "pending",
+      task.totalUnits ?? 0,
+    )
+    .run();
+}
+
+export async function getCourseTask(id: string, userEmail: string): Promise<StoredCourseTask | null> {
+  const row = await database()
+    .prepare(
+      `SELECT id, user_email, query, brief_json, research_hits_json, blueprint_json, selected_units_json,
+              units_json, current_unit_index, total_units, status, lease_token, lease_expires_at,
+              error_message, version, created_at, updated_at
+       FROM hk_course_tasks WHERE id = ? AND user_email = ?`,
+    )
+    .bind(id, userEmail)
+    .first<{
+      id: string;
+      user_email: string;
+      query: string;
+      brief_json: string | null;
+      research_hits_json: string | null;
+      blueprint_json: string | null;
+      selected_units_json: string | null;
+      units_json: string;
+      current_unit_index: number;
+      total_units: number;
+      status: StoredCourseTask["status"];
+      lease_token: string | null;
+      lease_expires_at: string | null;
+      error_message: string | null;
+      version: number;
+      created_at: string;
+      updated_at: string;
+    }>();
+  if (!row) return null;
+  return {
+    id: row.id,
+    userEmail: row.user_email,
+    query: row.query,
+    briefJson: row.brief_json,
+    researchHitsJson: row.research_hits_json,
+    blueprintJson: row.blueprint_json,
+    selectedUnitsJson: row.selected_units_json,
+    unitsJson: row.units_json ?? "[]",
+    currentUnitIndex: Number(row.current_unit_index ?? 0),
+    totalUnits: Number(row.total_units ?? 0),
+    status: row.status,
+    leaseToken: row.lease_token,
+    leaseExpiresAt: row.lease_expires_at,
+    errorMessage: row.error_message,
+    version: Number(row.version ?? 1),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function updateCourseTaskBlueprint(
+  id: string,
+  userEmail: string,
+  blueprintJson: string,
+  totalUnits: number,
+  status: string = "blueprint_ready",
+): Promise<void> {
+  await database()
+    .prepare(
+      `UPDATE hk_course_tasks
+       SET blueprint_json = ?, total_units = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_email = ?`,
+    )
+    .bind(blueprintJson, totalUnits, status, id, userEmail)
+    .run();
+}
+
+export async function saveCourseTaskUnitCheckpoint(
+  id: string,
+  userEmail: string,
+  unit: unknown,
+  unitIndex: number,
+  totalUnits: number,
+): Promise<void> {
+  const task = await getCourseTask(id, userEmail);
+  let units: unknown[] = [];
+  try {
+    units = JSON.parse(task?.unitsJson || "[]");
+    if (!Array.isArray(units)) units = [];
+  } catch {
+    units = [];
+  }
+  units[unitIndex] = unit;
+  const filteredUnits = units.filter(Boolean);
+
+  await database()
+    .prepare(
+      `UPDATE hk_course_tasks
+       SET units_json = ?, current_unit_index = ?, total_units = ?, status = 'generating_units', updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_email = ?`,
+    )
+    .bind(JSON.stringify(filteredUnits), unitIndex + 1, totalUnits, id, userEmail)
+    .run();
+}
+
+export async function markCourseTaskStatus(
+  id: string,
+  userEmail: string,
+  status: string,
+  errorMessage?: string,
+): Promise<void> {
+  await database()
+    .prepare(
+      `UPDATE hk_course_tasks
+       SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_email = ?`,
+    )
+    .bind(status, errorMessage ?? null, id, userEmail)
+    .run();
+}
+
 function safeJson(text: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(text) as unknown;

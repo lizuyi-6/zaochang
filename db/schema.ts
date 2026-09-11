@@ -942,3 +942,66 @@ export const hkCredits = sqliteTable("hk_credits", {
   resetDate: text("reset_date").notNull(),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// 幂等扣费锁与任务租约表
+export const hkCreditCharges = sqliteTable(
+  "hk_credit_charges",
+  {
+    key: text("key").primaryKey(),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    cost: integer("cost").notNull(),
+    status: text("status").notNull().default("pending"),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: text("lease_expires_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("hk_credit_charges_user_status_idx").on(table.userEmail, table.status)],
+);
+
+// 持久版本化课程生成任务与检查点表
+export const hkCourseTasks = sqliteTable(
+  "hk_course_tasks",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    query: text("query").notNull(),
+    briefJson: text("brief_json"),
+    researchHitsJson: text("research_hits_json"),
+    blueprintJson: text("blueprint_json"),
+    selectedUnitsJson: text("selected_units_json"),
+    unitsJson: text("units_json").notNull().default("[]"),
+    currentUnitIndex: integer("current_unit_index").notNull().default(0),
+    totalUnits: integer("total_units").notNull().default(0),
+    status: text("status").notNull().default("pending"),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: text("lease_expires_at"),
+    errorMessage: text("error_message"),
+    version: integer("version").notNull().default(1),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("hk_course_tasks_user_status_idx").on(table.userEmail, table.status)],
+);
+
+// 课程讲座生成图像缓存与跨实例锁表
+export const hkLectureImages = sqliteTable(
+  "hk_lecture_images",
+  {
+    cacheKey: text("cache_key").primaryKey(),
+    sessionId: text("session_id").notNull(),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    model: text("model").notNull(),
+    params: text("params").notNull(),
+    version: text("version").notNull(),
+    url: text("url").notNull().default(""),
+    caption: text("caption"),
+    prompt: text("prompt"),
+    status: text("status").notNull().default("completed"),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: text("lease_expires_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("hk_lecture_images_session_idx").on(table.sessionId, table.userEmail)],
+);
