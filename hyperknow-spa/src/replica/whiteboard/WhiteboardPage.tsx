@@ -32,12 +32,13 @@ import {
   type Rich,
 } from './lessonScript';
 import { liveLessonFromPlan, type LessonScript } from './liveLesson';
-import { interjectLive, planLectureLive } from '../backend';
+import { fetchLectureImageLive, interjectLive, planLectureLive } from '../backend';
+import { getBackendLang, getCurrentLng } from '../i18n';
 import { L } from '../i18n/content';
 import { exportBoard, type ExportFormat, type ExportPage } from '../boardExport';
 import { uploadFile } from '../materials';
 import { toast } from '../toast';
-import { listenOnce, tts, type SpeakHandle } from '../actions';
+import { listenOnce, tts, type SpeakHandle, type SpeakStart } from '../actions';
 import './whiteboard.css';
 
 type Stage = 'intro' | 'talk' | 'play';
@@ -68,11 +69,31 @@ function hashParams(): { ff: number | null; auto: boolean; hold: boolean; idle: 
 export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   /* 伪生成课程:壳层(课节 chip/介绍页)话题化;演示脚本作直播放的后备 */
   const GEN = state.generated;
-  const genLectureTitle = GEN ? GEN.units[0].lectures[0]?.title : undefined;
+  const targetLecture = useMemo(() => {
+    if (!GEN) return null;
+    if (state.activeLectureId) {
+      for (const u of GEN.units) {
+        const found = u.lectures.find(
+          (l) => l.id === state.activeLectureId || (l as { lectureId?: string }).lectureId === state.activeLectureId,
+        );
+        if (found) return found;
+      }
+    }
+    if (state.activeUnitId) {
+      const u = GEN.units.find(
+        (unit) => String(unit.id) === String(state.activeUnitId) || (unit as { unitId?: string }).unitId === state.activeUnitId,
+      );
+      if (u && u.lectures.length > 0) return u.lectures[0];
+    }
+    return GEN.units[0]?.lectures[0] ?? null;
+  }, [GEN, state.activeLectureId, state.activeUnitId]);
+
+  const targetTopic = state.activeTopic || targetLecture?.title || (GEN ? GEN.topic : null);
+  const genLectureTitle = targetTopic ?? undefined;
   const genIntroBody = GEN
     ? L(
-        `This session opens ${GEN.topic} the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today.`,
-        `本节课用 Hyperknow 的标准方式开启「${GEN.topic}」：看板书逐步成形，回答一次快速检查，带着一个马上能用的想法离开。`,
+        `This session opens ${targetTopic ?? GEN.topic} the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today.`,
+        `本节课用 Hyperknow 的标准方式开启「${targetTopic ?? GEN.topic}」：看板书逐步成形，回答一次快速检查，带着一个马上能用的想法离开。`,
       )
     : undefined;
 
@@ -98,21 +119,69 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     [learnerName],
   );
 
-  /* 直播放:生成课(伪生成/后端课)进白板 → 按课节话题真拉讲座计划;失败静默
-   * 回退演示课(与其余端点同一双轨纪律)。演示公开演讲课不走直播,保住像素复刻。 */
-  const liveTopic = GEN ? (genLectureTitle ?? GEN.topic) : null;
+  /* 直播放:生成课(伪生成/后端课)进白板 → 按选中课节话题真拉讲座计划;失败静默
+   * 回退演示课(与其余端点同一双轨纪律)。演示公开演讲课不走直播,保住像素复刻。
+   * 严格锁定当前课节上下文，杜绝默认跳第一讲。 */
+  const liveTopic = targetTopic;
   const [liveScript, setLiveScript] = useState<LessonScript | null>(null);
   const [planPending, setPlanPending] = useState(liveTopic !== null);
+  const imageWaitResolvers = useRef<Map<number, () => void>>(new Map());
+
   useEffect(() => {
     if (!liveTopic) return;
     const ctrl = new AbortController();
     const timer = window.setTimeout(() => ctrl.abort(), 65_000); // 服务端 60s 超时 + 余量
     let alive = true;
-    void planLectureLive(liveTopic, ctrl.signal)
+    const appLang = getBackendLang() || getCurrentLng() || 'en';
+    void planLectureLive(
+      {
+        topic: liveTopic,
+        courseUuid: state.activeCourseUuid || (GEN as { courseUuid?: string } | null)?.courseUuid,
+        unitId: state.activeUnitId ? String(state.activeUnitId) : undefined,
+        lectureId: state.activeLectureId,
+        sessionId: state.activeSessionId,
+        language: appLang,
+      } as any,
+      ctrl.signal,
+    )
       .then((plan) => {
         if (!alive) return;
         setPlanPending(false);
-        if (plan) setLiveScript(liveLessonFromPlan(plan));
+        if (plan) {
+          setLiveScript(liveLessonFromPlan(plan));
+
+          // 检查并异步按需生图(单讲最多 1 图)，切课取消不串图，失败优雅降级为文字
+          const imageStep = plan.steps.find((s) => s.board_action.type === 'image' && !s.board_action.url);
+          if (imageStep && imageStep.board_action.prompt) {
+            const stepId = plan.steps.indexOf(imageStep) + 1;
+            void fetchLectureImageLive(
+              {
+                prompt: imageStep.board_action.prompt,
+                caption: imageStep.board_action.caption,
+                courseUuid: state.activeCourseUuid || (GEN as { courseUuid?: string } | null)?.courseUuid,
+                unitId: state.activeUnitId ? String(state.activeUnitId) : undefined,
+                lectureId: state.activeLectureId,
+                sessionId: state.activeSessionId,
+              },
+              ctrl.signal,
+            )
+              .then((imgRes) => {
+                if (!alive || !imgRes?.url) return;
+                imageStep.board_action.url = imgRes.url;
+                imageStep.board_action.caption = imgRes.caption ?? imageStep.board_action.caption;
+                setLiveScript(liveLessonFromPlan(plan));
+              })
+              .catch(() => {
+                // 生图失败优雅降级为文本板书
+                (imageStep.board_action as { failed?: boolean }).failed = true;
+                if (alive) setLiveScript(liveLessonFromPlan(plan));
+              })
+              .finally(() => {
+                imageWaitResolvers.current.get(stepId)?.();
+                imageWaitResolvers.current.delete(stepId);
+              });
+          }
+        }
       })
       .catch(() => {
         if (alive) setPlanPending(false);
@@ -121,9 +190,11 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       alive = false;
       window.clearTimeout(timer);
       ctrl.abort();
+      imageWaitResolvers.current.forEach((res) => res());
+      imageWaitResolvers.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveTopic]);
+  }, [liveTopic, state.activeCourseUuid, state.activeUnitId, state.activeLectureId, state.activeSessionId]);
 
   const lesson = liveScript ?? DEMO_SCRIPT;
   const LESSON_STEPS = lesson.steps;
@@ -160,6 +231,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   // ----- chrome / ui state -----
   const [panelOpen, setPanelOpen] = useState(true);
   const [zoom, setZoom] = useState(1);
+  const [isFollowing, setIsFollowing] = useState(true);
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
   const [voice, setVoice] = useState<VoiceState>('off');
@@ -256,47 +328,67 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       setTyping(true);
       const plain = rich.map((seg) => seg.t).join('');
       // 音频是时钟:等旁白真正起声,字幕才同窗起跑(冷合成的短暂停顿换来声画同步);
-      // 8 秒仍等不到声音(上游异常/被静音)则字幕自行前进,不让课程卡死。
+      // 但所有等待都有界——起声慢、上游挂起或中途断流时切估算时钟并止损停音频,
+      // 绝不让字幕冻结、课程死锁(ended 只在自然播完/出错/被顶替时 settle)。
       const { voice: vk, speed, muted: silent } = narrationRef.current;
       let handle: SpeakHandle | null = null;
       if (!silent && total > 0) {
         handle = tts.speakTrack(plain, vk, speed);
-        const how = await Promise.race([handle.started, wait(8000).then(() => 'timeout' as const)]);
-        if (how === 'stopped' || how === 'error') handle = null;
-      }
-      // 声画双向绝对对齐:以真实音频播放进度(currentTime / duration)作为核心时钟
-      // 驱动字幕字数,音频读到哪字就亮到哪;静音/上游无声音时平滑回退到估算时钟。
-      if (handle) {
+        let startHow: SpeakStart | null = null;
+        void handle.started.then((v) => {
+          startHow = v;
+        });
+
+        const TICK = 50; // 与 wait 的 50ms 轮询粒度对齐,activeMs 才与真实时间一致
+        const estMs = narrateMs(plain, speed);
+        const GRACE_MS = 2500; // 起声宽限:此前不动字幕(声画同窗);超时后估算接管
+        const START_CAP_MS = 8000; // 仍没起声:估算已驱动,超时强制收尾
+        const STALL_MS = 12000; // 起声后 currentTime 连续不动这么久 = 断流,止损
+
         let shownCount = 0;
+        let ticks = 0; // tick 仅在未暂停时累加(wait 暂停感知),天然排除课程暂停
+        let lastAdvanceMs = 0; // 字幕最近一次前进的时刻
         let ended = false;
         void handle.ended.then(() => {
           ended = true;
         });
 
-        const startTime = Date.now();
-        const estMs = narrateMs(plain, speed);
-
         while (!ended) {
+          const activeMs = ticks * TICK;
           const prog = handle.getProgress();
-          if (prog && prog.duration > 0) {
+          if (startHow === 'started' && prog) {
+            // 声画双向绝对对齐:音频读到哪字就亮到哪;只前进不回退。
             const byAudio = Math.min(total, Math.floor(prog.ratio * total));
             if (byAudio > shownCount) {
               shownCount = byAudio;
               setCapShown(shownCount);
+              lastAdvanceMs = activeMs;
+            } else if (activeMs - lastAdvanceMs > STALL_MS) {
+              // 字幕 12s 无进展:currentTime 冻结(断流)或反复回卷重连(Range 重拉)
+              // 都命中此分支——止损停音频,字幕补全,课程继续。
+              tts.stop();
+              break;
             }
-          } else {
-            const elapsed = Date.now() - startTime;
-            const byEst = Math.min(total, Math.floor((elapsed / estMs) * total));
+          } else if (activeMs > GRACE_MS) {
+            // 静音/未起声/上游无声音:估算时钟平滑前进(tick 计时,暂停安全)
+            const byEst = Math.min(total, Math.floor(((activeMs - GRACE_MS) / estMs) * total));
             if (byEst > shownCount) {
               shownCount = byEst;
               setCapShown(shownCount);
+              lastAdvanceMs = activeMs;
             }
           }
+          // 音频始终没起声(挂起/极慢合成):估算走完再宽限一段,强制收尾防死锁
+          if (startHow !== 'started' && activeMs > START_CAP_MS + estMs) {
+            tts.stop();
+            break;
+          }
           const won = await Promise.race([
-            wait(35).then(() => 'tick' as const),
+            wait(TICK).then(() => 'tick' as const),
             handle.ended.then(() => 'ended' as const),
           ]);
           if (won === 'ended') break;
+          ticks++;
         }
         setCapShown(total);
       } else {
@@ -358,6 +450,17 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       }
 
       const items = BOARD_ITEMS.filter((b) => b.step === s.id);
+      // 有界等待生图就绪或失败 (最多等待 3500ms，防无界阻塞音频时钟)
+      const hasPendingImage = items.some((it) => it.image?.status === 'pending');
+      if (hasPendingImage) {
+        await Promise.race([
+          new Promise<void>((res) => {
+            imageWaitResolvers.current.set(s.id, res);
+          }),
+          wait(3500),
+        ]);
+      }
+
       const capTask: Promise<SpeakHandle | null> = s.caption ? typeCaption(s.caption) : Promise.resolve(null);
       if (BOARD_TABLE?.step === s.id) await revealTable();
       for (const it of items) await writeItem(it.id);
@@ -649,31 +752,36 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     });
   }, [finished, set, state.identity, state.energy]);
 
-  const centerX = panelOpen ? 615 : 800;
   const choiceVisible = quickCheck !== null;
   // play triangle whenever the tutor isn't actively explaining (await, popup, end)
   const idle = status !== 'explaining' || popup !== null;
   const placeholder = status === 'yourturn' ? L('Your answer here...', '在这里写下你的回答…') : L('Ask a question...', '问一个问题…');
 
-  const content = useMemo(
-    () => (
-      <>
+  const content = (
+    <>
+      <main className="wb-canvas-area" aria-label="Interactive whiteboard">
         <Board
-          step={step}
-          progress={progress}
-          writingId={writingId}
-          panX={panX}
-          zoom={zoom}
-          standardFont={settings.font === 'standard'}
-          dots={settings.dots}
-          tableRows={tableRows}
-          annotsDone={annotsDone}
-          annotActive={annotActive}
-          items={BOARD_ITEMS}
-          table={BOARD_TABLE}
-          annots={BOARD_ANNOTS}
-        />
-        <CaptionBar caption={caption} shown={capShown} typing={typing} centerX={centerX} raised={choiceVisible} />
+        step={step}
+        progress={progress}
+        writingId={writingId}
+        panX={panX}
+        zoom={zoom}
+        onZoomChange={(z) => setZoom(z)}
+        standardFont={settings.font === 'standard'}
+        dots={settings.dots}
+        tableRows={tableRows}
+        annotsDone={annotsDone}
+        annotActive={annotActive}
+        items={BOARD_ITEMS}
+        table={BOARD_TABLE}
+        annots={BOARD_ANNOTS}
+        isFollowing={isFollowing}
+        onUserInteraction={() => setIsFollowing(false)}
+      />
+
+      {/* Structured interaction overlay layer above canvas, non-overlapping with footer */}
+      <section className="wb-interaction-layer" aria-live="polite">
+        <CaptionBar caption={caption} shown={capShown} typing={typing} centerX={0} raised={choiceVisible} />
         {quickCheck && CHOICE_STEP?.awaitChoice && (
           <QuickCheck
             question={CHOICE_STEP.awaitChoice.question}
@@ -686,34 +794,41 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
                 res(i);
               }
             }}
-            centerX={centerX}
+            centerX={0}
           />
         )}
-        {(voice === 'listening' || asking) && <ListenPill centerX={centerX} />}
-      </>
-    ),
-    [step, progress, writingId, panX, zoom, settings.font, settings.dots, tableRows, annotsDone, annotActive, caption, capShown, typing, centerX, choiceVisible, quickCheck, voice, asking, BOARD_ITEMS, BOARD_TABLE, BOARD_ANNOTS, CHOICE_STEP],
+        {(voice === 'listening' || asking) && <ListenPill centerX={0} />}
+      </section>
+      </main>
+    </>
   );
 
   return (
-    <div className="wb-root">
+    <div className={`wb-app-layout${panelOpen ? ' with-panel' : ''}`}>
       {content}
-
       {panelOpen && (
-        <ConversationPanel
-          entries={entries}
-          status={status}
-          systemEnd={systemEnd}
-          voice={voice}
-          inputValue={input}
-          onInput={setInput}
-          onSend={handleSend}
-          onMic={handleMic}
-          onAddImage={handleAddImage}
-          onClose={() => setPanelOpen(false)}
-          placeholder={placeholder}
-          canSend={input.trim().length > 0}
-        />
+        <aside
+          className="wb-panel-container"
+          aria-label="Conversation panel"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPanelOpen(false);
+          }}
+        >
+          <ConversationPanel
+            entries={entries}
+            status={status}
+            systemEnd={systemEnd}
+            voice={voice}
+            inputValue={input}
+            onInput={setInput}
+            onSend={handleSend}
+            onMic={handleMic}
+            onAddImage={handleAddImage}
+            onClose={() => setPanelOpen(false)}
+            placeholder={placeholder}
+            canSend={input.trim().length > 0}
+          />
+        </aside>
       )}
       <input
         ref={imageRef}
@@ -730,10 +845,16 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       <WhiteboardChrome
         panelOpen={panelOpen}
         zoom={zoom}
-        onZoom={setZoom}
+        onZoom={(z) => {
+          setZoom(z);
+          setIsFollowing(false);
+        }}
         page={panX > 0 ? 2 : 1}
         pageCount={lesson.pageSplitX ? 2 : 1}
-        onPage={(p) => setPanX(p <= 1 ? 0 : PAN_X)}
+        onPage={(p) => {
+          setPanX(p <= 1 ? 0 : PAN_X);
+          setIsFollowing(true);
+        }}
         onExport={handleExport}
         paused={paused}
         idle={idle}
@@ -755,6 +876,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         onMicFab={handleMic}
         voiceOn={voice !== 'off'}
         titleOverride={genLectureTitle}
+        isFollowing={isFollowing}
+        onResumeFollow={() => setIsFollowing(true)}
       />
 
       {connOpen && (

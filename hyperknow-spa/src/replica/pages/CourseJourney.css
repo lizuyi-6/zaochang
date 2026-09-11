@@ -5,6 +5,8 @@
 
 .cj-page {
   background: #FAFAFA;
+  overflow-y: auto;
+  height: 100%;
 }
 
 /* "Have an issue?" pill (joined mode), local to the page region */
@@ -749,3 +751,42 @@
 .cj-unit.active,.cj-unit-chip,.cj-strip-ico,.cj-pill.learn,.cj-pill.practice,.cj-pill.revisit,.cj-seg-opt.active { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
 .cj-join,.cj-unit.active .cj-unit-badge,.cj-pill.learn-filled,.cj-pill.practice-filled,.cj-btn-confirm,.cj-btn-big.filled,.cj-lc-now { background: var(--color-primary); color: var(--panel-bg); }
 .cj-course-title,.cj-unit-heading,.cj-dialog-title,.cj-lc-title { font-family: var(--font-display); color: var(--color-primary); }
+.cj-tl-empty, .cj-mat-empty, .cj-mat-size { color: var(--text-secondary, #555C66); }
+
+@media (max-width: 860px) {
+  .cj-layout {
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px 60px;
+    gap: 32px;
+  }
+
+  .cj-left {
+    position: static;
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .cj-right {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .cj-action-strip {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .cj-pill-row {
+    flex-wrap: wrap;
+  }
+
+  .cj-strip-pill {
+    width: 100%;
+    justify-content: center;
+  }
+}

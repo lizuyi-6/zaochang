@@ -36,6 +36,15 @@ export interface BoardItem {
   mono?: boolean; // mermaid code block
   /** mermaid flowchart 源码:可渲染时以手绘图呈现,lines 作为不可渲染时的回退文本 */
   diagram?: string;
+  /** 真实图片层:支持按需生图(pending/ready/failed)、固定比例、图注与放大 */
+  image?: {
+    url?: string;
+    status?: 'pending' | 'ready' | 'failed';
+    prompt?: string;
+    caption?: string;
+    width?: number;
+    height?: number;
+  };
 }
 
 /** Freehand annotation attached to an item (or free-standing). */

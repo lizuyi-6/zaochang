@@ -31,13 +31,14 @@ import {
 import type { PageProps } from '../types';
 import { placeholders, newsFeed, homeCourses } from '../data';
 import { Logo, PlanetDoodle, CourseCover, Handshake, WelcomeReader, Ufo } from '../illustrations';
-import { DarkPill } from '../ui';
+import { Modal, DarkPill } from '../ui';
 import { useI18n, TRich } from '../i18n';
 import { L } from '../i18n/content';
 import { WhatsNewModal } from '../WhatsNewModal';
 import { copyText, listenOnce, tts } from '../actions';
 import { uploadMaterial } from '../materials';
 import { toast } from '../toast';
+import { fetchCourseInquiry, normalizeDepth, type InquiryQuestion, type CourseBriefParams } from '../backend';
 import './Home.css';
 
 /** 能力 chips 预填的提问模板(点一下就把输入框变成一条可编辑的真实提问) */
@@ -72,9 +73,134 @@ const PERSONAS: Array<[string, string]> = [
   ['Research partner', '研究伙伴'],
 ];
 
+/** 0ms 瞬间生成初始推荐问询，默认全中文友好，绝不转圈卡顿 */
+export function buildDefaultInquiryQuestions(prompt: string, isZh: boolean): InquiryQuestion[] {
+  const isCodeOrTech = /(vue|react|angular|svelte|next|nuxt|vite|webpack|typescript|javascript|python|rust|golang|go|java|c\+\+|linux|docker|k8s|ai|llm|deep learning|machine learning|code|api|web|algorithm|database|微积分|物理|数学|代码|编程|算法)/i.test(prompt);
+
+  if (isZh) {
+    return [
+      {
+        id: 'goal',
+        field: 'goal',
+        prompt: `你学习《${prompt}》的核心目标是什么？`,
+        recommended: isCodeOrTech ? '掌握核心概念与实战落地应用' : '系统掌握核心原理与实际应用',
+        options: isCodeOrTech
+          ? ['掌握核心概念与实战落地应用', '快速攻克考试与核心考点', '完成生产级实战项目', '深入底层原理与系统架构']
+          : ['系统掌握核心原理与实际应用', '快速攻克考试与核心考点', '通识科普与宏观视野建立', '深入经典理论与专业推导'],
+      },
+      {
+        id: 'background',
+        field: 'background',
+        prompt: '你当前的相关知识储备与先修基础如何？',
+        recommended: '具备基础好奇心的初学者',
+        options: [
+          '零基础跨专业入门',
+          '具备基础好奇心的初学者',
+          '具备一定基础的进阶学习者',
+          '寻求专题突破的资深从业者',
+        ],
+      },
+      {
+        id: 'duration',
+        field: 'duration',
+        prompt: '你的预期学习周期与时间预算？',
+        recommended: '标准节奏（2-4 周，自适应学习）',
+        options: [
+          '高效冲刺（1-3 天速成）',
+          '标准节奏（2-4 周，自适应学习）',
+          '系统大课（1-2 个月深度掌握）',
+        ],
+      },
+      {
+        id: 'depth',
+        field: 'depth',
+        prompt: '希望达到什么样的知识深度？',
+        recommended: '系统实战（理论兼顾实操）',
+        options: [
+          '核心通识（二八法则快速入门）',
+          '系统实战（理论兼顾实操）',
+          '严谨学术（完整逻辑推导）',
+          '工业级深度（解决复杂实际问题）',
+        ],
+      },
+      {
+        id: 'preference',
+        field: 'preference',
+        prompt: '你偏好的白板授课与互动形式？',
+        recommended: '项目实操结合白板板书图解',
+        options: [
+          '项目实操结合白板板书图解',
+          '苏格拉底式启发提问与逐步推导',
+          '微课切片结合高频随堂测验',
+          '真实案例拆解与踩坑复盘',
+        ],
+      },
+    ];
+  }
+
+  return [
+    {
+      id: 'goal',
+      field: 'goal',
+      prompt: `What is your primary learning goal for "${prompt}"?`,
+      recommended: isCodeOrTech ? 'Master core principles and practical skills' : 'Comprehensive deep dive and understanding',
+      options: isCodeOrTech
+        ? ['Master core principles and practical skills', 'Build production-ready projects', 'Pass technical interviews & exams', 'Deep architectural mastery']
+        : ['Comprehensive deep dive and understanding', 'Academic & exam preparation', 'Practical everyday application', 'Quick conceptual overview'],
+    },
+    {
+      id: 'background',
+      field: 'background',
+      prompt: 'What is your current background / prerequisite knowledge?',
+      recommended: 'Beginner with foundational curiosity',
+      options: [
+        'Complete beginner (zero prior knowledge)',
+        'Beginner with foundational curiosity',
+        'Intermediate practitioner with basic experience',
+        'Advanced practitioner seeking specialized mastery',
+      ],
+    },
+    {
+      id: 'duration',
+      field: 'duration',
+      prompt: 'What is your available time budget / learning pace?',
+      recommended: 'Standard (2-4 weeks, self-paced)',
+      options: [
+        'Crash course (1-3 days intensive)',
+        'Standard (2-4 weeks, self-paced)',
+        'Deep curriculum (1-2 months structured)',
+      ],
+    },
+    {
+      id: 'depth',
+      field: 'depth',
+      prompt: 'What target depth level are you aiming for?',
+      recommended: 'Practical & Comprehensive',
+      options: [
+        'Foundational Overview (80/20 essentials)',
+        'Practical & Comprehensive',
+        'Rigorous & Theoretical',
+        'System Design & Production-grade',
+      ],
+    },
+    {
+      id: 'preference',
+      field: 'preference',
+      prompt: 'What is your preferred pedagogical and visual style?',
+      recommended: 'Project-based hands-on with visual whiteboard diagrams',
+      options: [
+        'Project-based hands-on with visual whiteboard diagrams',
+        'Socratic dialogue and step-by-step proofs',
+        'Bite-sized micro-lessons with frequent quizzes',
+        'Case study driven with real-world breakdowns',
+      ],
+    },
+  ];
+}
+
 /** Home — Craft Courses / Instant Assistance (1600×900 reference geometry). */
 export const Home = ({ state, set }: PageProps) => {
-  const { t } = useI18n();
+  const { t, lng } = useI18n();
   const [phIdx, setPhIdx] = useState(0);
   const [topic, setTopic] = useState('');
   const [note, setNote] = useState('');
@@ -87,6 +213,15 @@ export const Home = ({ state, set }: PageProps) => {
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 课程前置问询状态 (3-5 问询推荐继续，最多 2 轮智能追问)
+  const [inquiryOpen, setInquiryOpen] = useState(false);
+  const [inquiryPendingPrompt, setInquiryPendingPrompt] = useState('');
+  const [inquiryQuestions, setInquiryQuestions] = useState<InquiryQuestion[]>([]);
+  const [inquiryAnswers, setInquiryAnswers] = useState<Record<string, string>>({});
+  const [inquiryRound, setInquiryRound] = useState(0);
+  const [inquiryFollowUpAllowed, setInquiryFollowUpAllowed] = useState(true);
+  const [inquiryLoading, setInquiryLoading] = useState(false);
+
   // rotate the Craft Courses prompt placeholder through the topic examples
   useEffect(() => {
     const t = setInterval(() => setPhIdx((i) => (i + 1) % placeholders().length), 3500);
@@ -98,10 +233,81 @@ export const Home = ({ state, set }: PageProps) => {
   const submitTopic = () => {
     const prompt = topic.trim();
     if (!prompt) return;
-    /* 自由输入 → 在线真生成优先,后端不可达时浮层自动回退伪生成 */
     const withFiles = attachLine();
+    const finalPrompt = withFiles ? `${prompt}\n\n${withFiles}` : prompt;
+    setInquiryPendingPrompt(finalPrompt);
+    setInquiryRound(0);
+
+    // 默认全中文友好问询：除非界面语言明确是纯英文(en)，否则无论输入 vue/react/python 等纯英文，问询一律使用地道中文！
+    const isZh = lng ? !lng.toLowerCase().startsWith('en') : true;
+    const initialQuestions = buildDefaultInquiryQuestions(prompt, isZh);
+    setInquiryQuestions(initialQuestions);
+    setInquiryFollowUpAllowed(true);
+
+    const initialAnswers: Record<string, string> = {};
+    for (const q of initialQuestions) {
+      initialAnswers[q.field] = q.recommended;
+    }
+    setInquiryAnswers(initialAnswers);
+    setInquiryLoading(false);
+    setInquiryOpen(true);
+  };
+
+  const confirmGenerationWithBrief = (customBrief?: CourseBriefParams) => {
+    const isZh = lng ? !lng.toLowerCase().startsWith('en') : true;
+    const rawDepth = inquiryAnswers.depth;
+    const normalizedDepth = normalizeDepth(rawDepth);
+    const finalBrief: CourseBriefParams = customBrief || {
+      version: inquiryRound + 1,
+      goal: inquiryAnswers.goal,
+      background: inquiryAnswers.background,
+      duration: inquiryAnswers.duration,
+      depth: normalizedDepth,
+      preference: inquiryAnswers.preference,
+      language: inquiryAnswers.language || (isZh ? 'zh-CN' : 'en-US'),
+      visual: inquiryAnswers.visual || 'Hand-drawn whiteboard diagrams & cards',
+    };
+    setInquiryOpen(false);
     setAttachments([]);
-    set({ generating: true, genQuery: withFiles ? `${prompt}\n\n${withFiles}` : prompt, generated: null });
+    set({
+      generating: true,
+      genQuery: inquiryPendingPrompt,
+      courseBrief: finalBrief,
+      generated: null,
+    });
+  };
+
+  const handleSmartFollowUp = async () => {
+    if (inquiryRound >= 2 || !inquiryFollowUpAllowed) return;
+    setInquiryLoading(true);
+    try {
+      const res = await fetchCourseInquiry({
+        topic: inquiryPendingPrompt || topic,
+        brief: {
+          version: inquiryRound + 1,
+          ...inquiryAnswers,
+        },
+        answers: inquiryAnswers,
+        followUpRound: inquiryRound + 1,
+      });
+      if (res && res.questions && res.questions.length > 0) {
+        setInquiryQuestions(res.questions);
+        setInquiryFollowUpAllowed(res.followUpAllowed);
+        setInquiryRound((r) => r + 1);
+        const updated = { ...inquiryAnswers };
+        for (const q of res.questions) {
+          if (!updated[q.field]) updated[q.field] = q.recommended;
+        }
+        setInquiryAnswers(updated);
+      } else {
+        setInquiryFollowUpAllowed(false);
+        toast(L('Current recommendations are fully calibrated.', '当前问询已对齐最佳配置'));
+      }
+    } catch {
+      setInquiryFollowUpAllowed(false);
+    } finally {
+      setInquiryLoading(false);
+    }
   };
   const submitNote = () => {
     const text = note.trim();
@@ -557,36 +763,28 @@ export const Home = ({ state, set }: PageProps) => {
                 {rotatedNews.map((n) => (
                   <div className="hm-news-row" key={n}>
                     <Spline size={14} />
-                    {n}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
+	                    {n}
+	                  </div>
+	                ))}
+	              </div>
+	            </div>
+	          </>
+	        )}
 
-        {/* affiliate banner — top right, below header */}
-        <div className="hm-affiliate">
-          <div className="hm-affiliate-main">
-            <Handshake size={52} />
-            <div className="hm-affiliate-text">
-              {t('sidebar.affiliatePromoLine1')}
-              <br />
-              {t('sidebar.affiliatePromoLine2')}
-            </div>
-          </div>
-          <div className="hm-affiliate-join" onClick={() => void copyInvite()}>
-            <ArrowUpRight size={12} />
-            {t('sidebar.affiliatePromoCta')}
-          </div>
-        </div>
-
-        {/* easter egg — bottom right */}
-        <div className="hm-easter">
-          <div className="hm-easter-title">{L('Attention, Drifting', '注意力的漂移')}</div>
-          <div className="hm-easter-sub">{L('Dot field, cursor light, 2026', '点阵 · 光标流光 · 2026')}</div>
-        </div>
-      </div>
+	        {/* affiliate banner — normal flow below primary content */}
+	        <div className="hm-affiliate">
+	          <div className="hm-affiliate-main">
+	            <Handshake size={36} />
+	            <div className="hm-affiliate-text">
+	              {t('sidebar.affiliatePromoLine1')} {t('sidebar.affiliatePromoLine2')}
+	            </div>
+	          </div>
+	          <button type="button" className="hm-affiliate-join" onClick={() => void copyInvite()}>
+	            <ArrowUpRight size={12} />
+	            {t('sidebar.affiliatePromoCta')}
+	          </button>
+	        </div>
+	      </div>
 
       {/* welcome-back takeover */}
       {state.welcomeBack && (
@@ -600,6 +798,111 @@ export const Home = ({ state, set }: PageProps) => {
             {t('home.welcomeBack.cta')}
           </DarkPill>
         </div>
+      )}
+
+      {/* 课程前置问询 Modal (3-5 问询推荐继续，最多 2 轮智能追问) */}
+      {inquiryOpen && (
+        <Modal onClose={() => setInquiryOpen(false)} scrim="dark-blur" width={640}>
+          <div className="hm-inquiry-box">
+            <div className="hm-inquiry-head">
+              <div>
+                <div className="hm-inquiry-title">
+                  <Sparkles size={16} />
+                  <span>{L('Curriculum Customization Brief', '定制课程前置问询')}</span>
+                  <span className="hm-inquiry-round-tag">
+                    {inquiryRound > 0 ? L(`Follow-up ${inquiryRound}/2`, `智能追问 ${inquiryRound}/2`) : L('3-5 Inquiries', '3-5 项推荐')}
+                  </span>
+                </div>
+                <div className="hm-inquiry-sub">
+                  {L('Confirm your learning goal, background, and visual preference. You can proceed directly with recommendations.', '定制你的目标、基础、时间与板书偏好。可一键采用推荐继续，亦可自由修改。')}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="hm-inquiry-close"
+                onClick={() => setInquiryOpen(false)}
+                aria-label={L('Close', '关闭')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {inquiryLoading ? (
+              <div className="hm-inquiry-loading">
+                <Sparkle className="hm-spin" size={24} />
+                <span>{L('Tailoring learning inquiries for your topic...', '正在针对该主题智能生成问询...')}</span>
+              </div>
+            ) : (
+              <div className="hm-inquiry-body">
+                {inquiryQuestions.map((q, qIdx) => {
+                  const currentVal = inquiryAnswers[q.field] ?? q.recommended;
+                  return (
+                    <div className="hm-inquiry-q" key={q.id || qIdx} style={{ '--q-idx': qIdx } as React.CSSProperties}>
+                      <div className="hm-inquiry-q-prompt">
+                        <span className="hm-inquiry-q-num">{qIdx + 1}</span>
+                        <span>{q.prompt}</span>
+                      </div>
+                      <div className="hm-inquiry-options">
+                        {q.options.map((opt) => {
+                          const isSelected = currentVal === opt;
+                          return (
+                            <button
+                              type="button"
+                              key={opt}
+                              className={`hm-inquiry-opt-chip${isSelected ? ' selected' : ''}`}
+                              onClick={() => setInquiryAnswers((prev) => ({ ...prev, [q.field]: opt }))}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <input
+                        type="text"
+                        className="hm-inquiry-input"
+                        placeholder={L(`Custom ${String(q.field)} (or pick above)`, `自定义${String(q.field)}（或点击上方选项）`)}
+                        value={inquiryAnswers[q.field] ?? ''}
+                        onChange={(e) => setInquiryAnswers((prev) => ({ ...prev, [q.field]: e.target.value }))}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="hm-inquiry-footer">
+              <div className="hm-inquiry-footer-left">
+                <button
+                  type="button"
+                  className="hm-inquiry-ghost-btn"
+                  onClick={() => confirmGenerationWithBrief()}
+                >
+                  {L('Skip (Use Defaults)', '跳过定制 (直接生成)')}
+                </button>
+                {inquiryFollowUpAllowed && inquiryRound < 2 && (
+                  <button
+                    type="button"
+                    className="hm-inquiry-followup-btn"
+                    onClick={() => void handleSmartFollowUp()}
+                    disabled={inquiryLoading}
+                  >
+                    <Sparkles size={13} />
+                    {L('Smart Clarification', '智能追问澄清')}
+                  </button>
+                )}
+              </div>
+              <div className="hm-inquiry-footer-right">
+                <DarkPill
+                  style={{ height: 38, padding: '0 18px', fontWeight: 600 }}
+                  onClick={() => confirmGenerationWithBrief()}
+                >
+                  <Check size={14} style={{ marginRight: 6 }} />
+                  {L('Continue with Recommended', '推荐继续')}
+                </DarkPill>
+              </div>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {whatsNewOpen && <WhatsNewModal onClose={() => setWhatsNewOpen(false)} />}

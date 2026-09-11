@@ -34,18 +34,21 @@
 .hm-prompt-card {
   width: 777px;
   max-width: calc(100% - 48px);
-  height: 123px;
+  min-height: 123px;
+  height: auto;
   margin: 24px auto 0;
   background: #fff;
   border: 1px solid #ececec;
   border-radius: 20px;
   box-shadow: 0 6px 24px rgba(16, 24, 40, 0.05);
-  padding: 20px 13px 10px;
+  padding: 16px 13px 12px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 .hm-input-wrap {
   position: relative;
+  min-height: 48px;
   flex: 1;
   padding: 0 4px;
 }
@@ -57,6 +60,11 @@
   font-size: 15px;
   color: #111827;
   padding: 4px 0;
+}
+.hm-input:focus,
+.hm-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 .hm-placeholder {
   position: absolute;
@@ -503,18 +511,22 @@
   flex-shrink: 0;
 }
 
-/* ---------------- Affiliate banner (top right, below header) ---------------- */
+/* ---------------- Affiliate banner (normal flow below primary content) ---------------- */
 .hm-affiliate {
-  position: absolute;
-  top: 76px;
-  right: 24px;
-  width: 244px;
+  position: static;
+  width: 777px;
+  max-width: calc(100% - 48px);
+  margin: 36px auto 0;
   background: #fff;
   border: 1px solid #f0f0f0;
   border-radius: 14px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-  padding: 14px 14px 10px;
-  z-index: 10;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-sizing: border-box;
 }
 .hm-affiliate-main {
   display: flex;
@@ -522,43 +534,33 @@
   gap: 12px;
 }
 .hm-affiliate-text {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 500;
   color: #111827;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 .hm-affiliate-join {
-  margin-top: 8px;
-  display: flex;
+  background: transparent;
+  border: none;
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 4px;
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary, #164E46);
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
 }
 .hm-affiliate-join:hover {
-  color: #111827;
+  background: var(--surface-hover, #F3F6F4);
 }
 
-/* ---------------- Easter egg (bottom right) ---------------- */
+/* ---------------- Easter egg (removed from view) ---------------- */
 .hm-easter {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  text-align: right;
-  z-index: 5;
-  pointer-events: none;
-}
-.hm-easter-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #111827;
-}
-.hm-easter-sub {
-  margin-top: 3px;
-  font-size: 12px;
-  color: #9ca3af;
+  display: none;
 }
 
 /* ---------------- Welcome-back takeover ---------------- */
@@ -620,7 +622,330 @@
 .hm-send { background: var(--color-primary); color: var(--panel-bg); }
 .hm-send:hover:not(:disabled) { background: var(--color-primary-hover); }
 .hm-send:disabled { background: var(--surface-soft); color: var(--text-muted); }
-.hm-prompt-card:focus-within { border-color: var(--focus-ring); }
+.hm-prompt-card:focus-within {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring), 0 8px 24px rgba(22, 78, 70, 0.08);
+}
 .hm-welcome { background: var(--app-bg); }
 .hm-placeholder, .hm-lms, .hm-easter-sub { color: var(--text-muted); }
 .hm-h1,.hm-instant-title,.hm-market-title,.hm-welcome-oh,.hm-welcome-back { font-family: var(--font-display); color: var(--color-primary); }
+
+@media (max-width: 768px) {
+  .hm-h1 {
+    font-size: 24px;
+    margin: 32px 16px 0;
+    line-height: 1.35;
+  }
+
+  .hm-sub {
+    font-size: 14px;
+    margin: 10px 16px 0;
+  }
+
+  .hm-prompt-card {
+    max-width: calc(100% - 24px);
+    padding: 12px 10px 10px;
+    border-radius: 16px;
+  }
+
+  .hm-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .hm-toolbar-right {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .hm-market {
+    max-width: calc(100% - 24px);
+    margin-top: 48px;
+  }
+
+  .hm-market-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px;
+  }
+
+  .hm-affiliate {
+    max-width: calc(100% - 24px);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .hm-affiliate-join {
+    padding-left: 0;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .hm-market-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 20px;
+  }
+}
+
+/* ---------------- CourseBrief Customization Modal ---------------- */
+.hm-inquiry-box {
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  box-sizing: border-box;
+  animation: hm-inquiry-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hm-inquiry-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.hm-inquiry-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-color, #E5E7EB);
+}
+
+.hm-inquiry-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-primary, #164E46);
+}
+
+.hm-inquiry-round-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--surface-soft, #EFF4F2);
+  color: var(--color-primary, #164E46);
+  border: 1px solid var(--border-color, #D2DFD8);
+}
+
+.hm-inquiry-sub {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted, #6B7280);
+  line-height: 1.4;
+}
+
+.hm-inquiry-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #6B7280);
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+.hm-inquiry-close:hover {
+  background: var(--surface-hover, #F3F4F6);
+  color: var(--color-primary, #111827);
+  transform: scale(1.05);
+}
+.hm-inquiry-close:active {
+  transform: scale(0.95);
+}
+
+.hm-inquiry-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--text-muted, #6B7280);
+  font-size: 13.5px;
+  animation: hm-inquiry-in 0.25s ease-out both;
+}
+
+.hm-spin {
+  animation: hk-spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes hk-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.hm-inquiry-body {
+  padding: 18px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hm-inquiry-q {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  animation: hm-q-fade-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--q-idx, 0) * 0.045s);
+}
+
+@keyframes hm-q-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hm-inquiry-q-prompt {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-heading, #1F2937);
+}
+
+.hm-inquiry-q-num {
+  font-size: 11px;
+  font-weight: 700;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-primary, #164E46);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hm-inquiry-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.hm-inquiry-opt-chip {
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--border-color, #E5E7EB);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--text-normal, #374151);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.hm-inquiry-opt-chip:hover {
+  background: var(--surface-hover, #F9FAFB);
+  border-color: #D1D5DB;
+  transform: translateY(-1px);
+}
+
+.hm-inquiry-opt-chip:active {
+  transform: scale(0.96);
+}
+
+.hm-inquiry-opt-chip.selected {
+  background: var(--selected-bg, #E9F3EE);
+  color: var(--color-primary, #164E46);
+  border-color: var(--color-primary, #164E46);
+  font-weight: 600;
+  box-shadow: 0 0 0 2.5px rgba(22, 78, 70, 0.12), 0 2px 6px rgba(22, 78, 70, 0.08);
+  transform: translateY(-1px);
+}
+
+.hm-inquiry-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  border: 1px solid var(--border-color, #E5E7EB);
+  border-radius: 7px;
+  background: var(--surface-soft, #FAFAFA);
+  color: var(--text-normal, #1F2937);
+  transition: all 0.15s ease;
+}
+
+.hm-inquiry-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #164E46);
+  background: #fff;
+  box-shadow: 0 0 0 2.5px rgba(22, 78, 70, 0.1);
+}
+
+.hm-inquiry-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border-color, #E5E7EB);
+  background: var(--surface-soft, #FAFAFA);
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+  gap: 12px;
+}
+
+.hm-inquiry-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hm-inquiry-ghost-btn {
+  background: transparent;
+  border: none;
+  font-size: 12.5px;
+  color: var(--text-muted, #6B7280);
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+.hm-inquiry-ghost-btn:hover {
+  color: #111827;
+  background: var(--surface-hover, #F3F4F6);
+}
+.hm-inquiry-ghost-btn:active {
+  transform: scale(0.97);
+}
+
+.hm-inquiry-followup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff;
+  border: 1px solid var(--border-color, #D1D5DB);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-primary, #164E46);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.hm-inquiry-followup-btn:hover:not(:disabled) {
+  background: var(--surface-soft, #EFF4F2);
+  border-color: var(--color-primary, #164E46);
+  transform: translateY(-1px);
+}
+.hm-inquiry-followup-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.hm-inquiry-followup-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

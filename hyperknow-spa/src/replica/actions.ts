@@ -270,9 +270,12 @@ export const tts = {
       },
     );
     const getProgress = (): AudioProgress | null => {
-      if (!el || isNaN(el.duration) || el.duration <= 0) return null;
-      const cur = el.currentTime;
+      if (!el) return null;
       const dur = el.duration;
+      // 流式响应 duration 可能为 Infinity:cur/Infinity 恒为 0,会把字幕钉死在 0。
+      // 视为"不可用进度",让调用方回退估算时钟。
+      if (!Number.isFinite(dur) || dur <= 0) return null;
+      const cur = el.currentTime;
       const ratio = Math.max(0, Math.min(1, cur / dur));
       return { currentTime: cur, duration: dur, ratio };
     };

@@ -40,6 +40,20 @@ export interface AppState {
   generating: boolean;
   /** 本次生成用户输入的原始 query(在线 SSE 与伪生成兜底共用) */
   genQuery: string;
+  /** 课程前置问询 CourseBrief(版本化: 目标、基础、时间、深度、偏好、语言、视觉) */
+  courseBrief?: {
+    version?: number;
+    goal?: string;
+    background?: string;
+    duration?: string;
+    depth?: 'overview' | 'systematic' | 'deep' | string;
+    preference?: string;
+    language?: string;
+    visual?: string;
+  };
+  /** 课程深链或详情加载状态 */
+  courseLoading?: boolean;
+  courseError?: string | null;
   /** 已生成的课程(非空时课程页/白板壳层按其渲染) */
   generated: GeneratedCourse | null;
   /** 即时协助:用户实际输入的问题(空则回退演示消息) */
@@ -67,6 +81,12 @@ export interface AppState {
   autoSpeak: boolean;
   /** 白板进入方式:lecture = 从头讲;practice = 直接跳到随堂练习(课程页"练习"按钮) */
   whiteboardMode: 'lecture' | 'practice';
+  /** 白板上下文:精准定位小节，杜绝默认跳第一讲 */
+  activeCourseUuid?: string;
+  activeUnitId?: string | number;
+  activeLectureId?: string;
+  activeSessionId?: string;
+  activeTopic?: string;
 }
 
 /** 订阅档位定义(前端常量;与 backend HK_DAILY_CREDITS=20 的 FREE 档对应)。 */

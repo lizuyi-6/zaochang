@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
+import { deflateSync, crc32 } from "node:zlib";
 
 export const port = 4179;
 export const baseUrl = `http://127.0.0.1:${port}`;
@@ -34,8 +35,69 @@ export let lastChatCompletion = null;
 export let aiUpstreamCount = 0;
 export let lastTtsRequest = null;
 export let ttsUpstreamCount = 0;
+export let lastImageRequest = null;
+export let imageUpstreamCount = 0;
+
+export function generate1024PngBase64() {
+  const width = 1024;
+  const height = 1024;
+  const rawData = Buffer.alloc(height * (1 + width), 0);
+  const idatData = deflateSync(rawData);
+
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from([0x00, 0x00, 0x00, 0x0d]),
+    Buffer.from("IHDR"),
+    (() => {
+      const b = Buffer.alloc(13);
+      b.writeUInt32BE(width, 0);
+      b.writeUInt32BE(height, 4);
+      b[8] = 8;
+      b[9] = 0;
+      b[10] = 0;
+      b[11] = 0;
+      b[12] = 0;
+      return b;
+    })(),
+    (() => {
+      const b = Buffer.alloc(4);
+      const ihdrPayload = Buffer.alloc(17);
+      ihdrPayload.write("IHDR", 0);
+      ihdrPayload.writeUInt32BE(width, 4);
+      ihdrPayload.writeUInt32BE(height, 8);
+      ihdrPayload[12] = 8;
+      ihdrPayload[13] = 0;
+      ihdrPayload[14] = 0;
+      ihdrPayload[15] = 0;
+      ihdrPayload[16] = 0;
+      b.writeUInt32BE(crc32(ihdrPayload), 0);
+      return b;
+    })(),
+    (() => {
+      const lenBuf = Buffer.alloc(4);
+      lenBuf.writeUInt32BE(idatData.length, 0);
+      const typeBuf = Buffer.from("IDAT");
+      const crcBuf = Buffer.alloc(4);
+      crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, idatData])), 0);
+      return Buffer.concat([lenBuf, typeBuf, idatData, crcBuf]);
+    })(),
+    Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]),
+  ]);
+  return png.toString("base64");
+}
+
+export const valid1024PngBase64 = generate1024PngBase64();
+
 /** 假 Tavily 搜索上游收到的 /search 请求体(课程生成联网研学断言用)。 */
 export const searchRequests = [];
+/** 假 StepFun Chat Completions 搜索请求体与模式控制 */
+export let lastStepfunSearchRequest = null;
+export const stepfunSearchRequests = [];
+export let stepfunSearchMockOutcome = "success";
+
+export function setStepfunSearchMockOutcome(outcome) {
+  stepfunSearchMockOutcome = outcome;
+}
 /** 置 true 后假上游一律 500(测"上游故障"分支);resetAiUpstream 会复位。 */
 export let aiUpstreamForceFail = false;
 /** 置对象后,非流式 Messages 调用(llm.chat)以该对象的 JSON 串作为回复文本
@@ -55,7 +117,12 @@ export function resetAiUpstream() {
   aiUpstreamCount = 0;
   lastTtsRequest = null;
   ttsUpstreamCount = 0;
+  lastImageRequest = null;
+  imageUpstreamCount = 0;
   searchRequests.length = 0;
+  lastStepfunSearchRequest = null;
+  stepfunSearchRequests.length = 0;
+  stepfunSearchMockOutcome = "success";
   aiUpstreamForceFail = false;
   aiUpstreamJsonOverride = null;
 }
@@ -72,15 +139,16 @@ export async function startFakeAiUpstream() {
     return "";
   };
   aiServer = createServer(async (request, response) => {
-    // 四种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
+    // 五种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
     // 专家模型与 Hyperknow Agent 共用)、/v1/audio/speech(Hyperknow TTS)、
-    // /search(假 Tavily——课程生成的联网研学)。
+    // /v1/images/generations(StepFun 生图)、/search(假 Tavily——课程生成的联网研学)。
     const isMessages = request.url === "/v1/messages";
     const isTts = request.url === "/v1/audio/speech";
     const isSearch = request.url === "/search";
+    const isImages = request.url === "/v1/images/generations";
     if (
       request.method !== "POST" ||
-      (!isMessages && !isTts && !isSearch && request.url !== "/v1/chat/completions")
+      (!isMessages && !isTts && !isSearch && !isImages && request.url !== "/v1/chat/completions")
     ) {
       response.writeHead(404).end();
       return;
@@ -121,6 +189,27 @@ export async function startFakeAiUpstream() {
       response.end(Buffer.from(`fake-mp3-for-${body.voice}-${Buffer.byteLength(String(body.input ?? ""))}b`));
       return;
     }
+    if (isImages) {
+      lastImageRequest = body;
+      imageUpstreamCount += 1;
+      if (aiUpstreamForceFail || String(body.prompt ?? "").includes("AI-UPSTREAM-FAIL-TEST")) {
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "upstream_image_failed" }));
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          data: [
+            {
+              b64_json: valid1024PngBase64,
+              finish_reason: "success",
+            },
+          ],
+        }),
+      );
+      return;
+    }
     const rawContent = isMessages ? body.messages?.[0]?.content : body.messages?.[1]?.content;
     lastChatCompletion = {
       model: body.model,
@@ -139,12 +228,181 @@ export async function startFakeAiUpstream() {
       response.end(JSON.stringify({ error: "boom" }));
       return;
     }
-    // 非流式 Messages 调用(llm.chat,模型探针/讲座规划用):回 Anthropic 非流式
+    // 非流式 Messages 调用(llm.chat,模型探针/讲座规划/蓝图与单元生成用):回 Anthropic 非流式
     // JSON 形状;aiUpstreamJsonOverride 置值时以该 JSON 串作正文(计划透传断言)。
     if (isMessages && body.stream !== true) {
-      const text = aiUpstreamJsonOverride ?? "ok";
+      let text = aiUpstreamJsonOverride;
+      if (!text) {
+        const sys = String(lastChatCompletion.system || "");
+        const usr = String(lastChatCompletion.user || "");
+        if (sys.includes("CourseBlueprint") || sys.includes("Curriculum Architect") || usr.includes("course blueprint")) {
+          const isZh = usr.includes("Language: zh-CN") || /[\u4e00-\u9fa5]/.test(usr);
+          const isDeep = usr.includes("Target Depth: deep");
+          const isOverview = usr.includes("Target Depth: overview");
+          const unitCount = isDeep ? 8 : (isOverview ? 3 : 6);
+          const units = [];
+          for (let u = 1; u <= unitCount; u++) {
+            units.push({
+              unitId: `unit-${u}`,
+              title: isZh ? `第 ${u} 单元：系统核心 ${u}` : `Unit ${u}: Core System Part ${u}`,
+              prerequisites: u > 1 ? [`unit-${u - 1}`] : [],
+              objectives: [isZh ? `掌握第 ${u} 阶段核心知识` : `Master core concept ${u}`],
+              completionCriteria: [
+                isZh ? `完成项目：实战工程 ${u}` : `Complete Project: Hands-on ${u}`,
+                isZh ? `通关测验：第 ${u} 单元测验` : `Pass Exam: Unit ${u} Quiz`,
+              ],
+              lectureCount: 3,
+              plannedSessionCount: 6,
+              estimatedDurationMinutes: 180,
+            });
+          }
+          text = JSON.stringify({
+            courseTitle: usr.match(/blueprint for: "([^"]+)"/)?.[1] || "Course Title",
+            courseDescription: isZh ? "高质量系统化深度课程" : "A comprehensive curriculum",
+            targetLearner: isZh ? "探索深度知识的学习者" : "Curious learners seeking mastery",
+            tags: ["System", "Practice"],
+            units,
+          });
+        } else if (sys.includes("Unit Specialist") || usr.includes("Generate concrete lectures and sessions")) {
+          const isZh = usr.includes("Language: zh-CN") || usr.includes("Simplified Chinese") || /[\u4e00-\u9fa5]/.test(usr);
+          const uIdMatch = usr.match(/Unit: "([^"]+)" - "([^"]+)"/);
+          const uId = uIdMatch ? uIdMatch[1] : "unit-1";
+          const uTitle = uIdMatch ? uIdMatch[2] : (isZh ? "第 1 单元" : "Unit 1");
+          const reqMatch = usr.match(/generate EXACTLY (\d+) lectures and total (\d+) sessions/);
+          const lecCount = reqMatch ? parseInt(reqMatch[1], 10) : 3;
+          const sessCount = reqMatch ? parseInt(reqMatch[2], 10) : 6;
+
+          // 生成精确匹配期望数量的 lectures 和 sessions
+          const lectures = [];
+          let remainingSessions = sessCount;
+          for (let l = 1; l <= lecCount; l++) {
+            const isLast = l === lecCount;
+            const isPenultimate = l === lecCount - 1;
+            let lTitle = isZh ? `第 ${l} 讲：核心要点` : `Lecture ${l}: Core Concepts`;
+            if (isPenultimate) {
+              lTitle = isZh ? `项目：单元实战工程` : `Project: Unit Hands-on`;
+            } else if (isLast) {
+              lTitle = isZh ? `测验：单元知识检验` : `Exam: Unit Assessment`;
+            }
+            const currentLecSessions = isLast
+              ? remainingSessions
+              : Math.max(1, Math.floor(remainingSessions / (lecCount - l + 1)));
+            remainingSessions -= currentLecSessions;
+
+            const sessions = [];
+            for (let s = 1; s <= currentLecSessions; s++) {
+              sessions.push({
+                sessionId: `${uId}-lec-${l}-sess-${s}`,
+                sessionIndex: s,
+                title: isZh ? `第 ${s} 节：学习与实操` : `Session ${s}: Study and Practice`,
+                sessionTime: 30,
+                depthTags: isLast ? ["definition", "application"] : (isPenultimate ? ["application"] : ["intuition", "definition"]),
+              });
+            }
+            lectures.push({
+              lectureId: `${uId}-lec-${l}`,
+              title: lTitle,
+              sessions,
+            });
+          }
+
+          text = JSON.stringify({
+            unitId: uId,
+            title: uTitle,
+            prerequisites: [],
+            objectives: [isZh ? "深入掌握单元核心" : "Master unit foundations"],
+            completionCriteria: [
+              isZh ? "完成动手项目并通关测验" : "Complete hands-on project and pass quiz",
+            ],
+            lectures,
+          });
+        } else {
+          text = "ok";
+        }
+      }
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ id: "msg_fake", type: "message", role: "assistant", content: [{ type: "text", text }], stop_reason: "end_turn" }));
+      return;
+    }
+    // StepFun web_search Chat Completions 非流式调用:
+    if (request.url === "/v1/chat/completions" && Array.isArray(body.tools) && body.tools.some((t) => t?.type === "web_search")) {
+      lastStepfunSearchRequest = body;
+      stepfunSearchRequests.push(body);
+      if (stepfunSearchMockOutcome === "auth_failed") {
+        response.writeHead(401, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "unauthorized" }));
+        return;
+      }
+      if (stepfunSearchMockOutcome === "rate_limited") {
+        response.writeHead(429, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "rate_limited" }));
+        return;
+      }
+      if (stepfunSearchMockOutcome === "upstream_error") {
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "upstream_fail" }));
+        return;
+      }
+      if (stepfunSearchMockOutcome === "not_triggered") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          choices: [{ message: { role: "assistant", content: "No tool calls needed." } }],
+        }));
+        return;
+      }
+      if (stepfunSearchMockOutcome === "no_results") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: null,
+                tool_calls: [
+                  {
+                    id: "call_empty",
+                    type: "web_search",
+                    function: {
+                      name: "web_search",
+                      results: [],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }));
+        return;
+      }
+      const q = String(body.messages?.[0]?.content ?? "topic");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_stepfun_1",
+                  type: "web_search",
+                  function: {
+                    name: "web_search",
+                    results: [
+                      {
+                        index: 1,
+                        title: `StepFun Docs: ${q}`,
+                        url: `https://stepfun.research.test/${encodeURIComponent(q)}`,
+                        summary: `Verified curriculum outline and documentation for ${q}.`,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }));
       return;
     }
     response.writeHead(200, { "content-type": "text/event-stream" });
@@ -325,7 +583,6 @@ export function previewServerArgs() {
     "--var", "AI_CHAT_EXPERT_TRANSPORT:messages",
     "--var", "AI_CHAT_VISION:1",
     "--var", `HYPERKNOW_TTS_BASE_URL:http://127.0.0.1:${aiPort}/v1`,
-    "--var", "HK_WEB_SEARCH_PROVIDER:tavily",
     "--var", "HK_TAVILY_API_KEY:test-search-key",
     "--var", `HK_WEB_SEARCH_BASE_URL:http://127.0.0.1:${aiPort}`,
     "--var", `EMAIL_SEND_BASE_URL:http://127.0.0.1:${emailPort}`,
@@ -581,7 +838,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))

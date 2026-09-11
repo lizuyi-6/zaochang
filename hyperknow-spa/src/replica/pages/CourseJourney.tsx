@@ -153,16 +153,29 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
           'Lectures, practices, and a project for this part of the course.',
           '本单元包含讲座、练习与一个项目。',
         );
-  /* 未加入 → 先弹加入确认;已加入 → 进白板课堂(lecture 从头讲 / practice 直通随堂练习) */
-  const openLesson = (mode: 'lecture' | 'practice') => {
+  /* 未加入 → 先弹加入确认;已加入 → 进白板课堂(精准携带 courseUuid/unitId/lectureId/sessionId) */
+  const openLesson = (
+    mode: 'lecture' | 'practice',
+    ctx?: { unitId?: string | number; lectureId?: string; sessionId?: string; topic?: string },
+  ) => {
     if (!joined) {
       setDialog('join');
       return;
     }
-    set({ screen: 'whiteboard', whiteboardMode: mode });
+    set({
+      screen: 'whiteboard',
+      whiteboardMode: mode,
+      activeCourseUuid: (PS as { courseUuid?: string }).courseUuid,
+      activeUnitId: ctx?.unitId ?? activeUnit,
+      activeLectureId: ctx?.lectureId,
+      activeSessionId: ctx?.sessionId,
+      activeTopic: ctx?.topic,
+    });
   };
   /* "练习"标签列出当前单元的练习项(取自各讲的 session) */
-  const practiceRows = unit.lectures.flatMap((lec) => lec.sessions.map((s) => s.title));
+  const practiceRows = unit.lectures.flatMap((lec) =>
+    lec.sessions.map((s) => ({ title: s.title, lectureId: lec.id, sessionId: s.sessionId })),
+  );
   const onShareCourse = () => void shareLink(window.location.href, `${PS.title} · ${L('Lattice', '见界')}`);
   const onAddToCalendar = () => {
     const start = new Date();
@@ -374,9 +387,20 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                     <div className="cj-mat-empty">{L('No practices in this unit yet.', '本单元还没有练习。')}</div>
                   ) : (
                     practiceRows.map((p) => (
-                      <div key={p} className="cj-prac-row">
-                        <span className="cj-prac-name">{p}</span>
-                        <button className="cj-pill practice" type="button" onClick={() => openLesson('practice')}>
+                      <div key={p.title} className="cj-prac-row">
+                        <span className="cj-prac-name">{p.title}</span>
+                        <button
+                          className="cj-pill practice"
+                          type="button"
+                          onClick={() =>
+                            openLesson('practice', {
+                              unitId: unit.id,
+                              lectureId: p.lectureId,
+                              sessionId: p.sessionId,
+                              topic: p.title,
+                            })
+                          }
+                        >
                           <PenLine size={12} />
                           <span>{t('courseJourney.practiceAction')}</span>
                         </button>
@@ -469,7 +493,18 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                   });
                 })}
               </div>
-              <button className="cj-strip-pill" type="button" onClick={() => openLesson('lecture')}>
+              <button
+                className="cj-strip-pill"
+                type="button"
+                onClick={() =>
+                  openLesson('lecture', {
+                    unitId: unit.id,
+                    lectureId: unit.lectures[0]?.id,
+                    sessionId: unit.lectures[0]?.sessions[0]?.sessionId,
+                    topic: unit.lectures[0]?.sessions[0]?.title ?? unit.lectures[0]?.title,
+                  })
+                }
+              >
                 <span className="cj-strip-ico">
                   {done ? <PenLine size={11} /> : <Play size={10} fill="currentColor" />}
                 </span>
@@ -515,7 +550,18 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                               <span className="cj-session-actions">
                                 {isFirst && done ? (
                                   <>
-                                    <button className="cj-pill revisit" type="button" onClick={() => openLesson('lecture')}>
+                                    <button
+                                      className="cj-pill revisit"
+                                      type="button"
+                                      onClick={() =>
+                                        openLesson('lecture', {
+                                          unitId: unit.id,
+                                          lectureId: lec.id,
+                                          sessionId: s.sessionId,
+                                          topic: s.title,
+                                        })
+                                      }
+                                    >
                                       <Play size={11} fill="currentColor" />
                                       <span>{t('courseJourney.revisitAction')}</span>
                                     </button>
@@ -523,7 +569,14 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill practice-filled"
                                       type="button"
-                                      onClick={() => openLesson('practice')}
+                                      onClick={() =>
+                                        openLesson('practice', {
+                                          unitId: unit.id,
+                                          lectureId: lec.id,
+                                          sessionId: s.sessionId,
+                                          topic: s.title,
+                                        })
+                                      }
                                     >
                                       <PenLine size={12} />
                                       <span>{t('courseJourney.practiceAction')}</span>
@@ -534,7 +587,14 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill learn-filled"
                                       type="button"
-                                      onClick={() => openLesson('lecture')}
+                                      onClick={() =>
+                                        openLesson('lecture', {
+                                          unitId: unit.id,
+                                          lectureId: lec.id,
+                                          sessionId: s.sessionId,
+                                          topic: s.title,
+                                        })
+                                      }
                                     >
                                       <Play size={11} fill="currentColor" />
                                       <span>{t('courseJourney.learnAction')}</span>
@@ -542,7 +602,14 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill practice"
                                       type="button"
-                                      onClick={() => openLesson('practice')}
+                                      onClick={() =>
+                                        openLesson('practice', {
+                                          unitId: unit.id,
+                                          lectureId: lec.id,
+                                          sessionId: s.sessionId,
+                                          topic: s.title,
+                                        })
+                                      }
                                     >
                                       <PenLine size={12} />
                                       <span>{t('courseJourney.practiceAction')}</span>
@@ -550,14 +617,32 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                   </>
                                 ) : (
                                   <>
-                                    <button className="cj-pill learn" type="button" onClick={() => openLesson('lecture')}>
+                                    <button
+                                      className="cj-pill learn"
+                                      type="button"
+                                      onClick={() =>
+                                        openLesson('lecture', {
+                                          unitId: unit.id,
+                                          lectureId: lec.id,
+                                          sessionId: s.sessionId,
+                                          topic: s.title,
+                                        })
+                                      }
+                                    >
                                       <Play size={11} fill="currentColor" />
                                       <span>{t('courseJourney.learnAction')}</span>
                                     </button>
                                     <button
                                       className="cj-pill practice"
                                       type="button"
-                                      onClick={() => openLesson('practice')}
+                                      onClick={() =>
+                                        openLesson('practice', {
+                                          unitId: unit.id,
+                                          lectureId: lec.id,
+                                          sessionId: s.sessionId,
+                                          topic: s.title,
+                                        })
+                                      }
                                     >
                                       <PenLine size={12} />
                                       <span>{t('courseJourney.practiceAction')}</span>

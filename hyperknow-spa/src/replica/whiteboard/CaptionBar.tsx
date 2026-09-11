@@ -15,11 +15,11 @@ export const CaptionBar: React.FC<{
   /** characters revealed */
   shown: number;
   typing: boolean;
-  /** center x of the caption (depends on panel state) */
-  centerX: number;
+  /** center x of the caption (optional for legacy calls) */
+  centerX?: number;
   /** raised above the quick-check block */
   raised?: boolean;
-}> = ({ caption, shown, typing, centerX, raised }) => {
+}> = ({ caption, shown, typing, raised }) => {
   const flat = useMemo<FlatC[]>(() => {
     if (!caption) return [];
     const out: FlatC[] = [];
@@ -58,7 +58,7 @@ export const CaptionBar: React.FC<{
   flush();
 
   return (
-    <div className={`wb-caption${raised ? ' raised' : ''}`} style={{ left: centerX, transform: 'translateX(-50%)' }}>
+    <div className={`wb-caption${raised ? ' raised' : ''}`} role="status">
       {out}
       {typing && <span className="caret" />}
     </div>

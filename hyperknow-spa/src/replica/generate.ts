@@ -1,5 +1,5 @@
 import { L } from './i18n/content';
-import type { Lecture, SessionRow, Unit } from './data';
+import { coverForTitle, type Lecture, type SessionRow, type Unit } from './data';
 import type { BackendCourse } from './backend';
 
 /**
@@ -253,5 +253,6 @@ export function courseFromBackend(cs: BackendCourse, fallbackTopic: string): Gen
     unit1Description: cs.courseDescription || '',
     units,
     enrolled: `${((hashOf(topic) % 87) / 10 + 1.1).toFixed(1)}K`,
+    cover: coverForTitle(cs.courseTitle || fallbackTopic),
   };
 }

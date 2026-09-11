@@ -118,14 +118,24 @@ export const HistoryPage: React.FC<PageProps> = ({ state, set }) => {
           <>
             <div className="hs-group-label">{t('studyHistory.groupThisWeek')}</div>
             <div className="hs-card">
-              {/* 真实历史(按造场账户隔离);null = 拉取失败/纯静态托管 → 复刻演示行。 */}
+              {/* 真实历史(按造场账户隔离);null 且 bootReady=false = 首次拉取在途,
+               * 渲染加载骨架,不再先展示演示数据又被真实结果替换(生产环境闪现);
+               * null 且 bootReady = 拉取失败/纯静态托管 → 复刻演示行;
+               * [] = 真实为空,展示空态而非假数据。 */}
               {state.conversations === null
-                ? demoRows.map((title, i) => (
-                    <div key={i} className="hs-row" onClick={() => set({ screen: 'chat', activeConversationId: null })}>
-                      <span className="hs-row-title">{title}</span>
-                      <span className="hs-row-time">{t('studyHistory.relativeYesterday')}</span>
-                    </div>
-                  ))
+                ? !state.bootReady
+                  ? [0, 1, 2, 3, 4].map((i) => (
+                      <div key={i} className="hs-row hk-skel-row" aria-hidden="true">
+                        <span className="hk-skel-bar" style={{ width: `${30 + (i % 4) * 8}%` }} />
+                        <span className="hk-skel-bar" style={{ width: 44 }} />
+                      </div>
+                    ))
+                  : demoRows.map((title, i) => (
+                      <div key={i} className="hs-row" onClick={() => set({ screen: 'chat', activeConversationId: null })}>
+                        <span className="hs-row-title">{title}</span>
+                        <span className="hs-row-time">{t('studyHistory.relativeYesterday')}</span>
+                      </div>
+                    ))
                 : realRows.map((conv) => (
                     <div
                       key={conv.id}
@@ -136,7 +146,8 @@ export const HistoryPage: React.FC<PageProps> = ({ state, set }) => {
                       <span className="hs-row-time">{relativeTime(conv.updatedAt)}</span>
                     </div>
                   ))}
-              {((state.conversations !== null && realRows.length === 0) || (state.conversations === null && demoRows.length === 0)) && (
+              {((state.conversations !== null && realRows.length === 0) ||
+                (state.conversations === null && state.bootReady && demoRows.length === 0)) && (
                 <div className="hs-row" style={{ color: '#9CA3AF' }}>
                   <span className="hs-row-title">
                     {q ? L('No conversations match your search', '没有匹配的会话') : L('No conversations yet', '暂无会话')}
