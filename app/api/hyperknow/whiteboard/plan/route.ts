@@ -116,6 +116,7 @@ export async function POST(request: Request) {
       userEmail: member.email,
       topic: resolvedTopic,
       plan,
+      language: effectiveLanguage,
     });
 
     return Response.json({
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
       language: effectiveLanguage,
       resumed: false,
       status: "active",
+      degraded: plan.degraded === true,
       steps: plan.steps,
     });
   } catch (error) {

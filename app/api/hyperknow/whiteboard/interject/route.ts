@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     const signal = AbortSignal.timeout(60_000);
     let answer;
     try {
-      answer = await answerInterjection(question, currentStep, signal, member.displayName);
+      answer = await answerInterjection(question, currentStep, signal, member.displayName, session.plan.language);
     } catch (error) {
       if (error instanceof HyperknowNotConfiguredError) {
         return Response.json({ error: error.code }, { status: error.status });

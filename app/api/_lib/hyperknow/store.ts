@@ -111,13 +111,15 @@ export type StoredWhiteboardSession = {
   id: string;
   topic: string;
   createdAt: string;
-  plan: { steps: Array<{ step_id: string; spoken_text: string; board_action: Record<string, unknown> }> };
+  plan: { steps: Array<{ step_id: string; spoken_text: string; board_action: Record<string, unknown> }>; language?: string };
 };
 
-export async function saveWhiteboardSession(input: { id: string; userEmail: string; topic: string; plan: StoredWhiteboardSession["plan"] }): Promise<void> {
+export async function saveWhiteboardSession(input: { id: string; userEmail: string; topic: string; plan: StoredWhiteboardSession["plan"]; language?: string }): Promise<void> {
+  // language 并入 plan_json 存储(免迁移):插话答疑端点据此恢复讲座语言。
+  const planJson = JSON.stringify(input.language ? { ...input.plan, language: input.language } : input.plan);
   await database()
     .prepare(`INSERT INTO hk_whiteboard_sessions (id, user_email, topic, plan_json) VALUES (?, ?, ?, ?)`)
-    .bind(input.id, input.userEmail, input.topic, JSON.stringify(input.plan))
+    .bind(input.id, input.userEmail, input.topic, planJson)
     .run();
 }
 

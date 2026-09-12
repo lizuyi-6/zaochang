@@ -103,20 +103,28 @@ test("parseNextSteps: 合法 JSON 透传,坏 JSON 走确定性 fallback", () => 
   assert.equal(fallbackNextSteps().next_steps.length, 3, "fallback 必须是 3 条(前端按钮网格依赖)");
 });
 
-test("parseLecturePlan: steps 缺失/坏 JSON 走 fallback,fallback 自带两步", () => {
+test("parseLecturePlan: steps 缺失/坏 JSON 走 fallback,fallback 自带 5 步完整教学", () => {
   const plan = { steps: [{ step_id: "s1", spoken_text: "x", board_action: { type: "card" } }] };
   assert.deepEqual(parseLecturePlan(JSON.stringify(plan), "拓扑学"), plan);
-  assert.deepEqual(parseLecturePlan(JSON.stringify({ nope: true }), "拓扑学"), fallbackLecturePlan("拓扑学"));
-  assert.deepEqual(parseLecturePlan("boom", "拓扑学"), fallbackLecturePlan("拓扑学"));
+  const expectedFallback = { ...fallbackLecturePlan("拓扑学"), degraded: true };
+  assert.deepEqual(parseLecturePlan(JSON.stringify({ nope: true }), "拓扑学"), expectedFallback);
+  assert.deepEqual(parseLecturePlan("boom", "拓扑学"), expectedFallback);
   const fallback = fallbackLecturePlan("拓扑学");
-  assert.equal(fallback.steps.length, 2);
+  assert.equal(fallback.steps.length, 5, "降级讲座必须具备 5 步完整教学结构(导论/图解/实践/避坑/快测)");
   assert.match(fallback.steps[0].spoken_text, /拓扑学/);
-  assert.equal(fallback.steps[1].board_action.type, "formula");
+  assert.equal(fallback.steps[1].board_action.type, "diagram");
+  assert.equal(fallback.steps[4].board_action.type, "quick_check");
+  // 语言感知:显式 zh 或中文主题都必须输出中文旁白,英文上下文保持英文
+  assert.match(fallbackLecturePlan("Vue.js 设计背景", "", "zh-CN").steps[0].spoken_text, /探索/);
+  assert.match(fallbackLecturePlan("Topology", "", "en").steps[0].spoken_text, /diving into/);
+  assert.match(fallbackLecturePlan("拓扑学").steps[0].spoken_text, /探索/);
+  assert.match(fallbackLecturePlan("Topology").steps[0].spoken_text, /diving into/);
 });
 
 test("parseInterjectionAnswer: 坏 JSON 走 fallback(文案与原版逐字一致)", () => {
   assert.deepEqual(parseInterjectionAnswer('{"answer_text":"a","resume_transition":"b"}'), { answer_text: "a", resume_transition: "b" });
   assert.deepEqual(parseInterjectionAnswer("nope"), fallbackInterjectionAnswer());
+  assert.match(fallbackInterjectionAnswer("zh-CN").answer_text, /问题/);
 });
 
 test("parseCourseStructure: units 缺失/坏 JSON 走 fallback,fallback 保留查询词", () => {

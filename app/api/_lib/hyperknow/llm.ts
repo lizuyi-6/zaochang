@@ -47,7 +47,13 @@ export function formatMessagesForMessagesApi(messages: LlmMessage[]): { systemPr
 }
 
 function messagesEndpoint(baseUrl: string): string {
-  return baseUrl.endsWith("/messages") ? baseUrl : `${baseUrl}/messages`;
+  return baseUrl.endsWith("/messages") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/messages`;
+}
+
+function chatCompletionsEndpoint(baseUrl: string): string {
+  if (baseUrl.includes("/chat/completions")) return baseUrl;
+  const base = baseUrl.replace(/\/messages\/?$/, "").replace(/\/+$/, "");
+  return `${base}/chat/completions`;
 }
 
 async function postMessages(
@@ -78,6 +84,47 @@ async function postMessages(
   return response;
 }
 
+async function postChatCompletions(
+  messages: LlmMessage[],
+  options: ChatOptions & { jsonMode?: boolean } = {},
+): Promise<string> {
+  const config = resolveConfigOrThrow();
+  const endpoint = chatCompletionsEndpoint(config.baseUrl);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: options.model || config.model,
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        max_tokens: options.maxTokens || 4096,
+        ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    throw new HyperknowUpstreamError("ai_upstream_error", 503);
+  }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
+    if (response.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
+    throw new HyperknowUpstreamError("ai_upstream_error", 503);
+  }
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+    content?: Array<{ type?: unknown; text?: unknown }>;
+  };
+  const choiceContent = data.choices?.[0]?.message?.content;
+  if (typeof choiceContent === "string") return choiceContent;
+  const textBlock = data.content?.find((block) => block.type === "text");
+  return typeof textBlock?.text === "string" ? textBlock.text : "";
+}
+
 // 流式对话(思维链 + 正文增量)。调用方在发 SSE 头之前先 next() 一次即可获得
 // "发流前失败回 JSON"的语义(与 reading-ai 路由同款手法)。
 export async function* streamChat(messages: LlmMessage[], options: ChatOptions = {}): AsyncGenerator<StreamChunk> {
@@ -98,24 +145,47 @@ export async function* streamChat(messages: LlmMessage[], options: ChatOptions =
 }
 
 // 单次对话补全(JSON 模式:system 追加 JSON 指令,与原版 jsonMode 行为一致)。
-// 返回第一个 text 块;上游失败抛 HyperknowUpstreamError(不像原版静默吞掉——
-// JSON 模式的消费方都有确定性 fallback,抛错让路由能区分"降级"与"上游故障")。
+// 双协议自适应:优先 Messages 协议,若上游为 OpenAI/StepFun 标准 chat/completions
+// (如报 404/503 或未开 messages 接口),无缝切换走 chat/completions。
 export async function chat(messages: LlmMessage[], options: ChatOptions & { jsonMode?: boolean } = {}): Promise<string> {
   const config = resolveConfigOrThrow();
-  const { systemPrompt, formatted } = formatMessagesForMessagesApi(messages);
-  const response = await postMessages(
-    {
-      model: options.model || config.model,
-      max_tokens: options.maxTokens || 4096,
-      thinking: { type: "enabled", budget_tokens: options.budgetTokens || 256 },
-      system: (systemPrompt || "") + (options.jsonMode ? "\nIMPORTANT: You must respond in valid JSON format only." : ""),
-      messages: formatted,
-    },
-    options.signal,
-  );
-  const data = (await response.json()) as { content?: Array<{ type?: unknown; text?: unknown }> };
-  const textBlock = data.content?.find((block) => block.type === "text");
-  return typeof textBlock?.text === "string" ? textBlock.text : "";
+  if (config.baseUrl.includes("/chat/completions")) {
+    return postChatCompletions(messages, options);
+  }
+
+  try {
+    const { systemPrompt, formatted } = formatMessagesForMessagesApi(messages);
+    const response = await postMessages(
+      {
+        model: options.model || config.model,
+        max_tokens: options.maxTokens || 4096,
+        thinking: { type: "enabled", budget_tokens: options.budgetTokens || 256 },
+        system: (systemPrompt || "") + (options.jsonMode ? "\nIMPORTANT: You must respond in valid JSON format only." : ""),
+        messages: formatted,
+      },
+      options.signal,
+    );
+    const data = (await response.json()) as {
+      content?: Array<{ type?: unknown; text?: unknown }>;
+      choices?: Array<{ message?: { content?: unknown } }>;
+    };
+    const textBlock = data.content?.find((block) => block.type === "text");
+    if (typeof textBlock?.text === "string") return textBlock.text;
+    const choiceContent = data.choices?.[0]?.message?.content;
+    if (typeof choiceContent === "string") return choiceContent;
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    if (error instanceof HyperknowUpstreamError && (error.code === "ai_auth_failed" || error.code === "ai_rate_limited")) {
+      throw error;
+    }
+    // Messages 失败时自动尝试 chat/completions 兼容通道
+    try {
+      return await postChatCompletions(messages, options);
+    } catch {
+      throw error;
+    }
+  }
+  return "";
 }
 
 export { HyperknowNotConfiguredError };
