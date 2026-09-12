@@ -201,9 +201,9 @@ export type LectureStep = { step_id: string; spoken_text: string; board_action: 
 // degraded: 本计划来自确定性 fallback 而非模型输出(供路由在响应/日志中区分降级与成功)。
 export type LecturePlan = { steps: LectureStep[]; degraded?: boolean };
 
-// 讲座计划的确定性 fallback(5 步完整教学:导论+图解+实践+避坑+快测)。
-// 语言感知:显式 language 或主题含汉字时输出中文,每步含 3-4 句详实老师解说词,
-// 绝不输出两句话敷衍收尾的空洞伪课。
+// 讲座计划的确定性 fallback(5 步完整教学:导论+图解+视角+避坑+快测)。
+// 通用人文/社科/理工适配,语言感知:显式 language 或主题含汉字时输出中文,
+// 每步含 3-4 句详实口语化讲解词,杜绝把计算机术语生搬硬套到所有主题。
 export function fallbackLecturePlan(topic: string, learnerName = "", language = ""): LecturePlan {
   const zh = /^zh/i.test(language.trim()) || /[一-鿿]/.test(topic);
   if (zh) {
@@ -212,50 +212,50 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
       steps: [
         {
           step_id: "step_1",
-          spoken_text: `${greet}欢迎来到今天的专题课，我们来深入探索${topic}。在实际工程和学术应用中，这个概念解决的核心痛点是复杂度的解耦与状态的一致性管理。在进入具体实现前，我们先建立对它的基本直觉与核心心智模型。`,
+          spoken_text: `${greet}欢迎来到今天的专题课，我们来深入探索${topic}。在探索这一主题时，最核心的价值在于建立清晰的思维框架与本质认知。在展开具体细节前，我们先建立对它的基本直觉与核心思考维度。`,
           board_action: {
             type: "card",
             title: topic,
-            content: `<p><strong>核心定义：</strong>${topic}的基本架构定位与核心设计哲学。</p><ul><li><strong>设计初衷：</strong>降低系统耦合度，提供声明式可预测行为。</li><li><strong>核心目标：</strong>提升开发效率与运行期可靠性。</li></ul>`,
+            content: `<p><strong>核心内涵：</strong>${topic}的基本定位与核心关切。</p><ul><li><strong>核心议题：</strong>把握其背后的基本逻辑与问题意识。</li><li><strong>认知目标：</strong>建立系统化视角，理解各要素的内在联系。</li></ul>`,
           },
         },
         {
           step_id: "step_2",
-          spoken_text: "看白板中央的结构流程图，这里清晰地展现了整个生命周期的演进脉络。数据从输入端进入，经过中间层的依赖收集与响应驱动，最终高效映射到底层执行环境。理清这三层边界，是掌握它的关键所在。",
+          spoken_text: `请看白板中央的结构流程图，这里清晰展现了${topic}的核心脉络。从背景与现实情境切入，通过核心机制的传导与互动，最终映射到具体的实践表现与深远影响。理清这一传导逻辑，是掌握它的关键。`,
           board_action: {
             type: "diagram",
-            code: `graph TD\n  Input["输入数据 / 初始状态"] --> Core["核心计算与响应调度"]\n  Core --> Transform["中间状态派生与变换"]\n  Transform --> Output["视图渲染 / 结果呈现"]`,
+            code: `graph TD\n  Context["现实背景与核心情境"] --> Mechanism["核心概念与关键机制"]\n  Mechanism --> Interaction["多维要素的相互作用"]\n  Interaction --> Outcome["具体实践与深远影响"]`,
           },
         },
         {
           step_id: "step_3",
-          spoken_text: "现在我们来看第三步的关键模式与实践要点。在真实业务场景中，最常用的模式是将纯函数逻辑与副作用严格隔离。正如卡片中总结的原则，清晰的边界划分能让后续的维护和自动化测试变得极其简单。",
+          spoken_text: `现在我们来看第三步的关键视角与分析方法。在理解和运用${topic}时，最有效的方法是结合具体情境进行多维审视。正如卡片中总结的方法论准则，抓住关键线索能帮我们快速洞察问题本质。`,
           board_action: {
             type: "card",
-            title: "核心实践模式",
-            content: `<p><strong>关键设计准则：</strong></p><ol><li><strong>单一职责：</strong>每个模块仅聚焦一个具体关注点。</li><li><strong>状态可见性：</strong>保证数据流向清晰、来源可追踪。</li><li><strong>优雅降级：</strong>异常边界与错误恢复机制就绪。</li></ol>`,
+            title: "核心分析视角",
+            content: `<p><strong>关键认知准则：</strong></p><ol><li><strong>情境化审视：</strong>将具体问题置于完整背景中理解。</li><li><strong>多维关联：</strong>探究个体经验与宏观结构的双向互动。</li><li><strong>本质洞察：</strong>透过表象提炼底层驱动机制与规律。</li></ol>`,
           },
         },
         {
           step_id: "step_4",
-          spoken_text: "接下来提醒大家注意几个最容易踩的陷阱。初学者往往容易忽视异步时序问题，或者在局部直接修改共享状态导致不可预测的副作用。请务必记住卡片上的避坑清单，时刻保持数据的单向流动和不可变约束。",
+          spoken_text: `接下来提醒大家注意在理解${topic}时最容易出现的几个认知误区。很多人容易脱离情境进行片面归因，或者混淆相关与因果关系。请务必记住卡片上的避坑提示，保持全面而严谨的批判性思维。`,
           board_action: {
             type: "card",
-            title: "常见陷阱与避坑指南",
-            content: `<p><strong>⚠️ 常见踩坑点：</strong></p><ul><li><strong>隐式状态突变：</strong>绕过规范直接修改内部引用。</li><li><strong>竞态时序：</strong>多个异步请求交错导致渲染过时数据。</li><li><strong>内存泄漏：</strong>未及时注销长效监听器或清理闭包引用。</li></ul>`,
+            title: "常见认知误区与避坑指南",
+            content: `<p><strong>⚠️ 常见思考陷阱：</strong></p><ul><li><strong>孤立片面归因：</strong>忽略整体结构与背景约束的影响。</li><li><strong>静态表面定论：</strong>忽视事物随时间与情境的动态演进。</li><li><strong>概念混淆套用：</strong>未把握核心边界而随意泛化结论。</li></ul>`,
           },
         },
         {
           step_id: "step_5",
-          spoken_text: "最后，我们通过一个小测验来快速检验对本节核心要点的理解。请看白板上的题目，思考后选择你认为最准确的选项，我们马上揭晓答案并做简要复盘。",
+          spoken_text: `最后，我们通过一个小测验来快速检验对本节核心要点的理解。请看白板上的题目，思考后选择你认为最符合${topic}核心视角的选项，我们马上揭晓答案。`,
           board_action: {
             type: "quick_check",
-            question: `在应用 ${topic} 时，以下哪项属于最推荐的核心工程实践？`,
+            question: `在深入理解 ${topic} 时，以下哪种思考方式最符合其核心视角？`,
             options: [
-              "保持清晰的数据单向流动与明确的边界划分",
-              "在多个地方直接突变全局共享状态以减少代码量",
-              "忽略异步异常捕获，全部依赖上层统一重试",
-              "尽量避免对核心流程拆解和编写单元测试",
+              "将具体现象置于宏观结构与动态情境中进行多维审视",
+              "脱离时代背景与外部情境，仅做孤立片面的静态归因",
+              "直接套用经验直觉，拒绝探究底层驱动机制与逻辑联系",
+              "将所有现象归结为单一偶然因素，忽视规律与结构作用",
             ],
             answer: 0,
           },
@@ -268,50 +268,50 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
     steps: [
       {
         step_id: "step_1",
-        spoken_text: `${greet} Today we are diving into ${topic}. In practical engineering and system design, this concept solves key challenges around decoupling complexity and maintaining predictable state. Before examining code, let us first build an intuitive mental model.`,
+        spoken_text: `${greet} Today we are diving into ${topic}. Exploring this subject helps us develop clear analytical frameworks and deep intuitive understanding. Before examining specific details, let us first establish our foundational perspective.`,
         board_action: {
           type: "card",
           title: topic,
-          content: `<p><strong>Core Concept:</strong> Foundational architecture and design rationale of ${topic}.</p><ul><li><strong>Motivation:</strong> Decouple state from presentation and enforce predictability.</li><li><strong>Key Benefit:</strong> Maintainability, testability, and deterministic workflows.</li></ul>`,
+          content: `<p><strong>Core Concept:</strong> Foundational framing and core concerns of ${topic}.</p><ul><li><strong>Primary Inquiry:</strong> Grasping the underlying logic and motivation.</li><li><strong>Learning Objective:</strong> Developing a systematic, holistic perspective.</li></ul>`,
         },
       },
       {
         step_id: "step_2",
-        spoken_text: "Notice the architecture diagram appearing on the board. The pipeline takes raw inputs, passes them through a deterministic scheduling and transformation stage, and cleanly emits the final output. Understanding these boundaries will make your implementation far more robust.",
+        spoken_text: `Notice the structured flowchart on the board illustrating the core progression of ${topic}. We move from foundational context into core mechanisms, observe their interactions, and identify realistic outcomes.`,
         board_action: {
           type: "diagram",
-          code: `graph TD\n  Input["Input / Raw State"] --> Core["Core Scheduler & Processing"]\n  Core --> Transform["Derived State Transformation"]\n  Transform --> Output["Rendered Output / UI"]`,
+          code: `graph TD\n  Context["Foundational Context & Context"] --> Mechanism["Core Mechanisms & Concepts"]\n  Mechanism --> Interaction["Dynamic Interactions & Relationships"]\n  Interaction --> Outcome["Real-World Outcomes & Impact"]`,
         },
       },
       {
         step_id: "step_3",
-        spoken_text: "Now let us examine practical design patterns. In real applications, the most effective strategy is isolating side effects from pure business logic. Adhering to single-responsibility modules makes unit testing and ongoing maintenance significantly smoother.",
+        spoken_text: "Now let us examine the primary analytical perspectives. When applying this knowledge, the most robust approach is contextualized, multi-dimensional inquiry. As summarized on the board, tracing these core threads makes complex analysis manageable.",
         board_action: {
           type: "card",
-          title: "Practical Design Principles",
-          content: `<p><strong>Core Engineering Rules:</strong></p><ol><li><strong>Single Responsibility:</strong> Modules focus on a discrete concern.</li><li><strong>Traceable Data Flow:</strong> Predictable mutations and clear dependencies.</li><li><strong>Resilient Boundaries:</strong> Explicit error handling and fallback states.</li></ol>`,
+          title: "Core Analytical Principles",
+          content: `<p><strong>Key Inquiry Guidelines:</strong></p><ol><li><strong>Contextual Understanding:</strong> Interpreting observations within their broader context.</li><li><strong>Multi-Dimensional Linkages:</strong> Connecting individual cases to overarching structures.</li><li><strong>Root-Cause Insight:</strong> Looking past surface phenomena to discover underlying drivers.</li></ol>`,
         },
       },
       {
         step_id: "step_4",
-        spoken_text: "Here are several frequent pitfalls that trip up even seasoned engineers. Over-coupling state mutations or missing asynchronous edge cases can cause race conditions. Keep data flow unidirectional and avoid direct shared state mutation.",
+        spoken_text: "Here are several common cognitive traps when analyzing this subject. Oversimplifying cause and effect or analyzing issues in isolation frequently leads to skewed conclusions. Keep the guidelines on the card in mind.",
         board_action: {
           type: "card",
-          title: "Common Pitfalls & Best Practices",
-          content: `<p><strong>⚠️ Key Traps to Avoid:</strong></p><ul><li><strong>Implicit Mutations:</strong> Bypassing contracts to mutate internal objects.</li><li><strong>Race Conditions:</strong> Uncoordinated asynchronous state updates.</li><li><strong>Resource Leaks:</strong> Unsubscribed listeners or stale closures.</li></ul>`,
+          title: "Common Pitfalls to Avoid",
+          content: `<p><strong>⚠️ Analytical Traps:</strong></p><ul><li><strong>Isolated Attribution:</strong> Ignoring systemic influences and background constraints.</li><li><strong>Static Oversimplification:</strong> Neglecting dynamic evolution over time.</li><li><strong>Over-generalization:</strong> Applying conclusions beyond their valid boundaries.</li></ul>`,
         },
       },
       {
         step_id: "step_5",
-        spoken_text: "To wrap up today's lesson, let us check your understanding with a quick interactive question. Review the options on the board and select the best practice for this architecture.",
+        spoken_text: "To wrap up today's lesson, let us test your understanding with a quick question. Review the options on the board and select the most appropriate analytical approach.",
         board_action: {
           type: "quick_check",
-          question: `Which of the following represents the most recommended architectural best practice for ${topic}?`,
+          question: `When analyzing ${topic}, which of the following represents the most comprehensive analytical approach?`,
           options: [
-            "Enforcing predictable unidirectional data flow with explicit boundaries",
-            "Mutating shared global states freely across arbitrary components",
-            "Disabling error boundaries to avoid catching intermediate failures",
-            "Skipping modular isolation to minimize code splitting overhead",
+            "Examining phenomena within their dynamic context and systemic structures",
+            "Attributing outcomes solely to isolated, superficial causes",
+            "Relying entirely on first impressions without verifying underlying mechanisms",
+            "Ignoring historical and environmental context altogether",
           ],
           answer: 0,
         },

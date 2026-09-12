@@ -23,11 +23,11 @@ export interface LessonScript {
   sessionId?: string;
 }
 
-/* 与演示板书同一套栏目网格(列 x 间距沿用参考稿) */
-const COL_X = [90, 470, 775, 1132, 1471];
-const COL_W = 330;
-const COL_MAX_H = 620;
-const LINE_CHARS = 36; // Caveat 19px ≈ 8.8px/字符,36 字符 ≈ 317px < 列宽
+/* 与演示板书同一套栏目网格(列宽 320 + 间距 40,彻底杜绝列间水平交叉重叠) */
+const COL_X = [60, 420, 780, 1180, 1540];
+const COL_W = 320;
+const COL_MAX_H = 580; // 留出充足安全区，绝不越过视口下边界
+const MAX_LINE_UNITS = 30; // 320px 列宽 / 19px 汉字 ≈ 16.8 字; 1 汉字 = 1.9 单元, 16 * 1.9 = 30.4
 
 /* ---------------- HTML → 手写行(Rich) ---------------- */
 
@@ -67,22 +67,37 @@ function collectRuns(node: Node, fmt: { b?: boolean; i?: boolean }, runs: Run[])
   el.childNodes.forEach((c) => collectRuns(c, next, runs));
 }
 
-/** 按行宽把 run 序列折行:拉丁按词折,CJK 逐字折。 */
+function charUnits(ch: string): number {
+  const code = ch.codePointAt(0) ?? 0;
+  if (
+    (code >= 0x2e80 && code <= 0x9fff) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xff01 && code <= 0xff60) ||
+    (code >= 0x20000 && code <= 0x2fa1f)
+  ) {
+    return 1.9; // 汉字与全角标点按 1.9 单元计算
+  }
+  if (ch === ' ' || ch === '\t') return 0.5;
+  if ('ilj.,:;\'"!()[]{}|'.includes(ch)) return 0.5;
+  if ('mwMW@#%&'.includes(ch)) return 1.3;
+  return 1.0;
+}
+
+/** 按行宽把 run 序列折行:拉丁按词折,CJK 逐字折，与 DOM 真实渲染换行 1:1 对齐。 */
 function wrapRuns(runs: Run[]): Rich[] {
   const lines: Rich[] = [];
   let cur: Rich = [];
-  let curLen = 0;
+  let curUnits = 0;
   const flush = () => {
-    // 去行首/行尾的纯空白段,再落行;整行空白丢弃
     while (cur.length && !cur[0].t.trim()) cur.shift();
     while (cur.length && !cur[cur.length - 1].t.trim()) cur.pop();
     if (cur.length) {
-      const line = cur.map((s) => ({ ...s }));
-      lines.push(line);
+      lines.push(cur.map((s) => ({ ...s })));
     }
     cur = [];
-    curLen = 0;
+    curUnits = 0;
   };
+
   for (const run of runs) {
     if (run.br) {
       flush();
@@ -90,27 +105,27 @@ function wrapRuns(runs: Run[]): Rich[] {
     }
     const parts = run.t.split(/(\s+)/).filter((p) => p !== '');
     for (const part of parts) {
-      const isCjk = /[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/.test(part);
-      const plen = part.length;
-      if (curLen + plen > LINE_CHARS && (isCjk || part.trim() === '')) {
-        flush();
-        if (part.trim() === '') continue;
-      }
-      if (isCjk && plen > LINE_CHARS) {
+      const isCjk = /[\u2e80-\u9fff\uff00-\uffef]/.test(part);
+      if (isCjk) {
         for (const ch of part) {
-          if (curLen + 1 > LINE_CHARS) flush();
+          const u = charUnits(ch);
+          if (curUnits + u > MAX_LINE_UNITS) flush();
           cur.push({ t: ch, b: run.b, i: run.i });
-          curLen += 1;
+          curUnits += u;
         }
         continue;
       }
-      if (curLen + plen > LINE_CHARS) flush();
+      const wordUnits = [...part].reduce((sum, ch) => sum + charUnits(ch), 0);
+      if (curUnits + wordUnits > MAX_LINE_UNITS && cur.length > 0) {
+        flush();
+        if (part.trim() === '') continue;
+      }
       cur.push({ t: part, b: run.b, i: run.i });
-      curLen += plen;
+      curUnits += wordUnits;
     }
   }
   flush();
-  return lines.slice(0, 9);
+  return lines.slice(0, 10);
 }
 
 /** HTML 卡片正文 → 手写板书行(结构性标签成行、strong/h* 加粗、br/块界换行)。 */
@@ -142,17 +157,20 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
   const cursor: Cursor = { col: 0, y: 94 };
   let plannedPan = false;
 
-  const advance = (h: number): void => {
-    cursor.y += h + 26;
-    if (cursor.y > COL_MAX_H && cursor.col < COL_X.length - 1) {
+  const ensureSpace = (h: number): void => {
+    // 若当前列已有内容(y > 94)，且再加上此元素高度后会溢出 COL_MAX_H，主动移至下一列顶部
+    if (cursor.y > 94 && cursor.y + h > COL_MAX_H && cursor.col < COL_X.length - 1) {
       cursor.col += 1;
       cursor.y = 94;
     }
   };
-  const push = (item: Omit<BoardItem, 'x' | 'y'>): void => {
-    items.push({ ...item, x: COL_X[cursor.col], y: cursor.y });
-    const lh = item.size * 1.24;
-    advance(item.diagram ? 440 : item.image ? 280 : (item.lines?.length ?? 1) * lh);
+
+  const advance = (h: number): void => {
+    cursor.y += h + 28;
+    if (cursor.y > COL_MAX_H && cursor.col < COL_X.length - 1) {
+      cursor.col += 1;
+      cursor.y = 94;
+    }
   };
 
   plan.steps.forEach((step, idx) => {
@@ -165,13 +183,27 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
     ];
     if (action.type === 'card') {
       const titleLines = action.title ? [plain(action.title)] : [];
-      if (titleLines.length) {
-        push({ id: `c${id}t`, step: id, size: 22, weight: 700, color: VIOLET, lines: titleLines });
-      }
       const body = action.content ? htmlToLines(action.content) : [];
-      if (body.length) push({ id: `c${id}b`, step: id, size: 19, w: COL_W, lines: body });
+      const titleH = titleLines.length ? 22 * 1.24 + 14 : 0;
+      const bodyH = body.length ? body.length * 19 * 1.24 : 0;
+      const totalCardH = titleH + bodyH;
+
+      // 标题与正文捆绑前置检查：若本列剩余空间不足以完整容纳该卡片，整卡移至下一列顶部
+      ensureSpace(totalCardH);
+
+      if (titleLines.length) {
+        items.push({ id: `c${id}t`, step: id, size: 22, weight: 700, color: VIOLET, lines: titleLines, x: COL_X[cursor.col], y: cursor.y });
+        cursor.y += titleH;
+      }
+      if (body.length) {
+        items.push({ id: `c${id}b`, step: id, size: 19, w: COL_W, lines: body, x: COL_X[cursor.col], y: cursor.y });
+        advance(bodyH);
+      }
     } else if (action.type === 'formula') {
-      push({ id: `f${id}`, step: id, size: 16, mono: true, w: COL_W, lines: [plain(action.latex ?? action.content ?? '')] });
+      const formH = 64;
+      ensureSpace(formH);
+      items.push({ id: `f${id}`, step: id, size: 16, mono: true, w: COL_W, lines: [plain(action.latex ?? action.content ?? '')], x: COL_X[cursor.col], y: cursor.y });
+      advance(formH);
     } else if (action.type === 'diagram') {
       let code = action.code ?? action.content ?? '';
       const rawNodes = (action as { nodes?: Array<{ id: string; label: string }> }).nodes;
@@ -201,14 +233,19 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
         ? naturalFallbackText.slice(0, 5).map(plain)
         : [plain(action.title || step.spoken_text || 'Structured Concept Flow')];
 
-      push({
+      const diagH = 360;
+      ensureSpace(diagH);
+      items.push({
         id: `d${id}`,
         step: id,
         size: 14,
-        w: 360,
+        w: COL_W,
         diagram: code,
         lines: fallbackDisplayLines,
+        x: COL_X[cursor.col],
+        y: cursor.y,
       });
+      advance(diagH);
     } else if (action.type === 'image') {
       const caption = action.caption ?? action.title ?? '';
       const prompt = action.prompt ?? '';
@@ -219,28 +256,33 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
         ? 'failed'
         : 'pending';
 
-      push({
+      const imgH = 260;
+      ensureSpace(imgH);
+      items.push({
         id: `img${id}`,
         step: id,
         size: 14,
-        w: 360,
+        w: COL_W,
         image: {
           url: action.url,
           status,
           caption: caption || prompt,
           prompt,
-          width: action.width ?? 340,
-          height: action.height ?? 240,
+          width: action.width ?? 320,
+          height: action.height ?? 220,
         },
         lines: [
           plain(caption ? `[${caption}]` : '[Visual Note]'),
           plain(prompt || step.spoken_text),
         ],
+        x: COL_X[cursor.col],
+        y: cursor.y,
       });
+      advance(imgH);
     }
 
-    /* 本步内容已落到第二页(x≥1132)→ 该步开讲时翻页;只翻一次 */
-    const needPan = COL_X[cursor.col] >= 1132 && !plannedPan;
+    /* 本步内容已落到第二页(x≥1180)→ 该步开讲时翻页;只翻一次 */
+    const needPan = COL_X[cursor.col] >= 1180 && !plannedPan;
     if (needPan) plannedPan = true;
 
     const lessonStep: LessonStep = {
@@ -281,7 +323,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
     table: null,
     annots: [],
     userAnswers: {},
-    pageSplitX: maxX >= 1132 ? 1132 : 0,
+    pageSplitX: maxX >= 1180 ? 1180 : 0,
     sessionId: plan.session_id || undefined,
   };
 }

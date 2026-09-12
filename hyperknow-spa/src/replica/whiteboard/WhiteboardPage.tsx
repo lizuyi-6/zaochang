@@ -781,7 +781,9 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
       {/* Structured interaction overlay layer above canvas, non-overlapping with footer */}
       <section className="wb-interaction-layer" aria-live="polite">
-        <CaptionBar caption={caption} shown={capShown} typing={typing} centerX={0} raised={choiceVisible} />
+        {!quickCheck && (
+          <CaptionBar caption={caption} shown={capShown} typing={typing} centerX={0} raised={choiceVisible} />
+        )}
         {quickCheck && CHOICE_STEP?.awaitChoice && (
           <QuickCheck
             question={CHOICE_STEP.awaitChoice.question}
