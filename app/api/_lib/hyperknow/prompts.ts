@@ -119,40 +119,62 @@ export function parseNextSteps(jsonStr: string): NextStepsData {
 
 // ── Whiteboard Instructor(白板讲师 + 举手插话)────────────────────────────
 export const WHITEBOARD_INSTRUCTOR_PROMPT = `# Role: Hyperknow Whiteboard Instructor
-You are an expert tutor delivering an interactive visual lecture on an infinite digital whiteboard.
-You break explanations into sequential visual STEPS, speaking with natural conversational voice cadences while placing cards and formulas on the board.
+You are an expert tutor delivering an engaging, in-depth interactive visual lecture on an infinite digital whiteboard.
+You break comprehensive explanations into sequential visual STEPS, speaking with natural, conversational voice cadences while placing cards, diagrams, and formulas on the board.
 
-For each lesson step, you provide:
-1. "spoken_text": What you say to the student out loud (natural, engaging tone, suitable for TTS).
-2. "board_action": The visual element to render on the whiteboard:
-   - type: "card" (title, bullet points or definition in "content" as HTML)
+## Pedagogical Structure Requirements:
+1. Lecture Depth and Scale:
+   - Deliver a substantial, thorough lesson consisting of 5 to 7 progressive steps.
+   - Never output a superficial 2-3 step lesson. Each step must build upon previous concepts.
+   - Recommended step progression:
+     * Step 1: Hook & Core Intuition (overview card: real-world analogy, motivation, why this matters)
+     * Step 2: Key Concepts & Formal Definitions (card: clear definitions, bullet points, mental model)
+     * Step 3: Architecture / Workflow / System Mechanics (diagram: Mermaid flowchart, sequence, or taxonomy)
+     * Step 4: Step-by-Step Deep Dive (card/formula: practical implementation, mechanics, or code walkthrough)
+     * Step 5: Real-world Practical Patterns & Pitfalls (card: best practices, common traps, dos and don'ts)
+     * Final Step: Understanding Check (quick_check: interactive multiple-choice question)
+
+2. Spoken Narration Depth ("spoken_text"):
+   - Each step's "spoken_text" is what you speak aloud to the student (synthesized via TTS).
+   - Each step MUST contain at least 3 to 5 full, natural spoken sentences (approx. 60-120 words in English, or 100-200 Chinese characters in Chinese).
+   - Proactively teach: explain the "why", point out key details on the board ("Take a look at the card on the board...", "Notice in this diagram..."), use relatable analogies, and maintain an encouraging, lively lecture tone.
+   - NEVER output brief 1-sentence summaries. The spoken explanation must carry real pedagogical substance.
+
+3. Board Action Elements ("board_action"):
+   - type: "card" (rich HTML content with <p>, <ul>, <li>, <code>, or <strong>; title should be concise and clear)
    - type: "formula" (LaTeX math expression; put the bare LaTeX in "content" WITHOUT $ or $$ delimiters, keep it on one line)
-   - type: "diagram" (Mermaid flowchart code in "content"; every node label MUST stay on a single line — use <br> instead of line breaks inside [ ] or { })
-
-Add a diagram whenever the explanation benefits from an illustration — workflows, pipelines, relationships, taxonomies, cycles, or step-by-step processes. A lecture with no diagram at all is a failed lecture.
-
-The FINAL step must always be a quick check:
-   - type: "quick_check" with "question", "options" (array of 2-4 strings), "answer" (0-based index of the correct option)
+   - type: "diagram" (valid Mermaid flowchart code in "content"; every node label MUST stay on a single line — use <br> instead of line breaks inside [ ] or { })
+   - At least one diagram MUST be included in the lecture to visualize structure, workflow, or lifecycle. A lecture with no diagram at all is a failed lecture.
+   - The FINAL step must always be a quick check:
+     type: "quick_check" with "question", "options" (array of 3-4 distinct choices), "answer" (0-based index of the correct option)
 
 Output your response strictly as JSON:
 {
   "steps": [
     {
       "step_id": "step_1",
-      "spoken_text": "Spoken explanation for step 1",
+      "spoken_text": "Engaging, conversational 3-5 sentence spoken explanation introducing the core intuition.",
       "board_action": {
         "type": "card",
         "title": "Title",
-        "content": "HTML/Markdown content"
+        "content": "<p>HTML content with <strong>key highlights</strong></p>"
+      }
+    },
+    {
+      "step_id": "step_2",
+      "spoken_text": "Detailed 3-5 sentence spoken walkthrough of the mechanics and workflow.",
+      "board_action": {
+        "type": "diagram",
+        "code": "graph TD\\n  A[Start] --> B[Process]\\n  B --> C[Output]"
       }
     },
     {
       "step_id": "step_N",
-      "spoken_text": "Let's check your understanding.",
+      "spoken_text": "Now, let us verify our understanding with a quick checkpoint.",
       "board_action": {
         "type": "quick_check",
         "question": "Question text",
-        "options": ["Option A", "Option B"],
+        "options": ["Option A", "Option B", "Option C"],
         "answer": 0
       }
     }
@@ -176,28 +198,122 @@ export type BoardAction =
   | { type: "quick_check"; question?: string; options?: string[]; answer?: number };
 
 export type LectureStep = { step_id: string; spoken_text: string; board_action: BoardAction };
-export type LecturePlan = { steps: LectureStep[] };
+// degraded: 本计划来自确定性 fallback 而非模型输出(供路由在响应/日志中区分降级与成功)。
+export type LecturePlan = { steps: LectureStep[]; degraded?: boolean };
 
-// 讲座计划的确定性 fallback(原 whiteboardAgent.planLecture catch 分支逐字一致)。
-export function fallbackLecturePlan(topic: string, learnerName = ""): LecturePlan {
+// 讲座计划的确定性 fallback(5 步完整教学:导论+图解+实践+避坑+快测)。
+// 语言感知:显式 language 或主题含汉字时输出中文,每步含 3-4 句详实老师解说词,
+// 绝不输出两句话敷衍收尾的空洞伪课。
+export function fallbackLecturePlan(topic: string, learnerName = "", language = ""): LecturePlan {
+  const zh = /^zh/i.test(language.trim()) || /[一-鿿]/.test(topic);
+  if (zh) {
+    const greet = learnerName ? `${learnerName}，你好！` : "你好！";
+    return {
+      steps: [
+        {
+          step_id: "step_1",
+          spoken_text: `${greet}欢迎来到今天的专题课，我们来深入探索${topic}。在实际工程和学术应用中，这个概念解决的核心痛点是复杂度的解耦与状态的一致性管理。在进入具体实现前，我们先建立对它的基本直觉与核心心智模型。`,
+          board_action: {
+            type: "card",
+            title: topic,
+            content: `<p><strong>核心定义：</strong>${topic}的基本架构定位与核心设计哲学。</p><ul><li><strong>设计初衷：</strong>降低系统耦合度，提供声明式可预测行为。</li><li><strong>核心目标：</strong>提升开发效率与运行期可靠性。</li></ul>`,
+          },
+        },
+        {
+          step_id: "step_2",
+          spoken_text: "看白板中央的结构流程图，这里清晰地展现了整个生命周期的演进脉络。数据从输入端进入，经过中间层的依赖收集与响应驱动，最终高效映射到底层执行环境。理清这三层边界，是掌握它的关键所在。",
+          board_action: {
+            type: "diagram",
+            code: `graph TD\n  Input["输入数据 / 初始状态"] --> Core["核心计算与响应调度"]\n  Core --> Transform["中间状态派生与变换"]\n  Transform --> Output["视图渲染 / 结果呈现"]`,
+          },
+        },
+        {
+          step_id: "step_3",
+          spoken_text: "现在我们来看第三步的关键模式与实践要点。在真实业务场景中，最常用的模式是将纯函数逻辑与副作用严格隔离。正如卡片中总结的原则，清晰的边界划分能让后续的维护和自动化测试变得极其简单。",
+          board_action: {
+            type: "card",
+            title: "核心实践模式",
+            content: `<p><strong>关键设计准则：</strong></p><ol><li><strong>单一职责：</strong>每个模块仅聚焦一个具体关注点。</li><li><strong>状态可见性：</strong>保证数据流向清晰、来源可追踪。</li><li><strong>优雅降级：</strong>异常边界与错误恢复机制就绪。</li></ol>`,
+          },
+        },
+        {
+          step_id: "step_4",
+          spoken_text: "接下来提醒大家注意几个最容易踩的陷阱。初学者往往容易忽视异步时序问题，或者在局部直接修改共享状态导致不可预测的副作用。请务必记住卡片上的避坑清单，时刻保持数据的单向流动和不可变约束。",
+          board_action: {
+            type: "card",
+            title: "常见陷阱与避坑指南",
+            content: `<p><strong>⚠️ 常见踩坑点：</strong></p><ul><li><strong>隐式状态突变：</strong>绕过规范直接修改内部引用。</li><li><strong>竞态时序：</strong>多个异步请求交错导致渲染过时数据。</li><li><strong>内存泄漏：</strong>未及时注销长效监听器或清理闭包引用。</li></ul>`,
+          },
+        },
+        {
+          step_id: "step_5",
+          spoken_text: "最后，我们通过一个小测验来快速检验对本节核心要点的理解。请看白板上的题目，思考后选择你认为最准确的选项，我们马上揭晓答案并做简要复盘。",
+          board_action: {
+            type: "quick_check",
+            question: `在应用 ${topic} 时，以下哪项属于最推荐的核心工程实践？`,
+            options: [
+              "保持清晰的数据单向流动与明确的边界划分",
+              "在多个地方直接突变全局共享状态以减少代码量",
+              "忽略异步异常捕获，全部依赖上层统一重试",
+              "尽量避免对核心流程拆解和编写单元测试",
+            ],
+            answer: 0,
+          },
+        },
+      ],
+    };
+  }
   const greet = learnerName ? `Welcome, ${learnerName}!` : "Welcome!";
   return {
     steps: [
       {
         step_id: "step_1",
-        spoken_text: `${greet} Today we are exploring ${topic}. Let's first establish the core intuition.`,
+        spoken_text: `${greet} Today we are diving into ${topic}. In practical engineering and system design, this concept solves key challenges around decoupling complexity and maintaining predictable state. Before examining code, let us first build an intuitive mental model.`,
         board_action: {
           type: "card",
           title: topic,
-          content: `<p><strong>Core Concept:</strong> Fundamental foundation of ${topic}.</p>`,
+          content: `<p><strong>Core Concept:</strong> Foundational architecture and design rationale of ${topic}.</p><ul><li><strong>Motivation:</strong> Decouple state from presentation and enforce predictability.</li><li><strong>Key Benefit:</strong> Maintainability, testability, and deterministic workflows.</li></ul>`,
         },
       },
       {
         step_id: "step_2",
-        spoken_text: "Now, let us examine the mathematical definition and formal mechanics behind this idea.",
+        spoken_text: "Notice the architecture diagram appearing on the board. The pipeline takes raw inputs, passes them through a deterministic scheduling and transformation stage, and cleanly emits the final output. Understanding these boundaries will make your implementation far more robust.",
         board_action: {
-          type: "formula",
-          latex: "f(x) = \\lim_{\\Delta x \\to 0} \\frac{f(x+\\Delta x) - f(x)}{\\Delta x}",
+          type: "diagram",
+          code: `graph TD\n  Input["Input / Raw State"] --> Core["Core Scheduler & Processing"]\n  Core --> Transform["Derived State Transformation"]\n  Transform --> Output["Rendered Output / UI"]`,
+        },
+      },
+      {
+        step_id: "step_3",
+        spoken_text: "Now let us examine practical design patterns. In real applications, the most effective strategy is isolating side effects from pure business logic. Adhering to single-responsibility modules makes unit testing and ongoing maintenance significantly smoother.",
+        board_action: {
+          type: "card",
+          title: "Practical Design Principles",
+          content: `<p><strong>Core Engineering Rules:</strong></p><ol><li><strong>Single Responsibility:</strong> Modules focus on a discrete concern.</li><li><strong>Traceable Data Flow:</strong> Predictable mutations and clear dependencies.</li><li><strong>Resilient Boundaries:</strong> Explicit error handling and fallback states.</li></ol>`,
+        },
+      },
+      {
+        step_id: "step_4",
+        spoken_text: "Here are several frequent pitfalls that trip up even seasoned engineers. Over-coupling state mutations or missing asynchronous edge cases can cause race conditions. Keep data flow unidirectional and avoid direct shared state mutation.",
+        board_action: {
+          type: "card",
+          title: "Common Pitfalls & Best Practices",
+          content: `<p><strong>⚠️ Key Traps to Avoid:</strong></p><ul><li><strong>Implicit Mutations:</strong> Bypassing contracts to mutate internal objects.</li><li><strong>Race Conditions:</strong> Uncoordinated asynchronous state updates.</li><li><strong>Resource Leaks:</strong> Unsubscribed listeners or stale closures.</li></ul>`,
+        },
+      },
+      {
+        step_id: "step_5",
+        spoken_text: "To wrap up today's lesson, let us check your understanding with a quick interactive question. Review the options on the board and select the best practice for this architecture.",
+        board_action: {
+          type: "quick_check",
+          question: `Which of the following represents the most recommended architectural best practice for ${topic}?`,
+          options: [
+            "Enforcing predictable unidirectional data flow with explicit boundaries",
+            "Mutating shared global states freely across arbitrary components",
+            "Disabling error boundaries to avoid catching intermediate failures",
+            "Skipping modular isolation to minimize code splitting overhead",
+          ],
+          answer: 0,
         },
       },
     ],
@@ -238,35 +354,49 @@ function extractJsonPayload(jsonStr: string): string {
   return out;
 }
 
-export function parseLecturePlan(jsonStr: string, topic: string, learnerName = ""): LecturePlan {
+export function parseLecturePlan(jsonStr: string, topic: string, learnerName = "", language = ""): LecturePlan {
   try {
     const parsed = JSON.parse(extractJsonPayload(jsonStr)) as LecturePlan;
-    if (!Array.isArray(parsed.steps)) return fallbackLecturePlan(topic, learnerName);
+    if (!Array.isArray(parsed.steps)) throw new Error("steps is not an array");
     return parsed;
-  } catch {
-    return fallbackLecturePlan(topic, learnerName);
+  } catch (error) {
+    // 解析失败落 fallback 时留痕(上游空响应/坏 JSON 才能从日志区分),不再静默吞掉。
+    console.warn(
+      `[hyperknow] lecture plan parse failed for "${topic}", using fallback:`,
+      error instanceof Error ? error.message : error,
+      `payload head: ${jsonStr.slice(0, 160)}`,
+    );
+    const plan = fallbackLecturePlan(topic, learnerName, language);
+    plan.degraded = true;
+    return plan;
   }
 }
 
 export type InterjectionAnswer = { answer_text: string; resume_transition: string };
 
-// 插话回答的确定性 fallback(原 answerInterjection catch 分支逐字一致)。
-export function fallbackInterjectionAnswer(): InterjectionAnswer {
+// 插话回答的确定性 fallback(原 answerInterjection catch 分支逐字一致,新增中文文案)。
+export function fallbackInterjectionAnswer(language = ""): InterjectionAnswer {
+  if (/^zh/i.test(language.trim())) {
+    return {
+      answer_text: "这个问题问得很好，正好帮我们厘清这一步里各个量之间的关系。",
+      resume_transition: "好，我们接着刚才讲到的内容继续。",
+    };
+  }
   return {
     answer_text: "That is a great question regarding this step. It clarifies how the underlying variables interact.",
     resume_transition: "Let's resume our lesson from this point.",
   };
 }
 
-export function parseInterjectionAnswer(jsonStr: string): InterjectionAnswer {
+export function parseInterjectionAnswer(jsonStr: string, language = ""): InterjectionAnswer {
   try {
     const parsed = JSON.parse(extractJsonPayload(jsonStr)) as InterjectionAnswer;
     if (typeof parsed.answer_text !== "string" || typeof parsed.resume_transition !== "string") {
-      return fallbackInterjectionAnswer();
+      return fallbackInterjectionAnswer(language);
     }
     return parsed;
   } catch {
-    return fallbackInterjectionAnswer();
+    return fallbackInterjectionAnswer(language);
   }
 }
 

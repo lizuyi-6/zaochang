@@ -107,8 +107,15 @@ export async function planLecture(
       { role: "user", content: `Create a step-by-step whiteboard lecture for: "${topic}"${langNote}${nameNote}` },
     ],
     { jsonMode: true, signal, maxTokens: 8192 },
-  ).catch(() => "");
-  return parseLecturePlan(jsonStr, topic, learnerName);
+  ).catch((error) => {
+    // 上游故障留痕后落语言一致的 fallback;不能让中文课程静默变成英文模板课。
+    console.warn(
+      `[hyperknow] planLecture upstream failed for "${topic}" (${effLang}), using fallback:`,
+      error instanceof Error ? error.message : error,
+    );
+    return "";
+  });
+  return parseLecturePlan(jsonStr, topic, learnerName, effLang);
 }
 
 export async function answerInterjection(
@@ -128,7 +135,7 @@ export async function answerInterjection(
     ],
     { jsonMode: true, signal },
   ).catch(() => "");
-  return jsonStr ? parseInterjectionAnswer(jsonStr) : fallbackInterjectionAnswer();
+  return jsonStr ? parseInterjectionAnswer(jsonStr, effLang) : fallbackInterjectionAnswer(effLang);
 }
 
 // ── Course Architect(三级课程大纲)────────────────────────────────────────

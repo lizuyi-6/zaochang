@@ -188,14 +188,19 @@ export function register() {
     const plan = await planResponse.json();
     assert.equal(plan.status, "active");
     assert.equal(plan.topic, "Binary Search");
-    assert.equal(plan.steps.length, 2, "假上游非 JSON → 确定性 fallback 两步");
+    assert.equal(plan.degraded, true, "假上游非 JSON → 响应必须显式标记降级");
+    assert.equal(plan.steps.length, 5, "假上游非 JSON → 确定性 fallback 5 步完整教学结构");
     assert.equal(plan.steps[0].board_action.type, "card");
     assert.match(plan.steps[0].spoken_text, /Binary Search/);
-    assert.equal(plan.steps[1].board_action.type, "formula");
+    // 默认语言 zh-CN:fallback 旁白必须中文,不再输出英文模板句
+    assert.match(plan.steps[0].spoken_text, /探索/);
+    assert.equal(plan.steps[1].board_action.type, "diagram");
+    assert.equal(plan.steps[4].board_action.type, "quick_check");
 
-    const stored = await queryLocalD1(`SELECT user_email AS u, topic AS t FROM hk_whiteboard_sessions WHERE id = '${plan.session_id}'`);
+    const stored = await queryLocalD1(`SELECT user_email AS u, topic AS t, plan_json AS p FROM hk_whiteboard_sessions WHERE id = '${plan.session_id}'`);
     assert.equal(stored[0].u, email, "讲座计划必须落库(插话端点跨请求取回)");
     assert.equal(stored[0].t, "Binary Search");
+    assert.equal(JSON.parse(stored[0].p).language, "zh-CN", "讲座语言必须随计划落库(插话答疑沿用)");
 
     const interject = await fetch(`${baseUrl}/api/hyperknow/whiteboard/interject`, {
       method: "POST",
@@ -204,7 +209,7 @@ export function register() {
     });
     assert.equal(interject.status, 200);
     const answer = await interject.json();
-    assert.equal(answer.answer_text, "That is a great question regarding this step. It clarifies how the underlying variables interact.");
+    assert.equal(answer.answer_text, "这个问题问得很好，正好帮我们厘清这一步里各个量之间的关系。", "插话 fallback 必须沿用讲座语言");
     assert.ok(answer.resume_transition);
 
     const stranger = await fetch(`${baseUrl}/api/hyperknow/whiteboard/interject`, {
