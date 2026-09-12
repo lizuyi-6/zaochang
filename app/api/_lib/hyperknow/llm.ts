@@ -77,6 +77,8 @@ async function postMessages(
     throw new HyperknowUpstreamError("ai_upstream_error", 503);
   }
   if (!response.ok || !response.body) {
+    const errText = await response.text().catch(() => "");
+    console.warn(`[hyperknow-llm] messages returned status ${response.status}: ${errText.slice(0, 300)}`);
     if (response.status === 401 || response.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
     if (response.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
     throw new HyperknowUpstreamError("ai_upstream_error", 503);
@@ -91,6 +93,11 @@ async function postChatCompletions(
   const config = resolveConfigOrThrow();
   const endpoint = chatCompletionsEndpoint(config.baseUrl);
   let response: Response;
+  const sysJson = options.jsonMode ? "\nIMPORTANT: You must output ONLY a valid JSON object matching the requested schema. No other text." : "";
+  const formattedMessages = messages.map((m, idx) => ({
+    role: m.role,
+    content: idx === 0 && m.role === "system" ? m.content + sysJson : m.content,
+  }));
   try {
     response = await fetch(endpoint, {
       method: "POST",
@@ -100,9 +107,8 @@ async function postChatCompletions(
       },
       body: JSON.stringify({
         model: options.model || config.model,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        messages: formattedMessages,
         max_tokens: options.maxTokens || 4096,
-        ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
       signal: options.signal,
     });
@@ -111,6 +117,8 @@ async function postChatCompletions(
     throw new HyperknowUpstreamError("ai_upstream_error", 503);
   }
   if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    console.warn(`[hyperknow-llm] chat/completions ${endpoint} returned status ${response.status}: ${errText.slice(0, 300)}`);
     if (response.status === 401 || response.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
     if (response.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
     throw new HyperknowUpstreamError("ai_upstream_error", 503);
