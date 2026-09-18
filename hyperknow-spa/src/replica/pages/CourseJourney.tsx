@@ -171,6 +171,44 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joined, journeyUuid]);
 
+  /* 悬停/键盘聚焦意图预热:指针或焦点在讲次小节行停留 650ms 才触发(扫过不烧配额),
+   * 预算 4 次/页面挂载(planPrefetch 内控制),离开/卸载即取消。 */
+  const hoverTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    },
+    [],
+  );
+  const hoverPrefetch = (ctx: { unitId: string | number; lectureId?: string; sessionId?: string; topic?: string }) => {
+    const arm = () => {
+      if (!joined || !journeyUuid) return;
+      if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+      hoverTimer.current = window.setTimeout(() => {
+        hoverTimer.current = null;
+        prefetchLecturePlan(
+          {
+            topic: ctx.topic ?? PS.title,
+            courseUuid: journeyUuid,
+            unitId: String(ctx.unitId),
+            lectureId: ctx.lectureId,
+            sessionId: ctx.sessionId,
+            language: getBackendLang() || getCurrentLng() || 'en',
+          },
+          { voice: 'calm', speed: 1 },
+          'hover',
+        );
+      }, 650);
+    };
+    const disarm = () => {
+      if (hoverTimer.current) {
+        window.clearTimeout(hoverTimer.current);
+        hoverTimer.current = null;
+      }
+    };
+    return { onPointerEnter: arm, onPointerLeave: disarm, onFocus: arm, onBlur: disarm };
+  };
+
   const unit = UNITS.find((u) => u.id === activeUnit) ?? UNITS[0];
   const unitChip =
     activeUnit === 1
@@ -609,6 +647,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                               role="button"
                               tabIndex={0}
                               style={{ cursor: 'pointer' }}
+                              {...hoverPrefetch({ unitId: unit.id, lectureId: lec.id, sessionId: s.sessionId, topic: s.title })}
                               onClick={() =>
                                 openLesson(isFirst && done ? 'practice' : 'lecture', {
                                   unitId: unit.id,
