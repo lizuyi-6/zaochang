@@ -31,7 +31,8 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { circles, products } from "../lib/community-data";
+import { circles, products, type Product } from "../lib/community-data";
+import { hydrateProductRow } from "../lib/product-hydrate";
 import { SHELL_STATE_REFRESH_EVENT } from "./shell-state-sync";
 
 type Member = { signedIn: boolean; email: string | null; displayName: string; initial: string; isAdmin: boolean; isFounder: boolean; memberNumber: number | null };
@@ -63,6 +64,8 @@ const routeNames: Record<string, string> = {
   "/circles": "社区圈子",
   "/challenges": "造物挑战",
   "/collections": "灵感收藏",
+  "/bookshelf": "书架",
+  "/app": "造场 App",
   "/lattice/": "见界研学",
   "/docs": "造场文档",
   "/studio/docs": "文档管理",
@@ -95,6 +98,20 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   const [hasUnread, setHasUnread] = useState(false);
   const [feedCount, setFeedCount] = useState(0);
   const [circleStats, setCircleStats] = useState<Record<string, CircleStat>>({});
+  const [remoteProducts, setRemoteProducts] = useState<Product[]>([]);
+
+  // ⌘K 首次打开时拉一次公开作品列表,让搜索覆盖社区已发布的真实作品,
+  // 而不只搜站内置顶的几件种子作品。
+  useEffect(() => {
+    if (!commandOpen) return;
+    let active = true;
+    fetch("/api/community", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
+      if (!active || !data) return;
+      const rows = (data as { products?: Record<string, unknown>[] }).products ?? [];
+      setRemoteProducts(rows.map((row) => hydrateProductRow(row, { release: "", tags: [] })));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [commandOpen]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -159,19 +176,19 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   }, [member.signedIn, member.email]);
 
   const results = useMemo(() => {
+    const searchable = [...remoteProducts, ...products];
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return products.slice(0, 4);
-    return products
+    if (!normalized) return searchable.slice(0, 4);
+    return searchable
       .filter((product) => `${product.title} ${product.ownerName} ${product.category}`.toLowerCase().includes(normalized))
       .slice(0, 6);
-  }, [query]);
+  }, [query, remoteProducts]);
 
   // Authentication screens are intentionally outside the community chrome.
   // Keeping them unwrapped prevents account actions, side navigation, and the
   // mobile rail from appearing while a user is signing in.
   if (
     pathname.startsWith("/signin") ||
-    pathname.startsWith("/signout") ||
     pathname === "/callback" ||
     pathname.startsWith("/oauth")
   ) return <>{children}</>;
@@ -187,6 +204,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
 
   return (
     <div className={`deep-shell${officialProduct ? " official-product-shell" : ""}${readingMode ? " reading-mode" : ""}`}>
+      <a className="skip-link" href="#main-content">跳到主要内容</a>
       <motion.div
         key={`progress-${pathname}`}
         className="route-progress"
@@ -313,7 +331,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         </div>
 
         <Link className="deep-side-challenge" href="/challenges">
-          <span><Sparkles size={16} /> 七月造物挑战</span>
+          <span><Sparkles size={16} /> 造物挑战</span>
           <strong>为“等候”<br />做一件东西</strong>
           <small>开放命题 · 无截止日期</small>
           <i><b /></i>
@@ -327,6 +345,8 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
         <AnimatePresence mode="wait" initial={false}>
           <motion.main
             key={pathname}
+            id="main-content"
+            tabIndex={-1}
             className="deep-route-content"
             initial={reduced ? false : { opacity: 0, y: 18, filter: "blur(5px)" }}
             animate={reduced ? undefined : { opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -355,7 +375,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
               <div className="command-results">
                 <span>{query ? "搜索结果" : "此刻热门"}</span>
                 {results.map((product) => (
-                  <Link href={`/product/${product.slug}`} key={product.id}>
+                  <Link href={`/product/${product.slug ?? product.id}`} key={product.id}>
                     <img src={product.image} alt="" />
                     <span><strong>{product.title}</strong><small>{product.category} · {product.ownerName}</small></span>
                     <em>{product.price ? `${product.price} 果` : "免费"}</em>

@@ -576,6 +576,7 @@ export function FeedClient() {
                     <button
                       className={liked.has(String(post.id)) ? "liked" : ""}
                       onClick={() => toggleLike(post)}
+                      aria-label={`喜欢,当前 ${post.likes} 次`}
                     >
                       <Heart
                         size={17}
@@ -588,6 +589,7 @@ export function FeedClient() {
                     <button
                       className={commentsOpen === post.id ? "active" : ""}
                       onClick={() => openComments(post)}
+                      aria-label={`评论,当前 ${post.comments} 条`}
                     >
                       <MessageCircle size={17} />{" "}
                       {post.comments}

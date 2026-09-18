@@ -32,6 +32,7 @@ export function CreateProductFlow() {
   const [coverError, setCoverError] = useState("");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [theme, setTheme] = useState<ProductTheme>("coral");
+  const [stepError, setStepError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -56,7 +57,17 @@ export function CreateProductFlow() {
   }, [category, demoUrl, description, imageUrl, price, pricingModel, theme, title]);
 
   const next = () => {
-    if (step === 0 && (title.trim().length < 2 || description.trim().length < 12)) return;
+    if (step === 0) {
+      if (title.trim().length < 2) {
+        setStepError("作品名称至少需要 2 个字");
+        return;
+      }
+      if (description.trim().length < 12) {
+        setStepError("一句话介绍至少需要 12 个字，说清楚它为谁带来怎样的体验");
+        return;
+      }
+    }
+    setStepError("");
     setStep((current) => Math.min(2, current + 1));
   };
 
@@ -110,13 +121,13 @@ export function CreateProductFlow() {
       <form className="create-flow-body" onSubmit={submit}>
         <AnimatePresence mode="wait">
           <motion.section key={step} className="create-step-panel" initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.35 }}>
-            {step === 0 && <><div className="step-intro"><span>01 / IDENTITY</span><h2>先说清楚，它是什么</h2><p>一个准确的名字和一句具体介绍，比完整功能列表更容易让人愿意点进来。</p></div><label><span>作品名称 <b>{title.length}/36</b></span><input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={36} placeholder="例如：雨天散步生成器" /></label><label><span>一句话介绍 <b>{description.length}/180</b></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={180} placeholder="它为谁带来怎样的体验？" /></label><label><span>作品类别</span><div className="choice-grid">{["互动体验", "效率工具", "声音影像", "生活方式", "开发工具"].map((item) => <button type="button" key={item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{category === item && <Check size={14} />}{item}</button>)}</div></label></>}
+            {step === 0 && <><div className="step-intro"><span>01 / IDENTITY</span><h2>先说清楚，它是什么</h2><p>一个准确的名字和一句具体介绍，比完整功能列表更容易让人愿意点进来。</p></div><label><span>作品名称 <b>{title.length}/36</b></span><input value={title} onChange={(event) => { setTitle(event.target.value); setStepError(""); }} maxLength={36} placeholder="例如：雨天散步生成器" /></label><label><span>一句话介绍 <b>{description.length}/180</b></span><textarea value={description} onChange={(event) => { setDescription(event.target.value); setStepError(""); }} maxLength={180} placeholder="它为谁带来怎样的体验？" /></label><label><span>作品类别</span><div className="choice-grid">{["互动体验", "效率工具", "声音影像", "生活方式", "开发工具"].map((item) => <button type="button" key={item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{category === item && <Check size={14} />}{item}</button>)}</div></label></>}
             {step === 1 && <><div className="step-intro"><span>02 / EXPERIENCE</span><h2>用户要从哪里进入</h2><p>你可以先发布一个站内原型，也可以关联已经在线的完整版本。</p></div><label><span>完整体验链接 <small>可选</small></span><div className="input-with-icon"><Link2 size={17} /><input value={demoUrl} onChange={(event) => setDemoUrl(event.target.value)} type="url" placeholder="https://" /></div></label><fieldset className="pricing-model-field"><legend>访问方式</legend><div className="pricing-model-choice">{pricingModelChoices.map((item) => <button type="button" key={item.id} className={pricingModel === item.id ? "active" : ""} onClick={() => { setPricingModel(item.id); if (item.id === "free") setPrice(0); else if (price === 0) setPrice(5); }}>{pricingModel === item.id && <Check size={14} />}<strong>{item.title}</strong><small>{item.text}</small></button>)}</div></fieldset>{pricingModel !== "free" && <label><span>果子价格</span><div className="price-control"><button type="button" onClick={() => setPrice(Math.max(1, price - 1))}>−</button><strong><Coins size={18} /> {price}</strong><button type="button" onClick={() => setPrice(Math.min(99, price + 1))}>+</button><small>{pricingModel === "one_time" ? "一次解锁收入先待结算 24 小时" : "每次体验单独扣款，进入后不退款"}</small></div></label>}<fieldset><legend>作品封面色</legend><div className="theme-choice">{PRODUCT_THEMES.map((item) => <button type="button" aria-label={item} key={item} className={`${item} ${theme === item ? "active" : ""}`} onClick={() => setTheme(item)}>{theme === item && <Check size={15} />}</button>)}</div></fieldset><button type="button" className="upload-zone" onClick={() => coverInputRef.current?.click()} disabled={uploadingCover}><ImageIcon size={23} /><span><strong>{uploadingCover ? "正在上传封面" : imageUrl ? "已添加封面图片" : "添加一张作品封面"}</strong><small>{imageUrl ? "再次点击可替换文件" : "PNG / JPG / WebP · 最大 10MB"}</small></span><ExternalLink size={16} /></button><input ref={coverInputRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCover(file); event.currentTarget.value = ""; }} />{coverError && <p className="cover-upload-error" role="alert">{coverError}</p>}<button type="button" className="cover-url-toggle" onClick={() => setCoverOpen((value) => !value)}>或使用公开图片链接</button>{coverOpen && <label className="cover-url-field"><span>封面图片链接</span><input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} type="url" placeholder="https://example.com/cover.jpg" /></label>}</>}
             {step === 2 && <><div className="step-intro"><span>03 / REVIEW</span><h2>提交平台预审</h2><p>平台会核对产品说明、体验入口、内容安全与访问方式。批准前不会公开或收取果子。</p></div><div className={`publish-preview theme-${theme} ${previewing ? "playing" : ""}`} style={imageUrl ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 48%), rgb(0 0 0 / 48%)), url(${imageUrl})` } : undefined}><div><span>{category}</span><h3>{title || "未命名作品"}</h3><p>{previewing ? "预审预览正在运行：审核员会从这里检查作品。" : description || "你的作品介绍会出现在这里。"}</p><small>BY YOU / REVIEW VERSION 1</small></div><motion.button type="button" onClick={() => setPreviewing((value) => !value)} whileHover={{ scale: 1.06 }} aria-label="预览作品"><Play size={19} fill="currentColor" /></motion.button></div><div className="release-checklist"><div><Check size={16} /><span><strong>基础信息</strong><small>名称、介绍和类别已经填写</small></span></div><div><Check size={16} /><span><strong>体验入口</strong><small>{demoUrl ? "已关联完整链接" : "使用站内原型模式"}</small></span></div><div><Sparkles size={16} /><span><strong>访问方式</strong><small>{pricingModel === "free" ? "免费开放" : pricingModel === "one_time" ? `${price} 果一次解锁` : `${price} 果按次体验`}</small></span></div></div></>}
           </motion.section>
         </AnimatePresence>
 
-        {submitError && <p className="cover-upload-error" role="alert">{submitError}</p>}
+        {(stepError || submitError) && <p className="cover-upload-error" role="alert">{stepError || submitError}</p>}
         <div className="create-flow-actions"><button type="button" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}><ArrowLeft size={16} /> 上一步</button>{step < 2 ? <button key="next-step" type="button" className="primary-action" onClick={next}>继续 <ArrowRight size={17} /></button> : <button key="submit-product" type="submit" className="primary-action" disabled={submitting}>{submitting ? "提交中" : "提交平台预审"}<Sparkles size={16} /></button>}</div>
       </form>
     </div>
