@@ -212,6 +212,26 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
     toast(L(`Added “${material.name}” to this course`, `已把《${material.name}》加入本课程`));
   };
 
+  /* 深链/换课加载门:目标课程未就绪时渲染骨架,绝不让演示课或上一门课的残影
+   * 冒充内容闪现在屏幕上(刷新/深链/A→B 快切共用此判定) */
+  const expectedUuid = state.activeCourseUuid;
+  const loadedUuid = (state.generated as { courseUuid?: string } | null)?.courseUuid;
+  if (expectedUuid && (state.courseLoading || loadedUuid !== expectedUuid)) {
+    return (
+      <div className="hk-page with-sidebar cj-page">
+        <div className="hk-page-inner" style={{ paddingTop: 40, maxWidth: 760 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="hs-row hk-skel-row" aria-hidden="true" style={{ marginBottom: 12 }}>
+              <span className="hk-skel-bar" style={{ width: `${46 + (i % 3) * 14}%` }} />
+              <span className="hk-skel-bar" style={{ width: 64 }} />
+            </div>
+          ))}
+          <div style={{ marginTop: 10, color: '#6B7280', fontSize: 13 }}>{L('Loading course…', '正在加载课程…')}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="hk-page with-sidebar cj-page">
       <div className="hk-page-inner">

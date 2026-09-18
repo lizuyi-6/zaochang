@@ -125,6 +125,16 @@ test("courseFromBackend:按标题推导项目/测验 kind,剥掉单元标题前�
   assert.equal(course.units[0].lectures[0].id, "l1");
 });
 
+test("courseFromBackend:courseUuid 随课程树保留(旅程页 hash/刷新复原依赖它)", () => {
+  const withUuid = gen.courseFromBackend(
+    { courseUuid: "uuid-xyz", courseTitle: "测试课", units: [{ title: "U1", unitId: "u1", lectures: [] }] },
+    "fallback",
+  );
+  assert.equal(withUuid.courseUuid, "uuid-xyz");
+  const without = gen.courseFromBackend({ courseTitle: "测试课", units: [{ title: "U1", unitId: "u1", lectures: [] }] }, "fallback");
+  assert.equal(without.courseUuid, undefined);
+});
+
 test("官方示例课:完整中文课程树,市场行节数由结构现算,详情可按 id 解析", () => {
   assert.equal(SAMPLE_COURSES.length, 2);
   for (const course of SAMPLE_COURSES) {

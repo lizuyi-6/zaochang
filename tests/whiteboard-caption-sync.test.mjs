@@ -111,6 +111,7 @@ test('Regression 1: delayed start >2.5 sec keeps captions strictly at zero until
       stopped = true;
     },
     tickMs,
+    nowMs: () => simulatedTimeMs,
   });
 
   await syncPromise;
@@ -170,6 +171,7 @@ test('Regression 2: streaming with Infinity duration retains currentTime and fin
       stopped = true;
     },
     tickMs,
+    nowMs: () => simulatedTimeMs,
   });
 
   await syncPromise;
@@ -219,6 +221,7 @@ test('Regression 3: buffering freeze stops stalled audio and performs smooth fal
     },
     stallMs: 12000,
     tickMs,
+    nowMs: () => simulatedTimeMs,
   });
 
   await syncPromise;
@@ -265,6 +268,7 @@ test('Regression 4: failed start performs smooth fallback anchored at failure po
       stopped = true;
     },
     tickMs,
+    nowMs: () => simulatedTimeMs,
   });
 
   await syncPromise;
@@ -378,6 +382,7 @@ test('Regression 6: narration beyond estimate does not stop prematurely and trac
       stopped = true;
     },
     tickMs,
+    nowMs: () => simulatedTimeMs,
   });
 
   await syncPromise;
@@ -424,6 +429,7 @@ test('Regression 7: startup timeout cancels pending audio and performs smooth fa
     },
     startupTimeoutMs,
     tickMs,
+    nowMs: () => simulatedTimeMs,
   });
 
   await syncPromise;
@@ -439,4 +445,133 @@ test('Regression 7: startup timeout cancels pending audio and performs smooth fa
   const postTimeoutUpdates = updates.filter((u) => u.time >= startupTimeoutMs);
   assert.ok(postTimeoutUpdates.some((u) => u.count > 0), '超时后应启动 fallback 推进字幕');
   assert.equal(updates[updates.length - 1].count, total, '超时降级后最终字幕必须完整展现');
+});
+
+test('Regression 8: background-throttled ticks still honor real startup timeout', async () => {
+  /* 后台标签页 setInterval 被节流到 ~1Hz:tick 次数失真,但真实流逝时间必须生效——
+   * 起声超时 8s 不能退化成 160s。模拟:每次 wait(50) 实际过去 1000ms。 */
+  const plain = '后台节流期间起声超时仍按真实时间止损并平滑补齐字幕内容';
+  const total = plain.length;
+  const updates = [];
+  let stopCount = 0;
+  let simulatedTimeMs = 0;
+  let waitCalls = 0;
+  const tickMs = 50;
+
+  const handle = {
+    started: new Promise(() => {}), // 上游永远不起声
+    ended: new Promise(() => {}),
+    getProgress: () => null,
+  };
+
+  await runCaptionSync({
+    total,
+    plain,
+    speed: 1,
+    handle,
+    wait: async (ms) => {
+      waitCalls++;
+      simulatedTimeMs += ms * 20; // 节流:50ms 的拍子实际耗 1000ms
+      await Promise.resolve();
+    },
+    isSkipped: () => false,
+    onUpdate: (count) => updates.push({ time: simulatedTimeMs, count }),
+    stopAudio: () => { stopCount++; },
+    tickMs,
+    nowMs: () => simulatedTimeMs,
+  });
+
+  assert.equal(stopCount, 1, '起声超时必须止损停掉挂起音频');
+  assert.ok(waitCalls <= 20, `真实时间 8s 超时不应需要 160 拍(实际 ${waitCalls} 拍)`);
+  assert.equal(updates[updates.length - 1].count, total, '降级后字幕必须完整');
+});
+
+test('Regression 9: underestimated duration never completes captions before audio ends', async () => {
+  /* 估算 4s、真实 12s:字幕在 ended 前不得超过 97% 上限,收尾由播完驱动 */
+  const plain = '这段旁白的真实音频时长远超估算窗口字幕绝不能提前讲完';
+  const total = plain.length;
+  const updates = [];
+  let simulatedTimeMs = 0;
+  const tickMs = 50;
+
+  let resolveEnded;
+  const ended = new Promise((res) => { resolveEnded = res; });
+  const handle = {
+    started: Promise.resolve('started'),
+    ended,
+    getProgress: () => {
+      const curSec = simulatedTimeMs / 1000;
+      return { currentTime: curSec, duration: Infinity, ratio: -1 };
+    },
+  };
+
+  await runCaptionSync({
+    total,
+    plain,
+    speed: 1,
+    handle,
+    wait: async (ms) => {
+      simulatedTimeMs += ms;
+      if (simulatedTimeMs >= 12000) resolveEnded();
+      await Promise.resolve();
+    },
+    isSkipped: () => false,
+    onUpdate: (count) => updates.push({ time: simulatedTimeMs, count }),
+    stopAudio: () => {},
+    tickMs,
+    nowMs: () => simulatedTimeMs,
+  });
+
+  const cap = Math.floor(0.97 * total);
+  const premature = updates.filter((u) => u.time < 12000 && u.count > cap);
+  assert.equal(premature.length, 0, `ended 前字幕不得超过 97% 上限: ${JSON.stringify(premature[0] ?? '')}`);
+  const preEnd = updates.filter((u) => u.time < 12000);
+  assert.ok(preEnd.some((u) => u.count > 0), '播放中字幕应随媒体时间推进');
+  assert.equal(updates[updates.length - 1].count, total, '播完后字幕必须完整');
+});
+
+test('Regression 10: paused lesson clock never false-triggers stall fallback', async () => {
+  /* 暂停 20s(超过 12s 止损线):授课时钟冻结,恢复后不得误判断流杀音频 */
+  const plain = '暂停再恢复不应该被误判成断流冻结音频必须继续正常播放';
+  const total = plain.length;
+  let stopCount = 0;
+  let wallMs = 0;
+  let lessonMs = 0;
+  let paused = false;
+  const tickMs = 50;
+
+  let resolveEnded;
+  const ended = new Promise((res) => { resolveEnded = res; });
+  const handle = {
+    started: Promise.resolve('started'),
+    ended,
+    getProgress: () => {
+      // 暂停期间媒体时间冻结,恢复后继续
+      const curSec = lessonMs / 1000;
+      return { currentTime: curSec, duration: 30.0, ratio: curSec / 30.0 };
+    },
+  };
+
+  await runCaptionSync({
+    total,
+    plain,
+    speed: 1,
+    handle,
+    wait: async (ms) => {
+      wallMs += ms;
+      if (!paused) lessonMs += ms;
+      // 2000ms 起暂停 20s(墙钟),随后恢复,12s 媒体时间处播完
+      if (wallMs === 2000) paused = true;
+      if (wallMs === 22000) paused = false;
+      if (lessonMs >= 12000) resolveEnded();
+      await Promise.resolve();
+    },
+    isSkipped: () => false,
+    onUpdate: () => {},
+    stopAudio: () => { stopCount++; },
+    tickMs,
+    nowMs: () => lessonMs,
+  });
+
+  assert.equal(stopCount, 0, '暂停 20s 不得触发断流止损');
 });

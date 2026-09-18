@@ -3,8 +3,8 @@ import { Search, BadgeCheck, Users, Star } from 'lucide-react';
 import type { PageProps } from '../types';
 import type { CourseCard } from '../data';
 import { marketplaceFeatured, marketplaceCategories, homeCourses, coverForTitle } from '../data';
-import { buildGeneratedCourse, courseFromBackend } from '../generate';
-import { fetchCourseDetail, type MarketCourse } from '../backend';
+import { buildGeneratedCourse } from '../generate';
+import type { MarketCourse } from '../backend';
 import { courseJoinKey, isCourseJoined } from '../courseJoinMemory';
 import { CourseCover, HighlightSwash, Logo } from '../illustrations';
 import { useI18n, TRich } from '../i18n';
@@ -124,7 +124,8 @@ export default function MarketplacePage({ state, set }: PageProps) {
     [liveMarket],
   );
   /* 点哪本书就预览哪本书:伪生成引擎按书名重建课程骨架,并携带封面风格;
-   * D1 本人课程先落同名占位预览,详情(courses/[uuid])到达后原位换成真课程树。
+   * D1 本人课程置 activeCourseUuid 交给 App 深链效应加载(带 AbortController 与
+   * 存活守卫,快切课程不会出现 A 的迟到响应覆盖 B;URL 带上 uuid,刷新可还原)。
    * 完课标记切书即重置(单课模型下预览新课就是重新开始);加入态按账户+课程键
    * 记忆恢复——加入过的课重开预览不再退回未加入 */
   const openCourse = (course: CourseCard) => {
@@ -134,12 +135,8 @@ export default function MarketplacePage({ state, set }: PageProps) {
       generated: { ...buildGeneratedCourse(course.title), cover: course.cover },
       courseJoined: isCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(uuid)),
       lectureDone: false,
+      ...(uuid ? { activeCourseUuid: uuid, courseLoading: true, courseError: null } : {}),
     });
-    if (uuid) {
-      void fetchCourseDetail(uuid).then((cs) => {
-        if (cs) set({ generated: { ...courseFromBackend(cs, course.title), cover: course.cover } });
-      });
-    }
   };
   /* 精选位:后端市场不足 6 张时用演示卡补位(布局固定 1 大 + 2 上 + 3 小) */
   const featured = useMemo(() => {

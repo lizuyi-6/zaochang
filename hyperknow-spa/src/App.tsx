@@ -20,6 +20,8 @@ import { GenerationOverlay } from './replica/GenerationOverlay';
 import { ToastHost } from './replica/toast';
 import { courseFromBackend } from './replica/generate';
 import { fetchConversations, fetchCourseDetail, fetchMarketCourses, fetchMe } from './replica/backend';
+import { toast } from './replica/toast';
+import { L } from './replica/i18n/content';
 import './replica/replica.css';
 
 /* ---------------- hash routing ---------------- */
@@ -141,6 +143,14 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  /* veil 兜底:fade 动画的 animationend 在标签页隐藏/动画被系统禁用时可能丢失,
+   * 绝不能因此白屏常驻——800ms 后强制收场 */
+  useEffect(() => {
+    if (veil !== 'fade') return;
+    const t = window.setTimeout(() => setVeil('idle'), 800);
+    return () => window.clearTimeout(t);
+  }, [veil]);
+
   /* back/forward + manual hash edits */
   useEffect(() => {
     const onHash = () => {
@@ -206,8 +216,10 @@ export const App: React.FC = () => {
         const detail = await fetchCourseDetail(uuid, ctrl.signal);
         if (!alive) return;
         if (detail) {
+          const prevCover = (state.generated as { cover?: (ReturnType<typeof courseFromBackend>)['cover'] } | null)?.cover;
           const generated = {
             ...courseFromBackend(detail, detail.courseTitle),
+            ...(prevCover ? { cover: prevCover } : {}),
             courseUuid: uuid,
           };
           set({
@@ -216,7 +228,8 @@ export const App: React.FC = () => {
             courseError: null,
           });
         } else {
-          // 404 或未授权安全报错，回退 courses 屏避免白屏或伪造
+          // 404 或未授权安全报错,回退 courses 屏避免白屏或伪造
+          toast(L('This course is unavailable or no longer exists', '课程不存在或无权访问'));
           set({
             courseLoading: false,
             courseError: 'course_not_found',
@@ -225,6 +238,7 @@ export const App: React.FC = () => {
         }
       } catch {
         if (!alive) return;
+        toast(L('Network issue — the course could not be loaded', '网络异常，课程加载失败'));
         set({
           courseLoading: false,
           courseError: 'network_error',
@@ -260,7 +274,14 @@ export const App: React.FC = () => {
         {s === 'marketplace' && <MarketplacePage state={state} set={set} />}
         {s === 'plans' && <PlansPage state={state} set={set} />}
         {s === 'chat' && <ChatPage state={state} set={set} />}
-        {s === 'whiteboard' && <WhiteboardPage state={state} set={set} />}
+        {s === 'whiteboard' && (
+          /* key 强制换课/换模式时整体重挂载:旧课的音频、字幕、相机、测验绝不污染新课 */
+          <WhiteboardPage
+            key={`${state.activeCourseUuid ?? 'demo'}|${state.activeLectureId ?? ''}|${state.activeSessionId ?? ''}|${state.whiteboardMode}`}
+            state={state}
+            set={set}
+          />
+        )}
 
         {state.settingsOpen && <SettingsModal state={state} set={set} />}
         {state.generating && <GenerationOverlay state={state} set={set} />}

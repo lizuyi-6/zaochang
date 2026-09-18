@@ -247,6 +247,8 @@ export function courseFromBackend(cs: BackendCourse, fallbackTopic: string): Gen
   return {
     topic,
     title: cs.courseTitle || fallbackTopic,
+    /* 真课 UUID 必须随课程树走:旅程页 hash/深链/刷新复原都靠它 */
+    ...(cs.courseUuid ? { courseUuid: cs.courseUuid } : {}),
     curator: 'Hyperknow Official',
     description: cs.courseDescription || '',
     tags: (cs.tags ?? []).slice(0, 4).map((t) => (t.startsWith('#') ? t : `# ${t}`)),
