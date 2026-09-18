@@ -237,6 +237,8 @@ export function courseFromBackend(cs: BackendCourse, fallbackTopic: string): Gen
         kind: kindOfTitle(l.title),
         sessions: (l.sessions ?? []).map((s) => ({
           title: s.title,
+          /* 后端 sessionId 随树保留:进课堂/预生成精准锁定小节,服务端按节解析主题 */
+          ...(s.sessionId ? { sessionId: s.sessionId } : {}),
           ...(s.sessionTime ? { sub: L(`${s.sessionTime} min`, `${s.sessionTime} 分钟`) } : {}),
         })),
       };
