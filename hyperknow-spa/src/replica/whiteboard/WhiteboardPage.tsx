@@ -39,7 +39,7 @@ import { exportBoard, type ExportFormat, type ExportPage } from '../boardExport'
 import { uploadFile } from '../materials';
 import { toast } from '../toast';
 import { listenOnce, prefetchTts, tts, type SpeakHandle, type SpeakStart } from '../actions';
-import { takePrefetchedPlan } from './planPrefetch';
+import { takePrefetchedEntry } from './planPrefetch';
 import './whiteboard.css';
 
 type Stage = 'intro' | 'talk' | 'play';
@@ -324,13 +324,16 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       language: appLang,
     };
     // 旅程页预生成的 plan 直接复用(同 key、15min TTL);预热失败(null)补一次真实请求
-    const prefetched = takePrefetchedPlan(planParams);
-    void (prefetched ?? planLectureLive(planParams as any, ctrl.signal))
+    const prefetched = takePrefetchedEntry(planParams);
+    let fromPrefetch = false;
+    void (prefetched?.plan ?? planLectureLive(planParams as any, ctrl.signal))
       .then(async (plan) => {
         if (!alive) return;
         if (plan === null && prefetched && !ctrl.signal.aborted) {
           plan = await planLectureLive(planParams as any, ctrl.signal);
           if (!alive) return;
+        } else if (plan && prefetched) {
+          fromPrefetch = true;
         }
         setPlanPending(false);
         if (plan) {
@@ -342,21 +345,26 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
             .slice(0, 2)
             .forEach((s) => prefetchNarration(s.caption));
 
-          // 检查并异步按需生图(单讲最多 1 图)，切课取消不串图，失败优雅降级为文字
+          // 检查并异步按需生图(单讲最多 1 图)，切课取消不串图，失败优雅降级为文字。
+          // plan 来自预生成时复用同一条 in-flight 生图 promise,零重复调用。
           const imageStep = plan.steps.find((s) => s.board_action.type === 'image' && !s.board_action.url);
           if (imageStep && imageStep.board_action.prompt) {
             const stepId = plan.steps.indexOf(imageStep) + 1;
-            void fetchLectureImageLive(
-              {
-                prompt: imageStep.board_action.prompt,
-                caption: imageStep.board_action.caption,
-                courseUuid: state.activeCourseUuid || (GEN as { courseUuid?: string } | null)?.courseUuid,
-                unitId: state.activeUnitId ? String(state.activeUnitId) : undefined,
-                lectureId: state.activeLectureId,
-                sessionId: state.activeSessionId,
-              },
-              ctrl.signal,
-            )
+            const imagePromise =
+              fromPrefetch && prefetched
+                ? prefetched.image
+                : fetchLectureImageLive(
+                    {
+                      prompt: imageStep.board_action.prompt,
+                      caption: imageStep.board_action.caption,
+                      courseUuid: state.activeCourseUuid || (GEN as { courseUuid?: string } | null)?.courseUuid,
+                      unitId: state.activeUnitId ? String(state.activeUnitId) : undefined,
+                      lectureId: state.activeLectureId,
+                      sessionId: state.activeSessionId,
+                    },
+                    ctrl.signal,
+                  );
+            void imagePromise
               .then((imgRes) => {
                 if (!alive || !imgRes?.url) return;
                 imageStep.board_action.url = imgRes.url;
