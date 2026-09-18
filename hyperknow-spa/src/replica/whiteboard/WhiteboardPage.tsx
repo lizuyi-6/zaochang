@@ -39,6 +39,7 @@ import { exportBoard, type ExportFormat, type ExportPage } from '../boardExport'
 import { uploadFile } from '../materials';
 import { toast } from '../toast';
 import { listenOnce, prefetchTts, tts, type SpeakHandle, type SpeakStart } from '../actions';
+import { takePrefetchedPlan } from './planPrefetch';
 import './whiteboard.css';
 
 type Stage = 'intro' | 'talk' | 'play';
@@ -52,7 +53,11 @@ export const narrateMs = (text: string, speed = 1) => {
   return Math.max(4000, (cjk * 180 + other * 65) / Math.max(0.5, speed));
 };
 export const BOARD_CPS = 24; // handwriting chars/sec
-export const STARTUP_TIMEOUT_MS = 8000; // 上游冷合成等起声超时上限:此前字幕恒为 0;超时后取消音频并以估算时钟平滑打出剩余字幕
+// 上游冷合成等起声超时上限:此前字幕恒为 0;超时后取消音频并以估算时钟平滑打出剩余字幕。
+// 必须盖住真实合成 TTFB(实测 ~2.5s + 55ms/字,200+ 字旁白 ~13s),否则预热尚未完成的
+// 第一步会被误判成无声杀掉(用户只看到第一步有声后面全静默)。真实错误(4xx/5xx/网络)
+// 走 error 事件即时止损,这个超时只兜底"连接挂着永远不起声"。
+export const STARTUP_TIMEOUT_MS = 25000;
 export const STALL_MS = 12000; // 起声后 media time (currentTime) 连续不动这么久 = 断流/缓冲冻结,止损
 
 export interface CaptionSyncOptions {
@@ -310,19 +315,23 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     const timer = window.setTimeout(() => ctrl.abort(), 65_000); // 服务端 60s 超时 + 余量
     let alive = true;
     const appLang = getBackendLang() || getCurrentLng() || 'en';
-    void planLectureLive(
-      {
-        topic: liveTopic,
-        courseUuid: state.activeCourseUuid || (GEN as { courseUuid?: string } | null)?.courseUuid,
-        unitId: state.activeUnitId ? String(state.activeUnitId) : undefined,
-        lectureId: state.activeLectureId,
-        sessionId: state.activeSessionId,
-        language: appLang,
-      } as any,
-      ctrl.signal,
-    )
-      .then((plan) => {
+    const planParams = {
+      topic: liveTopic,
+      courseUuid: state.activeCourseUuid || (GEN as { courseUuid?: string } | null)?.courseUuid,
+      unitId: state.activeUnitId ? String(state.activeUnitId) : undefined,
+      lectureId: state.activeLectureId,
+      sessionId: state.activeSessionId,
+      language: appLang,
+    };
+    // 旅程页预生成的 plan 直接复用(同 key、15min TTL);预热失败(null)补一次真实请求
+    const prefetched = takePrefetchedPlan(planParams);
+    void (prefetched ?? planLectureLive(planParams as any, ctrl.signal))
+      .then(async (plan) => {
         if (!alive) return;
+        if (plan === null && prefetched && !ctrl.signal.aborted) {
+          plan = await planLectureLive(planParams as any, ctrl.signal);
+          if (!alive) return;
+        }
         setPlanPending(false);
         if (plan) {
           const script = liveLessonFromPlan(plan);

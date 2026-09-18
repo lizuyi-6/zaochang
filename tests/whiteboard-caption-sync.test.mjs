@@ -449,7 +449,7 @@ test('Regression 7: startup timeout cancels pending audio and performs smooth fa
 
 test('Regression 8: background-throttled ticks still honor real startup timeout', async () => {
   /* 后台标签页 setInterval 被节流到 ~1Hz:tick 次数失真,但真实流逝时间必须生效——
-   * 起声超时 8s 不能退化成 160s。模拟:每次 wait(50) 实际过去 1000ms。 */
+   * 起声超时不许退化成 ×20 的拍数。模拟:每次 wait(50) 实际过去 1000ms。 */
   const plain = '后台节流期间起声超时仍按真实时间止损并平滑补齐字幕内容';
   const total = plain.length;
   const updates = [];
@@ -482,7 +482,9 @@ test('Regression 8: background-throttled ticks still honor real startup timeout'
   });
 
   assert.equal(stopCount, 1, '起声超时必须止损停掉挂起音频');
-  assert.ok(waitCalls <= 20, `真实时间 8s 超时不应需要 160 拍(实际 ${waitCalls} 拍)`);
+  /* 每拍 1000ms:超时拍数 = STARTUP_TIMEOUT_MS/1000,再加降级补齐字幕的少量拍 */
+  const maxTicks = Math.ceil(STARTUP_TIMEOUT_MS / 1000) + 15;
+  assert.ok(waitCalls <= maxTicks, `真实时间 ${STARTUP_TIMEOUT_MS}ms 超时不应需要 ${maxTicks} 拍(实际 ${waitCalls} 拍)`);
   assert.equal(updates[updates.length - 1].count, total, '降级后字幕必须完整');
 });
 

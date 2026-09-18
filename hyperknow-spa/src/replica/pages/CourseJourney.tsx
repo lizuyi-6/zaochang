@@ -23,12 +23,13 @@ import type { PageProps } from '../types';
 import { Modal } from '../ui';
 import { SkaterKid, CourseCover } from '../illustrations';
 import { publicSpeaking, psCourse } from '../data';
-import { useI18n, TRich } from '../i18n';
+import { useI18n, TRich, getBackendLang, getCurrentLng } from '../i18n';
 import { L } from '../i18n/content';
 import { downloadIcs, shareLink } from '../actions';
 import { toast } from '../toast';
 import { formatSize, loadMaterials, removeMaterial, uploadMaterial, type CourseMaterial } from '../materials';
 import { courseJoinKey, isCourseJoined, markCourseJoined } from '../courseJoinMemory';
+import { prefetchLecturePlan } from '../whiteboard/planPrefetch';
 import './CourseJourney.css';
 
 /* ------------------------------------------------------------------ */
@@ -148,6 +149,27 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
   useEffect(() => {
     if (!joined && isCourseJoined(joinScope, joinKey)) set({ courseJoined: true });
   }, [joined, joinScope, joinKey, set]);
+
+  /* 进课堂前的预生成:旅程页就绪(已加入+真课)即为主 CTA 目标讲次后台生成白板 plan,
+   * plan 到手立刻预热首两条旁白 TTS——用户点开课堂时 plan 与首音都已温,
+   * intro/语音选择的停留期不再承担 LLM 冷启动。未加入不预热(点了也是先弹加入框)。
+   * 目标讲次必须与主 CTA(openLesson 首讲首节)完全一致,否则 key 错位预热白费。 */
+  const journeyUuid = (PS as { courseUuid?: string }).courseUuid;
+  useEffect(() => {
+    if (!joined || !journeyUuid) return;
+    const targetUnit = UNITS.find((u) => u.id === activeUnit) ?? UNITS[0];
+    const targetLecture = targetUnit?.lectures[0];
+    prefetchLecturePlan({
+      topic: targetLecture?.sessions[0]?.title ?? targetLecture?.title ?? PS.title,
+      courseUuid: journeyUuid,
+      unitId: String(activeUnit),
+      lectureId: targetLecture?.id,
+      sessionId: targetLecture?.sessions[0]?.sessionId,
+      language: getBackendLang() || getCurrentLng() || 'en',
+    });
+    // 进入时的单元首讲即主 CTA 目标;切单元不重复预热,避免浏览即烧 LLM 配额
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joined, journeyUuid]);
 
   const unit = UNITS.find((u) => u.id === activeUnit) ?? UNITS[0];
   const unitChip =
