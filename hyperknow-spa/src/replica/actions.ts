@@ -198,6 +198,10 @@ function stopAudio(): void {
   currentTrack = null;
   if (el) {
     el.pause();
+    try {
+      el.removeAttribute('src');
+      el.load();
+    } catch {}
     el.onended = null;
     el.onerror = null;
     notifyTts(false);
@@ -228,6 +232,9 @@ export const tts = {
     const body = text.trim();
     if (!body) return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
     stopAudio();
+    if (typeof Audio === 'undefined') {
+      return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
+    }
     const url = `/api/hyperknow/tts/stream?text=${encodeURIComponent(body.slice(0, 1500))}&voice=${encodeURIComponent(voice)}&speed=${speed}`;
     const el = new Audio(url);
     audioEl = el;
@@ -260,23 +267,35 @@ export const tts = {
     };
     void el.play().then(
       () => {
+        // 若在 play() 异步完成前已被主动停止(如起声超时切估算或用户跳过/卸载),
+        // 必须立刻掐断声音并卸载资源,杜绝迟到外放污染画面
+        if (currentTrack !== track || audioEl !== el) {
+          try {
+            el.pause();
+            el.removeAttribute('src');
+            el.load();
+          } catch {}
+          return;
+        }
         notifyTts(true);
         track.settleStarted('started');
       },
       () => {
+        if (currentTrack !== track && audioEl !== el) {
+          return;
+        }
         detach();
         track.settleStarted('error');
         track.settleEnded();
       },
     );
     const getProgress = (): AudioProgress | null => {
-      if (!el) return null;
+      if (!el || audioEl !== el) return null;
+      const cur = typeof el.currentTime === 'number' && Number.isFinite(el.currentTime) ? el.currentTime : 0;
       const dur = el.duration;
-      // 流式响应 duration 可能为 Infinity:cur/Infinity 恒为 0,会把字幕钉死在 0。
-      // 视为"不可用进度",让调用方回退估算时钟。
-      if (!Number.isFinite(dur) || dur <= 0) return null;
-      const cur = el.currentTime;
-      const ratio = Math.max(0, Math.min(1, cur / dur));
+      // 流式响应 duration 可能为 Infinity 或 NaN:保留 currentTime,供调用方结合语速估算窗口对齐字幕
+      const validDur = typeof dur === 'number' && Number.isFinite(dur) && dur > 0;
+      const ratio = validDur ? Math.max(0, Math.min(1, cur / dur)) : (Number.isFinite(cur) ? -1 : 0);
       return { currentTime: cur, duration: dur, ratio };
     };
     return { started, ended, getProgress };

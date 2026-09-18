@@ -368,69 +368,137 @@ const coverBg: Record<CoverKind, string> = {
 
 const plates: Record<CoverKind, React.ReactNode> = {
   sociology: <>
-    <circle cx="100" cy="67" r="39" fill={'#A9BCA5'} stroke="none" />
-    <path d="m60 43 40 48 40-48M60 43h80M60 43v48h80V43M60 91l40-48 40 48" />
-    <circle cx="60" cy="43" r="12" fill={'#F7F4EC'} /><circle cx="140" cy="43" r="12" fill={'#D9A441'} />
-    <circle cx="100" cy="91" r="12" fill={ink} /><circle cx="60" cy="91" r="7" fill={'#F7F4EC'} /><circle cx="140" cy="91" r="7" fill={'#F7F4EC'} />
+    {/* 社会学：微观互动网络与宏观制度同心结构 */}
+    <circle cx="100" cy="70" r="42" fill={'#A9BCA5'} fillOpacity=".3" stroke="none" />
+    <circle cx="100" cy="70" r="28" strokeDasharray="3 3" />
+    <path d="M62 52 L100 36 L138 52 L124 94 L76 94 Z" strokeWidth="1.5" />
+    <path d="M62 52 L100 70 L138 52 M76 94 L100 70 L124 94" />
+    <circle cx="100" cy="70" r="8" fill={'#D9A441'} />
+    <circle cx="62" cy="52" r="5" fill={'#F7F4EC'} />
+    <circle cx="138" cy="52" r="5" fill={'#F7F4EC'} />
+    <circle cx="76" cy="94" r="5" fill={'#F7F4EC'} />
+    <circle cx="124" cy="94" r="5" fill={'#F7F4EC'} />
+    <circle cx="100" cy="36" r="6" fill={'#164E46'} />
+    <path d="M38 70h16M146 70h16" strokeWidth="1.5" strokeLinecap="round" />
   </>,
   bio: <>
-    <circle cx="104" cy="67" r="43" fill={'#A9BCA5'} stroke="none" />
-    <path d="M71 28c0 26 58 50 58 78M129 28c0 26-58 50-58 78" strokeWidth="3" />
-    <path d="M74 36h52M84 48h32M91 60h18M82 78h36M73 94h54" />
-    <path d="M144 83c0-20 14-27 27-25-1 17-12 27-27 25Z" fill={'#D9A441'} />
-    <path d="m143 91 17-22" /><circle cx="51" cy="52" r="10" fill={'#F7F4EC'} /><circle cx="51" cy="52" r="3" fill={ink} />
+    {/* 生物学：立体双螺旋空间回旋与生命碱基律动 */}
+    <circle cx="100" cy="70" r="44" fill={'#A9BCA5'} fillOpacity=".25" stroke="none" />
+    <path d="M68 32 C82 52, 118 52, 132 72 C146 92, 118 108, 68 112" strokeWidth="2.4" />
+    <path d="M132 32 C118 52, 82 52, 68 72 C54 92, 82 108, 132 112" strokeWidth="2.4" />
+    <path d="M74 40 L126 42 M85 52 L115 54 M95 65 L105 65 M82 78 L118 80 M72 90 L128 92 M70 102 L130 104" strokeWidth="1.8" />
+    <circle cx="100" cy="65" r="7" fill={'#D9A441'} />
+    <circle cx="136" cy="32" r="4" fill={'#164E46'} />
+    <circle cx="64" cy="112" r="4" fill={'#164E46'} />
+    <circle cx="148" cy="60" r="6" fill={'#F7F4EC'} /><circle cx="148" cy="60" r="2" fill={'#164E46'} />
   </>,
   ml: <>
-    <path d="M44 30v75h118" /><path d="m48 97 25-14 24 1 24-32 33-14" strokeWidth="3" />
-    <path d="M53 104V85h16v19M83 104V72h16v32M113 104V56h16v48M143 104V35h16v69" fill={'#A9BCA5'} stroke="none" />
-    <path d="m48 97 25-14 24 1 24-32 33-14" />
-    <circle cx="73" cy="83" r="5" fill={'#F7F4EC'} /><circle cx="97" cy="84" r="5" fill={'#F7F4EC'} /><circle cx="121" cy="52" r="5" fill={'#D9A441'} /><circle cx="154" cy="38" r="7" fill={'#D9A441'} />
+    {/* 机器学习：高维特征流形、超平面与梯度优化轨迹 */}
+    <path d="M42 112 L158 112 M42 112 L42 28" strokeWidth="1.5" />
+    <path d="M46 98 Q80 100, 105 76 T154 36" strokeWidth="2.4" />
+    <path d="M48 108 Q80 112, 105 88 T154 48" strokeOpacity=".3" strokeDasharray="3 3" />
+    {/* 数据聚类与梯度下降点阵 */}
+    <circle cx="65" cy="85" r="4" fill={'#F7F4EC'} />
+    <circle cx="82" cy="74" r="4" fill={'#F7F4EC'} />
+    <circle cx="105" cy="56" r="4.5" fill={'#D9A441'} />
+    <circle cx="128" cy="46" r="5" fill={'#D9A441'} />
+    <circle cx="148" cy="34" r="6" fill={'#164E46'} />
+    {/* 决策间隔边界柱 */}
+    <rect x="58" y="92" width="10" height="20" rx="2" fill={'#A9BCA5'} stroke="none" />
+    <rect x="88" y="80" width="10" height="32" rx="2" fill={'#A9BCA5'} stroke="none" />
+    <rect x="118" y="62" width="10" height="50" rx="2" fill={'#A9BCA5'} stroke="none" />
   </>,
   ai: <>
-    <circle cx="100" cy="67" r="43" fill={'#A9BCA5'} stroke="none" />
-    <path d="m49 40 51 27-51 27M151 40l-51 27 51 27M100 24v86M49 40h102M49 94h102" />
-    <rect x="80" y="47" width="40" height="40" rx="7" fill={ink} />
-    <path d="m90 68 7 7 14-17" stroke={'#F7F4EC'} strokeWidth="3" />
-    <circle cx="49" cy="40" r="8" fill={'#F7F4EC'} /><circle cx="151" cy="40" r="8" fill={'#D9A441'} /><circle cx="49" cy="94" r="8" fill={'#D9A441'} /><circle cx="151" cy="94" r="8" fill={'#F7F4EC'} />
+    {/* 人工智能与大模型：多层自注意力机制张量与核心知识晶体 */}
+    <circle cx="100" cy="70" r="45" fill={'#A9BCA5'} fillOpacity=".22" stroke="none" />
+    <rect x="76" y="46" width="48" height="48" rx="8" fill={'#164E46'} stroke="none" />
+    <path d="M84 70 L96 82 L116 58" stroke={'#F7F4EC'} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    {/* 注意力发散连接节点 */}
+    <path d="M50 44 L76 56 M50 96 L76 84 M150 44 L124 56 M150 96 L124 84" strokeWidth="1.6" />
+    <path d="M100 24 L100 46 M100 94 L100 116" strokeWidth="1.6" strokeDasharray="3 3" />
+    <circle cx="50" cy="44" r="6" fill={'#D9A441'} />
+    <circle cx="50" cy="96" r="6" fill={'#F7F4EC'} />
+    <circle cx="150" cy="44" r="6" fill={'#F7F4EC'} />
+    <circle cx="150" cy="96" r="6" fill={'#D9A441'} />
+    <circle cx="100" cy="22" r="4" fill={'#164E46'} />
+    <circle cx="100" cy="118" r="4" fill={'#164E46'} />
   </>,
   history: <>
-    <circle cx="137" cy="47" r="26" fill={'#D9A441'} stroke="none" />
-    <path d="M50 102V58a34 34 0 0 1 68 0v44" fill={'#A9BCA5'} />
-    <path d="M69 102V59a15 15 0 0 1 30 0v43" fill={'#F7F4EC'} />
-    <path d="M44 104h118M48 110h118M127 78h28v25h-28zM133 71h16v7h-16" />
-    <path d="M50 58h19M99 58h19M55 40l17 8M96 48l17-8M84 25v19" />
+    {/* 历史与文明：编年石柱、拱门殿堂与时光星盘 */}
+    <circle cx="138" cy="48" r="26" fill={'#D9A441'} fillOpacity=".9" stroke="none" />
+    <path d="M44 114 L156 114 M48 120 L152 120" strokeWidth="2" />
+    <path d="M56 114 V64 A20 20 0 0 1 96 64 V114" fill={'#A9BCA5'} fillOpacity=".4" />
+    <path d="M104 114 V64 A20 20 0 0 1 144 64 V114" fill={'#F7F4EC'} fillOpacity=".6" />
+    <path d="M50 56 H150 M54 48 H146" strokeWidth="1.8" />
+    <path d="M68 64 V114 M84 64 V114 M116 64 V114 M132 64 V114" strokeOpacity=".3" />
+    <circle cx="100" cy="34" r="6" fill={'#164E46'} />
   </>,
   prompt: <>
-    <rect x="40" y="30" width="105" height="59" rx="7" fill={'#A9BCA5'} />
-    <path d="m57 48 10 9-10 9M78 66h28" strokeWidth="3" />
-    <path d="M88 73h73v30h-15l-13 11v-11H88Z" fill={'#F7F4EC'} />
-    <circle cx="105" cy="88" r="3" fill={ink} /><circle cx="124" cy="88" r="3" fill={ink} /><circle cx="143" cy="88" r="3" fill={ink} />
-    <path d="m154 26 4 9 10 3-10 4-4 10-4-10-10-4 10-3Z" fill={'#D9A441'} stroke="none" />
+    {/* 现代前端与代码工程：嵌套组件树、响应式数据流与交互终端 */}
+    <rect x="42" y="32" width="116" height="76" rx="10" fill={'#F7F4EC'} strokeWidth="2" />
+    <rect x="42" y="32" width="116" height="20" rx="8" fill={'#164E46'} stroke="none" />
+    <circle cx="54" cy="42" r="3" fill={'#D9A441'} />
+    <circle cx="64" cy="42" r="3" fill={'#A9BCA5'} />
+    <circle cx="74" cy="42" r="3" fill={'#F7F4EC'} />
+    {/* 组件树折叠块与响应式流向 */}
+    <path d="M54 64 L62 70 L54 76" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M72 70 H102" strokeWidth="2.4" strokeLinecap="round" />
+    <rect x="110" y="60" width="36" height="20" rx="4" fill={'#A9BCA5'} stroke="none" />
+    <path d="M54 88 H126" strokeWidth="1.8" strokeDasharray="4 3" />
+    <circle cx="138" cy="98" r="8" fill={'#D9A441'} />
+    <path d="M138 94 L141 98 L138 102" stroke={'#164E46'} strokeWidth="1.5" />
   </>,
   psych: <>
-    <circle cx="108" cy="66" r="43" fill={'#A9BCA5'} stroke="none" />
-    <path d="M66 107V88l-15-9 12-20a35 35 0 0 1 70-2c0 19-12 28-12 50Z" fill={'#F7F4EC'} />
-    <path d="M83 67c-17-13 8-34 23-20 13 13-6 29-16 17-8-10 9-19 13-7M87 81h25M92 88h15" />
-    <circle cx="155" cy="51" r="9" fill={'#D9A441'} /><path d="M146 51h-14M155 60v21h-18" />
+    {/* 心理学与认知脑科学：左右半球认知共振、神经突触与感知光环 */}
+    <circle cx="100" cy="70" r="46" fill={'#A9BCA5'} fillOpacity=".25" stroke="none" />
+    {/* 大脑轮廓与认知双回路 */}
+    <path d="M100 34 C75 34, 56 50, 56 72 C56 90, 72 104, 94 106 L100 106" strokeWidth="2.4" />
+    <path d="M100 34 C125 34, 144 50, 144 72 C144 90, 128 104, 106 106 L100 106" strokeWidth="2.4" />
+    <path d="M100 36 V104" strokeOpacity=".4" strokeDasharray="3 3" />
+    {/* 认知思维突触连接与核心共振环 */}
+    <path d="M74 56 Q88 64, 82 82 T96 94" strokeWidth="1.6" />
+    <path d="M126 56 Q112 64, 118 82 T104 94" strokeWidth="1.6" />
+    <circle cx="74" cy="56" r="5" fill={'#F7F4EC'} />
+    <circle cx="82" cy="82" r="4" fill={'#F7F4EC'} />
+    <circle cx="126" cy="56" r="5" fill={'#D9A441'} />
+    <circle cx="118" cy="82" r="4" fill={'#D9A441'} />
+    <circle cx="100" cy="70" r="10" fill={'#164E46'} />
+    <circle cx="100" cy="70" r="4" fill={'#D9A441'} />
   </>,
   sat: <>
-    <path d="M54 27h76l19 19v63H54Z" fill={'#F7F4EC'} />
-    <path d="M130 27v20h19" fill={'#A9BCA5'} />
-    <path d="m67 54 4 4 8-10m-12 27 4 4 8-10m-12 27 4 4 8-10M89 54h27M89 75h40M89 96h30" />
-    <path d="m139 98 21-55 8 3-21 55-9 10Z" fill={'#D9A441'} /><path d="m156 55 8 3" />
-    <circle cx="44" cy="36" r="10" fill={'#A9BCA5'} stroke="none" />
+    {/* 考试与进阶跃迁：成长阶梯、精准靶心与知识罗盘 */}
+    <circle cx="100" cy="70" r="42" fill={'#A9BCA5'} fillOpacity=".2" stroke="none" />
+    <path d="M50 112 L150 112" strokeWidth="2" />
+    <path d="M60 112 V92 H85 V72 H110 V52 H135 V32" strokeWidth="2.4" />
+    <circle cx="135" cy="32" r="8" fill={'#D9A441'} />
+    <path d="M135 28 V36 M131 32 H139" stroke={'#164E46'} strokeWidth="1.8" />
+    <circle cx="60" cy="92" r="3" fill={'#164E46'} />
+    <circle cx="85" cy="72" r="3" fill={'#164E46'} />
+    <circle cx="110" cy="52" r="3" fill={'#164E46'} />
+    <path d="M68 56 Q85 46, 106 46" strokeWidth="1.4" strokeDasharray="3 3" />
   </>,
   philo: <>
-    <circle cx="75" cy="64" r="34" fill={'#A9BCA5'} /><circle cx="121" cy="64" r="34" fill={'#F7F4EC'} />
-    <path d="M98 39a34 34 0 0 1 0 50 34 34 0 0 1 0-50Z" fill={'#D9A441'} />
-    <path d="M49 107h100M98 91v16M89 103h18" />
-    <circle cx="98" cy="59" r="4" fill={ink} /><path d="M98 71v7" strokeWidth="3" />
+    {/* 哲学与批判性思维：柏拉图立体多面体、思维透镜与理性天平 */}
+    <circle cx="82" cy="68" r="34" fill={'#A9BCA5'} fillOpacity=".4" stroke="none" />
+    <circle cx="118" cy="68" r="34" fill={'#F7F4EC'} fillOpacity=".6" stroke="none" />
+    <circle cx="82" cy="68" r="34" />
+    <circle cx="118" cy="68" r="34" />
+    <path d="M100 42 C110 50, 110 86, 100 94 C90 86, 90 50, 100 42 Z" fill={'#D9A441'} />
+    <path d="M50 114 H150 M100 94 V114" strokeWidth="2" />
+    <circle cx="100" cy="68" r="4" fill={'#164E46'} />
+    <path d="M100 26 V36" strokeWidth="2" strokeLinecap="round" />
   </>,
   stats: <>
-    <path d="M37 105h130M43 105V32" />
-    <path d="M55 105V88h17v17M77 105V62h17v43M99 105V41h17v64M121 105V70h17v35M143 105V91h17v14" fill={'#A9BCA5'} stroke="none" />
-    <path d="M43 101c28 0 29-66 57-66s28 66 61 66" strokeWidth="3" />
-    <path d="M100 35v70" strokeDasharray="3 4" /><circle cx="100" cy="35" r="7" fill={'#D9A441'} />
+    {/* 数学与统计：高斯正态分布曲线、极坐标网格与概率区间 */}
+    <path d="M40 114 L160 114 M44 114 V30" strokeWidth="1.6" />
+    {/* 高斯钟形曲线 */}
+    <path d="M46 110 C70 110, 80 40, 100 40 C120 40, 130 110, 154 110" strokeWidth="2.6" />
+    {/* 积分概率填充区域 */}
+    <path d="M85 112 V56 C90 48, 110 48, 115 56 V112 Z" fill={'#A9BCA5'} fillOpacity=".5" stroke="none" />
+    <path d="M100 40 V114" strokeWidth="1.4" strokeDasharray="3 3" />
+    <circle cx="100" cy="40" r="6" fill={'#D9A441'} />
+    <circle cx="70" cy="96" r="3" fill={'#164E46'} />
+    <circle cx="130" cy="96" r="3" fill={'#164E46'} />
   </>,
 };
 

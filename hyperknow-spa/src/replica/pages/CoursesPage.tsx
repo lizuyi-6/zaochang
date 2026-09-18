@@ -6,6 +6,9 @@ import { coverForTitle } from '../data';
 import { KandinskyCover, KnotMark } from './CourseJourney';
 import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
+import { courseFromBackend } from '../generate';
+import { normalizeBackendCourse } from '../backend-course';
+import { courseJoinKey, markCourseJoined } from '../courseJoinMemory';
 import './CoursesPage.css';
 
 /* ------------------------------------------------------------------ */
@@ -34,37 +37,67 @@ const EmptyShelf: React.FC<{ size?: number }> = ({ size = 200 }) => (
 
 const WEEK_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-const MARKET_ROWS = [
-  { title: 'Public Speaking', rating: '4.6', cover: 'kandinsky' as const },
-  { title: 'Introduction to Sociology', rating: '4.4', cover: 'sociology' as const },
-  { title: 'AP Psychology', rating: '4.3', cover: 'psych' as const },
-];const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
+const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
   const { t, lng } = useI18n();
   const [tab, setTab] = useState<'all' | 'progress' | 'completed'>('all');
   const [query, setQuery] = useState('');
   const [weekOffset, setWeekOffset] = useState(0);
-  const previewTarget = state.courseJoined ? ('courseJourney' as const) : ('coursePreview' as const);
   /* 已加入的课程就是当前 generated(伪生成/后端课);无 generated 时回退演示公开演讲课 */
   const joinedTitle = state.generated?.title ?? L('Public Speaking', '公开演讲');
   const joinedCover = state.generated?.cover;
-  /* 集市行预览:kandinsky 行 = 演示公开演讲课(generated 置空),其余根据市场课程真实 UUID 进入 */
-  const openMarketRow = (row: (typeof MARKET_ROWS)[number]) => {
-    if (row.cover === 'kandinsky') {
-      set({ screen: previewTarget, generated: null, activeCourseUuid: undefined, courseJoined: false, lectureDone: false });
-    } else {
-      // 匹配市场真实课程
-      const matched = state.marketCourses?.find((m) => m.title.toLowerCase().includes(row.title.toLowerCase()));
-      if (matched?.uuid) {
-        set({
-          screen: previewTarget,
-          activeCourseUuid: matched.uuid,
-          courseJoined: false,
-          lectureDone: false,
+
+  /* 右侧精选课程行:优先从后端真实课程(D1/官方样例)聚合,确保每一行均有真实 UUID 可直达 */
+  const marketRowsAll = useMemo(() => {
+    const list: Array<{ title: string; rating: string; cover: any; uuid?: string }> = [];
+    const seen = new Set<string>();
+
+    // 1. 公开演讲 (官方预置经典课)
+    const pubTitle = L('Public Speaking', '公开演讲');
+    list.push({ title: pubTitle, rating: '4.6', cover: 'kandinsky' as const });
+    seen.add(pubTitle.toLowerCase());
+    seen.add('public speaking');
+
+    // 2. 真实市场课程(含社会学导论、机器学习基础、Vue 全栈等)
+    if (state.marketCourses && state.marketCourses.length > 0) {
+      for (const m of state.marketCourses) {
+        if (!m.title || seen.has(m.title.toLowerCase())) continue;
+        seen.add(m.title.toLowerCase());
+        list.push({
+          title: m.title,
+          rating: '4.5',
+          cover: coverForTitle(m.title),
+          uuid: m.uuid || undefined,
         });
-      } else {
-        // 无真实课程时进入课程市场挑选真实课程
-        set({ screen: 'marketplace' });
+        if (list.length >= 6) break;
       }
+    } else {
+      // 离线/加载中保底
+      list.push(
+        { title: L('Introduction to Sociology', '社会学导论'), rating: '4.4', cover: 'sociology' as const, uuid: '091d5945-4f34-4bfc-9d3b-c34b76d62ee5' },
+        { title: L('Machine Learning Foundations', '机器学习基础'), rating: '4.5', cover: 'ml' as const, uuid: 'c18a2301-3f42-4bfc-9d3b-c34b76d62ea1' },
+      );
+    }
+    return list;
+  }, [state.marketCourses]);
+
+  const openMarketRow = (row: { title: string; uuid?: string; cover: any }) => {
+    markCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(row.uuid));
+    if (row.uuid) {
+      set({
+        screen: 'courseJourney',
+        activeCourseUuid: row.uuid,
+        courseJoined: true,
+        lectureDone: false,
+      });
+    } else {
+      // 默认公开演讲课
+      set({
+        screen: 'courseJourney',
+        generated: null,
+        activeCourseUuid: undefined,
+        courseJoined: true,
+        lectureDone: false,
+      });
     }
   };
 
@@ -97,18 +130,31 @@ const MARKET_ROWS = [
     [state.marketCourses, joinedTitle],
   );
   const openMine = (uuid: string) => {
+    markCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(uuid));
+    const found = state.marketCourses?.find((m) => m.uuid === uuid || m.marketId === uuid);
+    let preGenerated = undefined;
+    if (found?.rawCourse) {
+      const normalized = normalizeBackendCourse(found.rawCourse);
+      if (normalized) {
+        preGenerated = {
+          ...courseFromBackend(normalized, found.title),
+          courseUuid: uuid,
+        };
+      }
+    }
     set({
       screen: 'courseJourney',
       activeCourseUuid: uuid,
       courseJoined: true,
       lectureDone: false,
+      ...(preGenerated ? { generated: preGenerated } : {}),
     });
   };
   const shelfMine =
     tab !== 'completed'
       ? mineCourses.filter((m) => !q || m.title.toLowerCase().includes(q))
       : [];
-  const marketRows = MARKET_ROWS.filter((row) => !q || row.title.toLowerCase().includes(q));
+  const marketRows = marketRowsAll.filter((row) => !q || row.title.toLowerCase().includes(q));
 
   return (
     <div className="hk-page with-sidebar cs-page">
@@ -155,7 +201,18 @@ const MARKET_ROWS = [
             {showJoinedCourse || shelfMine.length > 0 ? (
               <div className="cs-course-grid">
                 {showJoinedCourse && (
-                  <div className="cs-course-card">
+                  <div
+                    className="cs-course-card"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => set({ screen: 'courseJourney', courseJoined: true })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        set({ screen: 'courseJourney', courseJoined: true });
+                      }
+                    }}
+                  >
                     <div className="cs-course-cover">
                       {joinedCover ? <CourseCover kind={joinedCover} /> : <KandinskyCover size={268} radius={12} />}
                     </div>
@@ -165,7 +222,10 @@ const MARKET_ROWS = [
                         <button
                           type="button"
                           className="cs-preview"
-                          onClick={() => set({ screen: 'courseJourney' })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            set({ screen: 'courseJourney', courseJoined: true });
+                          }}
                         >
                           {t('marketplacePage.previewCta')}
                         </button>
@@ -182,7 +242,19 @@ const MARKET_ROWS = [
                   </div>
                 )}
                 {shelfMine.map((m) => (
-                  <div className="cs-course-card" key={m.uuid}>
+                  <div
+                    className="cs-course-card"
+                    key={m.uuid}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openMine(m.uuid as string)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openMine(m.uuid as string);
+                      }
+                    }}
+                  >
                     <div className="cs-course-cover">
                       <CourseCover kind={coverForTitle(m.title)} />
                     </div>
@@ -192,7 +264,10 @@ const MARKET_ROWS = [
                         <button
                           type="button"
                           className="cs-preview"
-                          onClick={() => openMine(m.uuid as string)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openMine(m.uuid as string);
+                          }}
                         >
                           {t('marketplacePage.previewCta')}
                         </button>
@@ -254,9 +329,40 @@ const MARKET_ROWS = [
             </section>
 
             <div className="cs-caps cs-pickup-label">{t('courses.motivation.pickupEyebrow')}</div>
-            <section className="cs-pickup">
-              <div className="cs-pickup-title">{t('courses.motivation.pickupEmptyTitle')}</div>
-              <div className="cs-pickup-sub">{t('courses.motivation.pickupEmptyMeta')}</div>
+            <section
+              className="cs-pickup"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (showJoinedCourse) {
+                  set({ screen: 'courseJourney', courseJoined: true });
+                } else if (shelfMine[0]?.uuid) {
+                  openMine(shelfMine[0].uuid as string);
+                } else {
+                  set({ screen: 'marketplace' });
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  if (showJoinedCourse) {
+                    set({ screen: 'courseJourney', courseJoined: true });
+                  } else if (shelfMine[0]?.uuid) {
+                    openMine(shelfMine[0].uuid as string);
+                  } else {
+                    set({ screen: 'marketplace' });
+                  }
+                }
+              }}
+            >
+              <div className="cs-pickup-title">
+                {showJoinedCourse ? joinedTitle : (shelfMine[0]?.title ?? t('courses.motivation.pickupEmptyTitle'))}
+              </div>
+              <div className="cs-pickup-sub">
+                {showJoinedCourse || shelfMine[0]
+                  ? L('Continue your learning journey', '继续你的学习旅程')
+                  : t('courses.motivation.pickupEmptyMeta')}
+              </div>
             </section>
 
             <section className="cs-card cs-mkt">
@@ -270,7 +376,19 @@ const MARKET_ROWS = [
               <div className="cs-mkt-sub-h">{t('home.marketplace.subtitle')}</div>
               <div className="cs-mkt-rows">
                 {marketRows.map((row) => (
-                  <div key={row.title} className="cs-mkt-row">
+                  <div
+                    key={row.title}
+                    className="cs-mkt-row"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openMarketRow(row)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openMarketRow(row);
+                      }
+                    }}
+                  >
                     <div className="cs-mkt-thumb">
                       {row.cover === 'kandinsky' ? (
                         <KandinskyCover size={56} radius={10} />
@@ -292,7 +410,10 @@ const MARKET_ROWS = [
                     <button
                       type="button"
                       className="cs-preview"
-                      onClick={() => openMarketRow(row)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openMarketRow(row);
+                      }}
                     >
                       {t('marketplacePage.previewCta')}
                     </button>

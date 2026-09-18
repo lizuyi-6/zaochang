@@ -23,7 +23,9 @@ export type HyperknowAiConfig = {
   baseUrl: string;
   apiKey: string;
   model: string;
-  // TTS 上游(默认 StepFun 原生;测试注入假上游用覆盖位)
+  // TTS 上游(默认 StepFun 原生;测试注入假上游用覆盖位)。
+  // 默认 stepaudio-3-tts:StepAudio 3 代 TTS,实测同一 /audio/speech 端点、
+  // 同一请求形状(model/input/voice/speed),且兼容 step-tts 时代克隆的 voice-tone ID。
   ttsBaseUrl: string;
   ttsModel: string;
 };
@@ -33,12 +35,17 @@ export function resolveHyperknowAiConfig(): HyperknowAiConfig | null {
   const baseUrl = values.HYPERKNOW_AI_BASE_URL || values.AI_CHAT_BASE_URL;
   const apiKey = values.HYPERKNOW_AI_API_KEY || values.AI_CHAT_API_KEY;
   if (!baseUrl || !apiKey) return null;
+  const ttsBaseUrl = values.HYPERKNOW_TTS_BASE_URL || "https://api.stepfun.com/v1";
+  const defaultTtsModel = ttsBaseUrl.includes("step_plan") ? "stepaudio-2.5-tts" : "stepaudio-3-tts";
+  const rawModel = values.HYPERKNOW_AI_MODEL || values.AI_CHAT_MODEL;
+  // StepFun 官方已下线 step-explore 模型，若配置为 step-explore 或为空，自动升级为主力模型 step-3.7-flash
+  const model = (!rawModel || rawModel === "step-explore") ? "step-3.7-flash" : rawModel;
   return {
     baseUrl,
     apiKey,
-    model: values.HYPERKNOW_AI_MODEL || values.AI_CHAT_MODEL || "step-explore",
-    ttsBaseUrl: values.HYPERKNOW_TTS_BASE_URL || "https://api.stepfun.com/v1",
-    ttsModel: values.HYPERKNOW_TTS_MODEL || "step-tts-mini",
+    model,
+    ttsBaseUrl,
+    ttsModel: values.HYPERKNOW_TTS_MODEL || defaultTtsModel,
   };
 }
 

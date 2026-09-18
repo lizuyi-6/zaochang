@@ -34,6 +34,7 @@ export let aiPort;
 export let lastChatCompletion = null;
 export let aiUpstreamCount = 0;
 export let lastTtsRequest = null;
+export let lastTtsBodyNonAscii = false;
 export let ttsUpstreamCount = 0;
 export let lastImageRequest = null;
 export let imageUpstreamCount = 0;
@@ -116,6 +117,7 @@ export function resetAiUpstream() {
   lastChatCompletion = null;
   aiUpstreamCount = 0;
   lastTtsRequest = null;
+  lastTtsBodyNonAscii = false;
   ttsUpstreamCount = 0;
   lastImageRequest = null;
   imageUpstreamCount = 0;
@@ -160,7 +162,8 @@ export async function startFakeAiUpstream() {
     }
     const chunks = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
-    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const rawBody = Buffer.concat(chunks).toString("utf8");
+    const body = JSON.parse(rawBody);
     if (isSearch) {
       // 假 Tavily:记录查询供课程研学断言;回 1 条确定性命中(URL 含查询词,可证
       // 提示词注入与 sources 计数)。
@@ -183,7 +186,10 @@ export async function startFakeAiUpstream() {
     if (isTts) {
       // 假 StepFun TTS:记录请求体供字段级断言(model/input/voice/speed),
       // 回确定性"音频"字节(内容里带 voice 标记,可证缓存 key 隔离)。
+      // 另记录原始体是否含非 ASCII 字节:真实上游 WAF 拦原始 CJK(tts.ts 必须
+      // \u 转义成纯 ASCII 发送),集成层守住这条线防回归。
       lastTtsRequest = body;
+      lastTtsBodyNonAscii = /[^\x00-\x7f]/.test(rawBody);
       ttsUpstreamCount += 1;
       response.writeHead(200, { "content-type": "audio/mpeg" });
       response.end(Buffer.from(`fake-mp3-for-${body.voice}-${Buffer.byteLength(String(body.input ?? ""))}b`));

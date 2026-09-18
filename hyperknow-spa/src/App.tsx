@@ -50,35 +50,28 @@ function stateFromHash(): Partial<AppState> | null {
     case '/courses':
       return { screen: 'courses', ...done, ...extras };
     case '/course/preview': {
-      // 路由层严禁 buildGeneratedCourse 伪造课程。必须依赖真实 UUID，旧 topic 安全回退课程列表
       const uuid = q.get('uuid') || q.get('id');
-      if (uuid) {
-        return {
-          screen: 'coursePreview',
-          activeCourseUuid: uuid,
-          courseLoading: true,
-          courseError: null,
-          courseJoined: false,
-          ...extras,
-        };
-      }
-      return { screen: 'courses', courseLoading: false, courseError: null, ...extras };
+      return {
+        screen: 'coursePreview',
+        activeCourseUuid: uuid || undefined,
+        courseLoading: !!uuid,
+        courseError: null,
+        courseJoined: false,
+        ...extras,
+      };
     }
     case '/course/journey': {
       const uuid = q.get('uuid') || q.get('id');
-      if (uuid) {
-        return {
-          screen: 'courseJourney',
-          activeCourseUuid: uuid,
-          courseJoined: true,
-          courseLoading: true,
-          courseError: null,
-          ...(q.has('done') ? { lectureDone: true } : {}),
-          ...(q.has('prompt') ? { lectureDone: true, lectureCompletePrompt: true } : {}),
-          ...extras,
-        };
-      }
-      return { screen: 'courses', courseLoading: false, courseError: null, ...extras };
+      return {
+        screen: 'courseJourney',
+        activeCourseUuid: uuid || undefined,
+        courseJoined: true,
+        courseLoading: !!uuid,
+        courseError: null,
+        ...(q.has('done') ? { lectureDone: true } : {}),
+        ...(q.has('prompt') ? { lectureDone: true, lectureCompletePrompt: true } : {}),
+        ...extras,
+      };
     }
     case '/marketplace':
       return { screen: 'marketplace', ...done, ...extras };
@@ -102,11 +95,11 @@ function hashFor(s: AppState): string {
       return `#/onboarding/${s.onboardingStep}`;
     case 'coursePreview': {
       const uuid = s.activeCourseUuid || (s.generated as { courseUuid?: string })?.courseUuid;
-      return uuid ? `#/course/preview?uuid=${encodeURIComponent(uuid)}` : '#/courses';
+      return uuid ? `#/course/preview?uuid=${encodeURIComponent(uuid)}` : '#/course/preview';
     }
     case 'courseJourney': {
       const uuid = s.activeCourseUuid || (s.generated as { courseUuid?: string })?.courseUuid;
-      return uuid ? `#/course/journey?uuid=${encodeURIComponent(uuid)}` : '#/courses';
+      return uuid ? `#/course/journey?uuid=${encodeURIComponent(uuid)}` : '#/course/journey';
     }
     case 'whiteboard':
       return s.whiteboardMode === 'practice' ? '#/whiteboard?practice=1' : '#/whiteboard';

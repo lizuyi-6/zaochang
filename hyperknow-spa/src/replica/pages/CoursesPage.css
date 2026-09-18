@@ -121,10 +121,13 @@
   border: 1px solid #F0F0F0;
   border-radius: 16px;
   padding: 16px;
-  cursor: default;
-  transition: box-shadow 0.15s;
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.12s;
 }
-.cs-course-card:hover { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06); }
+.cs-course-card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
 .cs-course-cover {
   width: 268px;
   height: 268px;
@@ -142,6 +145,10 @@
   font-size: 15px;
   font-weight: 700;
   color: #111827;
+  transition: color 0.12s;
+}
+.cs-course-card:hover .cs-course-title {
+  color: #164E46;
 }
 
 /* shared bits */
@@ -300,7 +307,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 0;
+  padding: 10px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.cs-mkt-row:hover {
+  background: #F9FAFB;
 }
 .cs-mkt-row + .cs-mkt-row { border-top: 1px solid #F4F5F7; }
 .cs-mkt-thumb {
@@ -309,6 +322,10 @@
   border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
+  transition: transform 0.12s;
+}
+.cs-mkt-row:hover .cs-mkt-thumb {
+  transform: scale(1.04);
 }
 .cs-mkt-thumb > * {
   width: 52px !important;
@@ -329,6 +346,10 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.12s;
+}
+.cs-mkt-row:hover .cs-mkt-title {
+  color: #164E46;
 }
 
 /* 交互补齐:周导航按钮 / 今日高亮 */

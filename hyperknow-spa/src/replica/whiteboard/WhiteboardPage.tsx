@@ -46,12 +46,172 @@ type Stage = 'intro' | 'talk' | 'play';
 // 每步旁白窗口(原 whiteboardWs.js deliverStep 同式,亦见 protocol.ts stepDurationMs):
 // 中文一字一音节 ×180ms;英文按音节密度 ×65ms(实测 287 字符英文 ≈19.7s 音频,
 // 纯 180ms/字符会算出 51.7s,音频播完后字幕独走半分钟);再按语速缩放,下限 4s。
-const narrateMs = (text: string, speed = 1) => {
+export const narrateMs = (text: string, speed = 1) => {
   const cjk = (text.match(/[\u4e00-\u9fff\u3040-\u30ff]/g) || []).length;
   const other = text.length - cjk;
   return Math.max(4000, (cjk * 180 + other * 65) / Math.max(0.5, speed));
 };
-const BOARD_CPS = 24; // handwriting chars/sec
+export const BOARD_CPS = 24; // handwriting chars/sec
+export const STARTUP_TIMEOUT_MS = 8000; // 上游冷合成等起声超时上限:此前字幕恒为 0;超时后取消音频并以估算时钟平滑打出剩余字幕
+export const STALL_MS = 12000; // 起声后 media time (currentTime) 连续不动这么久 = 断流/缓冲冻结,止损
+
+export interface CaptionSyncOptions {
+  total: number;
+  plain: string;
+  speed?: number;
+  handle: SpeakHandle;
+  wait: (ms: number) => Promise<void>;
+  isSkipped: () => boolean;
+  onUpdate: (shownCount: number) => void;
+  stopAudio: () => void;
+  startupTimeoutMs?: number;
+  stallMs?: number;
+  tickMs?: number;
+}
+
+export async function runCaptionSync({
+  total,
+  plain,
+  speed = 1,
+  handle,
+  wait,
+  isSkipped,
+  onUpdate,
+  stopAudio,
+  startupTimeoutMs = STARTUP_TIMEOUT_MS,
+  stallMs = STALL_MS,
+  tickMs = 50,
+}: CaptionSyncOptions): Promise<void> {
+  if (total <= 0) return;
+
+  const estMs = narrateMs(plain, speed);
+  let startHow: SpeakStart | null = null;
+  let audioEnded = false;
+
+  void handle.started.then((v) => {
+    startHow = v;
+  });
+  void handle.ended.then(() => {
+    audioEnded = true;
+  });
+
+  let shownCount = 0;
+  let ticks = 0;
+  let lastMediaTime = -1;
+  let lastMediaAdvanceMs = 0;
+
+  interface FallbackState {
+    startMs: number;
+    startCount: number;
+    remainingCount: number;
+    durationMs: number;
+  }
+
+  const fallbackRef = { current: null as FallbackState | null };
+
+  const initFallback = (atMs: number): FallbackState => {
+    if (fallbackRef.current) return fallbackRef.current;
+    // 降级前确保取消挂起/残留的音频,杜绝迟到外放
+    stopAudio();
+    const startCount = shownCount;
+    const remainingCount = Math.max(0, total - startCount);
+    const durationMs = total > 0 && remainingCount > 0 ? Math.max(500, (remainingCount / total) * estMs) : 0;
+    fallbackRef.current = {
+      startMs: atMs,
+      startCount,
+      remainingCount,
+      durationMs,
+    };
+    return fallbackRef.current;
+  };
+
+  while (true) {
+    if (isSkipped()) {
+      stopAudio();
+      break;
+    }
+    const activeMs = ticks * tickMs;
+
+    const currentFallback = fallbackRef.current;
+    if (currentFallback) {
+      const elapsed = activeMs - currentFallback.startMs;
+      if (currentFallback.durationMs <= 0 || elapsed >= currentFallback.durationMs) {
+        shownCount = total;
+        onUpdate(total);
+        break;
+      }
+      const byFallback = currentFallback.startCount + Math.floor((elapsed / currentFallback.durationMs) * currentFallback.remainingCount);
+      const nextShown = Math.min(total, Math.max(shownCount, byFallback));
+      if (nextShown > shownCount) {
+        shownCount = nextShown;
+        onUpdate(shownCount);
+      }
+      await wait(tickMs);
+      ticks++;
+      continue;
+    }
+
+    if (startHow === 'error' || startHow === 'stopped') {
+      initFallback(activeMs);
+      continue;
+    }
+
+    if (startHow === null) {
+      if (activeMs >= startupTimeoutMs) {
+        // 起声超时(上游无响应/极慢):取消挂起音频,锚定当前进度切估算回退
+        initFallback(activeMs);
+        continue;
+      }
+      // 等待起声音频加载中:字幕保持 0,避免声画错位
+      onUpdate(0);
+      await wait(tickMs);
+      ticks++;
+      continue;
+    }
+
+    // startHow === 'started'
+    const prog = handle.getProgress();
+    const cur = prog ? prog.currentTime : 0;
+    if (cur > lastMediaTime + 0.001) {
+      lastMediaTime = cur;
+      lastMediaAdvanceMs = activeMs;
+    }
+
+    if (activeMs - lastMediaAdvanceMs > stallMs) {
+      // 媒体时间连续 stallMs 无任何前进:判定断流/缓冲冻结,止损切回退
+      initFallback(activeMs);
+      continue;
+    }
+
+    if (prog) {
+      let ratio = prog.ratio;
+      if (ratio < 0 || !Number.isFinite(prog.duration) || prog.duration <= 0) {
+        // 流式响应或未知时长:以 currentTime 结合语速估算窗口推导比例
+        ratio = estMs > 0 ? (prog.currentTime * 1000) / estMs : 0;
+      }
+      const byAudio = Math.min(total, Math.floor(ratio * total));
+      if (byAudio > shownCount) {
+        shownCount = byAudio;
+        onUpdate(shownCount);
+      }
+    }
+
+    if (audioEnded) {
+      break;
+    }
+
+    const won = await Promise.race([
+      wait(tickMs).then(() => 'tick' as const),
+      handle.ended.then(() => 'ended' as const),
+    ]);
+    if (won === 'ended') {
+      audioEnded = true;
+      break;
+    }
+    ticks++;
+  }
+  onUpdate(total);
+}
 
 const userBubble = (id: string, text: string): PanelEntry => ({ id, kind: 'user', text: [{ t: text }] });
 const tutorBubble = (id: string, text: string): PanelEntry => ({ id, kind: 'msg', text: [{ t: text }] });
@@ -244,7 +404,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const [idleOpen, setIdleOpen] = useState(false);
 
   // ----- engine control refs -----
-  const ctl = useRef({ cancelled: false, paused: false });
+  const ctl = useRef({ cancelled: false, paused: false, skipped: false });
   const answerResolver = useRef<((text: string) => void) | null>(null);
   const popupResolver = useRef<(() => void) | null>(null);
   const choiceResolver = useRef<((i: number) => void) | null>(null);
@@ -259,7 +419,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const narrationRef = useRef({ voice: settings.voice, speed: settings.speed, muted });
   narrationRef.current = { voice: settings.voice, speed: settings.speed, muted };
 
-  /* Pause-aware delay: accumulates only while unpaused; rejects on unmount. */
+  /* Pause-aware delay: accumulates only while unpaused; resolves immediately if skipped; rejects on unmount. */
   const wait = useCallback(
     (ms: number) =>
       new Promise<void>((resolve, reject) => {
@@ -269,6 +429,11 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           if (ctl.current.cancelled) {
             window.clearInterval(iv);
             reject(new Error('cancelled'));
+            return;
+          }
+          if (ctl.current.skipped) {
+            window.clearInterval(iv);
+            resolve();
             return;
           }
           const now = Date.now();
@@ -334,66 +499,23 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       let handle: SpeakHandle | null = null;
       if (!silent && total > 0) {
         handle = tts.speakTrack(plain, vk, speed);
-        let startHow: SpeakStart | null = null;
-        void handle.started.then((v) => {
-          startHow = v;
+        await runCaptionSync({
+          total,
+          plain,
+          speed,
+          handle,
+          wait,
+          isSkipped: () => ctl.current.skipped,
+          onUpdate: setCapShown,
+          stopAudio: () => tts.stop(),
         });
-
-        const TICK = 50; // 与 wait 的 50ms 轮询粒度对齐,activeMs 才与真实时间一致
-        const estMs = narrateMs(plain, speed);
-        const GRACE_MS = 2500; // 起声宽限:此前不动字幕(声画同窗);超时后估算接管
-        const START_CAP_MS = 8000; // 仍没起声:估算已驱动,超时强制收尾
-        const STALL_MS = 12000; // 起声后 currentTime 连续不动这么久 = 断流,止损
-
-        let shownCount = 0;
-        let ticks = 0; // tick 仅在未暂停时累加(wait 暂停感知),天然排除课程暂停
-        let lastAdvanceMs = 0; // 字幕最近一次前进的时刻
-        let ended = false;
-        void handle.ended.then(() => {
-          ended = true;
-        });
-
-        while (!ended) {
-          const activeMs = ticks * TICK;
-          const prog = handle.getProgress();
-          if (startHow === 'started' && prog) {
-            // 声画双向绝对对齐:音频读到哪字就亮到哪;只前进不回退。
-            const byAudio = Math.min(total, Math.floor(prog.ratio * total));
-            if (byAudio > shownCount) {
-              shownCount = byAudio;
-              setCapShown(shownCount);
-              lastAdvanceMs = activeMs;
-            } else if (activeMs - lastAdvanceMs > STALL_MS) {
-              // 字幕 12s 无进展:currentTime 冻结(断流)或反复回卷重连(Range 重拉)
-              // 都命中此分支——止损停音频,字幕补全,课程继续。
-              tts.stop();
-              break;
-            }
-          } else if (activeMs > GRACE_MS) {
-            // 静音/未起声/上游无声音:估算时钟平滑前进(tick 计时,暂停安全)
-            const byEst = Math.min(total, Math.floor(((activeMs - GRACE_MS) / estMs) * total));
-            if (byEst > shownCount) {
-              shownCount = byEst;
-              setCapShown(shownCount);
-              lastAdvanceMs = activeMs;
-            }
-          }
-          // 音频始终没起声(挂起/极慢合成):估算走完再宽限一段,强制收尾防死锁
-          if (startHow !== 'started' && activeMs > START_CAP_MS + estMs) {
-            tts.stop();
-            break;
-          }
-          const won = await Promise.race([
-            wait(TICK).then(() => 'tick' as const),
-            handle.ended.then(() => 'ended' as const),
-          ]);
-          if (won === 'ended') break;
-          ticks++;
-        }
-        setCapShown(total);
       } else {
         const per = narrateMs(plain, speed) / Math.max(1, total);
         for (let i = 1; i <= total; i++) {
+          if (ctl.current.skipped) {
+            setCapShown(total);
+            break;
+          }
           await wait(per);
           setCapShown(i);
         }
@@ -406,10 +528,16 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const writeItem = useCallback(
     async (id: string) => {
-      const total = itemCharCount(BOARD_ITEMS.find((b) => b.id === id)!);
+      const item = BOARD_ITEMS.find((b) => b.id === id);
+      if (!item) return;
+      const total = itemCharCount(item);
       setWritingId(id);
       const per = 1000 / BOARD_CPS;
       for (let c = 1; c <= total; c++) {
+        if (ctl.current.skipped) {
+          setProgress((p) => ({ ...p, [id]: total }));
+          break;
+        }
         await wait(per);
         setProgress((p) => ({ ...p, [id]: c }));
       }
@@ -419,6 +547,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   );
 
   const revealTable = useCallback(async () => {
+    if (ctl.current.skipped) {
+      setTableRows(4);
+      return;
+    }
     for (let r = 1; r <= 4; r++) {
       setTableRows(r);
       await wait(480);
@@ -427,6 +559,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const drawAnnot = useCallback(
     async (id: string) => {
+      if (ctl.current.skipped) {
+        setAnnotsDone((d) => new Set(d).add(id));
+        return;
+      }
       setAnnotActive(id);
       await wait(950);
       setAnnotActive(null);
@@ -544,7 +680,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       }
 
       if (s.systemEnd) setSystemEnd(true);
-      if (s.beat) await wait(s.beat);
+      if (s.beat && !ctl.current.skipped) await wait(s.beat);
+      ctl.current.skipped = false;
     },
     [auto, drawAnnot, revealTable, typeCaption, wait, writeItem],
   );
@@ -706,6 +843,12 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     setPaused(ctl.current.paused);
   }, []);
 
+  /* 右侧面板停止/结束按钮:立即停止当前音频,解除当前步手写与字幕等待,快速收尾并进入下一步 */
+  const handleStopExplaining = useCallback(() => {
+    tts.stop();
+    ctl.current.skipped = true;
+  }, []);
+
   /* 面板"加图片":真实上传到 /api/uploads,成功后作为一条图片记录进入对话记录 */
   const imageRef = useRef<HTMLInputElement>(null);
   const handleAddImage = useCallback(() => imageRef.current?.click(), []);
@@ -824,6 +967,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
             inputValue={input}
             onInput={setInput}
             onSend={handleSend}
+            onStop={handleStopExplaining}
             onMic={handleMic}
             onAddImage={handleAddImage}
             onClose={() => setPanelOpen(false)}

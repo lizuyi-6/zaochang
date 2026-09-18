@@ -60,6 +60,54 @@ export async function* consumeMessagesSse(body: ReadableStream<Uint8Array>, sign
   }
 }
 
+export async function* consumeChatCompletionsSse(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let complete = false;
+  const abort = () => { void reader.cancel(signal?.reason).catch(() => {}); };
+  signal?.addEventListener("abort", abort, { once: true });
+  try {
+    for (;;) {
+      signal?.throwIfAborted();
+      const { done, value } = await reader.read();
+      signal?.throwIfAborted();
+      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = done ? "" : lines.pop() || "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data) continue;
+        if (data === "[DONE]") { complete = true; return; }
+        const event = JSON.parse(data) as {
+          error?: unknown;
+          choices?: Array<{ index?: number; delta?: { content?: unknown; reasoning_content?: unknown }; finish_reason?: string | null }>;
+        };
+        if (event.error) throw new Error("ai_upstream_stream_error");
+        if (complete) continue;
+        const choice = event.choices?.find((entry) => entry.index === 0 || entry.index === undefined);
+        if (typeof choice?.delta?.reasoning_content === "string" && choice.delta.reasoning_content) {
+          yield { type: "thinking", text: choice.delta.reasoning_content };
+        }
+        if (typeof choice?.delta?.content === "string" && choice.delta.content) {
+          yield { type: "text", text: choice.delta.content };
+        }
+        if (choice?.finish_reason) {
+          if (choice.finish_reason !== "stop") throw new Error("ai_upstream_incomplete");
+          complete = true;
+        }
+      }
+      if (done) break;
+    }
+    if (!complete) throw new Error("ai_upstream_incomplete");
+  } finally {
+    signal?.removeEventListener("abort", abort);
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
 // 白板单步讲解节奏:正文字数 × 180ms,最少 4 秒(原 whiteboardWs.js deliverStep 逐字一致)。
 // 服务端 setTimeout 链已改为客户端驱动播放,这个公式同时用于服务端(无)与客户端(适配器),
 // 放在纯模块保证两端节奏一致。
@@ -74,10 +122,21 @@ export function sanitizeTtsText(text: string, fallback = "你好，我是你的�
 
 // TTS 缓存 key:原版 md5(voiceId:speed:text) → voiceId_hash;Workers 无 md5,
 // 换 Web Crypto SHA-256(key 只用于寻址,摘要算法更换不影响语义)。
-export async function ttsCacheKey(text: string, voiceId: string, speed: number): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${voiceId}:${speed}:${text}`));
+// model 参与 digest:换 TTS 模型后旧模型合成的音频不得再命中(同文同音色也要重新合成)。
+export async function ttsCacheKey(text: string, voiceId: string, speed: number, model = ""): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${model}:${voiceId}:${speed}:${text}`));
   const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
   return `${voiceId}_${hash}`;
+}
+
+// StepFun /audio/speech 前置 WAF 对 POST 体做字节级内容扫描:体里出现原始 CJK UTF-8
+// 字节即 451 censorship_blocked(2026-09-16 实测:同内容 \u 转义体放行,英文/数字放行;
+// chat/completions 与 /messages 无此扫描层)。\uXXXX 转义在 JSON 语义上完全等价,服务端
+// 解析后拿到同一字符串,故 TTS 请求体一律编码成纯 ASCII(代理对逐半转义,合法 JSON)。
+export function asciiSafeJson(value: unknown): string {
+  return JSON.stringify(value).replace(/[\u0080-\uFFFF]/g, (char) =>
+    `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
 }
 
 export type WebSearchHit = { title: string; url: string; snippet: string };

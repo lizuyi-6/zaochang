@@ -28,6 +28,7 @@ import { L } from '../i18n/content';
 import { downloadIcs, shareLink } from '../actions';
 import { toast } from '../toast';
 import { formatSize, loadMaterials, removeMaterial, uploadMaterial, type CourseMaterial } from '../materials';
+import { courseJoinKey, isCourseJoined, markCourseJoined } from '../courseJoinMemory';
 import './CourseJourney.css';
 
 /* ------------------------------------------------------------------ */
@@ -41,23 +42,26 @@ export const KnotMark: React.FC<{ size?: number; color?: string }> = ({ size = 1
   </svg>
 );
 
-/* Original editorial public-speaking plate; legacy export retained. */
+/* Original editorial knowledge-symphony plate (Kandinsky-inspired Bauhaus geometric composition). */
 export const KandinskyCover: React.FC<{ size?: number; radius?: number }> = ({ size = 248, radius = 14 }) => (
   <svg width={size} height={size} viewBox="0 0 248 248" aria-hidden="true" style={{ display: 'block', borderRadius: radius, flexShrink: 0 }}>
     <rect width="248" height="248" fill="#F7F4EC" />
     <path d="M20 20h208v208H20zM20 64h208M64 20v208M184 20v208M20 184h208" fill="none" stroke="#164E46" strokeOpacity=".12" />
-    <circle cx="159" cy="86" r="57" fill="#D9A441" />
-    <path d="M110 160V95a42 42 0 0 1 84 0v65" fill="#B7C9B6" />
-    <path d="M190 78q23 16 0 32M201 66q37 28 0 56" fill="none" stroke="#164E46" strokeWidth="2" strokeLinecap="round" />
-    <path d="M112 82c0-20 28-20 28 0v21c0 20-28 20-28 0Z" fill="#164E46" />
-    <path d="M105 99v6a21 21 0 0 0 42 0v-6M126 126v31M111 158h30" fill="none" stroke="#164E46" strokeWidth="3" strokeLinecap="round" />
-    <path d="M49 174h122l-11 49H60Z" fill="#164E46" />
-    <path d="M47 165h128v10H47z" fill="#D9A441" />
-    <path d="M69 154v-19l22 7 22-7v19l-22 7Z" fill="#F7F4EC" stroke="#164E46" strokeWidth="2" />
-    <path d="M91 142v19" stroke="#164E46" strokeWidth="2" />
-    <circle cx="35" cy="35" r="4" fill="#164E46" />
-    <path d="M45 35h35M205 209h23M217 197v24" stroke="#164E46" strokeWidth="1.5" />
-    <path d="M74 194h66M74 201h45" stroke="#F7F4EC" strokeOpacity=".55" />
+    {/* 康定斯基式核心黄金太阳与知识同心圆 */}
+    <circle cx="152" cy="92" r="54" fill="#D9A441" fillOpacity=".9" />
+    <circle cx="152" cy="92" r="70" fill="none" stroke="#164E46" strokeWidth="1.8" strokeDasharray="5 4" strokeOpacity=".4" />
+    {/* 结构多边形与学术张力面 */}
+    <polygon points="64,180 108,76 182,144" fill="#B7C9B6" fillOpacity=".8" stroke="#164E46" strokeWidth="2.4" strokeLinejoin="round" />
+    <polygon points="92,192 144,116 204,184" fill="#164E46" fillOpacity=".85" stroke="#164E46" strokeWidth="2.4" strokeLinejoin="round" />
+    {/* 交叉流向切线与几何光点 */}
+    <path d="M40 208 L208 40" stroke="#164E46" strokeWidth="2.6" strokeLinecap="round" />
+    <path d="M36 124 L212 124" stroke="#164E46" strokeWidth="1.5" strokeOpacity=".3" />
+    <circle cx="72" cy="64" r="14" fill="#164E46" />
+    <circle cx="72" cy="64" r="6" fill="#F7F4EC" />
+    <circle cx="196" cy="188" r="8" fill="#D9A441" />
+    <circle cx="48" cy="168" r="5" fill="#B7C9B6" />
+    <circle cx="176" cy="56" r="4" fill="#F7F4EC" stroke="#164E46" strokeWidth="2" />
+    <path d="M52 44 Q88 32, 124 44" stroke="#D9A441" strokeWidth="3" strokeLinecap="round" fill="none" />
   </svg>
 );
 
@@ -138,6 +142,12 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
   const scope = `${state.identity?.email ?? 'demo'}:${PS.title}`;
   const [materials, setMaterials] = useState<CourseMaterial[]>(() => loadMaterials(scope));
   useEffect(() => setMaterials(loadMaterials(scope)), [scope]);
+  /* 加入态按"账户 + 课程键"记忆:刷新/深链/集市重开自动恢复,不再重复弹加入确认 */
+  const joinScope = state.identity?.email ?? 'demo';
+  const joinKey = courseJoinKey((PS as { courseUuid?: string }).courseUuid);
+  useEffect(() => {
+    if (!joined && isCourseJoined(joinScope, joinKey)) set({ courseJoined: true });
+  }, [joined, joinScope, joinKey, set]);
 
   const unit = UNITS.find((u) => u.id === activeUnit) ?? UNITS[0];
   const unitChip =
@@ -273,7 +283,16 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                 className="cj-join"
                 type="button"
                 onClick={() => {
-                  if (!joined) setDialog('join');
+                  if (!joined) {
+                    setDialog('join');
+                  } else {
+                    openLesson('lecture', {
+                      unitId: unit.id,
+                      lectureId: unit.lectures[0]?.id,
+                      sessionId: unit.lectures[0]?.sessions[0]?.sessionId,
+                      topic: unit.lectures[0]?.sessions[0]?.title ?? unit.lectures[0]?.title,
+                    });
+                  }
                 }}
               >
                 {joined ? t('home.marketplace.successStartLearning') : t('courseJourney.joinCourseButton')}
@@ -542,7 +561,32 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                         {lec.sessions.map((s, si) => {
                           const isFirst = lec.id === 'l1' && si === 0;
                           return (
-                            <div key={s.title} className="cj-session">
+                            <div
+                              key={s.title}
+                              className="cj-session"
+                              role="button"
+                              tabIndex={0}
+                              style={{ cursor: 'pointer' }}
+                              onClick={() =>
+                                openLesson(isFirst && done ? 'practice' : 'lecture', {
+                                  unitId: unit.id,
+                                  lectureId: lec.id,
+                                  sessionId: s.sessionId,
+                                  topic: s.title,
+                                })
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  openLesson(isFirst && done ? 'practice' : 'lecture', {
+                                    unitId: unit.id,
+                                    lectureId: lec.id,
+                                    sessionId: s.sessionId,
+                                    topic: s.title,
+                                  });
+                                }
+                              }}
+                            >
                               <span className="cj-session-name">
                                 {s.title}
                                 <Compass size={13} className="cj-compass" />
@@ -553,14 +597,15 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill revisit"
                                       type="button"
-                                      onClick={() =>
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         openLesson('lecture', {
                                           unitId: unit.id,
                                           lectureId: lec.id,
                                           sessionId: s.sessionId,
                                           topic: s.title,
-                                        })
-                                      }
+                                        });
+                                      }}
                                     >
                                       <Play size={11} fill="currentColor" />
                                       <span>{t('courseJourney.revisitAction')}</span>
@@ -569,14 +614,15 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill practice-filled"
                                       type="button"
-                                      onClick={() =>
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         openLesson('practice', {
                                           unitId: unit.id,
                                           lectureId: lec.id,
                                           sessionId: s.sessionId,
                                           topic: s.title,
-                                        })
-                                      }
+                                        });
+                                      }}
                                     >
                                       <PenLine size={12} />
                                       <span>{t('courseJourney.practiceAction')}</span>
@@ -587,14 +633,15 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill learn-filled"
                                       type="button"
-                                      onClick={() =>
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         openLesson('lecture', {
                                           unitId: unit.id,
                                           lectureId: lec.id,
                                           sessionId: s.sessionId,
                                           topic: s.title,
-                                        })
-                                      }
+                                        });
+                                      }}
                                     >
                                       <Play size={11} fill="currentColor" />
                                       <span>{t('courseJourney.learnAction')}</span>
@@ -602,14 +649,15 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill practice"
                                       type="button"
-                                      onClick={() =>
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         openLesson('practice', {
                                           unitId: unit.id,
                                           lectureId: lec.id,
                                           sessionId: s.sessionId,
                                           topic: s.title,
-                                        })
-                                      }
+                                        });
+                                      }}
                                     >
                                       <PenLine size={12} />
                                       <span>{t('courseJourney.practiceAction')}</span>
@@ -620,14 +668,15 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill learn"
                                       type="button"
-                                      onClick={() =>
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         openLesson('lecture', {
                                           unitId: unit.id,
                                           lectureId: lec.id,
                                           sessionId: s.sessionId,
                                           topic: s.title,
-                                        })
-                                      }
+                                        });
+                                      }}
                                     >
                                       <Play size={11} fill="currentColor" />
                                       <span>{t('courseJourney.learnAction')}</span>
@@ -635,14 +684,15 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     <button
                                       className="cj-pill practice"
                                       type="button"
-                                      onClick={() =>
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         openLesson('practice', {
                                           unitId: unit.id,
                                           lectureId: lec.id,
                                           sessionId: s.sessionId,
                                           topic: s.title,
-                                        })
-                                      }
+                                        });
+                                      }}
                                     >
                                       <PenLine size={12} />
                                       <span>{t('courseJourney.practiceAction')}</span>
@@ -711,6 +761,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                 className="cj-btn-confirm"
                 type="button"
                 onClick={() => {
+                  markCourseJoined(joinScope, joinKey);
                   set({ courseJoined: true });
                   setDialog('joined');
                 }}

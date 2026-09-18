@@ -47,6 +47,7 @@ export const ConversationPanel: React.FC<{
   inputValue: string;
   onInput: (v: string) => void;
   onSend: () => void;
+  onStop?: () => void;
   onMic: () => void;
   onAddImage: () => void;
   onClose: () => void;
@@ -60,6 +61,7 @@ export const ConversationPanel: React.FC<{
   inputValue,
   onInput,
   onSend,
+  onStop,
   onMic,
   onAddImage,
   onClose,
@@ -172,8 +174,13 @@ export const ConversationPanel: React.FC<{
           >
             {voice !== 'off' ? <Mic size={15} /> : <MicOff size={15} />}
           </button>
-          {status === 'explaining' && voice !== 'listening' ? (
-            <button className="send stop" aria-label="Stop">
+          {status === 'explaining' && !canSend && voice !== 'listening' ? (
+            <button
+              className="send stop"
+              onClick={onStop}
+              aria-label="Stop narration"
+              title={L('Skip narration', '跳过讲解')}
+            >
               <Square size={13} fill="currentColor" />
             </button>
           ) : voice === 'listening' ? (

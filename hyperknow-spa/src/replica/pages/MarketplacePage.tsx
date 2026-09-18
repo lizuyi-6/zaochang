@@ -5,6 +5,7 @@ import type { CourseCard } from '../data';
 import { marketplaceFeatured, marketplaceCategories, homeCourses, coverForTitle } from '../data';
 import { buildGeneratedCourse, courseFromBackend } from '../generate';
 import { fetchCourseDetail, type MarketCourse } from '../backend';
+import { courseJoinKey, isCourseJoined } from '../courseJoinMemory';
 import { CourseCover, HighlightSwash, Logo } from '../illustrations';
 import { useI18n, TRich } from '../i18n';
 import { L } from '../i18n/content';
@@ -124,15 +125,16 @@ export default function MarketplacePage({ state, set }: PageProps) {
   );
   /* 点哪本书就预览哪本书:伪生成引擎按书名重建课程骨架,并携带封面风格;
    * D1 本人课程先落同名占位预览,详情(courses/[uuid])到达后原位换成真课程树。
-   * 切书时重置加入/完课标记——单课模型下,预览新课就是重新开始 */
+   * 完课标记切书即重置(单课模型下预览新课就是重新开始);加入态按账户+课程键
+   * 记忆恢复——加入过的课重开预览不再退回未加入 */
   const openCourse = (course: CourseCard) => {
+    const uuid = liveUuids.get(course.id);
     set({
       screen: 'coursePreview',
       generated: { ...buildGeneratedCourse(course.title), cover: course.cover },
-      courseJoined: false,
+      courseJoined: isCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(uuid)),
       lectureDone: false,
     });
-    const uuid = liveUuids.get(course.id);
     if (uuid) {
       void fetchCourseDetail(uuid).then((cs) => {
         if (cs) set({ generated: { ...courseFromBackend(cs, course.title), cover: course.cover } });
