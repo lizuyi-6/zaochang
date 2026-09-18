@@ -360,157 +360,180 @@ export const AvatarCat: React.FC<{ size?: number; ring?: boolean }> = ({ size = 
 export type CoverKind =
   | 'sociology' | 'bio' | 'ml' | 'ai' | 'history' | 'prompt' | 'psych' | 'sat' | 'philo' | 'stats';
 
-const coverBg: Record<CoverKind, string> = {
-  sociology: '#E8EBDD', bio: '#EDF0DF', ml: '#F2E7CD', ai: '#DFE9E2',
-  history: '#EEE4D3', prompt: '#E5EBDF', psych: '#F1E7D8', sat: '#E6EBE4',
-  philo: '#EEEADF', stats: '#E5ECDA',
+/* 封面主题:每科专属底色(深浅交替成书架节奏),徽标用 ink/acc/paper 三色绘制。
+   约束:禁止 <defs>/渐变 id(lattice-brand 测试要求同页多实例无 id 冲突),只用纯色。 */
+interface CoverTheme {
+  bg: string; // 封面底色
+  ink: string; // 主线稿色
+  acc: string; // 点缀色
+  paper: string; // 高光/纸色
+}
+const AMBER = '#D9A441';
+const CREAM = '#F7F4EC';
+const INK = ink;
+
+const coverTheme: Record<CoverKind, CoverTheme> = {
+  sociology: { bg: '#C3CFB4', ink: INK, acc: AMBER, paper: CREAM }, // 灰绿
+  bio: { bg: '#164E46', ink: CREAM, acc: AMBER, paper: CREAM }, // 深墨绿
+  ml: { bg: '#EFD9A7', ink: INK, acc: AMBER, paper: CREAM }, // 暖杏
+  ai: { bg: '#22364A', ink: CREAM, acc: AMBER, paper: CREAM }, // 深夜蓝
+  history: { bg: '#C07551', ink: INK, acc: AMBER, paper: CREAM }, // 赤陶
+  prompt: { bg: '#10261F', ink: INK, acc: AMBER, paper: CREAM }, // 墨黑绿
+  psych: { bg: '#CDB8C8', ink: INK, acc: AMBER, paper: CREAM }, // 雾紫
+  sat: { bg: AMBER, ink: INK, acc: CREAM, paper: CREAM }, // 金榜
+  philo: { bg: '#EFE6CE', ink: INK, acc: AMBER, paper: CREAM }, // 羊皮纸
+  stats: { bg: '#B9CCDD', ink: INK, acc: AMBER, paper: CREAM }, // 雾蓝
 };
 
-const plates: Record<CoverKind, React.ReactNode> = {
-  sociology: <>
-    {/* 社会学：微观互动网络与宏观制度同心结构 */}
-    <circle cx="100" cy="70" r="42" fill={'#A9BCA5'} fillOpacity=".3" stroke="none" />
-    <circle cx="100" cy="70" r="28" strokeDasharray="3 3" />
-    <path d="M62 52 L100 36 L138 52 L124 94 L76 94 Z" strokeWidth="1.5" />
-    <path d="M62 52 L100 70 L138 52 M76 94 L100 70 L124 94" />
-    <circle cx="100" cy="70" r="8" fill={'#D9A441'} />
-    <circle cx="62" cy="52" r="5" fill={'#F7F4EC'} />
-    <circle cx="138" cy="52" r="5" fill={'#F7F4EC'} />
-    <circle cx="76" cy="94" r="5" fill={'#F7F4EC'} />
-    <circle cx="124" cy="94" r="5" fill={'#F7F4EC'} />
-    <circle cx="100" cy="36" r="6" fill={'#164E46'} />
-    <path d="M38 70h16M146 70h16" strokeWidth="1.5" strokeLinecap="round" />
-  </>,
-  bio: <>
-    {/* 生物学：立体双螺旋空间回旋与生命碱基律动 */}
-    <circle cx="100" cy="70" r="44" fill={'#A9BCA5'} fillOpacity=".25" stroke="none" />
-    <path d="M68 32 C82 52, 118 52, 132 72 C146 92, 118 108, 68 112" strokeWidth="2.4" />
-    <path d="M132 32 C118 52, 82 52, 68 72 C54 92, 82 108, 132 112" strokeWidth="2.4" />
-    <path d="M74 40 L126 42 M85 52 L115 54 M95 65 L105 65 M82 78 L118 80 M72 90 L128 92 M70 102 L130 104" strokeWidth="1.8" />
-    <circle cx="100" cy="65" r="7" fill={'#D9A441'} />
-    <circle cx="136" cy="32" r="4" fill={'#164E46'} />
-    <circle cx="64" cy="112" r="4" fill={'#164E46'} />
-    <circle cx="148" cy="60" r="6" fill={'#F7F4EC'} /><circle cx="148" cy="60" r="2" fill={'#164E46'} />
-  </>,
-  ml: <>
-    {/* 机器学习：高维特征流形、超平面与梯度优化轨迹 */}
-    <path d="M42 112 L158 112 M42 112 L42 28" strokeWidth="1.5" />
-    <path d="M46 98 Q80 100, 105 76 T154 36" strokeWidth="2.4" />
-    <path d="M48 108 Q80 112, 105 88 T154 48" strokeOpacity=".3" strokeDasharray="3 3" />
-    {/* 数据聚类与梯度下降点阵 */}
-    <circle cx="65" cy="85" r="4" fill={'#F7F4EC'} />
-    <circle cx="82" cy="74" r="4" fill={'#F7F4EC'} />
-    <circle cx="105" cy="56" r="4.5" fill={'#D9A441'} />
-    <circle cx="128" cy="46" r="5" fill={'#D9A441'} />
-    <circle cx="148" cy="34" r="6" fill={'#164E46'} />
-    {/* 决策间隔边界柱 */}
-    <rect x="58" y="92" width="10" height="20" rx="2" fill={'#A9BCA5'} stroke="none" />
-    <rect x="88" y="80" width="10" height="32" rx="2" fill={'#A9BCA5'} stroke="none" />
-    <rect x="118" y="62" width="10" height="50" rx="2" fill={'#A9BCA5'} stroke="none" />
-  </>,
-  ai: <>
-    {/* 人工智能与大模型：多层自注意力机制张量与核心知识晶体 */}
-    <circle cx="100" cy="70" r="45" fill={'#A9BCA5'} fillOpacity=".22" stroke="none" />
-    <rect x="76" y="46" width="48" height="48" rx="8" fill={'#164E46'} stroke="none" />
-    <path d="M84 70 L96 82 L116 58" stroke={'#F7F4EC'} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-    {/* 注意力发散连接节点 */}
-    <path d="M50 44 L76 56 M50 96 L76 84 M150 44 L124 56 M150 96 L124 84" strokeWidth="1.6" />
-    <path d="M100 24 L100 46 M100 94 L100 116" strokeWidth="1.6" strokeDasharray="3 3" />
-    <circle cx="50" cy="44" r="6" fill={'#D9A441'} />
-    <circle cx="50" cy="96" r="6" fill={'#F7F4EC'} />
-    <circle cx="150" cy="44" r="6" fill={'#F7F4EC'} />
-    <circle cx="150" cy="96" r="6" fill={'#D9A441'} />
-    <circle cx="100" cy="22" r="4" fill={'#164E46'} />
-    <circle cx="100" cy="118" r="4" fill={'#164E46'} />
-  </>,
-  history: <>
-    {/* 历史与文明：编年石柱、拱门殿堂与时光星盘 */}
-    <circle cx="138" cy="48" r="26" fill={'#D9A441'} fillOpacity=".9" stroke="none" />
-    <path d="M44 114 L156 114 M48 120 L152 120" strokeWidth="2" />
-    <path d="M56 114 V64 A20 20 0 0 1 96 64 V114" fill={'#A9BCA5'} fillOpacity=".4" />
-    <path d="M104 114 V64 A20 20 0 0 1 144 64 V114" fill={'#F7F4EC'} fillOpacity=".6" />
-    <path d="M50 56 H150 M54 48 H146" strokeWidth="1.8" />
-    <path d="M68 64 V114 M84 64 V114 M116 64 V114 M132 64 V114" strokeOpacity=".3" />
-    <circle cx="100" cy="34" r="6" fill={'#164E46'} />
-  </>,
-  prompt: <>
-    {/* 现代前端与代码工程：嵌套组件树、响应式数据流与交互终端 */}
-    <rect x="42" y="32" width="116" height="76" rx="10" fill={'#F7F4EC'} strokeWidth="2" />
-    <rect x="42" y="32" width="116" height="20" rx="8" fill={'#164E46'} stroke="none" />
-    <circle cx="54" cy="42" r="3" fill={'#D9A441'} />
-    <circle cx="64" cy="42" r="3" fill={'#A9BCA5'} />
-    <circle cx="74" cy="42" r="3" fill={'#F7F4EC'} />
-    {/* 组件树折叠块与响应式流向 */}
-    <path d="M54 64 L62 70 L54 76" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M72 70 H102" strokeWidth="2.4" strokeLinecap="round" />
-    <rect x="110" y="60" width="36" height="20" rx="4" fill={'#A9BCA5'} stroke="none" />
-    <path d="M54 88 H126" strokeWidth="1.8" strokeDasharray="4 3" />
-    <circle cx="138" cy="98" r="8" fill={'#D9A441'} />
-    <path d="M138 94 L141 98 L138 102" stroke={'#164E46'} strokeWidth="1.5" />
-  </>,
-  psych: <>
-    {/* 心理学与认知脑科学：左右半球认知共振、神经突触与感知光环 */}
-    <circle cx="100" cy="70" r="46" fill={'#A9BCA5'} fillOpacity=".25" stroke="none" />
-    {/* 大脑轮廓与认知双回路 */}
-    <path d="M100 34 C75 34, 56 50, 56 72 C56 90, 72 104, 94 106 L100 106" strokeWidth="2.4" />
-    <path d="M100 34 C125 34, 144 50, 144 72 C144 90, 128 104, 106 106 L100 106" strokeWidth="2.4" />
-    <path d="M100 36 V104" strokeOpacity=".4" strokeDasharray="3 3" />
-    {/* 认知思维突触连接与核心共振环 */}
-    <path d="M74 56 Q88 64, 82 82 T96 94" strokeWidth="1.6" />
-    <path d="M126 56 Q112 64, 118 82 T104 94" strokeWidth="1.6" />
-    <circle cx="74" cy="56" r="5" fill={'#F7F4EC'} />
-    <circle cx="82" cy="82" r="4" fill={'#F7F4EC'} />
-    <circle cx="126" cy="56" r="5" fill={'#D9A441'} />
-    <circle cx="118" cy="82" r="4" fill={'#D9A441'} />
-    <circle cx="100" cy="70" r="10" fill={'#164E46'} />
-    <circle cx="100" cy="70" r="4" fill={'#D9A441'} />
-  </>,
-  sat: <>
-    {/* 考试与进阶跃迁：成长阶梯、精准靶心与知识罗盘 */}
-    <circle cx="100" cy="70" r="42" fill={'#A9BCA5'} fillOpacity=".2" stroke="none" />
-    <path d="M50 112 L150 112" strokeWidth="2" />
-    <path d="M60 112 V92 H85 V72 H110 V52 H135 V32" strokeWidth="2.4" />
-    <circle cx="135" cy="32" r="8" fill={'#D9A441'} />
-    <path d="M135 28 V36 M131 32 H139" stroke={'#164E46'} strokeWidth="1.8" />
-    <circle cx="60" cy="92" r="3" fill={'#164E46'} />
-    <circle cx="85" cy="72" r="3" fill={'#164E46'} />
-    <circle cx="110" cy="52" r="3" fill={'#164E46'} />
-    <path d="M68 56 Q85 46, 106 46" strokeWidth="1.4" strokeDasharray="3 3" />
-  </>,
-  philo: <>
-    {/* 哲学与批判性思维：柏拉图立体多面体、思维透镜与理性天平 */}
-    <circle cx="82" cy="68" r="34" fill={'#A9BCA5'} fillOpacity=".4" stroke="none" />
-    <circle cx="118" cy="68" r="34" fill={'#F7F4EC'} fillOpacity=".6" stroke="none" />
-    <circle cx="82" cy="68" r="34" />
-    <circle cx="118" cy="68" r="34" />
-    <path d="M100 42 C110 50, 110 86, 100 94 C90 86, 90 50, 100 42 Z" fill={'#D9A441'} />
-    <path d="M50 114 H150 M100 94 V114" strokeWidth="2" />
-    <circle cx="100" cy="68" r="4" fill={'#164E46'} />
-    <path d="M100 26 V36" strokeWidth="2" strokeLinecap="round" />
-  </>,
-  stats: <>
-    {/* 数学与统计：高斯正态分布曲线、极坐标网格与概率区间 */}
-    <path d="M40 114 L160 114 M44 114 V30" strokeWidth="1.6" />
-    {/* 高斯钟形曲线 */}
-    <path d="M46 110 C70 110, 80 40, 100 40 C120 40, 130 110, 154 110" strokeWidth="2.6" />
-    {/* 积分概率填充区域 */}
-    <path d="M85 112 V56 C90 48, 110 48, 115 56 V112 Z" fill={'#A9BCA5'} fillOpacity=".5" stroke="none" />
-    <path d="M100 40 V114" strokeWidth="1.4" strokeDasharray="3 3" />
-    <circle cx="100" cy="40" r="6" fill={'#D9A441'} />
-    <circle cx="70" cy="96" r="3" fill={'#164E46'} />
-    <circle cx="130" cy="96" r="3" fill={'#164E46'} />
-  </>,
+const plates: Record<CoverKind, (t: CoverTheme) => React.ReactNode> = {
+  /* 社会学：三环相扣——个体、群体、制度的交叠 */
+  sociology: (t) => (
+    <>
+      <circle cx="72" cy="76" r="27" stroke={t.ink} strokeWidth="2.6" />
+      <circle cx="128" cy="76" r="27" stroke={t.ink} strokeWidth="2.6" />
+      <circle cx="100" cy="56" r="27" fill={t.paper} fillOpacity=".5" stroke={t.ink} strokeWidth="2.6" />
+      <circle cx="100" cy="68" r="7" fill={t.acc} />
+      <path d="M50 116 H150" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
+      <circle cx="42" cy="116" r="3" fill={t.ink} />
+      <circle cx="158" cy="116" r="3" fill={t.ink} />
+    </>
+  ),
+  /* 生物学：直立双螺旋,碱基横档与琥珀节点 */
+  bio: (t) => (
+    <>
+      <path d="M76 118 C76 96, 124 92, 124 70 C124 48, 76 44, 76 22" stroke={t.ink} strokeWidth="3" />
+      <path d="M124 118 C124 96, 76 92, 76 70 C76 48, 124 44, 124 22" stroke={t.ink} strokeWidth="3" />
+      <path d="M86 32 H114 M90 52 H110 M96 70 H104 M90 88 H110 M86 106 H114" stroke={t.ink} strokeWidth="1.8" strokeOpacity=".75" />
+      <circle cx="76" cy="22" r="4.5" fill={t.acc} />
+      <circle cx="124" cy="22" r="4.5" fill={t.acc} />
+      <circle cx="76" cy="118" r="4.5" fill={t.acc} />
+      <circle cx="124" cy="118" r="4.5" fill={t.acc} />
+      <circle cx="100" cy="70" r="6" fill={t.acc} />
+    </>
+  ),
+  /* 机器学习：决策树——根节点菱形分裂,叶节点交替落定 */
+  ml: (t) => (
+    <>
+      <path d="M100 24 L118 42 L100 60 L82 42 Z" fill={t.acc} />
+      <path d="M92 56 L72 80 M108 56 L128 80" stroke={t.ink} strokeWidth="2.6" />
+      <circle cx="66" cy="88" r="10" fill={t.ink} />
+      <circle cx="134" cy="88" r="10" fill={t.paper} stroke={t.ink} strokeWidth="2.4" />
+      <path d="M62 96 L50 114 M70 96 L82 114 M130 96 L118 114 M138 96 L150 114" stroke={t.ink} strokeWidth="2" />
+      <circle cx="48" cy="119" r="4.5" fill={t.acc} />
+      <circle cx="84" cy="119" r="4.5" fill={t.ink} />
+      <circle cx="116" cy="119" r="4.5" fill={t.ink} />
+      <circle cx="152" cy="119" r="4.5" fill={t.acc} />
+    </>
+  ),
+  /* 人工智能：核心芯片,引脚信号与虚线轨道 */
+  ai: (t) => (
+    <>
+      <ellipse cx="100" cy="70" rx="80" ry="46" stroke={t.ink} strokeOpacity=".3" strokeWidth="1.4" strokeDasharray="2 5" />
+      <rect x="76" y="46" width="48" height="48" rx="9" stroke={t.ink} strokeWidth="3" />
+      <rect x="92" y="62" width="16" height="16" rx="3" fill={t.acc} />
+      <path d="M88 46 V30 M100 46 V28 M112 46 V30 M88 94 V110 M100 94 V112 M112 94 V110" stroke={t.ink} strokeWidth="2" />
+      <path d="M76 58 H60 M76 70 H58 M76 82 H60 M124 58 H140 M124 70 H142 M124 82 H140" stroke={t.ink} strokeWidth="2" />
+      <circle cx="100" cy="25" r="3.5" fill={t.acc} />
+      <circle cx="145" cy="70" r="3.5" fill={t.acc} />
+      <circle cx="55" cy="70" r="3.5" fill={t.ink} />
+      <circle cx="100" cy="115" r="3.5" fill={t.ink} />
+    </>
+  ),
+  /* 历史：拱门石柱与烈日——文明遗迹的剪影 */
+  history: (t) => (
+    <>
+      <circle cx="146" cy="40" r="14" fill={t.acc} />
+      <path d="M64 116 V74 A20 20 0 0 1 104 74 V116 Z" fill={t.paper} />
+      <path d="M75 116 V82 A9 9 0 0 1 93 82 V116 Z" fill={t.bg} />
+      <path d="M56 116 H112 M60 123 H108" stroke={t.paper} strokeWidth="3" strokeLinecap="round" />
+      <path d="M58 64 H110" stroke={t.paper} strokeWidth="4" strokeLinecap="round" />
+      <path d="M138 92 L141 98 L138 104 L135 98 Z" fill={t.paper} stroke="none" />
+    </>
+  ),
+  /* 前端与代码工程：高对比终端窗口——琥珀光标静待输入 */
+  prompt: (t) => (
+    <>
+      <circle cx="100" cy="70" r="48" fill={t.acc} fillOpacity=".13" stroke="none" />
+      <rect x="56" y="40" width="88" height="60" rx="8" fill={t.paper} />
+      <path d="M64 40 H136 A8 8 0 0 1 144 48 V54 H56 V48 A8 8 0 0 1 64 40 Z" fill={t.ink} />
+      <circle cx="65" cy="47" r="2.2" fill={t.acc} />
+      <circle cx="73" cy="47" r="2.2" fill={t.paper} />
+      <circle cx="81" cy="47" r="2.2" fill={t.paper} fillOpacity=".55" />
+      <path d="M66 66 L74 72 L66 78" stroke={t.ink} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M82 72 H102" stroke={t.ink} strokeWidth="3" strokeLinecap="round" />
+      <rect x="110" y="66" width="10" height="13" rx="2" fill={t.acc} />
+      <path d="M66 89 H120" stroke={t.ink} strokeWidth="2" strokeDasharray="4 4" strokeOpacity=".45" />
+    </>
+  ),
+  /* 心理学：侧脸剪影,颅内一枚琥珀色的念头 */
+  psych: (t) => (
+    <>
+      <path
+        d="M126 118 V100 C140 92 146 78 142 62 C138 44 122 32 102 32 C82 32 66 46 64 64 C63 71 64 77 66 82 L58 94 L68 96 L70 104 C71 112 78 118 86 118 Z"
+        fill={t.paper}
+        fillOpacity=".45"
+        stroke={t.ink}
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <circle cx="100" cy="62" r="12" fill={t.acc} />
+      <path d="M100 46 V39 M112 51 L117 45 M88 51 L83 45" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
+      <circle cx="100" cy="62" r="4" fill={t.ink} />
+    </>
+  ),
+  /* 考试与进阶：同心靶心,一箭中的 */
+  sat: (t) => (
+    <>
+      <circle cx="96" cy="68" r="34" stroke={t.ink} strokeWidth="2.6" />
+      <circle cx="96" cy="68" r="23" stroke={t.ink} strokeWidth="2.2" />
+      <circle cx="96" cy="68" r="12" fill={t.ink} />
+      <circle cx="96" cy="68" r="4" fill={t.acc} />
+      <path d="M146 26 L103 61" stroke={t.ink} strokeWidth="3" strokeLinecap="round" />
+      <path d="M116 50 L104 61 L117 63" stroke={t.ink} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M146 26 l9 -3 M146 26 l3 9" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M50 118 H142" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
+    </>
+  ),
+  /* 哲学：一个大问号——一切学问始于发问 */
+  philo: (t) => (
+    <>
+      <path
+        d="M92 46 C92 34 102 28 112 28 C124 28 132 36 132 46 C132 57 122 61 116 68 C112 73 111 78 111 84"
+        stroke={t.ink}
+        strokeWidth="7"
+        strokeLinecap="round"
+      />
+      <circle cx="111" cy="101" r="6.5" fill={t.acc} />
+      <path d="M62 44 V104 M158 44 V104" stroke={t.ink} strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M84 116 H138" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
+    </>
+  ),
+  /* 数学与统计：填满的钟形曲线,置信区间与均值虚线 */
+  stats: (t) => (
+    <>
+      <path d="M44 114 C68 114 74 46 100 46 C126 46 132 114 156 114 Z" fill={t.ink} fillOpacity=".88" stroke="none" />
+      <path d="M92 114 V62 C95 55 105 55 108 62 V114 Z" fill={t.acc} fillOpacity=".92" stroke="none" />
+      <path d="M100 52 V114" stroke={t.paper} strokeWidth="1.6" strokeDasharray="3 4" />
+      <path d="M40 114 H160" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
+      <circle cx="100" cy="46" r="5" fill={t.acc} stroke={t.ink} strokeWidth="1.5" />
+      <circle cx="66" cy="96" r="3" fill={t.paper} />
+      <circle cx="134" cy="96" r="3" fill={t.paper} />
+    </>
+  ),
 };
 
 const CoverArt: React.FC<{ kind: CoverKind }> = ({ kind }) => {
   if (!Object.prototype.hasOwnProperty.call(plates, kind)) return null;
+  const t = coverTheme[kind];
   return (
     <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140" fill="none">
-      <path d="M18 17h164v106H18Z" stroke={ink} strokeOpacity=".15" />
-      <path d="M18 29h164M30 17v106" stroke={ink} strokeOpacity=".1" />
-      <circle cx="25" cy="23" r="2" fill={'#D9A441'} />
-      <path d="M35 23h24M162 116h14" stroke={ink} strokeWidth="1.2" />
-      <g stroke={ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{plates[kind]}</g>
+      {/* 藏书票签名:细内框 + 左上角琥珀菱标 + 右下短刻线,全套封面统一 */}
+      <rect x="10" y="10" width="180" height="120" rx="8" stroke={t.ink} strokeOpacity=".3" strokeWidth="1.4" />
+      <path d="M18 14 L22 18 L18 22 L14 18 Z" fill={t.acc} stroke="none" />
+      <path d="M168 122 H178" stroke={t.ink} strokeWidth="1.6" strokeOpacity=".5" strokeLinecap="round" />
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {plates[kind](t)}
+      </g>
     </svg>
   );
 };
@@ -521,7 +544,7 @@ export const CourseCover: React.FC<{ kind: CoverKind; flat?: boolean; style?: Re
     style={{
       width: '100%',
       height: '100%',
-      background: coverBg[kind],
+      background: coverTheme[kind]?.bg,
       borderRadius: flat ? 0 : 14,
       overflow: 'hidden',
       display: 'flex',
