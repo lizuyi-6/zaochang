@@ -67,6 +67,9 @@ export interface CaptionSyncOptions {
   startupTimeoutMs?: number;
   stallMs?: number;
   tickMs?: number;
+  /** 单调时钟(默认 Date.now):activeMs 由真实流逝时间累积,而不是 tick 次数——
+   * 后台标签页 setInterval 被节流到 1Hz 时,tick 计数会让 8s 起声超时变成 160s。 */
+  nowMs?: () => number;
 }
 
 export async function runCaptionSync({
@@ -81,6 +84,7 @@ export async function runCaptionSync({
   startupTimeoutMs = STARTUP_TIMEOUT_MS,
   stallMs = STALL_MS,
   tickMs = 50,
+  nowMs = Date.now,
 }: CaptionSyncOptions): Promise<void> {
   if (total <= 0) return;
 
@@ -96,9 +100,22 @@ export async function runCaptionSync({
   });
 
   let shownCount = 0;
-  let ticks = 0;
+  let activeMs = 0;
+  let lastTickAt = nowMs();
   let lastMediaTime = -1;
   let lastMediaAdvanceMs = 0;
+
+  /* 每拍真实耗时累积进 activeMs:节流(wait 晚解决)按真实时间走,暂停期间
+   * 由调用方提供的 nowMs(暂停感知时钟)自动冻结。 */
+  const bankElapsed = () => {
+    const now = nowMs();
+    activeMs += Math.max(0, now - lastTickAt);
+    lastTickAt = now;
+  };
+  const tick = async () => {
+    await wait(tickMs);
+    bankElapsed();
+  };
 
   interface FallbackState {
     startMs: number;
@@ -130,7 +147,6 @@ export async function runCaptionSync({
       stopAudio();
       break;
     }
-    const activeMs = ticks * tickMs;
 
     const currentFallback = fallbackRef.current;
     if (currentFallback) {
@@ -146,8 +162,7 @@ export async function runCaptionSync({
         shownCount = nextShown;
         onUpdate(shownCount);
       }
-      await wait(tickMs);
-      ticks++;
+      await tick();
       continue;
     }
 
@@ -164,8 +179,7 @@ export async function runCaptionSync({
       }
       // 等待起声音频加载中:字幕保持 0,避免声画错位
       onUpdate(0);
-      await wait(tickMs);
-      ticks++;
+      await tick();
       continue;
     }
 
@@ -186,8 +200,11 @@ export async function runCaptionSync({
     if (prog) {
       let ratio = prog.ratio;
       if (ratio < 0 || !Number.isFinite(prog.duration) || prog.duration <= 0) {
-        // 流式响应或未知时长:以 currentTime 结合语速估算窗口推导比例
-        ratio = estMs > 0 ? (prog.currentTime * 1000) / estMs : 0;
+        // 流式响应或未知时长:以 currentTime 结合语速估算窗口推导比例。
+        // 估算窗口只是下限——真实音频可能显著更长;未到 ended 前不许打满,
+        // 否则真实音频仍在播而字幕提前走完(收尾由播完后的 onUpdate(total) 完成)。
+        const est = estMs > 0 ? (prog.currentTime * 1000) / estMs : 0;
+        ratio = Math.min(est, 0.97);
       }
       const byAudio = Math.min(total, Math.floor(ratio * total));
       if (byAudio > shownCount) {
@@ -204,11 +221,11 @@ export async function runCaptionSync({
       wait(tickMs).then(() => 'tick' as const),
       handle.ended.then(() => 'ended' as const),
     ]);
+    bankElapsed();
     if (won === 'ended') {
       audioEnded = true;
       break;
     }
-    ticks++;
   }
   onUpdate(total);
 }
@@ -389,7 +406,9 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const [asking, setAsking] = useState(false);
 
   // ----- chrome / ui state -----
-  const [panelOpen, setPanelOpen] = useState(true);
+  /* 面板默认开仅限桌面:移动端面板是全屏浮层,默认开会遮住整块板书与字幕,
+   * 核心教学不可见——窄屏默认关,用户经 FAB 主动打开 */
+  const [panelOpen, setPanelOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768);
   const [zoom, setZoom] = useState(1);
   const [isFollowing, setIsFollowing] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -405,12 +424,36 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   // ----- engine control refs -----
   const ctl = useRef({ cancelled: false, paused: false, skipped: false });
+  /* 暂停感知的授课单调时钟:字幕同步的起声超时/断流止损按"课上真实流逝时间"计,
+   * 后台标签页 setInterval 节流不会拉长超时;暂停期间不累计(转场时结账重锚)。 */
+  const clockRef = useRef({ elapsed: 0, last: 0 });
+  const lessonNow = useCallback(() => {
+    const c = clockRef.current;
+    const now = Date.now();
+    if (c.last === 0) {
+      c.last = now;
+      return c.elapsed;
+    }
+    if (!ctl.current.paused) c.elapsed += now - c.last;
+    c.last = now;
+    return c.elapsed;
+  }, []);
+  const setLessonPaused = useCallback(
+    (p: boolean) => {
+      lessonNow(); // 结账到转场点
+      ctl.current.paused = p;
+      lessonNow(); // 重锚基线(暂停中为 0 增量)
+    },
+    [lessonNow],
+  );
   const answerResolver = useRef<((text: string) => void) | null>(null);
   const popupResolver = useRef<(() => void) | null>(null);
   const choiceResolver = useRef<((i: number) => void) | null>(null);
   const started = useRef(false);
   const voiceTimer = useRef<number | null>(null);
   const voiceTimers = useRef<number[]>([]);
+  /* 插话恢复提示等零散延时器:卸载时统一清理 */
+  const pendingTimers = useRef<number[]>([]);
   /* 当前步(插话按它取服务端 step_id 上下文)与插话互斥标记 */
   const stepRef = useRef(1);
   stepRef.current = step;
@@ -508,6 +551,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           isSkipped: () => ctl.current.skipped,
           onUpdate: setCapShown,
           stopAudio: () => tts.stop(),
+          nowMs: lessonNow,
         });
       } else {
         const per = narrateMs(plain, speed) / Math.max(1, total);
@@ -523,7 +567,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       setTyping(false);
       return handle;
     },
-    [wait],
+    [wait, lessonNow],
   );
 
   const writeItem = useCallback(
@@ -598,6 +642,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       }
 
       const capTask: Promise<SpeakHandle | null> = s.caption ? typeCaption(s.caption) : Promise.resolve(null);
+      // 若后续步骤先被取消/失败,capTask 的迟到拒绝不得成为未处理拒绝
+      void capTask.catch(() => {});
       if (BOARD_TABLE?.step === s.id) await revealTable();
       for (const it of items) await writeItem(it.id);
       for (const an of BOARD_ANNOTS.filter((a) => a.step === s.id)) await drawAnnot(an.id);
@@ -718,6 +764,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     () => () => {
       ctl.current.cancelled = true;
       if (voiceTimer.current) window.clearTimeout(voiceTimer.current);
+      voiceTimers.current.forEach((t) => window.clearTimeout(t));
+      pendingTimers.current.forEach((t) => window.clearTimeout(t));
       tts.stop();
     },
     [],
@@ -732,6 +780,12 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
    * 本地可见反馈,绝不静默落空。 */
   const askTutor = useCallback(
     async (question: string) => {
+      /* 插话互斥(文本/语音入口共用此守卫):上一个问题还在答疑时,新问题明确驳回,
+       * 不允许并发插话互相打断音频与暂停状态 */
+      if (askingRef.current) {
+        toast(L('The tutor is still answering your last question', '导师还在回答上一个问题'));
+        return;
+      }
       const sessionId = liveScript?.sessionId;
       if (!sessionId) {
         setEntries((prev) => [
@@ -753,7 +807,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       }
       askingRef.current = true;
       setAsking(true);
-      ctl.current.paused = true; // 主线暂停(声画同步,与暂停键同语义)
+      setLessonPaused(true); // 主线暂停(声画同步,与暂停键同语义)
       tts.pauseAudio();
       const sid = LESSON_STEPS.find((s) => s.id === stepRef.current)?.sid ?? '';
       const ans = await interjectLive(sessionId, sid, question);
@@ -765,9 +819,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       setEntries((prev) => [...prev, tutorBubble(`a-${Date.now()}`, answerText)]);
       const resume = ans?.resumeTransition ?? '';
       if (resume) {
-        window.setTimeout(() => {
+        const timer = window.setTimeout(() => {
           if (!ctl.current.cancelled) setEntries((prev) => [...prev, tutorBubble(`r-${Date.now()}`, resume)]);
         }, 1200);
+        pendingTimers.current.push(timer);
       }
       /* 答疑朗读(TTS 单例:插话会打断当前旁白,字幕随之补全);尊重静音 */
       const { voice: vk, speed, muted: silent } = narrationRef.current;
@@ -780,11 +835,11 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         return; // unmount cancelled
       }
       if (!ctl.current.cancelled) {
-        ctl.current.paused = false;
+        setLessonPaused(false);
         tts.resumeAudio();
       }
     },
-    [LESSON_STEPS, liveScript, wait],
+    [LESSON_STEPS, liveScript, wait, setLessonPaused],
   );
 
   const handleSend = useCallback(() => {
@@ -836,12 +891,14 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   }, [voice, askTutor]);
 
   const handleTogglePause = useCallback(() => {
-    ctl.current.paused = !ctl.current.paused;
-    // 音频与课程步进同暂停同恢复:元素不销毁,从断点续播(无需重读整句)。
-    if (ctl.current.paused) tts.pauseAudio();
+    // 音频与课程步进同暂停同恢复:元素不销毁,从断点续播(无需重读整句);
+    // setLessonPaused 同时给授课时钟结账,暂停时长不计入起声/断流超时。
+    const next = !ctl.current.paused;
+    setLessonPaused(next);
+    if (next) tts.pauseAudio();
     else tts.resumeAudio();
-    setPaused(ctl.current.paused);
-  }, []);
+    setPaused(next);
+  }, [setLessonPaused]);
 
   /* 右侧面板停止/结束按钮:立即停止当前音频,解除当前步手写与字幕等待,快速收尾并进入下一步 */
   const handleStopExplaining = useCallback(() => {

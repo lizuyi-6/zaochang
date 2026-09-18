@@ -72,6 +72,17 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const [unitsDone, setUnitsDone] = useState(0);
   const finishedRef = useRef(false);
   const remainingRef = useRef<number | null>(null);
+  /* Stage 2 请求生命周期:取消/卸载必须真正 abort SSE,忙碌守卫挡连击(重复 confirm
+   * 会在后端撞 409 并发租约并白烧一次生成) */
+  const stage2CtrlRef = useRef<AbortController | null>(null);
+  const stage2BusyRef = useRef(false);
+  const finishTimerRef = useRef<number | null>(null);
+  /* blueprintUuid 的 ref 镜像:异步 SSE 闭包里读到的是旧 state,断点登记必须拿最新值 */
+  const blueprintUuidRef = useRef('');
+  const updateBlueprintUuid = (uuid: string) => {
+    blueprintUuidRef.current = uuid;
+    setBlueprintUuid(uuid);
+  };
 
   const cg = 'chatResponse.courseGeneration';
   const phase = PHASES[phaseIdx];
@@ -82,11 +93,15 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     const latestCredits = remainingRef.current;
     /* persisted = 真 LLM 生成并已入 D1:集市/我的课程列表需要重拉才能看到新课 */
     markCourseJoined(state.identity?.email ?? 'demo', courseJoinKey((gen as { courseUuid?: string }).courseUuid));
+    const genUuid = (gen as { courseUuid?: string }).courseUuid;
     set({
       generating: false,
       generated: gen,
       screen: 'courseJourney',
       courseJoined: true,
+      genResume: null,
+      /* 真课完成后把 UUID 抬为活动课程:URL 带 uuid,刷新/深链可复原 */
+      ...(genUuid ? { activeCourseUuid: genUuid } : {}),
       ...(persisted ? { marketStale: true } : {}),
       ...(typeof latestCredits === 'number'
         ? {
@@ -104,11 +119,25 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
 
   const cancel = () => {
     finishedRef.current = true;
+    stage2CtrlRef.current?.abort();
+    if (finishTimerRef.current !== null) {
+      window.clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = null;
+    }
     set({ generating: false });
+  };
+
+  /* 中断但已有检查点:登记到 AppState,Courses 页提供"继续生成"入口(关掉浮层不丢断点) */
+  const registerCheckpoint = () => {
+    if (blueprintUuidRef.current) set({ genResume: { uuid: blueprintUuidRef.current, query } });
   };
 
   // 触发 Stage 2: 独立有界单元真实生成与检查点
   const confirmAndStartStage2 = async (customUnits?: string[]) => {
+    if (stage2BusyRef.current || finishedRef.current) return;
+    stage2BusyRef.current = true;
+    const ctrl = new AbortController();
+    stage2CtrlRef.current = ctrl;
     setWaitingConfirmation(false);
     setStage2Active(true);
     setFailed(false);
@@ -117,42 +146,54 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
 
     const unitsToGenerate = customUnits || selectedUnitIds;
 
-    const result = await generateCourseLive(
-      {
-        resumeUuid: blueprintUuid,
-        action: 'confirm_blueprint',
-        selectedUnits: unitsToGenerate,
-      },
-      {
-        onStep: (id, status) => {
-          setStepStatus((s) => ({ ...s, [id]: status }));
+    let result: Awaited<ReturnType<typeof generateCourseLive>>;
+    try {
+      result = await generateCourseLive(
+        {
+          resumeUuid: blueprintUuid,
+          action: 'confirm_blueprint',
+          selectedUnits: unitsToGenerate,
         },
-        onUnitProgress: (data) => {
-          setLiveCurrentUnit(data.unit_index);
-          setLiveTotalUnits(data.total_units);
-          if (data.title) setLiveUnitTitle(data.title);
+        {
+          onStep: (id, status) => {
+            if (finishedRef.current) return;
+            setStepStatus((s) => ({ ...s, [id]: status }));
+          },
+          onUnitProgress: (data) => {
+            if (finishedRef.current) return;
+            /* SSE 乱序/重复帧守卫:进度只允许单调前进,绝不 3/6 → 2/6 倒退 */
+            setLiveCurrentUnit((cur) => Math.max(cur, data.unit_index));
+            setLiveTotalUnits((cur) => Math.max(cur, data.total_units));
+            if (data.title) setLiveUnitTitle(data.title);
+          },
+          onRemaining: (remaining) => {
+            if (finishedRef.current) return;
+            remainingRef.current = remaining;
+            set({
+              energy: remaining,
+              identity: {
+                username: state.identity?.username || 'You',
+                email: state.identity?.email || '',
+                tier: state.identity?.tier || 'FREE',
+                credits: remaining,
+              },
+            });
+          },
         },
-        onRemaining: (remaining) => {
-          remainingRef.current = remaining;
-          set({
-            energy: remaining,
-            identity: {
-              username: state.identity?.username || 'You',
-              email: state.identity?.email || '',
-              tier: state.identity?.tier || 'FREE',
-              credits: remaining,
-            },
-          });
-        },
-      },
-    );
+        ctrl.signal,
+      );
+    } finally {
+      stage2BusyRef.current = false;
+      stage2CtrlRef.current = null;
+    }
 
     if (finishedRef.current) return;
     if (result.ok && 'course' in result) {
       setStepStatus((s) => ({ ...s, generating_initial_syllabus: 'completed' }));
       setReady(true);
-      window.setTimeout(() => finish(courseFromBackend(result.course, query), true), 1000);
+      finishTimerRef.current = window.setTimeout(() => finish(courseFromBackend(result.course, query), true), 1000);
     } else {
+      registerCheckpoint();
       setFailed(true);
     }
   };
@@ -171,6 +212,17 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     setBlueprint(null);
     setWaitingConfirmation(false);
     setStage2Active(false);
+    /* 一次性断点交接:Courses 页"继续生成"带着 uuid 进来——直接落到中断态界面,
+     * 由用户点"从检查点恢复生成",而不是重跑蓝图阶段重复扣积分 */
+    const handoff = state.genResumeUuid;
+    if (handoff) {
+      set({ genResumeUuid: undefined });
+      updateBlueprintUuid(handoff);
+      setMode('live');
+      setFailed(true);
+      return;
+    }
+    updateBlueprintUuid('');
     const ctrl = new AbortController();
     const pseudoTimers: number[] = [];
 
@@ -196,7 +248,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
           },
           onBlueprint: (bp, reqConfirm, uuid) => {
             setBlueprint(bp);
-            if (uuid) setBlueprintUuid(uuid);
+            if (uuid) updateBlueprintUuid(uuid);
             const allIds = bp.units?.map((u) => u.unitId).filter(Boolean) as string[] || [];
             setSelectedUnitIds(allIds);
             if (reqConfirm) {
@@ -228,7 +280,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
           setStepStatus((s) => ({ ...s, generating_initial_syllabus: 'completed' }));
         } else if ('course' in result) {
           setReady(true);
-          window.setTimeout(() => finish(courseFromBackend(result.course, query), true), 1000);
+          finishTimerRef.current = window.setTimeout(() => finish(courseFromBackend(result.course, query), true), 1000);
         }
       } else if (result.reason === 'insufficient') {
         setInsufficient(true);
@@ -242,14 +294,21 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
         pseudoTimers.push(window.setTimeout(() => finish(buildGeneratedCourse(query)), total));
       } else {
         setInsufficient(false);
+        registerCheckpoint();
         setFailed(true);
       }
     })();
 
     return () => {
       ctrl.abort();
+      stage2CtrlRef.current?.abort();
+      if (finishTimerRef.current !== null) {
+        window.clearTimeout(finishTimerRef.current);
+        finishTimerRef.current = null;
+      }
       pseudoTimers.forEach((x) => window.clearTimeout(x));
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, set]);
 
   /* 轮换文案节奏 */

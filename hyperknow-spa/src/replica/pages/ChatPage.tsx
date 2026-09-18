@@ -68,10 +68,18 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   const convIdRef = useRef<string | null>(null);
   const conversationsRef = useRef(state.conversations);
   conversationsRef.current = state.conversations;
+  /* 当前展示会话的身份镜像:流式回调(异步)据此判断"这条 token 还属于屏幕上
+   * 的会话吗"——A 流未结束就切到 B 时,A 的迟到 chunk/错误绝不得写进 B 的视图 */
+  const activeConvRef = useRef(state.activeConversationId);
+  activeConvRef.current = state.activeConversationId;
 
   /* 从历史/侧边栏打开的会话:回放其消息(按造场账户隔离的数据)。
-   * 依赖 activeConversationId:在同一页切换会话也要换内容;新发消息不会改它。 */
+   * 依赖 activeConversationId:在同一页切换会话也要换内容;新发消息不会改它。
+   * 切换会话时中断在途流:旧 stream 不得继续向新会话的视图追加。 */
   useEffect(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setStreaming(false);
     const id = state.activeConversationId;
     if (!id) return;
     const conv = conversationsRef.current?.find((c) => c.id === id);
@@ -103,6 +111,9 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     setStreaming(true);
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    const convAtSend = activeConvRef.current;
+    /** 本会话专属更新:切会话/卸载后,旧流的迟到回调全部丢弃 */
+    const stillMine = () => activeConvRef.current === convAtSend;
     /* 附件以引用形式并入发给导师的正文(后端暂不解析文件本体) */
     const wire = attached.length
       ? `${text}${text ? '\n\n' : ''}${attached.map((a) => `[Attachment: ${a.name} — ${a.url}]`).join('\n')}`
@@ -113,6 +124,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         wire,
         {
           onChunk: (chunk) => {
+            if (!stillMine()) return;
             acc += chunk;
             setMsgs((m) => {
               const next = [...m];
@@ -137,6 +149,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         },
         { signal: ctrl.signal, conversationId: convIdRef.current ?? undefined, mode: state.replyMode },
       );
+      if (!stillMine()) return;
       if (!result.ok) {
         const fallback =
           result.reason === 'insufficient'

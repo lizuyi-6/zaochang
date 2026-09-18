@@ -210,19 +210,36 @@ export async function generateCourseBlueprint(
   const normDepth = normalizeCourseDepth(brief?.depth);
   const scale = getDepthScaleBudget(normDepth);
 
-  // chat 调用如果抛错直接向上透传，不 catch 吞掉错误
-  const jsonStr = await chat(
-    [
-      { role: "system", content: COURSE_BLUEPRINT_PROMPT },
-      {
-        role: "user",
-        content: `Design a structured course blueprint for: "${query}" (Target Depth: ${normDepth}, reference unit scale: ${scale.refUnits} units, Language: ${effLang})${briefNote}${researchNote}`,
-      },
-    ],
-    { jsonMode: true, signal, maxTokens: 4096 },
-  );
-
-  const blueprint = parseCourseBlueprint(jsonStr);
+  // 蓝图 JSON 体量随单元数增长,4096 会在中途截断数组(blueprint_invalid_json);
+  // 与 generateCourse/planLecture 对齐 8192。上游偶发空响应/截断时允许一次有界重试,
+  // 仍失败则原样抛出(绝不回退模板冒充成功)。
+  let jsonStr = "";
+  let blueprint: CourseBlueprint | undefined;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      jsonStr = await chat(
+        [
+          { role: "system", content: COURSE_BLUEPRINT_PROMPT },
+          {
+            role: "user",
+            content: `Design a structured course blueprint for: "${query}" (Target Depth: ${normDepth}, reference unit scale: ${scale.refUnits} units, Language: ${effLang})${briefNote}${researchNote}`,
+          },
+        ],
+        { jsonMode: true, signal, maxTokens: 8192 },
+      );
+      blueprint = parseCourseBlueprint(jsonStr);
+      break;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      lastError = error;
+      console.warn(
+        `[hyperknow] blueprint attempt ${attempt + 1} failed:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+  if (!blueprint) throw lastError;
   blueprint.courseTitle = refineCourseTitle(blueprint.courseTitle, query, effLang);
   blueprint.targetDepth = normDepth;
   blueprint.language = effLang;

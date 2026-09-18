@@ -164,6 +164,46 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
           <div className="cs-main">
             <h1 className="cs-title">{t('courses.title')}</h1>
 
+            {/* 中断的生成任务断点入口:关掉浮层/刷新后仍能从这里从检查点继续 */}
+            {state.genResume && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  marginBottom: 14,
+                  padding: '10px 14px',
+                  background: '#F4F7F3',
+                  border: '1px solid #DCE6D9',
+                  borderRadius: 10,
+                  fontSize: 13,
+                  color: '#164E46',
+                }}
+              >
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {L(`Unfinished course “${state.genResume.query}” — progress is saved`, `《${state.genResume.query}》的生成尚未完成——进度已保存`)}
+                </span>
+                <button
+                  type="button"
+                  className="btn primary"
+                  style={{ padding: '6px 14px', fontSize: 12, borderRadius: 6, flexShrink: 0 }}
+                  onClick={() =>
+                    set({ generating: true, genQuery: state.genResume!.query, genResumeUuid: state.genResume!.uuid, genResume: null })
+                  }
+                >
+                  {L('Resume generation', '继续生成')}
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  style={{ padding: '6px 10px', fontSize: 12, borderRadius: 6, flexShrink: 0 }}
+                  onClick={() => set({ genResume: null })}
+                >
+                  {L('Dismiss', '放弃')}
+                </button>
+              </div>
+            )}
+
             <div className="cs-toolbar">
               <div className="cs-tabs">
                 <button

@@ -52,7 +52,7 @@
   flex: 1 1 0;
   min-height: 0;
   min-width: 0;
-  touch-action: pan-x pan-y pinch-zoom;
+  touch-action: none; /* 拖拽/双指缩放全部由 JS 手势实现;放行原生 pinch-zoom 会与 JS 缩放叠加成"双缩放" */
   overflow: hidden;
   cursor: grab;
   user-select: none;

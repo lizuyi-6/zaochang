@@ -40,6 +40,10 @@ export interface AppState {
   generating: boolean;
   /** 本次生成用户输入的原始 query(在线 SSE 与伪生成兜底共用) */
   genQuery: string;
+  /** 最近一次中断的持久化生成任务(检查点 uuid + 主题);Courses 页据此给"继续生成"入口 */
+  genResume?: { uuid: string; query: string } | null;
+  /** 一次性交接:打开生成浮层直接进入"断点恢复"态(避免重跑蓝图阶段重复扣积分) */
+  genResumeUuid?: string;
   /** 课程前置问询 CourseBrief(版本化: 目标、基础、时间、深度、偏好、语言、视觉) */
   courseBrief?: {
     version?: number;
@@ -121,6 +125,7 @@ export const initialAppState: AppState = {
   moreOpen: false,
   generating: false,
   genQuery: '',
+  genResume: null,
   generated: null,
   chatNote: '',
   identity: null,
