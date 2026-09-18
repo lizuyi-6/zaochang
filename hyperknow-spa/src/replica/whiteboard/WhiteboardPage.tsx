@@ -38,7 +38,7 @@ import { L } from '../i18n/content';
 import { exportBoard, type ExportFormat, type ExportPage } from '../boardExport';
 import { uploadFile } from '../materials';
 import { toast } from '../toast';
-import { listenOnce, tts, type SpeakHandle, type SpeakStart } from '../actions';
+import { listenOnce, prefetchTts, tts, type SpeakHandle, type SpeakStart } from '../actions';
 import './whiteboard.css';
 
 type Stage = 'intro' | 'talk' | 'play';
@@ -325,7 +325,13 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         if (!alive) return;
         setPlanPending(false);
         if (plan) {
-          setLiveScript(liveLessonFromPlan(plan));
+          const script = liveLessonFromPlan(plan);
+          setLiveScript(script);
+          // 预热前两条旁白:整段合成延迟藏进 intro/语音选择停留期,第一步起声即缓存命中
+          script.steps
+            .filter((s) => s.caption)
+            .slice(0, 2)
+            .forEach((s) => prefetchNarration(s.caption));
 
           // 检查并异步按需生图(单讲最多 1 图)，切课取消不串图，失败优雅降级为文字
           const imageStep = plan.steps.find((s) => s.board_action.type === 'image' && !s.board_action.url);
@@ -461,6 +467,20 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   // 授课语音:step runner 是稳定回调,经 ref 读最新音色/语速/静音。
   const narrationRef = useRef({ voice: settings.voice, speed: settings.speed, muted });
   narrationRef.current = { voice: settings.voice, speed: settings.speed, muted };
+
+  /* 旁白预热:参数与 typeCaption 起声完全一致(音色/语速),静音不预热。
+   * 上游 MISS 为整段合成(TTFB ~2.5s+55ms/字),长段落必超字幕引擎 8s 起声上限
+   * 被止损成无声步——借响应 private 缓存在前一步播放期合成好后几步。 */
+  const prefetchNarration = useCallback((rich: Rich | undefined) => {
+    if (!rich) return;
+    const { voice: vk, speed, muted: silent } = narrationRef.current;
+    if (silent) return;
+    prefetchTts(
+      rich.map((seg) => seg.t).join(''),
+      vk,
+      speed,
+    );
+  }, []);
 
   /* Pause-aware delay: accumulates only while unpaused; resolves immediately if skipped; rejects on unmount. */
   const wait = useCallback(
@@ -743,12 +763,20 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     const ff = practiceEntry ? (CHOICE_STEP?.id ?? ffParam ?? 1) : ffParam;
     const startFrom = ff ?? 1;
     if (ff !== null) applyFastForward(ff);
+    // 起讲前先预热开头两条旁白(演示课/练习直入不走 plan 就绪预热)
+    LESSON_STEPS.filter((s) => s.caption && s.id >= startFrom)
+      .slice(0, 2)
+      .forEach((s) => prefetchNarration(s.caption));
     (async () => {
       try {
         await wait(600);
         setStatus('explaining');
         for (const s of LESSON_STEPS) {
           if (s.id < startFrom) continue;
+          // 滚动预热:当前步开讲时,把后面两条旁白送进合成管线
+          LESSON_STEPS.filter((x) => x.caption && x.id > s.id)
+            .slice(0, 2)
+            .forEach((x) => prefetchNarration(x.caption));
           await runStep(s);
         }
         setStatus((p) => (p === 'explaining' ? 'ended' : p));
