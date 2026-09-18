@@ -114,7 +114,10 @@ export async function POST(request: Request) {
         return Response.json({ error: "invalid_task_blueprint" }, { status: 500 });
       }
 
-      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(300_000)]);
+      /* Stage2 逐单元真实生成:每单元一次 LLM 调用(~30-60s),8+ 单元课程系统性超过
+       * 300s 通用上限,会被服务端截断逼用户手动恢复——单元检查点已让恢复廉价,
+       * 上限放宽到 15 分钟,让正常规模课程一次跑完;期间进度帧持续流出,流不会闲置。 */
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(900_000)]);
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
           void (async () => {

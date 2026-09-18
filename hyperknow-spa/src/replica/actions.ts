@@ -175,6 +175,29 @@ let audioEl: HTMLAudioElement | null = null;
 const ttsListeners = new Set<(on: boolean) => void>();
 const notifyTts = (on: boolean) => ttsListeners.forEach((l) => l(on));
 
+/** 播放与预热共用同一 URL 构造:参数一致才能命中同一条缓存。 */
+function ttsStreamUrl(text: string, voice: string, speed: number): string {
+  return `/api/hyperknow/tts/stream?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&speed=${speed}`;
+}
+
+const ttsPrefetched = new Set<string>();
+/**
+ * 旁白预热:上游 MISS 是整段合成完才返回(实测 ~2.5s + 55ms/字,长段落 13s+),
+ * 超过字幕引擎 8s 起声上限就会被止损成无声估算步。利用响应 private max-age=3600
+ * 的浏览器缓存,在前一步播放期间把后一步合成完毕,起声即缓存命中。
+ * 尽力而为:失败静默,字幕引擎的既有超时/回退路径不受影响。
+ */
+export function prefetchTts(text: string, voice = 'warm', speed = 1): void {
+  const body = text.trim().slice(0, 1500);
+  if (!body || typeof fetch === 'undefined') return;
+  const url = ttsStreamUrl(body, voice, speed);
+  if (ttsPrefetched.has(url)) return;
+  ttsPrefetched.add(url);
+  void fetch(url)
+    .then((r) => (r.ok ? r.arrayBuffer() : undefined))
+    .catch(() => {});
+}
+
 /** 旁白句柄:started = 发声是否开始(stopped=被主动停止,error=失败);ended = 播完/停止/失败。均不 reject。 */
 export type SpeakStart = 'started' | 'stopped' | 'error';
 export interface AudioProgress {
@@ -235,7 +258,7 @@ export const tts = {
     if (typeof Audio === 'undefined') {
       return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
     }
-    const url = `/api/hyperknow/tts/stream?text=${encodeURIComponent(body.slice(0, 1500))}&voice=${encodeURIComponent(voice)}&speed=${speed}`;
+    const url = ttsStreamUrl(body.slice(0, 1500), voice, speed);
     const el = new Audio(url);
     audioEl = el;
     let resolveStarted!: (v: SpeakStart) => void;
