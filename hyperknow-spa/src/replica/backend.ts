@@ -632,6 +632,7 @@ export interface MarketCourse {
   unitCount: number | null;
   sessionCount: number | null;
   joinCount: number | null;
+  rawCourse?: unknown;
 }
 
 /**
@@ -677,6 +678,7 @@ export async function fetchMarketCourses(): Promise<MarketCourse[] | null> {
         unitCount: typeof c.unitCount === 'number' ? c.unitCount : Array.isArray(c.units) ? (c.units as unknown[]).length : null,
         sessionCount,
         joinCount: typeof c.joinCount === 'number' ? c.joinCount : null,
+        rawCourse: Array.isArray(c.units) && c.units.length > 0 ? c : undefined,
       });
     }
     return rows;

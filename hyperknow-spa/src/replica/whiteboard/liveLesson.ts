@@ -8,6 +8,7 @@
 import type { LiveLecturePlan } from '../backend';
 import type { BoardAnnot, BoardItem, BoardTable, LessonStep, Rich } from './lessonScript';
 import { VIOLET } from './lessonScript';
+import { diagramBox, renderDiagram } from './diagram';
 import { L } from '../i18n/content';
 
 export interface LessonScript {
@@ -84,7 +85,7 @@ function charUnits(ch: string): number {
 }
 
 /** 按行宽把 run 序列折行:拉丁按词折,CJK 逐字折，与 DOM 真实渲染换行 1:1 对齐。 */
-function wrapRuns(runs: Run[]): Rich[] {
+function wrapRuns(runs: Run[], maxUnits = MAX_LINE_UNITS, maxLines = 10): Rich[] {
   const lines: Rich[] = [];
   let cur: Rich = [];
   let curUnits = 0;
@@ -109,14 +110,14 @@ function wrapRuns(runs: Run[]): Rich[] {
       if (isCjk) {
         for (const ch of part) {
           const u = charUnits(ch);
-          if (curUnits + u > MAX_LINE_UNITS) flush();
+          if (curUnits + u > maxUnits) flush();
           cur.push({ t: ch, b: run.b, i: run.i });
           curUnits += u;
         }
         continue;
       }
       const wordUnits = [...part].reduce((sum, ch) => sum + charUnits(ch), 0);
-      if (curUnits + wordUnits > MAX_LINE_UNITS && cur.length > 0) {
+      if (curUnits + wordUnits > maxUnits && cur.length > 0) {
         flush();
         if (part.trim() === '') continue;
       }
@@ -125,7 +126,15 @@ function wrapRuns(runs: Run[]): Rich[] {
     }
   }
   flush();
-  return lines.slice(0, 10);
+  return lines.slice(0, maxLines);
+}
+
+/** 卡片标题折行:22px 字体折行(单行约 25 单元),带粗体,每行独立成 rich line */
+export function titleToLines(title: string): Rich[] {
+  const text = title.trim();
+  if (!text) return [];
+  const lines = wrapRuns([{ t: text, b: true }], 25, 4);
+  return lines.length ? lines : [plain(text)];
 }
 
 /** HTML 卡片正文 → 手写板书行(结构性标签成行、strong/h* 加粗、br/块界换行)。 */
@@ -182,9 +191,9 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
       { id: `m-live-${id}`, kind: 'msg', text: plain(step.spoken_text) },
     ];
     if (action.type === 'card') {
-      const titleLines = action.title ? [plain(action.title)] : [];
+      const titleLines = action.title ? titleToLines(action.title) : [];
       const body = action.content ? htmlToLines(action.content) : [];
-      const titleH = titleLines.length ? 22 * 1.24 + 14 : 0;
+      const titleH = titleLines.length ? titleLines.length * 22 * 1.24 + 14 : 0;
       const bodyH = body.length ? body.length * 19 * 1.24 : 0;
       const totalCardH = titleH + bodyH;
 
@@ -192,12 +201,14 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
       ensureSpace(totalCardH);
 
       if (titleLines.length) {
-        items.push({ id: `c${id}t`, step: id, size: 22, weight: 700, color: VIOLET, lines: titleLines, x: COL_X[cursor.col], y: cursor.y });
+        items.push({ id: `c${id}t`, step: id, size: 22, weight: 700, color: VIOLET, lines: titleLines, w: COL_W, x: COL_X[cursor.col], y: cursor.y });
         cursor.y += titleH;
       }
       if (body.length) {
         items.push({ id: `c${id}b`, step: id, size: 19, w: COL_W, lines: body, x: COL_X[cursor.col], y: cursor.y });
         advance(bodyH);
+      } else if (titleLines.length) {
+        advance(0);
       }
     } else if (action.type === 'formula') {
       const formH = 64;
@@ -233,7 +244,8 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
         ? naturalFallbackText.slice(0, 5).map(plain)
         : [plain(action.title || step.spoken_text || 'Structured Concept Flow')];
 
-      const diagH = 360;
+      const rendered = renderDiagram(code);
+      const diagH = rendered ? diagramBox(rendered, COL_W).h : fallbackDisplayLines.length * 14 * 1.24;
       ensureSpace(diagH);
       items.push({
         id: `d${id}`,

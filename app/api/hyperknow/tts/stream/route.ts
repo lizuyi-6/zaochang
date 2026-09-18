@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const voice = url.searchParams.get("voice") || "warm";
     const speed = Number.parseFloat(url.searchParams.get("speed") || "1.0") || 1.0;
 
-    await enforceRateLimit(await rateLimitKey("hyperknow-tts", member.email), 120, 60 * 60);
+    await enforceRateLimit(await rateLimitKey("hyperknow-tts", member.email), 360, 60 * 60);
 
     let result;
     try {

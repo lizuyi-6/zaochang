@@ -12,6 +12,7 @@ import {
   runId,
   lastChatCompletion,
   lastTtsRequest,
+  lastTtsBodyNonAscii,
   ttsUpstreamCount,
   lastImageRequest,
   imageUpstreamCount,
@@ -160,19 +161,25 @@ export function register() {
     assert.equal(first.headers.get("x-cache"), "MISS");
     const firstBody = Buffer.from(await first.arrayBuffer());
     assert.equal(lastTtsRequest.voice, "voice-tone-U5kvAcyum0", "warm 必须映射官方克隆音色 ID");
-    assert.equal(lastTtsRequest.model, "step-tts-mini");
+    assert.equal(lastTtsRequest.model, "stepaudio-3-tts");
     assert.equal(lastTtsRequest.speed, 1);
     assert.equal(ttsUpstreamCount, 1, "首次必须真实触达上游");
+    // 中文试听走真实转义链路:上游 WAF 拦原始 CJK 字节,请求体必须纯 ASCII(\u 转义)。
+    const chinese = await fetch(`${baseUrl}/api/hyperknow/tts/stream?text=${encodeURIComponent("你好，欢迎来到见界课堂")}&voice=warm&speed=1.0`, { headers: authHeaders("试听用户", email) });
+    assert.equal(chinese.status, 200);
+    assert.equal(lastTtsRequest.input, "你好，欢迎来到见界课堂", "解析后必须还原为原文");
+    assert.equal(lastTtsBodyNonAscii, false, "TTS 上游原始请求体必须纯 ASCII(防 WAF 451 回归)");
+    await chinese.body?.cancel();
 
     const second = await fetch(url("warm", "1.0"), { headers: authHeaders("试听用户", email) });
     assert.equal(second.headers.get("x-cache"), "HIT-MEMORY", "同 key 第二次走内存缓存");
-    assert.equal(ttsUpstreamCount, 1, "命中不得再触达上游");
+    assert.equal(ttsUpstreamCount, 2, "命中不得再触达上游(1=hello 首次,2=中文试听)");
     assert.deepEqual(Buffer.from(await second.arrayBuffer()), firstBody);
 
     const calm = await fetch(url("calm", "1.0"), { headers: authHeaders("试听用户", email) });
     assert.equal(calm.headers.get("x-cache"), "MISS", "不同音色必须隔离 key");
     assert.equal((await calm.text()).includes("voice-tone-U5kvQekdQ8"), true, "假上游回声校验音色映射");
-    assert.equal(ttsUpstreamCount, 2);
+    assert.equal(ttsUpstreamCount, 3);
     assert.equal(lastTtsRequest.voice, "voice-tone-U5kvQekdQ8");
   });
 
@@ -320,7 +327,7 @@ export function register() {
     const ready = frames.find((f) => f.type === "course_structure_ready");
     assert.ok(ready, "必须以 course_structure_ready 收尾");
     assert.equal(ready.course.courseUuid, ready.course_uuid);
-    assert.equal(ready.course.courseTitle, query, "假上游蓝图标题取查询词");
+    assert.equal(ready.course.courseTitle, `${query} 核心体系与系统化实践导论`, "假上游蓝图标题取查询词");
     // 新契约:蓝图解析失败必须报错,不允许模板兜底冒充成功;假上游按深度动态
     // 生成合法蓝图(无 depth → systematic 默认 6 单元),数量应如实透传。
     assert.equal(ready.course.units.length, 6, "假上游按深度生成 6 单元(默认 systematic)");
@@ -341,7 +348,7 @@ export function register() {
 
     const mine = await fetch(`${baseUrl}/api/hyperknow/courses/${ready.course_uuid}`, { headers: authHeaders("建课用户", email) });
     assert.equal(mine.status, 200);
-    assert.equal((await mine.json()).data.courseTitle, query);
+    assert.equal((await mine.json()).data.courseTitle, `${query} 核心体系与系统化实践导论`);
     const stranger = await fetch(`${baseUrl}/api/hyperknow/courses/${ready.course_uuid}`, { headers: authHeaders("旁人", `hk-course-stranger-${runId}@example.com`) });
     assert.equal(stranger.status, 404, "课程详情越权 404");
     await stranger.body?.cancel();
@@ -406,7 +413,7 @@ export function register() {
 
     const ready = frames.find((f) => f.type === "course_structure_ready");
     assert.ok(ready, "必须以 course_structure_ready 收尾");
-    assert.equal(ready.course.courseTitle, query);
+    assert.equal(ready.course.courseTitle, `${query} 核心体系与系统化实践导论`);
   });
 
   test("hyperknow course-generation: StepFun 搜索失败明确降级继续生成, 积分不重复扣减", async () => {
@@ -437,7 +444,7 @@ export function register() {
 
     const ready = frames.find((f) => f.type === "course_structure_ready");
     assert.ok(ready, "搜索失败必须优雅降级完成建课");
-    assert.equal(ready.course.courseTitle, query);
+    assert.equal(ready.course.courseTitle, `${query} 核心体系与系统化实践导论`);
 
     // 校验积分扣减: 正常扣一次课程费(10)，未发生二次扣减或混乱
     const userInfo = await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers: authHeaders("降级用户", email) })).json();

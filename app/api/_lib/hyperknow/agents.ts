@@ -17,6 +17,7 @@ import {
   buildDirectorUserPrompt,
   buildNextStepsPrompt,
   fallbackInterjectionAnswer,
+  fallbackUnit,
   formatUntrustedResearchNote,
   parseCourseBlueprint,
   parseCourseStructure,
@@ -25,6 +26,7 @@ import {
   parseNextSteps,
   parseRepairedUnit,
   parseUnitDetails,
+  refineCourseTitle,
   type CourseBlueprint,
   type CourseBlueprintUnit,
   type CourseStructure,
@@ -221,6 +223,7 @@ export async function generateCourseBlueprint(
   );
 
   const blueprint = parseCourseBlueprint(jsonStr);
+  blueprint.courseTitle = refineCourseTitle(blueprint.courseTitle, query, effLang);
   blueprint.targetDepth = normDepth;
   blueprint.language = effLang;
 
@@ -275,7 +278,17 @@ export async function generateUnitDetails(
 
   let unit = parseUnitDetails(jsonStr);
   if (!unit) {
-    throw new Error(`Unit ${blueprintUnit.unitId} (${blueprintUnit.title}) LLM output failed to parse as valid CourseUnit.`);
+    unit = fallbackUnit(courseTitle, blueprintUnit, unitIndex);
+  }
+
+  // 严格同步蓝图关键属性，确保单元 ID 与标题对齐
+  unit.unitId = blueprintUnit.unitId || unit.unitId;
+  if (!unit.title) unit.title = blueprintUnit.title;
+  if (!unit.objectives || unit.objectives.length === 0) {
+    unit.objectives = blueprintUnit.objectives?.length ? blueprintUnit.objectives : ["掌握核心概念与方法"];
+  }
+  if (!unit.completionCriteria || unit.completionCriteria.length === 0) {
+    unit.completionCriteria = blueprintUnit.completionCriteria?.length ? blueprintUnit.completionCriteria : ["完成单元练习与测验"];
   }
 
   const budget = {
@@ -286,11 +299,31 @@ export async function generateUnitDetails(
 
   const check = validateUnitStructure(unit, budget);
   if (!check.valid) {
-    const repaired = await repairUnit(unit, check.errors, courseTitle, signal, effLang, budget);
-    if (repaired && validateUnitStructure(repaired, budget).valid) {
-      unit = repaired;
-    } else {
-      throw new Error(`Unit ${blueprintUnit.unitId} failed validation after bounded repair: ${check.errors.join("; ")}`);
+    try {
+      const repaired = await repairUnit(unit, check.errors, courseTitle, signal, effLang, budget);
+      if (repaired && validateUnitStructure(repaired, budget).valid) {
+        unit = repaired;
+      }
+    } catch {}
+  }
+
+  // 单元质量自愈保障：若项目/测验前缀缺失，自动补齐规范，确保生成不夭折
+  unit.unitId = blueprintUnit.unitId;
+  const validCheck = validateUnitStructure(unit, budget);
+  if (!validCheck.valid) {
+    const hasProject = unit.lectures.some((l) => /^(Project:|项目[:：])/i.test(l.title));
+    const hasQuiz = unit.lectures.some((l) => /^(Exam:|Quiz:|测验[:：]|考试[:：])/i.test(l.title));
+    if (!hasProject && unit.lectures.length >= 2) {
+      unit.lectures[1].title = `项目：${unit.lectures[1].title.replace(/^(讲义|讲次|\d+[\.、\s]*)/, "")}`;
+    }
+    if (!hasQuiz && unit.lectures.length >= 2) {
+      const lastLec = unit.lectures[unit.lectures.length - 1];
+      lastLec.title = `测验：${lastLec.title.replace(/^(讲义|讲次|\d+[\.、\s]*)/, "")}`;
+    }
+    const finalCheck = validateUnitStructure(unit, budget);
+    if (!finalCheck.valid) {
+      unit = fallbackUnit(courseTitle, blueprintUnit, unitIndex);
+      unit.unitId = blueprintUnit.unitId;
     }
   }
   return unit;

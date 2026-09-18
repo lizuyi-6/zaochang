@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { HyperknowUpstreamError } from "./llm";
 import { resolveConfigOrThrow } from "./config";
-import { sanitizeTtsText, ttsCacheKey } from "./protocol";
+import { asciiSafeJson, sanitizeTtsText, ttsCacheKey } from "./protocol";
 
 // StepFun 语音合成引擎 + Hyperknow 官方 6 大原声克隆音色(从原 ttsService.js 移植)。
 // 缓存两级:per-isolate 内存 Map → R2 UPLOADS 桶 tts-cache/ 前缀(替代原磁盘
@@ -53,7 +53,7 @@ export async function synthesize(text: string, voiceId = "warm", speed = 1.0): P
   const config = resolveConfigOrThrow();
   const voice = getVoiceToneId(voiceId);
   const cleanText = sanitizeTtsText(text);
-  const key = await ttsCacheKey(cleanText, voiceId, speed);
+  const key = await ttsCacheKey(cleanText, voiceId, speed, config.ttsModel);
 
   const cachedMemory = memoryCache.get(key);
   if (cachedMemory) return { cache: "HIT-MEMORY", audio: cachedMemory };
@@ -72,36 +72,70 @@ export async function synthesize(text: string, voiceId = "warm", speed = 1.0): P
     }
   }
 
-  let upstream: Response;
-  try {
-    upstream = await fetch(`${config.ttsBaseUrl}/audio/speech`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: config.ttsModel,
-        input: cleanText,
-        voice,
-        speed: Math.max(0.5, Math.min(2.0, speed)),
-      }),
-    });
-  } catch {
+  let upstream: Response | null = null;
+  let usedModel = config.ttsModel;
+
+  const candidateModels = [config.ttsModel];
+  if (config.ttsModel !== "stepaudio-2.5-tts") {
+    candidateModels.push("stepaudio-2.5-tts");
+  }
+  if (config.ttsModel !== "stepaudio-3-tts" && !config.ttsBaseUrl.includes("step_plan")) {
+    candidateModels.push("stepaudio-3-tts");
+  }
+
+  for (let i = 0; i < candidateModels.length; i++) {
+    const currentModel = candidateModels[i];
+    let resp: Response;
+    try {
+      resp = await fetch(`${config.ttsBaseUrl}/audio/speech`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        // 请求体必须纯 ASCII:上游 WAF 字节扫描拦原始 CJK(见 protocol.ts asciiSafeJson 注释)。
+        body: asciiSafeJson({
+          model: currentModel,
+          input: cleanText,
+          voice,
+          speed: Math.max(0.5, Math.min(2.0, speed)),
+        }),
+      });
+    } catch {
+      if (i === candidateModels.length - 1) {
+        throw new HyperknowUpstreamError("ai_upstream_error", 502);
+      }
+      continue;
+    }
+
+    if (resp.status === 404 && i < candidateModels.length - 1) {
+      // 模型不存在(如 step_plan 路径下 stepaudio-3-tts 返回 404):尝试备用兼容模型
+      continue;
+    }
+    upstream = resp;
+    usedModel = currentModel;
+    break;
+  }
+
+  if (!upstream) {
     throw new HyperknowUpstreamError("ai_upstream_error", 502);
   }
   if (!upstream.ok) {
     // 上游状态不外泄:401/403 归配置问题,其余归上游故障。
     throw new HyperknowUpstreamError(upstream.status === 401 || upstream.status === 403 ? "ai_auth_failed" : "ai_upstream_error", 502);
   }
+
+  // 若回退到了不同模型，使用实际模型对应的缓存 key
+  const finalKey = usedModel === config.ttsModel ? key : await ttsCacheKey(cleanText, voiceId, speed, usedModel);
+
   const body = upstream.body;
   if (!body) {
     // 上游未给流(理论上不发生):退回整段读取,缓存后返回。
     const audio = await upstream.arrayBuffer();
-    remember(key, audio);
+    remember(finalKey, audio);
     if (r2) {
       try {
-        await r2.put(`${TTS_R2_PREFIX}/${key}.mp3`, audio);
+        await r2.put(`${TTS_R2_PREFIX}/${finalKey}.mp3`, audio);
       } catch {
         // 缓存写失败不影响本次响应。
       }
@@ -118,10 +152,10 @@ export async function synthesize(text: string, voiceId = "warm", speed = 1.0): P
         // 全部音频字节已 enqueue 给客户端;回填完毕再 close,尾部仅差一个流结束帧,
         // 不影响 <audio> 播放进度。客户端中途断开走 cancel,半成品绝不进缓存。
         const audio = concatChunks(chunks);
-        remember(key, audio);
+        remember(finalKey, audio);
         if (r2) {
           try {
-            await r2.put(`${TTS_R2_PREFIX}/${key}.mp3`, audio);
+            await r2.put(`${TTS_R2_PREFIX}/${finalKey}.mp3`, audio);
           } catch {
             // 缓存写失败不影响本次响应。
           }

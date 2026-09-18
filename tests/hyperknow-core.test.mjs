@@ -9,6 +9,7 @@ import {
   sanitizeTtsText,
   stepDurationMs,
   ttsCacheKey,
+  asciiSafeJson,
   resolveStepfunChatCompletionsUrl,
   extractStepfunHits,
   resolveStepfunImagesUrl,
@@ -79,13 +80,22 @@ test("sanitizeTtsText: 剥 HTML/截 500 字/空兜底", () => {
   assert.equal(sanitizeTtsText("x".repeat(600)).length, 500);
 });
 
-test("ttsCacheKey: 同输入同 key,不同 voice/speed/text 互相隔离", async () => {
-  const base = await ttsCacheKey("hello", "warm", 1.0);
-  assert.equal(base, await ttsCacheKey("hello", "warm", 1.0));
+test("asciiSafeJson: 输出纯 ASCII,round-trip 语义不变(中文含 emoji 与标点)", () => {
+  const payload = { model: "stepaudio-3-tts", input: "你好，见界课堂 🎓", voice: "voice-tone-U5kvAcyum0", speed: 1.25 };
+  const encoded = asciiSafeJson(payload);
+  assert.equal(/[^\x00-\x7f]/.test(encoded), false, "编码结果必须纯 ASCII(WAF 拦原始 CJK 字节)");
+  assert.deepEqual(JSON.parse(encoded), payload, "unicode 转义必须与原始 JSON 语义等价");
+  assert.match(encoded, /\\u4f60\\u597d/, "汉字必须转成反斜杠uXXXX 形式");
+});
+
+test("ttsCacheKey: 同输入同 key,不同 voice/speed/text/model 互相隔离", async () => {
+  const base = await ttsCacheKey("hello", "warm", 1.0, "stepaudio-3-tts");
+  assert.equal(base, await ttsCacheKey("hello", "warm", 1.0, "stepaudio-3-tts"));
   assert.match(base, /^warm_[0-9a-f]{64}$/);
-  assert.notEqual(base, await ttsCacheKey("hello", "calm", 1.0));
-  assert.notEqual(base, await ttsCacheKey("hello", "warm", 1.5));
-  assert.notEqual(base, await ttsCacheKey("hello!", "warm", 1.0));
+  assert.notEqual(base, await ttsCacheKey("hello", "calm", 1.0, "stepaudio-3-tts"));
+  assert.notEqual(base, await ttsCacheKey("hello", "warm", 1.5, "stepaudio-3-tts"));
+  assert.notEqual(base, await ttsCacheKey("hello!", "warm", 1.0, "stepaudio-3-tts"));
+  assert.notEqual(base, await ttsCacheKey("hello", "warm", 1.0, "step-tts-mini"), "换模型必须换 key,旧模型缓存不得命中");
 });
 
 test("stepDurationMs: 字数×180ms,下限 4 秒(与原 whiteboardWs 逐字一致)", () => {

@@ -10,6 +10,7 @@ import {
   type GenStepId,
 } from './backend';
 import { buildGeneratedCourse, courseFromBackend } from './generate';
+import { courseJoinKey, markCourseJoined } from './courseJoinMemory';
 import type { PageProps } from './types';
 import './replica.css';
 
@@ -80,6 +81,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     finishedRef.current = true;
     const latestCredits = remainingRef.current;
     /* persisted = 真 LLM 生成并已入 D1:集市/我的课程列表需要重拉才能看到新课 */
+    markCourseJoined(state.identity?.email ?? 'demo', courseJoinKey((gen as { courseUuid?: string }).courseUuid));
     set({
       generating: false,
       generated: gen,
@@ -502,7 +504,9 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
               </span>
             ) : searchProgress.status && searchProgress.status !== 'success' ? (
               <span style={{ color: '#9CA3AF' }}>
-                {searchProgress.reason || L('Web search unavailable, continuing with model knowledge', '未获取到外部研学资料，已降级继续生成')}
+                {searchProgress.status === 'not_triggered'
+                  ? L('Bypassed web search, using structured model knowledge', '无需外部检索，已基于大模型知识库直接构建')
+                  : (searchProgress.reason || L('Web search unavailable, continuing with model knowledge', '未获取到外部研学资料，已结合知识库继续生成'))}
               </span>
             ) : null}
           </div>

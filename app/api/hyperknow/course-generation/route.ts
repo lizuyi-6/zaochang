@@ -4,6 +4,7 @@ import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { generateCourseBlueprint, generateUnitDetails, repairUnit } from "../../_lib/hyperknow/agents";
 import { resolveConfigOrThrow } from "../../_lib/hyperknow/config";
+import { finalizeCourseDependencies } from "../../_lib/hyperknow/dag-finalizer";
 import {
   createCourseTask,
   getCourse,
@@ -29,7 +30,6 @@ import {
   HK_DAILY_CREDITS,
 } from "../../_lib/hyperknow/credits";
 import {
-  checkPrerequisitesAcyclic,
   validateUnitStructure,
   type CourseBrief,
 } from "../../_lib/hyperknow/protocol";
@@ -217,16 +217,8 @@ export async function POST(request: Request) {
                 });
               }
 
-              // DAG 拓扑检查与质量兜底
-              const dagCheck = checkPrerequisitesAcyclic(completedUnits);
-              if (!dagCheck.isAcyclic) {
-                console.warn(`[hyperknow-course-gen] cyclic prerequisites detected: ${dagCheck.cycle?.join(" -> ")}`);
-                // 修复受影响单元
-                for (let i = 0; i < completedUnits.length; i++) {
-                  const repaired = await repairUnit(completedUnits[i], [`Cyclic dependency: ${dagCheck.cycle?.join(" -> ")}`], blueprint.courseTitle, signal, taskLanguage);
-                  if (repaired) completedUnits[i] = repaired;
-                }
-              }
+              await finalizeCourseDependencies(completedUnits,
+                (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, taskLanguage), signal);
 
               const completeCourse = {
                 courseUuid: resumeUuid,
@@ -642,21 +634,8 @@ export async function POST(request: Request) {
               });
             }
 
-            // DAG 先修依赖校验
-            const dagCheck = checkPrerequisitesAcyclic(generatedUnits);
-            if (!dagCheck.isAcyclic) {
-              console.warn(`[hyperknow-course-gen] cyclic prerequisites detected: ${dagCheck.cycle?.join(" -> ")}`);
-              for (let i = 0; i < generatedUnits.length; i++) {
-                const repaired = await repairUnit(
-                  generatedUnits[i],
-                  [`Cyclic dependency: ${dagCheck.cycle?.join(" -> ")}`],
-                  blueprint.courseTitle,
-                  signal,
-                  blueprintLanguage,
-                );
-                if (repaired) generatedUnits[i] = repaired;
-              }
-            }
+            await finalizeCourseDependencies(generatedUnits,
+              (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, blueprintLanguage), signal);
 
             const course = {
               courseUuid,

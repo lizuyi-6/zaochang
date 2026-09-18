@@ -36,15 +36,17 @@ tests/suites/11-hyperknow.tests.mjs # 集成套件(真实 Wrangler 预览 + 假 
 LLM 走 **StepFun/Anthropic Messages 协议**(`{base}/messages`,thinking 预算 384(流)/256(JSON),
 step-explore 原生协议),`thinking_delta` 增量映射为 directorAgent 思考过程实时展示——与
 `reading-ai-provider.ts` 刻意丢弃思维链不同,这是复刻产品的核心语义。TTS 走 StepFun
-`/audio/speech`(`step-tts-mini`),音色为对官方 6 个真实音频样本克隆所得的 Voice Tone ID
-(warm/calm/bright/gentle/firm/lively,见 `tts.ts` 常量)。
+`/audio/speech`(默认 `stepaudio-3-tts`,StepAudio 3 代;兼容 step-tts 时代的克隆音色与 speed 参数),音色为对官方 6 个真实音频样本克隆所得的 Voice Tone ID
+(warm/calm/bright/gentle/firm/lively,见 `tts.ts` 常量)。缓存 key 含模型名,换模型即全量重新合成。
+TTS 请求体必须纯 ASCII(`asciiSafeJson` 做 `\u` 转义):上游 WAF 对该路由做字节级内容扫描,
+原始 CJK 字节一律 451 `censorship_blocked`(chat/completions 与 /messages 无此层,勿扩大适用)。
 
 | 变量 | 必需 | 说明 |
 | --- | --- | --- |
 | `AI_CHAT_BASE_URL` / `AI_CHAT_API_KEY` | 复用 | 与阅读 AI 共用密钥面;缺任一 → 503 `ai_not_configured`(fail-closed) |
 | `HYPERKNOW_AI_BASE_URL` / `HYPERKNOW_AI_API_KEY` | 可选 | 覆盖位:上游与阅读 AI 不同时使用(如专门指向 StepFun) |
 | `HYPERKNOW_AI_MODEL` | 可选 | 默认回退 `AI_CHAT_MODEL`,再默认 `step-explore` |
-| `HYPERKNOW_TTS_BASE_URL` / `HYPERKNOW_TTS_MODEL` | 可选 | 默认 `https://api.stepfun.com/v1` / `step-tts-mini`(测试注入假上游用) |
+| `HYPERKNOW_TTS_BASE_URL` / `HYPERKNOW_TTS_MODEL` | 可选 | 默认 `https://api.stepfun.com/v1` / `stepaudio-3-tts`(测试注入假上游用) |
 | `HK_WEB_SEARCH_PROVIDER` | 可选 | 课程研学供应商(`stepfun`/`tavily`/`brave`/`cloudflare`/`off`);未显式指定时默认优先现有 AI 渠道(`stepfun`),保留显式 Tavily/Brave;为 `off` 时跳过搜索 |
 | `HK_WEB_SEARCH_MODEL` | 可选 | 课程研学专用模型(默认 `step-3.7-flash`),仅用于 StepFun web_search 工具调用,不影响其他 LLM |
 | `HK_TAVILY_API_KEY`(或 `TAVILY_API_KEY`) | 可选 | 课程生成联网研学:Tavily 供应商密钥 |

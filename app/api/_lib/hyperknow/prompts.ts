@@ -325,7 +325,12 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
 // 是非法控制字符——做一次"仅在字符串内转义控制字符"的清扫,否则整个计划被误判作废。
 function extractJsonPayload(jsonStr: string): string {
   const fenced = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const payload = (fenced ? fenced[1] : jsonStr).trim();
+  let payload = (fenced ? fenced[1] : jsonStr).trim();
+  const firstBrace = payload.indexOf('{');
+  const lastBrace = payload.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    payload = payload.slice(firstBrace, lastBrace + 1);
+  }
   let out = "";
   let inString = false;
   let escaped = false;
@@ -460,6 +465,20 @@ Output strictly as a valid JSON object conforming to:
   ]
 }`;
 
+export type CourseSession = {
+  sessionId: string;
+  sessionIndex: number;
+  title: string;
+  sessionTime: number;
+  depthTags: string[];
+};
+
+export type CourseLecture = {
+  lectureId: string;
+  title: string;
+  sessions: CourseSession[];
+};
+
 export type CourseUnit = {
   unitId: string;
   title: string;
@@ -467,17 +486,7 @@ export type CourseUnit = {
   prerequisites?: string[];
   objectives?: string[];
   completionCriteria?: string[];
-  lectures: Array<{
-    lectureId: string;
-    title: string;
-    sessions: Array<{
-      sessionId: string;
-      sessionIndex: number;
-      title: string;
-      sessionTime: number;
-      depthTags: string[];
-    }>;
-  }>;
+  lectures: CourseLecture[];
 };
 
 export type CourseStructure = {
@@ -677,7 +686,12 @@ Course Title, Description, Target Learner, Tags, and a sequence of units matchin
 - Systematic depth: 6 to 8 units
 - Deep depth: 8 to 12 units
 
-Language rule (HIGHEST PRIORITY): Follow the specified Preferred Language strictly. If Preferred Language is "zh-CN", write EVERY title, description, tag, and unit name in Simplified Chinese. If "en", use English. Default to Simplified Chinese if unspecified.
+CRITICAL COURSE TITLE REQUIREMENT (HIGHEST PRIORITY):
+- Never simply repeat, echo, or copy the user's raw query, conversational phrase, or casual prompt directly (e.g. if query is "心理学", do NOT output "心理学"; if query is "vue" or "我想学vue", do NOT output "vue" or "我想学vue").
+- Instead, synthesize an authoritative, prestigious, and engaging course title that captures the depth and core pedagogy (e.g., "系统化心理学：认知机制与个体行为科学探索", "Vue.js 现代工程化全栈进阶实战", "社会学导论：社会学的想象力与现代制度结构").
+- The title must reflect the refined academic/practical curriculum being structured.
+
+Language rule: Follow the specified Preferred Language strictly. If Preferred Language is "zh-CN", write EVERY title, description, tag, and unit name in Simplified Chinese. If "en", use English. Default to Simplified Chinese if unspecified.
 
 Structural requirements for each unit:
 - unitId (e.g. "unit-1", "unit-2")
@@ -776,12 +790,123 @@ export function parseCourseBlueprint(jsonStr: string): CourseBlueprint {
   return parsed;
 }
 
+/**
+ * 提炼规范化课程标题：杜绝直接照抄用户口语提问或过于单薄的单一词汇，
+ * 提炼为具有学术严谨度或实战专业度的正式课程名称。
+ */
+export function refineCourseTitle(rawTitle: string, query: string, language = "zh-CN"): string {
+  let title = (rawTitle || "").trim();
+  const rawQ = (query || "").trim();
+  const isChinese = language.toLowerCase().startsWith("zh");
+
+  // 1. 清洗引号与用户提问语气前缀
+  title = title.replace(/^["'《]+|["'》]+$/g, "").trim();
+  title = title.replace(/^(请|帮我|我想学|我要学|做一门|制作一门|设计一门|生成一门|关于|课程[:：]?)+/i, "").trim();
+
+  // 2. 检查是否照抄原始 query 或过短单字词
+  const isBare = !title || title.toLowerCase() === rawQ.toLowerCase() || title.length <= 4;
+  if (isBare) {
+    const cleanTopic = (title || rawQ).replace(/^["'《]+|["'》]+$/g, "").trim();
+    if (isChinese) {
+      if (/(vue|react|frontend|前端|javascript|typescript)/i.test(cleanTopic)) {
+        return `${cleanTopic.toUpperCase()} 现代工程化全栈进阶实战`;
+      }
+      if (/(python|java|golang|backend|后端|编程|算法)/i.test(cleanTopic)) {
+        return `${cleanTopic} 系统化架构与工程开发实战`;
+      }
+      if (/(ai|llm|agent|prompt|人工智能|大模型|深度学习|机器学习)/i.test(cleanTopic)) {
+        return `${cleanTopic} 核心原理与前沿应用实战`;
+      }
+      if (/(心理|认知|情绪|脑科学)/i.test(cleanTopic)) {
+        return `系统化${cleanTopic}：核心机制与生活实践导论`;
+      }
+      if (/(哲学|逻辑|思维)/i.test(cleanTopic)) {
+        return `${cleanTopic} 导论：思维演进与批判性认知`;
+      }
+      if (/(历史|文明|考古)/i.test(cleanTopic)) {
+        return `${cleanTopic} 通史：关键节点与宏观演化`;
+      }
+      if (/(数学|微积分|线性代数|概率|统计|高数)/i.test(cleanTopic)) {
+        return `${cleanTopic} 深度探索：本质直觉与应用推演`;
+      }
+      return `${cleanTopic} 核心体系与系统化实践导论`;
+    } else {
+      return `Mastering ${cleanTopic}: Foundations to Advanced Practice`;
+    }
+  }
+
+  return title;
+}
+
 export function parseUnitDetails(jsonStr: string): CourseUnit | null {
   try {
-    const parsed = JSON.parse(extractJsonPayload(jsonStr)) as CourseUnit;
-    if (parsed && typeof parsed === "object" && typeof parsed.title === "string" && Array.isArray(parsed.lectures) && parsed.lectures.length > 0) {
-      return parsed;
-    }
+    const raw = JSON.parse(extractJsonPayload(jsonStr));
+    if (!raw || typeof raw !== "object") return null;
+    const root = ((raw as Record<string, unknown>).unit ||
+      (raw as Record<string, unknown>).courseUnit ||
+      (raw as Record<string, unknown>).unitDetails ||
+      (raw as Record<string, unknown>).data ||
+      raw) as Record<string, unknown>;
+
+    const unitId = String(root.unitId || root.unit_id || root.id || "").trim();
+    const title = String(root.title || root.unit_name || root.unitTitle || root.name || "").trim();
+    const rawLectures = Array.isArray(root.lectures)
+      ? root.lectures
+      : Array.isArray(root.lecture_list)
+      ? root.lecture_list
+      : [];
+    if (!title || rawLectures.length === 0) return null;
+
+    const lectures: CourseLecture[] = rawLectures.map((lecRaw: unknown, lIdx: number) => {
+      const lec = (lecRaw && typeof lecRaw === "object" ? lecRaw : {}) as Record<string, unknown>;
+      const lTitle = String(lec.title || lec.lecture_title || lec.lectureTitle || lec.name || `Lecture ${lIdx + 1}`).trim();
+      const lId = String(lec.lectureId || lec.lecture_id || lec.id || `lec-${lIdx + 1}`).trim();
+      const rawSessions = Array.isArray(lec.sessions) ? lec.sessions : Array.isArray(lec.session_list) ? lec.session_list : [];
+      const sessions: CourseSession[] = rawSessions.map((sRaw: unknown, sIdx: number) => {
+        const s = (sRaw && typeof sRaw === "object" ? sRaw : {}) as Record<string, unknown>;
+        const sTitle = String(s.title || s.session_title || s.sessionTitle || s.name || `Session ${sIdx + 1}`).trim();
+        const sId = String(s.sessionId || s.session_id || s.id || `sess-${lIdx + 1}-${sIdx + 1}`).trim();
+        const sTime = typeof s.sessionTime === "number" && s.sessionTime >= 10 && s.sessionTime <= 60
+          ? s.sessionTime
+          : typeof s.session_time === "number" && s.session_time >= 10 && s.session_time <= 60
+          ? s.session_time
+          : 30;
+        const depthTags = Array.isArray(s.depthTags) && s.depthTags.length > 0
+          ? (s.depthTags as string[])
+          : Array.isArray(s.depth_tags) && s.depth_tags.length > 0
+          ? (s.depth_tags as string[])
+          : ["intuition", "application"];
+        return {
+          sessionId: sId,
+          sessionIndex: sIdx + 1,
+          title: sTitle,
+          sessionTime: sTime,
+          depthTags,
+        };
+      });
+      return {
+        lectureId: lId,
+        title: lTitle,
+        sessions: sessions.length ? sessions : [{ sessionId: `sess-${lIdx + 1}-1`, sessionIndex: 1, title: lTitle, sessionTime: 30, depthTags: ["intuition", "application"] }],
+      };
+    });
+
+    return {
+      unitId,
+      title,
+      prerequisites: Array.isArray(root.prerequisites) ? (root.prerequisites as string[]) : Array.isArray(root.pre_requisites) ? (root.pre_requisites as string[]) : [],
+      objectives: Array.isArray(root.objectives) && root.objectives.length > 0
+        ? (root.objectives as string[])
+        : Array.isArray(root.learning_objectives) && root.learning_objectives.length > 0
+        ? (root.learning_objectives as string[])
+        : ["掌握核心概念与方法"],
+      completionCriteria: Array.isArray(root.completionCriteria) && root.completionCriteria.length > 0
+        ? (root.completionCriteria as string[])
+        : Array.isArray(root.completion_criteria) && root.completion_criteria.length > 0
+        ? (root.completion_criteria as string[])
+        : ["完成单元练习与测验"],
+      lectures,
+    };
   } catch {}
   return null;
 }

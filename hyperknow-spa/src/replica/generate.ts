@@ -9,6 +9,8 @@ import type { BackendCourse } from './backend';
  */
 
 export interface GeneratedCourse {
+  /** 关联的后端 D1 真实课程 UUID(若有) */
+  courseUuid?: string;
   /** 用户原始输入清洗后的话题,也用于深链 ?topic= */
   topic: string;
   /** 与 psCourse() 同构,便于 CourseJourney 直接切换数据源 */
