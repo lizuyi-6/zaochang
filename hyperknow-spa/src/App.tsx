@@ -7,14 +7,6 @@ import SettingsModal from './replica/SettingsModal';
 import { SignIn } from './replica/pages/SignIn';
 import { Onboarding } from './replica/pages/Onboarding';
 import { Home } from './replica/pages/Home';
-import { HistoryPage } from './replica/pages/HistoryPage';
-import { LearningFeed } from './replica/pages/LearningFeed';
-import CoursesPage from './replica/pages/CoursesPage';
-import CourseJourney from './replica/pages/CourseJourney';
-import MarketplacePage from './replica/pages/MarketplacePage';
-import { PlansPage } from './replica/pages/PlansPage';
-import { ChatPage } from './replica/pages/ChatPage';
-import { WhiteboardPage } from './replica/whiteboard/WhiteboardPage';
 import { I18nProvider } from './replica/i18n';
 import { GenerationOverlay } from './replica/GenerationOverlay';
 import { ToastHost } from './replica/toast';
@@ -23,6 +15,17 @@ import { fetchConversations, fetchCourseDetail, fetchMarketCourses, fetchMe } fr
 import { toast } from './replica/toast';
 import { L } from './replica/i18n/content';
 import './replica/replica.css';
+
+/* 次级页面按需加载:登录/引导/首页保持同步(首屏体验),重页面(白板/聊天/课程等)
+ * 拆成独立 chunk,首包不再背负全量代码。命名导出需映射为 default。 */
+const HistoryPage = React.lazy(() => import('./replica/pages/HistoryPage').then(m => ({ default: m.HistoryPage })));
+const LearningFeed = React.lazy(() => import('./replica/pages/LearningFeed').then(m => ({ default: m.LearningFeed })));
+const CoursesPage = React.lazy(() => import('./replica/pages/CoursesPage'));
+const CourseJourney = React.lazy(() => import('./replica/pages/CourseJourney'));
+const MarketplacePage = React.lazy(() => import('./replica/pages/MarketplacePage'));
+const PlansPage = React.lazy(() => import('./replica/pages/PlansPage').then(m => ({ default: m.PlansPage })));
+const ChatPage = React.lazy(() => import('./replica/pages/ChatPage').then(m => ({ default: m.ChatPage })));
+const WhiteboardPage = React.lazy(() => import('./replica/whiteboard/WhiteboardPage').then(m => ({ default: m.WhiteboardPage })));
 
 /* ---------------- hash routing ---------------- */
 
@@ -267,21 +270,23 @@ export const App: React.FC = () => {
         {s === 'signin' && <SignIn state={state} set={set} />}
         {s === 'onboarding' && <Onboarding state={state} set={set} />}
         {s === 'home' && <Home state={state} set={set} />}
-        {s === 'history' && <HistoryPage state={state} set={set} />}
-        {s === 'feed' && <LearningFeed state={state} set={set} />}
-        {s === 'courses' && <CoursesPage state={state} set={set} />}
-        {(s === 'coursePreview' || s === 'courseJourney') && <CourseJourney state={state} set={set} />}
-        {s === 'marketplace' && <MarketplacePage state={state} set={set} />}
-        {s === 'plans' && <PlansPage state={state} set={set} />}
-        {s === 'chat' && <ChatPage state={state} set={set} />}
-        {s === 'whiteboard' && (
-          /* key 强制换课/换模式时整体重挂载:旧课的音频、字幕、相机、测验绝不污染新课 */
-          <WhiteboardPage
-            key={`${state.activeCourseUuid ?? 'demo'}|${state.activeLectureId ?? ''}|${state.activeSessionId ?? ''}|${state.whiteboardMode}`}
-            state={state}
-            set={set}
-          />
-        )}
+        <React.Suspense fallback={<div className="hk-page-loading" aria-busy="true"><span className="hk-skel-bar" /></div>}>
+          {s === 'history' && <HistoryPage state={state} set={set} />}
+          {s === 'feed' && <LearningFeed state={state} set={set} />}
+          {s === 'courses' && <CoursesPage state={state} set={set} />}
+          {(s === 'coursePreview' || s === 'courseJourney') && <CourseJourney state={state} set={set} />}
+          {s === 'marketplace' && <MarketplacePage state={state} set={set} />}
+          {s === 'plans' && <PlansPage state={state} set={set} />}
+          {s === 'chat' && <ChatPage state={state} set={set} />}
+          {s === 'whiteboard' && (
+            /* key 强制换课/换模式时整体重挂载:旧课的音频、字幕、相机、测验绝不污染新课 */
+            <WhiteboardPage
+              key={`${state.activeCourseUuid ?? 'demo'}|${state.activeLectureId ?? ''}|${state.activeSessionId ?? ''}|${state.whiteboardMode}`}
+              state={state}
+              set={set}
+            />
+          )}
+        </React.Suspense>
 
         {state.settingsOpen && <SettingsModal state={state} set={set} />}
         {state.generating && <GenerationOverlay state={state} set={set} />}

@@ -1,8 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import localeTrees from './locales.json';
 
-/* 1:1 复刻原站 i18next 体系:7 语言单 translation 树(locales.json 由原站 bundle 提取,
-   存储键/规范化/复数后缀/插值均与原站一致)。 */
+/* 1:1 复刻原站 i18next 体系:7 语言单 translation 树(locales/ 目录由原站 locales.json 按语言拆分,
+   存储键/规范化/复数后缀/插值均与原站一致)。
+   每语言 ~140-290KB,按需动态 import 成独立 chunk:启动只加载当前语言 + 英文兜底,
+   不再把 1.3MB 全量字典打进首包。注意不能用 import.meta.glob——Node 测试加载器
+   (tests/lattice-*.test.mjs 的 CommonJS 转译)不支持 import.meta,静态字符串 import() 会被
+   转成 require,两边都兼容。 */
 
 export interface LanguageEntry {
   code: string;
@@ -33,7 +36,32 @@ const OY: Record<string, string> = {
 export const DEFAULT_LNG = 'en';
 const STORAGE_KEY = 'app_language';
 
-const TREES = localeTrees as Record<string, Record<string, unknown>>;
+type LocaleTree = Record<string, unknown>;
+const TREES: Record<string, LocaleTree> = {};
+
+const localeLoaders: Record<string, () => Promise<LocaleTree>> = {
+  en: () => import('./locales/en.json').then((m) => m.default),
+  'zh-CN': () => import('./locales/zh-CN.json').then((m) => m.default),
+  'zh-TW': () => import('./locales/zh-TW.json').then((m) => m.default),
+  es: () => import('./locales/es.json').then((m) => m.default),
+  ko: () => import('./locales/ko.json').then((m) => m.default),
+  hi: () => import('./locales/hi.json').then((m) => m.default),
+  ur: () => import('./locales/ur.json').then((m) => m.default),
+};
+
+const localePending: Record<string, Promise<void>> = {};
+
+/** 加载某语言的字典(幂等,并发去重);translate 仍是同步 API,靠启动门 prepareI18n 保证就绪。 */
+export function ensureLocale(lng: string): Promise<void> {
+  const code = SUPPORTED_CODES.includes(lng) ? lng : DEFAULT_LNG;
+  if (TREES[code]) return Promise.resolve();
+  if (!localePending[code]) {
+    localePending[code] = localeLoaders[code]().then((tree) => {
+      TREES[code] = tree;
+    });
+  }
+  return localePending[code];
+}
 
 export function normalizeLng(input: string | null | undefined): string {
   if (!input) return DEFAULT_LNG;
@@ -127,6 +155,13 @@ export function localizedField<T>(obj: Record<string, T> | null | undefined, fie
 const initialLng = readStoredLng();
 let activeLng = initialLng;
 
+/** 启动门:渲染前加载当前语言 + 英文兜底(translate 的回退链依赖 en 就绪)。 */
+export function prepareI18n(): Promise<void> {
+  const loads = [ensureLocale(initialLng)];
+  if (initialLng !== DEFAULT_LNG) loads.push(ensureLocale(DEFAULT_LNG));
+  return Promise.all(loads).then(() => undefined);
+}
+
 /* 供非 React 模块(wsClient 等)读取当前语言。 */
 export const getCurrentLng = (): string => activeLng;
 export const getBackendLang = (): string => languageEntry(activeLng).backendLang;
@@ -149,14 +184,19 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   const setLng = useCallback((code: string) => {
     const next = normalizeLng(code);
-    activeLng = next;
-    setLngState(next);
-    document.documentElement.lang = next;
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      /* ignore */
-    }
+    /* 字典已按语言拆 chunk:先确保加载完成再切换,期间保持旧语言渲染,避免键名裸奔 */
+    void ensureLocale(next)
+      .then(() => ensureLocale(DEFAULT_LNG))
+      .then(() => {
+        activeLng = next;
+        setLngState(next);
+        document.documentElement.lang = next;
+        try {
+          localStorage.setItem(STORAGE_KEY, next);
+        } catch {
+          /* ignore */
+        }
+      });
   }, []);
 
   const value = useMemo<I18nContextValue>(

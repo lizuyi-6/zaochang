@@ -58,7 +58,7 @@ function loadTsModule(url) {
 }
 
 const whiteboardModule = loadTsModule(new URL('src/replica/whiteboard/WhiteboardPage.tsx', spa));
-const { runCaptionSync, narrateMs, STARTUP_TIMEOUT_MS, STALL_MS } = whiteboardModule;
+const { runCaptionSync, STARTUP_TIMEOUT_MS } = whiteboardModule;
 const actionsModule = loadTsModule(new URL('src/replica/actions.ts', spa));
 const { tts } = actionsModule;
 
@@ -316,7 +316,7 @@ test('Regression 5: cancellation prevents late audio from playing', async () => 
     });
 
     // 启动一条旁白
-    const handle = tts.speakTrack('测试迟到音频拦截');
+    tts.speakTrack('测试迟到音频拦截');
 
     // 立即取消/停止(例如起声超时切估算、或者用户跳过/切课)
     tts.stop();

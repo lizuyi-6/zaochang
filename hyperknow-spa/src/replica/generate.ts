@@ -218,7 +218,7 @@ const kindOfTitle = (title: string): Lecture['kind'] =>
 
 /* LLM 大纲常带"Unit 2:"/"第 2 单元:"前缀;CourseJourney 会按激活单元统一拼装,先剥掉防双前缀 */
 const stripUnitPrefix = (title: string): string =>
-  title.replace(/^\s*(?:unit\s*\d+|第\s*\d+\s*单元)\s*[:：.\-]?\s*/i, '') || title;
+  title.replace(/^\s*(?:unit\s*\d+|第\s*\d+\s*单元)\s*[:：.-]?\s*/i, '') || title;
 
 export function courseFromBackend(cs: BackendCourse, fallbackTopic: string): GeneratedCourse {
   const topic = extractTopic(cs.courseTitle || fallbackTopic) || fallbackTopic;

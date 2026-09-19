@@ -1,7 +1,7 @@
 import { getCurrentLng } from './index';
 
 /**
- * Demo-content localization. UI chrome comes from the original dict (locales.json);
+ * Demo-content localization. UI chrome comes from the original dict (i18n/locales/);
  * course/demo content (lesson script, course data, mockups) is authored here since the
  * original generated it server-side from ui_language. Languages without authored
  * content fall back to English, mirroring the original when generation is unavailable.

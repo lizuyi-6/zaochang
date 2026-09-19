@@ -33,7 +33,7 @@ import {
   validateUnitStructure,
   type CourseBrief,
 } from "../../_lib/hyperknow/protocol";
-import type { CourseBlueprint, CourseBlueprintUnit, CourseUnit } from "../../_lib/hyperknow/prompts";
+import type { CourseBlueprint, CourseUnit } from "../../_lib/hyperknow/prompts";
 
 export const dynamic = "force-dynamic";
 

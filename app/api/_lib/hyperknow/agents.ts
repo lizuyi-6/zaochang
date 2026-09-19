@@ -9,7 +9,6 @@ import {
   COURSE_ARCHITECT_PROMPT,
   COURSE_BLUEPRINT_PROMPT,
   DIRECTOR_SYSTEM_PROMPT,
-  FALLBACK_GUIDELINE,
   INTERJECTION_ANSWER_PROMPT,
   UNIT_GENERATION_PROMPT,
   UNIT_REPAIR_PROMPT,
@@ -245,7 +244,7 @@ export async function generateCourseBlueprint(
   blueprint.language = effLang;
 
   // 校验蓝图单元计划字段合法性 (plannedSessionCount 必填合法)
-  for (const [idx, u] of blueprint.units.entries()) {
+  for (const u of blueprint.units) {
     if (!u.lectureCount || u.lectureCount < 1) {
       u.lectureCount = Math.max(scale.minLecturesPerUnit, 2);
     }

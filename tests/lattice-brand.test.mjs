@@ -169,11 +169,12 @@ test("lattice-brand: document title and key localized auth branding contain no o
   assert.match(title, /见界/);
   assert.match(title, /LATTICE/i);
   assert.doesNotMatch(title, /hyperknow/i);
-  const locales = JSON.parse(readFileSync(new URL("src/replica/i18n/locales.json", spa), "utf8"));
-  for (const [locale, strings] of Object.entries(locales)) {
+  /* 字典已按语言拆到 i18n/locales/<lang>.json(首包只载当前语言),品牌断言逐文件执行 */
+  for (const localeFile of readdirSync(new URL("src/replica/i18n/locales", spa))) {
+    const strings = JSON.parse(readFileSync(new URL(`src/replica/i18n/locales/${localeFile}`, spa), "utf8"));
     for (const key of ["welcomeToHyperknow", "createAccountSubtitle", "termsAndPolicy"]) {
-      assert.equal(typeof strings.auth?.[key], "string", `${locale}: ${key}`);
-      assert.doesNotMatch(strings.auth[key], /hyperknow/i, `${locale}: ${key}`);
+      assert.equal(typeof strings.auth?.[key], "string", `${localeFile}: ${key}`);
+      assert.doesNotMatch(strings.auth[key], /hyperknow/i, `${localeFile}: ${key}`);
     }
   }
 });
