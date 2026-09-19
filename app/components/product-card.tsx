@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { BadgeCheck, Coins, Eye, Heart, Play } from "lucide-react";
 import Link from "next/link";
 import { compactNumber, type Product } from "../lib/community-data";
+import { CoverImage } from "./cover-image";
 import { ReportButton } from "./report-button";
 
 export function ProductCard({ product, index = 0, large = false }: { product: Product; index?: number; large?: boolean }) {
@@ -20,7 +21,7 @@ export function ProductCard({ product, index = 0, large = false }: { product: Pr
       whileHover={reduced ? undefined : { y: -6 }}
     >
       <Link className={`deep-product-cover theme-${product.coverTheme}`} href={`/product/${product.slug ?? product.id}`}>
-        <img src={product.image} alt={`${product.title} 作品预览`} />
+        <CoverImage src={product.image} alt={`${product.title} 作品预览`} />
         <span className="deep-cover-shade" />
         <motion.span className="deep-cover-play" whileHover={{ scale: 1.08 }}><Play size={18} fill="currentColor" /></motion.span>
         <span className="deep-price">{priceLabel}</span>
