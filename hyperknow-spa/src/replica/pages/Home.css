@@ -949,3 +949,15 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* Apple HIG 触控目标 ≥44px:触屏(粗指针)设备抬升首页小控件,桌面鼠标密度不变 */
+@media (pointer: coarse) {
+  .hm-circle-btn { width: 44px; height: 44px; }
+  .hm-chip { height: 44px; padding: 0 16px; }
+  .hm-ghost-icon { width: 44px; height: 44px; }
+  .hm-cost { height: 44px; padding: 0 14px; }
+  .hm-send { width: 44px; height: 44px; }
+  .hm-speed { height: 44px; padding: 0 12px; }
+  .hm-cap { height: 44px; padding: 0 18px; }
+  .hm-news-pill { height: 44px; }
+}

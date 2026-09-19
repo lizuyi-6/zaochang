@@ -790,3 +790,12 @@
     justify-content: center;
   }
 }
+
+/* Apple HIG 触控目标 ≥44px:触屏(粗指针)设备抬升本页小控件,桌面鼠标密度不变 */
+@media (pointer: coarse) {
+  .cj-issue-pill { height: 44px; padding: 0 18px; }
+  .cj-cover-btn { width: 44px; height: 44px; }
+  .cj-join { height: 46px; }
+  .cj-strip-pill, .cj-pill, .cj-mat-add { height: 44px; }
+  .cj-unit { height: 44px; }
+}

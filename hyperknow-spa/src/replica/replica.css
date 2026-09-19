@@ -168,6 +168,14 @@
 @keyframes hk-skel-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .hk-skel-bar { animation: none; } }
 
+/* 按需加载页面的 Suspense 过渡:复用骨架条,居中占位(见 App.tsx React.lazy) */
+.hk-page-loading {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+}
+.hk-page-loading .hk-skel-bar { width: 120px; }
+
 .hk-sidebar-footer {
   margin-top: auto;
   padding: 12px 20px 14px;
@@ -920,4 +928,17 @@
     padding: 0 10px !important;
     font-size: 12.5px !important;
   }
+}
+
+/* Apple HIG:触控目标最小 44×44pt。桌面鼠标保留紧凑密度(同 macOS 惯例);
+   粗指针(手机/平板触屏)抬升侧栏导航、头部图标按钮与常用按钮。
+   页面级控件在各页 CSS 末尾单独处理(CourseJourney/Home/whiteboard)。 */
+@media (pointer: coarse) {
+  .hk-nav-item { height: 44px; }
+  .hk-icon-btn { width: 44px; height: 44px; }
+  /* 折叠钮 hover 才显形,触屏无 hover:常驻可见并放大热区 */
+  .hk-sidebar-collapse { padding: 10px; opacity: 1; }
+  .hk-btn-dark.small { height: 44px; }
+  .hk-btn-ghost { height: 44px; }
+  .hk-founders-btn { height: 44px !important; }
 }

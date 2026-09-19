@@ -534,7 +534,7 @@
 }
 .ob-l7-curated {
   margin-top: 8px;
-  font-size: 8px;
+  font-size: 10px;
   color: #9CA3AF;
   display: flex;
   align-items: center;
@@ -561,9 +561,9 @@
   border-radius: 999px;
   padding: 2px 8px;
 }
-.ob-l7-panel-label { margin-top: 12px; font-size: 8px; letter-spacing: 1.5px; color: #B9BDC4; }
+.ob-l7-panel-label { margin-top: 12px; font-size: 10px; letter-spacing: 1.5px; color: #B9BDC4; }
 .ob-l7-tabs { margin-top: 5px; display: flex; gap: 12px; }
-.ob-l7-tab { display: flex; align-items: center; gap: 4px; font-size: 9.5px; color: #9CA3AF; }
+.ob-l7-tab { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: #9CA3AF; }
 .ob-l7-tab.active { color: #1A1A1A; font-weight: 600; }
 .ob-l7-units { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
 .ob-l7-unit { display: flex; gap: 7px; padding: 5px 7px; border-radius: 8px; align-items: flex-start; }

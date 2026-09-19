@@ -1234,3 +1234,11 @@
 .wb-user-image { padding: 8px; }
 .wb-user-image img { display: block; max-width: 100%; border-radius: 8px; }
 .wb-user-image-name { display: block; font-size: 11px; color: #6B7280; margin-top: 6px; word-break: break-all; }
+
+/* Apple HIG 触控目标 ≥44px:触屏(粗指针)设备抬升白板课堂小控件,桌面鼠标密度不变 */
+@media (pointer: coarse) {
+  .wb-composer .plus, .wb-composer .mic, .wb-composer .send { width: 44px; height: 44px; }
+  .wb-pill .seg { width: 44px; height: 44px; border-radius: 22px; }
+  .wb-listen-pill { height: 44px; border-radius: 22px; }
+  .wb-feedback-submit { height: 44px; }
+}

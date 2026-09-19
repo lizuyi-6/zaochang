@@ -235,7 +235,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
           if (!trimmed || /^(graph|flowchart|subgraph|end|style|class)/i.test(trimmed)) continue;
           const cleaned = trimmed
             .replace(/-->|---|==>/g, ' → ')
-            .replace(/[\[\]\(\)\{\}\"\']/g, '')
+            .replace(/[[\](){}"']/g, '')
             .trim();
           if (cleaned) naturalFallbackText.push(cleaned);
         }

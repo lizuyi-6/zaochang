@@ -8,7 +8,7 @@ import './PlansPage.css';
 
 const PLAN_NS = ['freePlan', 'proPlan', 'maxPlan'] as const;
 
-/** 订阅页 — 三档(免费/Pro/Max)。文案 1:1 走 locales.json 的原版 subscription 词条;
+/** 订阅页 — 三档(免费/Pro/Max)。文案 1:1 走 i18n/locales/ 的原版 subscription 词条;
  * 数值(每日积分/对话/课程)来自 PLANS(types.ts),与后端 hk_credits 的真实
  * 档位对应(FREE=20/日)。付费档目前为展示态,兑换码/付款通道未接通。 */
 export const PlansPage: React.FC<PageProps> = ({ state, set }) => {
