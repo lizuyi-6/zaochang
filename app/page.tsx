@@ -2,6 +2,7 @@ import { ArrowRight, ArrowUpRight, Bot, Eye, Flame, Heart, Radio, Sparkles, User
 import Link from "next/link";
 import { loadPublicCommunityState } from "./api/_lib/public-community";
 import { AnimatedNumber } from "./components/animated-number";
+import { CoverImage } from "./components/cover-image";
 import { ProductCard } from "./components/product-card";
 import { Reveal } from "./components/reveal";
 import { challenges, circles, products } from "./lib/community-data";
@@ -56,18 +57,18 @@ export default async function HomePage() {
           </div>
 
           <div className="home-stage-visual" aria-label="社区作品预览">
-            <div className="stage-grid-lines" />
-            <div className="floating-work work-focus">
+            <div className="stage-grid-lines" aria-hidden="true" />
+            <div className="floating-work work-focus" aria-hidden="true">
               <span>MORI / DEEP FOCUS</span><strong>42:18</strong><i><b /></i><small>森林正在生长</small>
             </div>
-            <div className="floating-work work-type"><span>字浪</span><strong>呼<br />吸</strong><small>WEIGHT 72 / FLOW 48</small></div>
+            <div className="floating-work work-type" aria-hidden="true"><span>字浪</span><strong>呼<br />吸</strong><small>WEIGHT 72 / FLOW 48</small></div>
             <a className="floating-work work-hyperknow" href="/lattice/" aria-label="进入见界学习 Agent">
               <span>JIANJIE / AGENT</span><strong>AI<br />研学</strong><small>白板授课 · 举手插话 ↗</small>
             </a>
-            <div className="floating-work work-loop"><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>
-            <div className="stage-orbit orbit-one" /><div className="stage-orbit orbit-two" />
-            <span className="stage-coordinate coordinate-one">X 31.42 / Y 18.07</span>
-            <span className="stage-coordinate coordinate-two">SIGNAL / OPEN</span>
+            <div className="floating-work work-loop" aria-hidden="true"><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>
+            <div className="stage-orbit orbit-one" aria-hidden="true" /><div className="stage-orbit orbit-two" aria-hidden="true" />
+            <span className="stage-coordinate coordinate-one" aria-hidden="true">X 31.42 / Y 18.07</span>
+            <span className="stage-coordinate coordinate-two" aria-hidden="true">SIGNAL / OPEN</span>
             <Link className="galaxy-gateway" href="/galaxy" aria-label="进入造场产品银河">
               <span className="galaxy-gateway-sky" aria-hidden="true"><i /><i /><b /></span>
               <span className="galaxy-gateway-copy">
@@ -111,7 +112,7 @@ export default async function HomePage() {
       <aside className="home-aside">
         <section className="aside-block live-board">
           <div className="aside-title"><span><Flame size={16} /> 产品目录</span><small>OPEN</small></div>
-          {products.slice(1, 5).map((product, index) => <Link href={`/product/${product.slug}`} key={product.id} className="live-rank"><b>0{index + 1}</b><img src={product.image} alt="" /><span><strong>{product.title}</strong><small>{product.category} · {product.release}</small></span><ArrowRight size={14} /></Link>)}
+          {products.slice(1, 5).map((product, index) => <Link href={`/product/${product.slug}`} key={product.id} className="live-rank"><b>0{index + 1}</b><CoverImage src={product.image} /><span><strong>{product.title}</strong><small>{product.category} · {product.release}</small></span><ArrowRight size={14} /></Link>)}
         </section>
 
         <section className="aside-block">

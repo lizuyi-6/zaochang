@@ -31,6 +31,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { CoverImage } from "./cover-image";
 import { circles, products, type Product } from "../lib/community-data";
 import { hydrateProductRow } from "../lib/product-hydrate";
 import { SHELL_STATE_REFRESH_EVENT } from "./shell-state-sync";
@@ -293,26 +294,26 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
               );
               if (isExternal) {
                 return (
-                  <a key={item.href} href={item.href} className={active ? "active" : ""}>
+                  <a key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
                     {inner}
                   </a>
                 );
               }
               return (
-                <Link key={item.href} href={item.href} className={active ? "active" : ""}>
+                <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
                   {inner}
                 </Link>
               );
             })}
-            <Link href="/wallet" className={routeIsActive(pathname, "/wallet") ? "active" : ""}>
+            <Link href="/wallet" className={routeIsActive(pathname, "/wallet") ? "active" : ""} aria-current={routeIsActive(pathname, "/wallet") ? "page" : undefined}>
               {routeIsActive(pathname, "/wallet") && <motion.span className="deep-nav-active" layoutId="deep-nav-active" />}
               <WalletCards size={19} /><span>果子钱包</span>
             </Link>
-            {member.isFounder && <Link href="/founder" className={routeIsActive(pathname, "/founder") ? "active founder-entry" : "founder-entry"}>
+            {member.isFounder && <Link href="/founder" className={routeIsActive(pathname, "/founder") ? "active founder-entry" : "founder-entry"} aria-current={routeIsActive(pathname, "/founder") ? "page" : undefined}>
               {routeIsActive(pathname, "/founder") && <motion.span className="deep-nav-active" layoutId="deep-nav-active" />}
               <BadgeCheck size={19} /><span>创始人中心</span>
             </Link>}
-            {member.isAdmin && <Link href="/admin" className={routeIsActive(pathname, "/admin") ? "active admin-entry" : "admin-entry"}>
+            {member.isAdmin && <Link href="/admin" className={routeIsActive(pathname, "/admin") ? "active admin-entry" : "admin-entry"} aria-current={routeIsActive(pathname, "/admin") ? "page" : undefined}>
               {routeIsActive(pathname, "/admin") && <motion.span className="deep-nav-active" layoutId="deep-nav-active" />}
               <ShieldCheck size={19} /><span>平台管理</span>
             </Link>}
@@ -361,7 +362,8 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
       <nav className="deep-mobile-nav" aria-label="移动端导航">
         {mobileTabItems.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={routeIsActive(pathname, item.href) ? "active" : ""}><Icon size={20} /><span>{item.label}</span></Link>;
+          const active = routeIsActive(pathname, item.href);
+          return <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon size={20} /><span>{item.label}</span></Link>;
         })}
         <Link className="deep-mobile-create" href="/studio/new" aria-label="发布作品"><Plus size={23} /></Link>
       </nav>
@@ -376,7 +378,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
                 <span>{query ? "搜索结果" : "此刻热门"}</span>
                 {results.map((product) => (
                   <Link href={`/product/${product.slug ?? product.id}`} key={product.id}>
-                    <img src={product.image} alt="" />
+                    <CoverImage src={product.image} />
                     <span><strong>{product.title}</strong><small>{product.category} · {product.ownerName}</small></span>
                     <em>{product.price ? `${product.price} 果` : "免费"}</em>
                   </Link>
