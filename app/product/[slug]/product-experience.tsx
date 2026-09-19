@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Bookmark, Check, Coins, Eye, Heart, Pause, Play, RotateCcw, Send, SlidersHorizontal, Sparkles, UserPlus, Volume2, VolumeX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { CoverImage } from "../../components/cover-image";
 import { compactNumber, type Product } from "../../lib/community-data";
 import { refreshShellState } from "../../components/shell-state-sync";
 import { EmbeddedProduct, hasEmbeddedProduct } from "./embedded-product";
@@ -134,7 +135,7 @@ export function ProductExperience({ product }: { product: Product }) {
           </motion.div></FruitAccessGate>
         ) : tab === "体验" ? (
           <FruitAccessGate product={product}><motion.section key="experience" className="immersive-experience" style={{ "--product-accent": accent } as React.CSSProperties} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <img src={product.image} alt="" />
+            <CoverImage src={product.image} />
             <span className="experience-shade" />
             <div className="experience-grid-lines" />
             <motion.div className="experience-console" initial={reduced ? false : { opacity: 0, scale: 0.94, y: 28 }} animate={reduced ? undefined : { opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.55 }}>
