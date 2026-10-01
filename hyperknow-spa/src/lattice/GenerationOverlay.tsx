@@ -297,7 +297,8 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
       );
 
       if (finishedRef.current) return;
-      if (result.ok) {
+      /* 工程未开 strict:真值检查不收窄判别联合,必须用字面量判别(ok===true/false) */
+      if (result.ok === true) {
         setMode('live');
         if ('requiresConfirmation' in result && result.requiresConfirmation) {
           // 蓝图阶段已真实完成，等待用户审查和确认

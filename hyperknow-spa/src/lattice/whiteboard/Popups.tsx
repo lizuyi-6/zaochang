@@ -601,7 +601,8 @@ export const ConnectionPanel: React.FC<{ onClose: () => void; muted: boolean; sp
     setModelBusy(true);
     setModel(null);
     const result = await modelCheck();
-    setModel(result.ok ? { ok: true, ms: result.latencyMs } : { ok: false, reason: result.reason });
+    /* 工程未开 strict:真值不收窄判别联合,用字面量判别 */
+    setModel(result.ok === true ? { ok: true, ms: result.latencyMs } : { ok: false, reason: result.reason });
     setModelBusy(false);
     setCooldownUntil(Date.now() + 15_000);
   };

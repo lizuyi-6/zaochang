@@ -416,7 +416,8 @@ export const Board: React.FC<BoardProps> = ({
     if (viewportRef.current) {
       observer.observe(viewportRef.current);
       const layout = viewportRef.current.closest('.wb-app-layout');
-      for (const element of layout?.querySelectorAll('.wb-top-bar, .wb-unified-dock') ?? []) {
+      /* lib 未含 DOM.Iterable,NodeList 不可 for-of,先转数组 */
+      for (const element of Array.from(layout?.querySelectorAll('.wb-top-bar, .wb-unified-dock') ?? [])) {
         observer.observe(element);
       }
     }
