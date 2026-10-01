@@ -131,7 +131,7 @@
   color: var(--white);
   flex-shrink: 0;
 }
-.ob-lang-row.sel .ob-radio { background: #4263EB; border-color: #4263EB; }
+.ob-lang-row.sel .ob-radio { background: var(--color-primary); border-color: var(--color-primary); }
 .ob-lang-confirm { align-self: flex-end; margin-top: 40px; }
 
 /* ---------------- steps 3 / 4: questions ---------------- */
@@ -580,7 +580,7 @@
   flex-shrink: 0;
   margin-top: 1px;
 }
-.ob-l7-unit.active .ob-l7-unit-n { background: #3B82F6; color: var(--white); }
+.ob-l7-unit.active .ob-l7-unit-n { background: var(--color-primary); color: var(--white); }
 .ob-l7-unit-t { font-size: 9px; line-height: 1.4; color: var(--ink-600); }
 .ob-l7-unit.active .ob-l7-unit-t { color: var(--ink-900); font-weight: 500; }
 

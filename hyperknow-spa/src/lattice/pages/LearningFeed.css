@@ -116,7 +116,7 @@
   gap: 12px;
 }
 .lf-pill-filled {
-  background: #2e3a66;
+  background: var(--ink-900);
   color: var(--white);
   font-size: 12px;
   font-weight: 500;
@@ -130,7 +130,7 @@
   gap: 6px;
   background: var(--white);
   border: 1px solid var(--sand-400);
-  color: #5b6472;
+  color: var(--ink-500);
   font-size: 12px;
   font-weight: 500;
   border-radius: 8px;
@@ -182,7 +182,7 @@
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  background: #2e3a66;
+  background: var(--ink-900);
   color: var(--white);
   display: inline-flex;
   align-items: center;
