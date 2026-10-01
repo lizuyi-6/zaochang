@@ -3,8 +3,12 @@ import Link from "next/link";
 import { loadPublicCommunityState } from "./api/_lib/public-community";
 import { AnimatedNumber } from "./components/animated-number";
 import { CoverImage } from "./components/cover-image";
+import BlurText from "./components/motion/blur-text";
+import Magnet from "./components/motion/magnet";
 import { ProductCard } from "./components/product-card";
 import { Reveal } from "./components/reveal";
+import { StageParallax } from "./components/stage-parallax";
+import { depthStyle } from "./components/depth-style";
 import { challenges, circles, products } from "./lib/community-data";
 import { formatZhDateTime } from "./lib/format";
 
@@ -47,28 +51,33 @@ export default async function HomePage() {
         <section className="home-stage">
           <div className="home-stage-copy">
             <span className="deep-eyebrow"><Users size={14} /> {stats ? `${stats.members} 位社区成员` : "社区数据暂不可用"}</span>
-            <h1>今天，大家<br />都在造什么</h1>
+            <h1>
+              <BlurText text="今天，大家" animateBy="letters" delay={70} />
+              <BlurText text="都在造什么" animateBy="letters" delay={70} />
+            </h1>
             <p>这里没有“等待发布”的作品。每个想法都从一个能被试玩、被讨论的版本开始。</p>
             <div className="home-stage-actions">
-              <Link className="primary-action" href="/discover">进入现场 <ArrowRight size={17} /></Link>
+              <Magnet magnetStrength={3} padding={70}>
+                <Link className="primary-action" href="/discover">进入现场 <ArrowRight size={17} /></Link>
+              </Magnet>
               <a className="secondary-action" href="/lattice/"><Bot size={16} /> 见界研学 <ArrowUpRight size={14} /></a>
               <Link className="text-action" href="/studio/new">带一件作品来</Link>
             </div>
           </div>
 
-          <div className="home-stage-visual" aria-label="社区作品预览">
-            <div className="stage-grid-lines" aria-hidden="true" />
-            <div className="floating-work work-focus" aria-hidden="true">
+          <StageParallax className="home-stage-visual" aria-label="社区作品预览">
+            <div className="stage-grid-lines" aria-hidden="true" data-depth="" style={depthStyle(4)} />
+            <div className="floating-work work-focus" aria-hidden="true" data-depth="" style={depthStyle(16)}>
               <span>MORI / DEEP FOCUS</span><strong>42:18</strong><i><b /></i><small>森林正在生长</small>
             </div>
-            <div className="floating-work work-type" aria-hidden="true"><span>字浪</span><strong>呼<br />吸</strong><small>WEIGHT 72 / FLOW 48</small></div>
-            <a className="floating-work work-hyperknow" href="/lattice/" aria-label="进入见界学习 Agent">
+            <div className="floating-work work-type" aria-hidden="true" data-depth="" style={depthStyle(26)}><span>字浪</span><strong>呼<br />吸</strong><small>WEIGHT 72 / FLOW 48</small></div>
+            <a className="floating-work work-hyperknow" href="/lattice/" aria-label="进入见界学习 Agent" data-depth="" style={depthStyle(11)}>
               <span>JIANJIE / AGENT</span><strong>AI<br />研学</strong><small>白板授课 · 举手插话 ↗</small>
             </a>
-            <div className="floating-work work-loop" aria-hidden="true"><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>
-            <div className="stage-orbit orbit-one" aria-hidden="true" /><div className="stage-orbit orbit-two" aria-hidden="true" />
-            <span className="stage-coordinate coordinate-one" aria-hidden="true">X 31.42 / Y 18.07</span>
-            <span className="stage-coordinate coordinate-two" aria-hidden="true">SIGNAL / OPEN</span>
+            <div className="floating-work work-loop" aria-hidden="true" data-depth="" style={depthStyle(21)}><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>
+            <div className="stage-orbit orbit-one" aria-hidden="true" data-depth="" style={depthStyle(6)} /><div className="stage-orbit orbit-two" aria-hidden="true" data-depth="" style={depthStyle(8)} />
+            <span className="stage-coordinate coordinate-one" aria-hidden="true" data-depth="" style={depthStyle(3)}>X 31.42 / Y 18.07</span>
+            <span className="stage-coordinate coordinate-two" aria-hidden="true" data-depth="" style={depthStyle(3)}>SIGNAL / OPEN</span>
             <Link className="galaxy-gateway" href="/galaxy" aria-label="进入造场产品银河">
               <span className="galaxy-gateway-sky" aria-hidden="true"><i /><i /><b /></span>
               <span className="galaxy-gateway-copy">
@@ -77,7 +86,7 @@ export default async function HomePage() {
                 <em>EXPLORE <ArrowUpRight size={13} /></em>
               </span>
             </Link>
-          </div>
+          </StageParallax>
         </section>
 
         <section className="home-signal-strip">
