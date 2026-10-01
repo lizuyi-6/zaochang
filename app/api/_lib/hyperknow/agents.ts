@@ -6,6 +6,7 @@
 import { chat, streamChat, type LlmMessage } from "./llm";
 import {
   CONTENT_GENERATOR_SYSTEM_PROMPT,
+  chatIdentityPrompt,
   COURSE_ARCHITECT_PROMPT,
   COURSE_BLUEPRINT_PROMPT,
   DIRECTOR_SYSTEM_PROMPT,
@@ -91,7 +92,11 @@ export async function* contentGenerateStream(
   model: ChatModelId = "flash",
 ): AsyncGenerator<StreamChunk> {
   const baseMessages: LlmMessage[] = [
-    { role: "system", content: CONTENT_GENERATOR_SYSTEM_PROMPT },
+    {
+      role: "system",
+      // 身份保密块拼接在末尾:越靠近生成位置,抗套话权重越高
+      content: `${CONTENT_GENERATOR_SYSTEM_PROMPT}\n\n${chatIdentityPrompt(model)}`,
+    },
     ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
     { role: "user", content: `Guidelines: "${guidelines}"\nStudent Query: "${userQuery}"` },
   ];
@@ -114,11 +119,11 @@ export async function* contentGenerateStream(
       return;
     } catch (error) {
       if (signal?.aborted) throw error;
-      if (!sawText && freshRetries < 2) {
+      if (!sawText && freshRetries < 3) {
         freshRetries += 1;
         continue;
       }
-      if (sawText && continuations < 2) {
+      if (sawText && continuations < 3) {
         continuations += 1;
         continue;
       }

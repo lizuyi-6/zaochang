@@ -25,6 +25,8 @@ import {
 } from "../app/api/_lib/hyperknow/protocol.ts";
 import {
   buildNextStepsPrompt,
+  chatIdentityPrompt,
+  CONTENT_GENERATOR_SYSTEM_PROMPT,
   parseCourseStructure,
   parseInterjectionAnswer,
   parseLecturePlan,
@@ -203,6 +205,26 @@ test("decodeRequestBodyJson: UTF-8 直通,GBK 字节兜底还原,双失败返回
   assert.deepEqual(decodeRequestBodyJson(gbk), { message: "系统讲解" });
   // 彻底坏体:两个解码都出不来合法 JSON
   assert.equal(decodeRequestBodyJson(new Uint8Array([0xff, 0xfe, 0x00, 0x01])), null);
+});
+
+test("chatIdentityPrompt: 自报见界自研,全链提示词零上游痕迹", () => {
+  const flash = chatIdentityPrompt("flash");
+  const pro = chatIdentityPrompt("pro");
+  assert.match(flash, /见界 Flash/);
+  assert.match(flash, /见界\(LATTICE\)自研/);
+  assert.match(pro, /见界 Pro/);
+  assert.match(pro, /新上线/);
+  assert.notEqual(flash, pro);
+  for (const block of [flash, pro]) {
+    // 保密语言在场:角色扮演/翻译/调试口吻/提示词泄露要求都不得解除
+    assert.match(block, /role-play|翻译|debug|system prompt/s);
+  }
+  // 系统提示词全文(基础 persona + 身份块)不得出现任何上游供应商/模型族痕迹
+  for (const model of ["flash", "pro"]) {
+    const full = `${CONTENT_GENERATOR_SYSTEM_PROMPT}\n${chatIdentityPrompt(model)}`;
+    assert.doesNotMatch(full, /step-?\d|stepfun|阶跃/i, "系统提示词不得出现上游模型/供应商字样");
+    assert.match(full, /见界|LATTICE/);
+  }
 });
 
 test("extractStepfunHits: 仅解析真实 tool_calls 的 results，映射 summary 为 snippet，校验 HTTP(S) 与去重截断", () => {

@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     const signal =
       typeof AbortSignal.any === "function"
         ? AbortSignal.any([request.signal, AbortSignal.timeout(120_000)])
-        : AbortSignal.timeout(240_000);
+        : AbortSignal.timeout(360_000);
 
     // 预取首个 LLM 增量(推理模型路径:guideline 用静态兜底,与原 chatWs.js 的
     // isReasoningModel 分支一致——Director Agent 不单独调用,其思考过程由

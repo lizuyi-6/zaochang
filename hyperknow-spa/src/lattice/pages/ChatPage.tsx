@@ -678,11 +678,33 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
                   );
                 }}
               >
-                <Gauge size={14} />
-                {m === 'pro' ? L('Lattice Pro', '见界 Pro') : L('Lattice Flash', '见界 Flash')}
-                <span className="hk-menu-hint">
-                  {m === 'pro' ? L('Deeper reasoning · step-5', '更深推理 · step-5') : L('Fast replies · step-3.7', '更快回复 · step-3.7')}
-                </span>
+                {m === 'pro' ? (
+                  <>
+                    <span className="cp-model-line">
+                      <span className="cp-model-name">{L('Lattice Pro', '见界 Pro')}</span>
+                      <span className="cp-model-badge">{L('Launch offer', '限时')}</span>
+                      <span className="cp-model-price">
+                        <del>5</del> {L('2 cr', '2 积分')}
+                      </span>
+                    </span>
+                    <span className="cp-model-desc">
+                      {L(
+                        'Deeper reasoning. Thinking takes longer — replies may feel slower. Launch period: same cost as Flash.',
+                        '更深推理。思考时间会变长，回答时可能感觉卡顿。新上线期间消耗对齐 Flash。',
+                      )}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="cp-model-line">
+                      <span className="cp-model-name">{L('Lattice Flash', '见界 Flash')}</span>
+                      <span className="cp-model-price">{L('2 cr', '2 积分')}</span>
+                    </span>
+                    <span className="cp-model-desc">
+                      {L('Fast replies. Great for everyday questions and course tutoring.', '速度快。适合日常问答与课程辅导。')}
+                    </span>
+                  </>
+                )}
               </button>
             ))}
           </div>
