@@ -1,4 +1,4 @@
-import { requireAdmin } from "../../_lib/access-control";
+import { requireAdminOrAgent } from "../../_lib/access-control";
 import { guardWrite } from "../../_lib/route-guards";
 import { applyModerationAction } from "../../_lib/moderation";
 import { database, jsonError } from "../../_lib/community";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminOrAgent();
     const [reports, products, clients, risks] = await Promise.all([
       database().prepare(`SELECT id, reporter_email AS reporterEmail, target_type AS targetType, target_ref AS targetRef, reason, details, status, created_at AS createdAt FROM content_reports WHERE status = 'pending' ORDER BY created_at ASC LIMIT 100`).all(),
       database().prepare(
@@ -29,7 +29,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const guarded = await guardWrite(request, { member: "admin", sameOrigin: true });
+    const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
     if (guarded instanceof Response) return guarded;
     const input = await request.json() as Record<string, unknown>;
     return await applyModerationAction(guarded.member, input);

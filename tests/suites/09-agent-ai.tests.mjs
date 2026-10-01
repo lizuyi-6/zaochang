@@ -108,9 +108,28 @@ test("agent service account: token auth, read + content-write scope, fail-closed
   const rpRow = await queryLocalD1(`SELECT COUNT(*) AS n FROM reading_progress WHERE user_email = 'agent@zaochang'`);
   assert.equal(rpRow[0].n, 0, "reading-progress 不应落库");
 
-  // 10) Agent GET /api/admin/incubation → 403(requireAdmin 拒绝 agent)
-  const adminAttempt = await fetch(`${baseUrl}/api/admin/incubation`, { headers: { ...agentAuth, accept: "application/json" } });
-  assert.equal(adminAttempt.status, 403, "agent 不应访问 admin");
+  // 10) Admin API 机器通道(2026-10 产品决策):agent token 获得管理读面 + 列名写面。
+  //     读:GET /api/admin/* 由 requireAdminOrAgent 放行;
+  //     写:仅 AGENT_ADMIN_CAPABILITIES 列名(incubation PATCH 在列,POST 不在 → 闸拦 403)。
+  const adminRead = await fetch(`${baseUrl}/api/admin/incubation`, { headers: { ...agentAuth, accept: "application/json" } });
+  assert.equal(adminRead.status, 200, "agent 应能读 admin 队列(机器通道)");
+
+  const caps = await (await fetch(`${baseUrl}/api/admin/capabilities`, { headers: { ...agentAuth, accept: "application/json" } })).json();
+  assert.equal(caps.caller, "agent@zaochang", "capabilities 应上报 agent 身份");
+  assert.equal(caps.callerIsAgent, true);
+
+  const adminWriteUnlisted = await fetch(`${baseUrl}/api/admin/incubation`, {
+    method: "POST", headers: agentJson,
+    body: JSON.stringify({}),
+  });
+  assert.equal(adminWriteUnlisted.status, 403, "未列名的 admin 写法必须被 scope 闸拦(POST incubation 不在表)");
+  assert.deepEqual(await adminWriteUnlisted.json(), { error: "agent_scope_forbidden" });
+
+  const adminWriteListed = await fetch(`${baseUrl}/api/admin/moderation`, {
+    method: "PATCH", headers: agentJson,
+    body: JSON.stringify({}),
+  });
+  assert.notEqual(adminWriteListed.status, 403, "列名的 moderation PATCH 应穿过 scope 闸(业务校验接管,此处空载荷即其 4xx)");
 
   // 清理:agent 创建的 doc/product + agent 系统行(子表先于父表,FK 约束)
   await executeLocalD1(`DELETE FROM docs WHERE id = '${docId}'; DELETE FROM products WHERE id = ${productId}; DELETE FROM members WHERE email = 'agent@zaochang'`);

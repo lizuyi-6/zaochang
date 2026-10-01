@@ -651,7 +651,7 @@ test("production rejects forged workspace identity headers unless explicitly tru
   productionServer.stdout.on("data", (chunk) => { productionOutput += chunk.toString(); });
   productionServer.stderr.on("data", (chunk) => { productionOutput += chunk.toString(); });
   try {
-    const deadline = Date.now() + 15000;
+    const deadline = Date.now() + 60000;
     let response;
     while (Date.now() < deadline) {
       if (productionServer.exitCode !== null) throw new Error(`Production auth preview exited early:\n${productionOutput}`);

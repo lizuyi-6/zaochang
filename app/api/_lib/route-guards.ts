@@ -5,11 +5,12 @@
 //
 // 收录的是"≥两段组合"的调用点;member+rateLimit 两行式(payments/products 等)
 // 各有独立限流参数,保持原样即可,不为合并而合并。
-import { requireMember, requireDocEditor, requireFounder, requireAdmin, type MemberIdentity } from "./access-control";
+import { requireMember, requireDocEditor, requireFounder, requireAdmin, requireAdminOrAgent, type MemberIdentity } from "./access-control";
+import { AGENT_EMAIL } from "./agent-auth";
 import { enforceRateLimit, rateLimitKey } from "./rate-limit";
 import { assertSameOrigin } from "./request-origin";
 
-export type WriteGuardRole = "member" | "docEditor" | "founder" | "admin";
+export type WriteGuardRole = "member" | "docEditor" | "founder" | "admin" | "adminOrAgent";
 
 export type WriteGuardOptions = {
   member: WriteGuardRole;
@@ -24,12 +25,15 @@ async function resolveMember(role: WriteGuardRole): Promise<MemberIdentity> {
   if (role === "docEditor") return requireDocEditor();
   if (role === "founder") return requireFounder();
   if (role === "admin") return requireAdmin();
+  if (role === "adminOrAgent") return requireAdminOrAgent();
   return requireMember();
 }
 
 export async function guardWrite(request: Request, options: WriteGuardOptions): Promise<WriteGuardResult | Response> {
   const member = await resolveMember(options.member);
-  if (options.sameOrigin) {
+  // 同源断言防的是 cookie 会话被跨站伪造;agent 的凭据是 Authorization 头,
+  // 浏览器不会自动携带(无 CSRF 面),对机器通道豁免——否则跨源运维调用全被误拦。
+  if (options.sameOrigin && member.email !== AGENT_EMAIL) {
     const originError = assertSameOrigin(request);
     if (originError) return originError;
   }

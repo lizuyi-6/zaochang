@@ -18,6 +18,7 @@
 import { optionalMember, requireMember, type MemberIdentity } from "./community";
 import { accessError } from "./errors";
 import { isFounderEmail, isAdminEmail } from "./admin";
+import { AGENT_EMAIL } from "./agent-auth";
 
 export { optionalMember, requireMember };
 export { isAdminEmail, isFounderEmail };
@@ -78,6 +79,17 @@ export async function requireRole(...roles: AccessRole[]): Promise<MemberIdentit
 // 历史语义别名(错误码/状态码与旧 admin.ts 实现逐字一致)。
 export function requireAdmin(): Promise<MemberIdentity> {
   return requireRole("admin");
+}
+
+// 管理 API 双入口:人类 admin(登录 + 邮箱白名单)或 agent 服务账户(Bearer token,
+// chatgpt-auth 最先识别并惰性落地为 AGENT_EMAIL 成员行)。agent 走此原语即获得
+// 本路由的管理权限——机器通道的权限面由 AGENT_ADMIN_CAPABILITIES(worker 入口
+// fail-closed)+ 本原语(路由层)共同圈定;requireAdmin 的语义保持零变化。
+export async function requireAdminOrAgent(): Promise<MemberIdentity> {
+  const member = await requireMember();
+  if (member.email === AGENT_EMAIL) return member;
+  if (!isAdminEmail(member.email)) throw accessError("admin_forbidden", 403);
+  return member;
 }
 
 export function requireFounder(): Promise<MemberIdentity> {
