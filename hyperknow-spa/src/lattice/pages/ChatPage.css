@@ -65,6 +65,12 @@
   padding: 58px 24px 150px;
 }
 
+/* 滚动锚:scrollIntoView 对齐时避开固定的底部 composer(composer 高 44 + bottom 20 + 余量) */
+.cp-col-end {
+  height: 1px;
+  scroll-margin-bottom: 110px;
+}
+
 /* user message bubble */
 .cp-bubble-row {
   display: flex;
