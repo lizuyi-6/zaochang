@@ -2,10 +2,10 @@ import React from 'react';
 
 /** Editorial atlas illustrations for 见界 · LATTICE. Solid paper, pine ink and amber. */
 
-const ink = '#164E46';
-const paper = '#F7F4EC';
+const ink = '#C24A2E';
+const paper = '#F7F1E4';
 const amber = '#D9A441';
-const sage = '#9EAF99';
+const sage = '#B3A284';
 const rule = '#BBC6B4';
 
 export const Sparkle: React.FC<{ x: number; y: number; s?: number; color?: string }> = ({ x, y, s = 8, color = ink }) => (
@@ -45,7 +45,7 @@ export const UfoBadge: React.FC<{ size?: number }> = ({ size = 96 }) => (
       width: size,
       height: size,
       borderRadius: '50%',
-      background: '#F7F4EC',
+      background: '#F7F1E4',
       boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
       display: 'flex',
       alignItems: 'center',
@@ -65,16 +65,16 @@ export const RocketGirl: React.FC<{ size?: number }> = ({ size = 170 }) => (
     <path d="M18 118 q6 -4 12 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
     <path d="M14 130 q7 -5 14 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
     {/* rocket body */}
-    <path d="M60 108 Q100 128 138 96 Q142 92 138 88 Q98 60 62 88 Q52 96 60 108 Z" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <path d="M60 108 Q100 128 138 96 Q142 92 138 88 Q98 60 62 88 Q52 96 60 108 Z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     {/* rocket nose + fins in periwinkle */}
-    <path d="M138 96 Q152 92 150 84 Q140 80 132 86 Z" fill="#9EAF99" stroke={ink} strokeWidth="2" />
-    <path d="M64 106 Q52 118 44 112 Q50 100 60 96 Z" fill="#9EAF99" stroke={ink} strokeWidth="2" />
-    <circle cx="112" cy="92" r="7" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
+    <path d="M138 96 Q152 92 150 84 Q140 80 132 86 Z" fill="#B3A284" stroke={ink} strokeWidth="2" />
+    <path d="M64 106 Q52 118 44 112 Q50 100 60 96 Z" fill="#B3A284" stroke={ink} strokeWidth="2" />
+    <circle cx="112" cy="92" r="7" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
     {/* flames */}
     <path d="M52 100 q-14 2 -22 12 M54 106 q-10 6 -14 14" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
     {/* rider: body */}
     <path d="M88 84 q-2 -18 6 -26" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
-    <circle cx="98" cy="48" r="9" fill="#F7F4EC" stroke={ink} strokeWidth="2.2" />
+    <circle cx="98" cy="48" r="9" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
     {/* hair bun */}
     <circle cx="104" cy="40" r="4.5" fill={ink} />
     <path d="M90 46 q8 -10 16 -2" stroke={ink} strokeWidth="2" fill={ink} />
@@ -94,14 +94,14 @@ export const Astronaut: React.FC<{ size?: number }> = ({ size = 105 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size * 1.1} viewBox="0 0 105 115" fill="none">
     <circle cx="52" cy="55" r="43" fill={sage} opacity="0.16" />
     <path d="M9 102 H95 M9 107 H31" stroke={rule} strokeWidth="0.8" />
-    <circle cx="52" cy="34" r="14" fill="#F7F4EC" stroke={ink} strokeWidth="2.2" />
-    <circle cx="52" cy="34" r="9" fill="#E4EADC" stroke={ink} strokeWidth="1.6" />
-    <path d="M44 52 q8 -6 16 0 l4 20 q-12 6 -24 0 z" fill="#F7F4EC" stroke={ink} strokeWidth="2.2" />
+    <circle cx="52" cy="34" r="14" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
+    <circle cx="52" cy="34" r="9" fill="#F2E8D4" stroke={ink} strokeWidth="1.6" />
+    <path d="M44 52 q8 -6 16 0 l4 20 q-12 6 -24 0 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
     <path d="M42 58 q-12 2 -18 -8 M62 58 q12 0 16 -10" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     <path d="M46 74 q-4 12 -12 18 M58 74 q2 12 10 18" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     <Sparkle x={16} y={20} s={5} /><Sparkle x={90} y={16} s={6} /><Sparkle x={88} y={60} s={4} />
-    <circle cx="20" cy="90" r="6" stroke={ink} strokeWidth="1.8" fill="#E4EADC" />
-    <circle cx="92" cy="94" r="4" stroke={ink} strokeWidth="1.6" fill="#F7F4EC" />
+    <circle cx="20" cy="90" r="6" stroke={ink} strokeWidth="1.8" fill="#F2E8D4" />
+    <circle cx="92" cy="94" r="4" stroke={ink} strokeWidth="1.6" fill="#F7F1E4" />
   </svg>
 );
 
@@ -115,7 +115,7 @@ export const DeskWriter: React.FC<{ size?: number; stars?: boolean }> = ({ size 
       <path key={i} d={`M ${x} ${16 + Math.abs(i - 2) * 3} l2.2 4.4 4.8 0.7 -3.5 3.4 0.8 4.8 -4.3 -2.2 -4.3 2.2 0.8 -4.8 -3.5 -3.4 4.8 -0.7 z`} fill="#D9A441" stroke={ink} strokeWidth="1.2" />
     ))}
     {/* head */}
-    <circle cx="55" cy="46" r="8" fill="#F7F4EC" stroke={ink} strokeWidth="2.2" />
+    <circle cx="55" cy="46" r="8" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
     <circle cx="60" cy="39" r="4" fill={ink} />
     <path d="M47 44 q8 -9 16 -2" stroke={ink} strokeWidth="2" fill={ink} />
     {/* body leaning over desk */}
@@ -127,9 +127,9 @@ export const DeskWriter: React.FC<{ size?: number; stars?: boolean }> = ({ size 
     <path d="M14 84 h82" stroke={ink} strokeWidth="2.6" strokeLinecap="round" />
     <path d="M20 84 v14 M90 84 v14" stroke={ink} strokeWidth="2.2" strokeLinecap="round" />
     {/* notebook */}
-    <path d="M56 78 h22 v6 h-22 z" fill="#F7F4EC" stroke={ink} strokeWidth="1.8" />
+    <path d="M56 78 h22 v6 h-22 z" fill="#F7F1E4" stroke={ink} strokeWidth="1.8" />
     {/* pencil cup */}
-    <path d="M24 72 h10 v12 h-10 z" fill="#F7F4EC" stroke={ink} strokeWidth="1.8" />
+    <path d="M24 72 h10 v12 h-10 z" fill="#F7F1E4" stroke={ink} strokeWidth="1.8" />
     <path d="M27 72 l-2 -8 M31 72 l3 -8" stroke={ink} strokeWidth="1.4" strokeLinecap="round" />
     {/* book stack */}
     <path d="M84 76 h14 M86 80 h12" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
@@ -141,18 +141,18 @@ export const CatPerson: React.FC<{ size?: number }> = ({ size = 105 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size * 0.85} viewBox="0 0 105 90" fill="none">
     <circle cx="53" cy="45" r="36" fill={sage} opacity="0.16" />
     <path d="M17 85 H89 M17 90 H39" stroke={rule} strokeWidth="0.8" />
-    <circle cx="42" cy="22" r="9" fill="#F7F4EC" stroke={ink} strokeWidth="2.2" />
+    <circle cx="42" cy="22" r="9" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
     <path d="M33 20 q9 -11 18 -1" stroke={ink} strokeWidth="2.2" fill={ink} />
     <path d="M36 34 q-6 14 2 24" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
     {/* crossed legs */}
-    <path d="M24 66 q14 -8 28 0 q-14 8 -28 0 Z" fill="#F7F4EC" stroke={ink} strokeWidth="2.2" />
+    <path d="M24 66 q14 -8 28 0 q-14 8 -28 0 Z" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
     <path d="M38 60 q10 -6 20 0" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     {/* arm petting */}
     <path d="M44 42 q14 4 22 12" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     {/* cat */}
-    <ellipse cx="80" cy="62" rx="13" ry="8" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-    <circle cx="90" cy="55" r="6" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-    <path d="M87 50 l-2 -5 4 3 M93 50 l2 -5 -4 3" fill="#F7F4EC" stroke={ink} strokeWidth="1.6" />
+    <ellipse cx="80" cy="62" rx="13" ry="8" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
+    <circle cx="90" cy="55" r="6" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
+    <path d="M87 50 l-2 -5 4 3 M93 50 l2 -5 -4 3" fill="#F7F1E4" stroke={ink} strokeWidth="1.6" />
     <path d="M68 60 q-8 -2 -10 -8" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
     <Sparkle x={12} y={14} s={4} /><Sparkle x={96} y={20} s={5} />
   </svg>
@@ -190,20 +190,20 @@ export const AwardPhone: React.FC<{ size?: number }> = ({ size = 160 }) => (
     <circle cx="80" cy="82" r="62" fill={sage} opacity="0.16" />
     <path d="M18 148 H142 M18 153 H40" stroke={rule} strokeWidth="0.8" />
     {/* curly hair */}
-    <circle cx="80" cy="34" r="15" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <circle cx="80" cy="34" r="15" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     <path d="M64 30 q-4 -10 6 -12 q2 -8 10 -6 q8 -4 12 4 q8 0 6 10 q4 8 -4 12" stroke={ink} strokeWidth="2.2" fill={ink} />
     {/* face */}
     <circle cx="75" cy="36" r="1.4" fill={ink} /><circle cx="85" cy="36" r="1.4" fill={ink} />
     <path d="M76 42 q4 3 8 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
     {/* cream long-sleeve top */}
-    <path d="M64 54 q16 -8 32 0 l4 34 q-20 8 -40 0 z" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <path d="M64 54 q16 -8 32 0 l4 34 q-20 8 -40 0 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     {/* arms holding phone at chest */}
     <path d="M66 60 q-8 10 0 20 M94 60 q8 10 0 20" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     {/* yellow phone */}
     <rect x="72" y="66" width="16" height="24" rx="3" fill="#D9A441" stroke={ink} strokeWidth="2" transform="rotate(-8 80 78)" />
     <circle cx="80" cy="86" r="1.6" fill={ink} />
     {/* black wide pants */}
-    <path d="M66 92 l-6 44 q8 4 14 0 l4 -36 M94 92 l6 44 q-8 4 -14 0 l-4 -36" fill="#164E46" stroke={ink} strokeWidth="2.2" />
+    <path d="M66 92 l-6 44 q8 4 14 0 l4 -36 M94 92 l6 44 q-8 4 -14 0 l-4 -36" fill="#C24A2E" stroke={ink} strokeWidth="2.2" />
     {/* shoes */}
     <path d="M56 138 q8 6 16 2 M88 140 q8 4 16 -2" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
   </svg>
@@ -228,13 +228,13 @@ export const AwardPopper: React.FC<{ size?: number }> = ({ size = 170 }) => (
     <path d="M96 56 q8 -6 12 2 q-8 4 -12 -2 M128 40 q6 -8 12 -2 M150 44 q6 -4 10 2" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
     <path d="M108 78 q4 4 10 2" stroke="#D9A441" strokeWidth="2" fill="none" strokeLinecap="round" />
     {/* person leaning back, facing right */}
-    <circle cx="56" cy="38" r="14" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <circle cx="56" cy="38" r="14" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     {/* curly hair: puffs */}
     <path d="M42 34 q-6 -10 4 -14 q0 -9 10 -8 q6 -7 13 -2 q9 -2 9 7 q6 5 0 11 q2 8 -6 9 l-2 -6 q4 -5 0 -9 q-4 -6 -10 -3 q-8 -3 -11 4 q-7 1 -5 9 z" fill={ink} />
     <circle cx="52" cy="40" r="1.4" fill={ink} /><circle cx="61" cy="40" r="1.4" fill={ink} />
     <path d="M52 46 q4 3 8 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
     {/* cream long-sleeve top */}
-    <path d="M42 58 q14 -8 30 -2 l6 34 q-20 10 -38 2 z" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <path d="M42 58 q14 -8 30 -2 l6 34 q-20 10 -38 2 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     {/* arms raised holding plaque */}
     <path d="M66 62 q16 -8 24 -16 M68 74 q14 -2 24 -12" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     {/* yellow plaque tilted up-right */}
@@ -243,7 +243,7 @@ export const AwardPopper: React.FC<{ size?: number }> = ({ size = 170 }) => (
       <path d="M83 41 h20 M83 47 h14" stroke={ink} strokeWidth="1.4" strokeLinecap="round" />
     </g>
     {/* black wide pants */}
-    <path d="M44 92 l-8 44 q8 4 14 0 l6 -34 M76 94 l4 44 q8 2 14 -2 l-4 -40" fill="#164E46" stroke={ink} strokeWidth="2.2" />
+    <path d="M44 92 l-8 44 q8 4 14 0 l6 -34 M76 94 l4 44 q8 2 14 -2 l-4 -40" fill="#C24A2E" stroke={ink} strokeWidth="2.2" />
     <path d="M32 138 q8 6 16 2 M80 140 q8 4 16 -2" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
   </svg>
 );
@@ -263,19 +263,19 @@ export const TrophyPerson: React.FC<{ size?: number }> = ({ size = 150 }) => (
     {/* motion ticks */}
     <path d="M86 14 l-6 -6 M84 26 l-8 -2" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
     {/* head */}
-    <circle cx="66" cy="56" r="13" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <circle cx="66" cy="56" r="13" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     <circle cx="72" cy="46" r="6" fill={ink} />
     <path d="M54 52 q10 -12 22 -4" stroke={ink} strokeWidth="2.2" fill={ink} />
     <circle cx="62" cy="58" r="1.3" fill={ink} /><circle cx="71" cy="58" r="1.3" fill={ink} />
     <path d="M62 64 q4 3 8 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
     {/* body */}
-    <path d="M58 72 q14 -6 24 2 l2 30 q-16 8 -30 0 z" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <path d="M58 72 q14 -6 24 2 l2 30 q-16 8 -30 0 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     {/* right arm up to trophy */}
     <path d="M78 76 q14 -10 20 -28" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     {/* left arm trailing */}
     <path d="M56 80 q-14 6 -20 16" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     {/* jumping legs (knees tucked) */}
-    <path d="M60 106 q-12 8 -10 22 q8 4 14 -2 M80 106 q10 10 6 24 q-8 4 -14 -2" fill="#164E46" stroke={ink} strokeWidth="2.2" />
+    <path d="M60 106 q-12 8 -10 22 q8 4 14 -2 M80 106 q10 10 6 24 q-8 4 -14 -2" fill="#C24A2E" stroke={ink} strokeWidth="2.2" />
     <path d="M46 130 q8 6 16 0 M74 132 q8 6 16 0" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
     <Sparkle x={18} y={30} s={6} /><Sparkle x={136} y={60} s={5} /><Sparkle x={30} y={100} s={4} />
   </svg>
@@ -286,18 +286,18 @@ export const SkaterKid: React.FC<{ size?: number }> = ({ size = 150 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 150 150" fill="none">
     <circle cx="77" cy="77" r="57" fill={sage} opacity="0.16" />
     <path d="M20 138 H134 M20 143 H42" stroke={rule} strokeWidth="0.8" />
-    <circle cx="78" cy="34" r="12" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <circle cx="78" cy="34" r="12" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     <path d="M66 30 q10 -12 24 -2 q0 6 -4 6 q-10 -6 -20 2 z" fill={ink} />
     {/* torso leaning */}
-    <path d="M70 50 q14 -2 20 8 l-4 24 q-14 4 -24 -4 z" fill="#F7F4EC" stroke={ink} strokeWidth="2.4" />
+    <path d="M70 50 q14 -2 20 8 l-4 24 q-14 4 -24 -4 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
     {/* arms out for balance */}
     <path d="M70 56 q-16 -2 -26 -10 M88 60 q14 2 24 -4" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     {/* crouched legs */}
     <path d="M68 84 q-10 10 -4 22 M86 86 q8 8 4 20" stroke={ink} strokeWidth="2.6" fill="none" strokeLinecap="round" />
     {/* skateboard */}
     <path d="M40 116 q35 10 70 0 q4 6 -4 8 q-31 8 -62 0 q-8 -2 -4 -8 Z" fill="#D9A441" stroke={ink} strokeWidth="2.2" />
-    <circle cx="58" cy="130" r="5" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
-    <circle cx="94" cy="130" r="5" fill="#F7F4EC" stroke={ink} strokeWidth="2" />
+    <circle cx="58" cy="130" r="5" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
+    <circle cx="94" cy="130" r="5" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
     {/* speed lines */}
     <path d="M16 100 h20 M22 112 h16" stroke={ink} strokeWidth="2" strokeLinecap="round" />
     <Sparkle x={124} y={26} s={5} />
@@ -341,13 +341,13 @@ export const AvatarCat: React.FC<{ size?: number; ring?: boolean }> = ({ size = 
       borderRadius: '50%',
       background: amber,
       overflow: 'hidden',
-      boxShadow: ring ? '0 0 0 2px #F7F4EC, 0 0 0 4px #164E46' : '0 0 0 1.5px #164E46',
+      boxShadow: ring ? '0 0 0 2px #F7F1E4, 0 0 0 4px #C24A2E' : '0 0 0 1.5px #C24A2E',
       flexShrink: 0,
     }}
   >
     <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 36 36">
       {/* cat head rising from the bottom, ear tufts poking into the amber */}
-      <path d="M2 36 V24 L5 11 L11 17 Q18 13 25 17 L31 11 L34 24 V36 Z" fill="#164E46" />
+      <path d="M2 36 V24 L5 11 L11 17 Q18 13 25 17 L31 11 L34 24 V36 Z" fill="#C24A2E" />
       {/* wide cream eyes */}
       <ellipse cx="14" cy="24" rx="3.2" ry="3.9" fill="#F5EFE3" />
       <ellipse cx="22" cy="24" rx="3.2" ry="3.9" fill="#F5EFE3" />
@@ -369,12 +369,12 @@ interface CoverTheme {
   paper: string; // 高光/纸色
 }
 const AMBER = '#D9A441';
-const CREAM = '#F7F4EC';
+const CREAM = '#F7F1E4';
 const INK = ink;
 
 const coverTheme: Record<CoverKind, CoverTheme> = {
   sociology: { bg: '#C3CFB4', ink: INK, acc: AMBER, paper: CREAM }, // 灰绿
-  bio: { bg: '#164E46', ink: CREAM, acc: AMBER, paper: CREAM }, // 深墨绿
+  bio: { bg: '#C24A2E', ink: CREAM, acc: AMBER, paper: CREAM }, // 深墨绿
   ml: { bg: '#EFD9A7', ink: INK, acc: AMBER, paper: CREAM }, // 暖杏
   ai: { bg: '#22364A', ink: CREAM, acc: AMBER, paper: CREAM }, // 深夜蓝
   history: { bg: '#C07551', ink: INK, acc: AMBER, paper: CREAM }, // 赤陶
@@ -577,7 +577,7 @@ export const HighlightSwash: React.FC<{ children: React.ReactNode }> = ({ childr
 export const MintMark: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span
     style={{
-      background: 'linear-gradient(180deg, transparent 55%, #DCE5D5 55%, #DCE5D5 92%, transparent 92%)',
+      background: 'linear-gradient(180deg, transparent 55%, #EBDFC8 55%, #EBDFC8 92%, transparent 92%)',
       borderRadius: 2,
       padding: '0 1px',
     }}

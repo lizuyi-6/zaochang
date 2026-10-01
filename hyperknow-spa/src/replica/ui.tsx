@@ -73,6 +73,6 @@ export const Toggle: React.FC<{ on: boolean; onChange?: (v: boolean) => void; la
         }}
       />
     </span>
-    {label && <span style={{ fontSize: 13, color: '#1F2937' }}>{on ? 'On' : 'Off'}</span>}
+    {label && <span style={{ fontSize: 13, color: '#241B10' }}>{on ? 'On' : 'Off'}</span>}
   </span>
 );

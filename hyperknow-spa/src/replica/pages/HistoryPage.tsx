@@ -148,7 +148,7 @@ export const HistoryPage: React.FC<PageProps> = ({ state, set }) => {
                   ))}
               {((state.conversations !== null && realRows.length === 0) ||
                 (state.conversations === null && state.bootReady && demoRows.length === 0)) && (
-                <div className="hs-row" style={{ color: '#9CA3AF' }}>
+                <div className="hs-row" style={{ color: '#A69A85' }}>
                   <span className="hs-row-title">
                     {q ? L('No conversations match your search', '没有匹配的会话') : L('No conversations yet', '暂无会话')}
                   </span>

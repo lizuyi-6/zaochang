@@ -32,7 +32,7 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: #241B10;
 }
 .lf-today-pill {
   background: #e8f0fe;
@@ -46,13 +46,13 @@
 .lf-big-date {
   font-size: 56px;
   font-weight: 300;
-  color: #111827;
+  color: #241B10;
   line-height: 1;
   margin-top: 12px;
 }
 .lf-date-sub {
   font-size: 12px;
-  color: #6b7280;
+  color: #6E6152;
   margin-top: 6px;
 }
 .lf-mini-pills {
@@ -61,16 +61,16 @@
   margin-top: 14px;
 }
 .lf-mini-pill {
-  border: 1px solid #e5e7eb;
+  border: 1px solid #EADCC3;
   border-radius: 8px;
   font-size: 11px;
   font-weight: 500;
-  color: #6b7280;
+  color: #6E6152;
   padding: 3px 10px;
   cursor: pointer;
 }
 .lf-dots {
-  color: #9ca3af;
+  color: #A69A85;
   cursor: pointer;
 }
 .lf-todos {
@@ -78,7 +78,7 @@
 }
 .lf-empty {
   font-size: 13px;
-  color: #9ca3af;
+  color: #A69A85;
   text-align: center;
   margin-top: 38px;
   line-height: 1.5;
@@ -129,7 +129,7 @@
   align-items: center;
   gap: 6px;
   background: #fff;
-  border: 1px solid #d8dce3;
+  border: 1px solid #DED1B6;
   color: #5b6472;
   font-size: 12px;
   font-weight: 500;
@@ -143,7 +143,7 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 500;
-  color: #6b7280;
+  color: #6E6152;
   cursor: pointer;
 }
 .lf-toolbar-right {
@@ -152,30 +152,30 @@
   gap: 10px;
 }
 .lf-nav-arrow {
-  color: #6b7280;
+  color: #6E6152;
   cursor: pointer;
 }
 .lf-month {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: #241B10;
   margin: 0 4px;
 }
 .lf-view-text {
   font-size: 12px;
-  color: #6b7280;
+  color: #6E6152;
   cursor: pointer;
   margin-left: 12px;
 }
 .lf-view-active {
   background: #fff;
-  border: 1px solid #dde0e6;
+  border: 1px solid #D8C7A9;
   box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
   border-radius: 8px;
   padding: 4px 12px;
   font-size: 12px;
   font-weight: 500;
-  color: #1f2937;
+  color: #241B10;
   cursor: pointer;
 }
 .lf-cal-btn {
@@ -201,7 +201,7 @@
   text-align: center;
   font-size: 11px;
   font-weight: 500;
-  color: #9ca3af;
+  color: #A69A85;
   letter-spacing: 0.08em;
 }
 
@@ -211,12 +211,12 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(5, 1fr);
-  border-top: 1px solid #efefef;
+  border-top: 1px solid #F3EADA;
 }
 .lf-cell {
   position: relative;
-  border-right: 1px solid #efefef;
-  border-bottom: 1px solid #efefef;
+  border-right: 1px solid #F3EADA;
+  border-bottom: 1px solid #F3EADA;
   padding: 8px 10px;
   display: flex;
   justify-content: flex-end;
@@ -224,10 +224,10 @@
 }
 .lf-daynum {
   font-size: 12px;
-  color: #374151;
+  color: #453722;
 }
 .lf-cell.out .lf-daynum {
-  color: #c4c8cf;
+  color: #C4B191;
 }
 .lf-today-outline {
   position: absolute;
@@ -259,10 +259,10 @@
   display: flex;
   border-radius: 6px;
 }
-.lf-nav-arrow:hover { background: #F3F4F6; color: #1F2937; }
+.lf-nav-arrow:hover { background: #F3EADA; color: #241B10; }
 .lf-view-text.active {
   background: #fff;
-  border: 1px solid #dde0e6;
+  border: 1px solid #D8C7A9;
   box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
   border-radius: 8px;
   padding: 4px 10px;

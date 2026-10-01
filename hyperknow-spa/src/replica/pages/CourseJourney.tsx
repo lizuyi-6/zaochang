@@ -35,7 +35,7 @@ import './CourseJourney.css';
 /* ------------------------------------------------------------------ */
 /* Local illustration: Lattice open book and knowledge node            */
 /* ------------------------------------------------------------------ */
-export const KnotMark: React.FC<{ size?: number; color?: string }> = ({ size = 14, color = '#164E46' }) => (
+export const KnotMark: React.FC<{ size?: number; color?: string }> = ({ size = 14, color = '#C24A2E' }) => (
   <svg width={size} height={size * 0.9} viewBox="0 0 32 32" fill="none" aria-hidden="true" style={{ display: 'block' }}>
     <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke={color} strokeWidth="2" strokeLinejoin="round" />
     <path d="M16 10v18M16 6v4" stroke={color} strokeWidth="2" />
@@ -46,22 +46,22 @@ export const KnotMark: React.FC<{ size?: number; color?: string }> = ({ size = 1
 /* Original editorial knowledge-symphony plate (Kandinsky-inspired Bauhaus geometric composition). */
 export const KandinskyCover: React.FC<{ size?: number; radius?: number }> = ({ size = 248, radius = 14 }) => (
   <svg width={size} height={size} viewBox="0 0 248 248" aria-hidden="true" style={{ display: 'block', borderRadius: radius, flexShrink: 0 }}>
-    <rect width="248" height="248" fill="#F7F4EC" />
-    <path d="M20 20h208v208H20zM20 64h208M64 20v208M184 20v208M20 184h208" fill="none" stroke="#164E46" strokeOpacity=".12" />
+    <rect width="248" height="248" fill="#F7F1E4" />
+    <path d="M20 20h208v208H20zM20 64h208M64 20v208M184 20v208M20 184h208" fill="none" stroke="#C24A2E" strokeOpacity=".12" />
     {/* 康定斯基式核心黄金太阳与知识同心圆 */}
     <circle cx="152" cy="92" r="54" fill="#D9A441" fillOpacity=".9" />
-    <circle cx="152" cy="92" r="70" fill="none" stroke="#164E46" strokeWidth="1.8" strokeDasharray="5 4" strokeOpacity=".4" />
+    <circle cx="152" cy="92" r="70" fill="none" stroke="#C24A2E" strokeWidth="1.8" strokeDasharray="5 4" strokeOpacity=".4" />
     {/* 结构多边形与学术张力面 */}
-    <polygon points="64,180 108,76 182,144" fill="#B7C9B6" fillOpacity=".8" stroke="#164E46" strokeWidth="2.4" strokeLinejoin="round" />
-    <polygon points="92,192 144,116 204,184" fill="#164E46" fillOpacity=".85" stroke="#164E46" strokeWidth="2.4" strokeLinejoin="round" />
+    <polygon points="64,180 108,76 182,144" fill="#C9B896" fillOpacity=".8" stroke="#C24A2E" strokeWidth="2.4" strokeLinejoin="round" />
+    <polygon points="92,192 144,116 204,184" fill="#C24A2E" fillOpacity=".85" stroke="#C24A2E" strokeWidth="2.4" strokeLinejoin="round" />
     {/* 交叉流向切线与几何光点 */}
-    <path d="M40 208 L208 40" stroke="#164E46" strokeWidth="2.6" strokeLinecap="round" />
-    <path d="M36 124 L212 124" stroke="#164E46" strokeWidth="1.5" strokeOpacity=".3" />
-    <circle cx="72" cy="64" r="14" fill="#164E46" />
-    <circle cx="72" cy="64" r="6" fill="#F7F4EC" />
+    <path d="M40 208 L208 40" stroke="#C24A2E" strokeWidth="2.6" strokeLinecap="round" />
+    <path d="M36 124 L212 124" stroke="#C24A2E" strokeWidth="1.5" strokeOpacity=".3" />
+    <circle cx="72" cy="64" r="14" fill="#C24A2E" />
+    <circle cx="72" cy="64" r="6" fill="#F7F1E4" />
     <circle cx="196" cy="188" r="8" fill="#D9A441" />
-    <circle cx="48" cy="168" r="5" fill="#B7C9B6" />
-    <circle cx="176" cy="56" r="4" fill="#F7F4EC" stroke="#164E46" strokeWidth="2" />
+    <circle cx="48" cy="168" r="5" fill="#C9B896" />
+    <circle cx="176" cy="56" r="4" fill="#F7F1E4" stroke="#C24A2E" strokeWidth="2" />
     <path d="M52 44 Q88 32, 124 44" stroke="#D9A441" strokeWidth="3" strokeLinecap="round" fill="none" />
   </svg>
 );
@@ -108,16 +108,16 @@ const Ring: React.FC<{ size?: number; pct?: number; color?: string; track?: stri
 const FileFan: React.FC = () => (
   <svg width="58" height="38" viewBox="0 0 58 38" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
     <g transform="rotate(-15 18 23)">
-      <path d="M7 8h15l5 5v21H7Z" fill="#B7C9B6" stroke="#164E46" />
-      <path d="M12 17h10M12 21h10M12 25h6" stroke="#164E46" />
+      <path d="M7 8h15l5 5v21H7Z" fill="#C9B896" stroke="#C24A2E" />
+      <path d="M12 17h10M12 21h10M12 25h6" stroke="#C24A2E" />
     </g>
     <g transform="rotate(3 29 20)">
-      <path d="M19 4h15l5 5v24H19Z" fill="#F7F4EC" stroke="#164E46" />
-      <path d="M34 4v6h5M24 15h10M24 20h10M24 25h7" fill="none" stroke="#164E46" />
+      <path d="M19 4h15l5 5v24H19Z" fill="#F7F1E4" stroke="#C24A2E" />
+      <path d="M34 4v6h5M24 15h10M24 20h10M24 25h7" fill="none" stroke="#C24A2E" />
     </g>
     <g transform="rotate(17 42 24)">
-      <path d="M32 10h15l5 5v21H32Z" fill="#D9A441" stroke="#164E46" />
-      <path d="m37 28 4-9 5 9M38 25h7" fill="none" stroke="#164E46" strokeWidth="1.4" />
+      <path d="M32 10h15l5 5v21H32Z" fill="#D9A441" stroke="#C24A2E" />
+      <path d="m37 28 4-9 5 9M38 25h7" fill="none" stroke="#C24A2E" strokeWidth="1.4" />
     </g>
   </svg>
 );
@@ -286,7 +286,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
               <span className="hk-skel-bar" style={{ width: 64 }} />
             </div>
           ))}
-          <div style={{ marginTop: 10, color: '#6B7280', fontSize: 13 }}>{L('Loading course…', '正在加载课程…')}</div>
+          <div style={{ marginTop: 10, color: '#6E6152', fontSize: 13 }}>{L('Loading course…', '正在加载课程…')}</div>
         </div>
       </div>
     );
@@ -533,15 +533,15 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                 {t('courseJourney.progressLegend.mastered')}
               </span>
               <span className="cj-lg-item">
-                <Ring size={20} pct={75} color="#445F91" track="#EDF0F5" />
+                <Ring size={20} pct={75} color="#445F91" track="#F3EADA" />
                 {t('courseJourney.progressLegend.proficient')}
               </span>
               <span className="cj-lg-item">
-                <Ring size={20} pct={45} color="#7896C5" track="#EDF0F5" />
+                <Ring size={20} pct={45} color="#7896C5" track="#F3EADA" />
                 {t('courseJourney.progressLegend.familiar')}
               </span>
               <span className="cj-lg-item">
-                <Ring size={20} pct={15} color="#C9CED6" track="#F1F2F6" />
+                <Ring size={20} pct={15} color="#C4B191" track="#F1F2F6" />
                 {t('courseJourney.progressLegend.attempted')}
               </span>
               <span className="cj-lg-item">

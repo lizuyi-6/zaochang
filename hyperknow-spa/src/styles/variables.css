@@ -11,41 +11,41 @@
   --font-satoshi-regular: var(--font-sans);
   --font-satoshi-bold: var(--font-sans);
 
-  /* 见界 LATTICE — paper, pine, sage and amber */
-  --app-bg: #F7F4EC;
-  --panel-bg: #FFFDF7;
-  --sidebar-bg: #F1EFE5;
-  --border-color: #DADCCE;
-  --border-strong: #A9B5A6;
-  --border-muted: #E5E5D9;
-  --hairline: #E5E5D9;
-  --surface-soft: #EFEDE3;
-  --surface-hover: #E8EADF;
-  --selected-bg: #E2EADD;
-  --selected-border: #6F8B73;
-  --selected-text: #164E46;
+  /* 见界 LATTICE — 暖纸 · 墨 · 珊瑚 · 琥珀(与主站「暖色编辑工作室」同族) */
+  --app-bg: #F7F1E4;
+  --panel-bg: #FFFDF8;
+  --sidebar-bg: #F3EBDA;
+  --border-color: #E2D4BB;
+  --border-strong: #C7B294;
+  --border-muted: #ECDFC9;
+  --hairline: #ECDFC9;
+  --surface-soft: #F5EDDC;
+  --surface-hover: #F0E5CF;
+  --selected-bg: #FBE9DC;
+  --selected-border: #DF6548;
+  --selected-text: #8A2E14;
   --accent-amber: #D9A441;
   --accent-amber-ink: #79571D;
-  --accent-amber-soft: #F4E8C9;
-  --accent-sage: #8FA58A;
-  --focus-ring: #164E46;
-  --atlas-dot: #DCE0D2;
+  --accent-amber-soft: #F7EAC8;
+  --accent-sage: #9C9370;
+  --focus-ring: #C24A2E;
+  --atlas-dot: #E9DCC2;
 
   /* Text */
-  --text-primary: #203C35;
-  --text-body: #34483F;
-  --text-secondary: #536158;
-  --text-muted: #687268;
-  --text-tertiary: #687268;
-  --text-faint: #687268;
-  --text-ghost: #A4AA9C;
+  --text-primary: #241B10;
+  --text-body: #3D3120;
+  --text-secondary: #6E6152;
+  --text-muted: #7D6F5A;
+  --text-tertiary: #7D6F5A;
+  --text-faint: #7D6F5A;
+  --text-ghost: #B5A48A;
 
   /* Brand / accents; semantic and board colors remain independent. */
-  --color-primary: #164E46;
-  --color-primary-hover: #103D36;
-  --color-primary-light: rgba(22, 78, 70, 0.08);
-  --dark-pill: #164E46;
-  --dark-pill-hover: #103D36;
+  --color-primary: #C24A2E;
+  --color-primary-hover: #A63D24;
+  --color-primary-light: rgba(194, 74, 46, 0.08);
+  --dark-pill: #241B10;
+  --dark-pill-hover: #3A2C1A;
   --accent-blue: #3B6FF6;
   --accent-blue-deep: #4169E1;
   --accent-blue-soft: #E8F0FE;
@@ -72,9 +72,9 @@
   --panel-width: 368px;
 
   /* Shadows */
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06);
-  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.08);
-  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.14);
+  --shadow-card: 0 1px 4px rgba(61, 44, 30, 0.07);
+  --shadow-pop: 0 8px 24px rgba(61, 44, 30, 0.09);
+  --shadow-modal: 0 24px 64px rgba(61, 44, 30, 0.16);
 }
 
 * {

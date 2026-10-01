@@ -12,6 +12,21 @@ html, body, #root {
   box-sizing: border-box;
 }
 
+/* 编辑排印(与主站同族):标题走衬线,侧栏导航加「01/02…」斜体衬线编号。 */
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.01em; }
+.hk-nav { counter-reset: hk-nav; }
+.hk-nav-item { counter-increment: hk-nav; }
+.hk-nav-item::before {
+  content: counter(hk-nav, decimal-leading-zero);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 11px;
+  color: #C24A2E;
+  min-width: 20px;
+  opacity: .8;
+}
+.hk-nav-item.more::before { content: none; min-width: 0; }
+
 /* 见界研学:造场的学习现场。 */
 .app-container { background: #f4f2ed; color: #171816; }
 .main-content { background: #f4f2ed; }

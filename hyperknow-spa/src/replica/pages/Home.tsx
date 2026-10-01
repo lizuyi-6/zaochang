@@ -479,7 +479,7 @@ export const Home = ({ state, set }: PageProps) => {
                 </div>
                 <div className="hm-toolbar-right">
                   <span className="hm-cost">
-                    <Sparkles size={14} color="#6B7280" />
+                    <Sparkles size={14} color="#6E6152" />
                     10
                   </span>
                   <button

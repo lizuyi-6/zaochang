@@ -4,7 +4,7 @@
    ============================================================ */
 
 .cs-page {
-  background: #FAFAFA;
+  background: #FAF4E8;
   overflow-y: auto;
   height: 100%;
 }
@@ -26,7 +26,7 @@
 .cs-title {
   font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: #241B10;
   margin: 0;
   letter-spacing: -0.01em;
 }
@@ -49,18 +49,18 @@
   border-radius: 999px;
   font-size: 13px;
   font-weight: 500;
-  color: #6B7280;
+  color: #6E6152;
   cursor: pointer;
   display: flex;
   align-items: center;
   transition: background 0.12s;
 }
-.cs-tab:hover:not(.active) { color: #374151; }
+.cs-tab:hover:not(.active) { color: #453722; }
 .cs-tab.active {
   background: #fff;
-  color: #111827;
+  color: #241B10;
   font-weight: 600;
-  border: 1px solid #EFEFEF;
+  border: 1px solid #F3EADA;
   box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
 }
 
@@ -72,9 +72,9 @@
   height: 36px;
   padding: 0 14px;
   background: #fff;
-  border: 1px solid #E8EAEE;
+  border: 1px solid #EADCC3;
   border-radius: 999px;
-  color: #9CA3AF;
+  color: #A69A85;
 }
 .cs-search input {
   flex: 1;
@@ -83,9 +83,9 @@
   outline: none;
   background: transparent;
   font-size: 13px;
-  color: #1F2937;
+  color: #241B10;
 }
-.cs-search input::placeholder { color: #9CA3AF; }
+.cs-search input::placeholder { color: #A69A85; }
 
 /* ---------------- Empty state ---------------- */
 .cs-empty {
@@ -98,12 +98,12 @@
 .cs-empty-title {
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: #241B10;
   margin-top: 26px;
 }
 .cs-empty-sub {
   font-size: 13px;
-  color: #9CA3AF;
+  color: #A69A85;
   line-height: 1.6;
   margin-top: 10px;
 }
@@ -118,14 +118,14 @@
 .cs-course-card {
   width: 300px;
   background: #fff;
-  border: 1px solid #F0F0F0;
+  border: 1px solid #F3EADA;
   border-radius: 16px;
   padding: 16px;
   cursor: pointer;
   transition: box-shadow 0.15s, transform 0.12s;
 }
 .cs-course-card:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 6px 20px rgba(61, 44, 30, 0.08);
   transform: translateY(-2px);
 }
 .cs-course-cover {
@@ -144,11 +144,11 @@
 .cs-course-title {
   font-size: 15px;
   font-weight: 700;
-  color: #111827;
+  color: #241B10;
   transition: color 0.12s;
 }
 .cs-course-card:hover .cs-course-title {
-  color: #164E46;
+  color: #C24A2E;
 }
 
 /* shared bits */
@@ -157,7 +157,7 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: #9CA3AF;
+  color: #A69A85;
   margin-top: 5px;
 }
 .cs-rating {
@@ -166,7 +166,7 @@
   gap: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: #4B5563;
+  color: #5A4A30;
   margin-top: 5px;
 }
 
@@ -174,16 +174,16 @@
   height: 24px;
   padding: 0 8px;
   background: #fff;
-  border: 1px solid #E3E5EA;
+  border: 1px solid #EADCC3;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  color: #1F2937;
+  color: #241B10;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.12s;
 }
-.cs-preview:hover { background: #F9FAFB; }
+.cs-preview:hover { background: #FAF4E8; }
 
 /* ---------------- Right rail ---------------- */
 .cs-rail {
@@ -193,7 +193,7 @@
 
 .cs-card {
   background: #fff;
-  border: 1px solid #F0F0F0;
+  border: 1px solid #F3EADA;
   border-radius: 16px;
   padding: 20px;
 }
@@ -202,7 +202,7 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.09em;
-  color: #9AA1AC;
+  color: #A69A85;
   text-transform: uppercase;
   }
 
@@ -222,18 +222,18 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #4B5563;
+  color: #5A4A30;
   cursor: pointer;
 }
 .cs-week-count {
   font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: #241B10;
   letter-spacing: -0.01em;
 }
 .cs-week-sub {
   font-size: 12px;
-  color: #9CA3AF;
+  color: #A69A85;
   line-height: 1.5;
   margin-top: 6px;
 }
@@ -252,8 +252,8 @@
   background: #F7F8FA;
   border-radius: 8px;
 }
-.cs-day-l { font-size: 11px; font-weight: 600; color: #9AA1AC; }
-.cs-day-v { font-size: 13px; font-weight: 600; color: #4B5563; }
+.cs-day-l { font-size: 11px; font-weight: 600; color: #A69A85; }
+.cs-day-v { font-size: 13px; font-weight: 600; color: #5A4A30; }
 .cs-day.dim { background: transparent; }
 .cs-day.dim .cs-day-l,
 .cs-day.dim .cs-day-v { color: #D6D9DE; }
@@ -265,15 +265,15 @@
 }
 .cs-pickup {
   background: #fff;
-  border: 1px solid #EDEFF2;
+  border: 1px solid #F3EADA;
   border-radius: 12px;
   padding: 14px 16px;
   cursor: pointer;
   transition: border-color 0.12s;
 }
-.cs-pickup:hover { border-color: #E0E4EA; }
-.cs-pickup-title { font-size: 15px; font-weight: 700; color: #111827; }
-.cs-pickup-sub { font-size: 12px; color: #9CA3AF; margin-top: 5px; }
+.cs-pickup:hover { border-color: #E4D6BA; }
+.cs-pickup-title { font-size: 15px; font-weight: 700; color: #241B10; }
+.cs-pickup-sub { font-size: 12px; color: #A69A85; margin-top: 5px; }
 
 /* Marketplace card */
 .cs-mkt { margin-top: 22px; padding: 20px 16px; }
@@ -282,7 +282,7 @@
   align-items: center;
   justify-content: space-between;
 }
-.cs-mkt-title-h { font-size: 17px; font-weight: 700; color: #111827; }
+.cs-mkt-title-h { font-size: 17px; font-weight: 700; color: #241B10; }
 .cs-seemore {
   display: flex;
   align-items: center;
@@ -292,10 +292,10 @@
   color: #6B7B94;
   cursor: pointer;
 }
-.cs-seemore:hover { color: #4C6696; }
+.cs-seemore:hover { color: #B4472B; }
 .cs-mkt-sub-h {
   font-size: 12px;
-  color: #9CA3AF;
+  color: #A69A85;
   margin-top: 5px;
 }
 .cs-mkt-rows {
@@ -313,9 +313,9 @@
   transition: background 0.12s;
 }
 .cs-mkt-row:hover {
-  background: #F9FAFB;
+  background: #FAF4E8;
 }
-.cs-mkt-row + .cs-mkt-row { border-top: 1px solid #F4F5F7; }
+.cs-mkt-row + .cs-mkt-row { border-top: 1px solid #FAF4E8; }
 .cs-mkt-thumb {
   width: 52px;
   height: 52px;
@@ -342,14 +342,14 @@
 .cs-mkt-title {
   font-size: 13.5px;
   font-weight: 600;
-  color: #1F2937;
+  color: #241B10;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   transition: color 0.12s;
 }
 .cs-mkt-row:hover .cs-mkt-title {
-  color: #164E46;
+  color: #C24A2E;
 }
 
 /* 交互补齐:周导航按钮 / 今日高亮 */
@@ -358,12 +358,12 @@
   background: none;
   padding: 2px;
   display: flex;
-  color: #4B5563;
+  color: #5A4A30;
   cursor: pointer;
   border-radius: 6px;
 }
-.cs-week-nav button:hover { background: #F3F4F6; color: #1F2937; }
-.cs-day.today { background: #E8F0F8; }
+.cs-week-nav button:hover { background: #F3EADA; color: #241B10; }
+.cs-day.today { background: #FBEADF; }
 .cs-day.today .cs-day-l,
 .cs-day.today .cs-day-v { color: #33507E; }
 
