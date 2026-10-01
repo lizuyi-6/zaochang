@@ -475,6 +475,18 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [panelOpen]);
 
+  /* 反馈/设置弹窗背板会挡住整页按钮,Esc 必须能随时退出(可发现性兜底) */
+  useEffect(() => {
+    if (!settingsOpen && !feedbackOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (feedbackOpen) setFeedbackOpen(false);
+      else setSettingsOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [settingsOpen, feedbackOpen]);
+
   // ----- engine control refs -----
   const ctl = useRef({ cancelled: false, paused: false, skipped: false });
   /* 暂停感知的授课单调时钟:字幕同步的起声超时/断流止损按"课上真实流逝时间"计,
