@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import type { PageProps } from '../types';
 import { placeholders, newsFeed, homeCourses } from '../data';
+import { fetchDailyFeed, type DailyFeedItem } from '../backend';
 import { Logo, PlanetDoodle, CourseCover, Handshake, WelcomeReader, Ufo } from '../illustrations';
 import { Modal, DarkPill } from '../ui';
 import { useI18n, TRich } from '../i18n';
@@ -210,6 +211,9 @@ export const Home = ({ state, set }: PageProps) => {
   const [uploading, setUploading] = useState(false);
   const [listening, setListening] = useState(false);
   const [newsOffset, setNewsOffset] = useState(0);
+  const [liveNews, setLiveNews] = useState<DailyFeedItem[] | null>(null);
+  const [feedRound, setFeedRound] = useState(0);
+  const [feedLoading, setFeedLoading] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -354,8 +358,50 @@ export const Home = ({ state, set }: PageProps) => {
     toast(ok ? L('Invite link copied — share it with a friend', '邀请链接已复制——发给朋友吧') : L('Could not copy the link', '复制链接失败'));
   };
 
+  // 「今日值得学」动态资讯源:阶跃联网搜索现查(后端按日+轮缓存),失败回退静态列表
+  useEffect(() => {
+    let alive = true;
+    void fetchDailyFeed(0).then((items) => {
+      if (alive && items) setLiveNews(items);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const shuffleNews = async () => {
+    // 有真实动态源:换一批 = 拉取新轮(新检索词出新内容);失败退回池内轮转
+    if (liveNews && liveNews.length > 0) {
+      setFeedLoading(true);
+      const next = await fetchDailyFeed(feedRound + 1);
+      setFeedLoading(false);
+      if (next && next.length > 0) {
+        setLiveNews(next);
+        setFeedRound((r) => r + 1);
+        setNewsOffset(0);
+        toast(L('Trends refreshed', '趋势已刷新'));
+        return;
+      }
+    }
+    const pool = liveNews?.length ?? news.length;
+    setNewsOffset((i) => (i + 1) % Math.max(pool, 1));
+    toast(L('Trends refreshed', '趋势已刷新'));
+  };
+
   const news = newsFeed();
   const rotatedNews = [...news.slice(newsOffset), ...news.slice(0, newsOffset)];
+  // 动态源条目截窗(5 条一批,换一批翻页池),静态兜底保持原轮转
+  const liveWindow = liveNews ? liveNews.slice(newsOffset, newsOffset + 5) : [];
+  const visibleNews: Array<{ key: string; title: string; url: string; source: string }> =
+    liveNews && liveWindow.length > 0
+      ? liveWindow.map((it) => ({ key: it.url, title: it.title, url: it.url, source: it.source }))
+      : rotatedNews.map((n) => ({
+          key: n,
+          title: n,
+          // 静态兜底也点得开:跳 Google 搜索该标题
+          url: `https://www.google.com/search?q=${encodeURIComponent(n)}`,
+          source: '',
+        }));
 
   return (
     <div className="hk-page with-sidebar">
@@ -762,10 +808,10 @@ export const Home = ({ state, set }: PageProps) => {
                   {t('whatsNew.modalTitle')}
                 </span>
                 <span
-                  className="hm-news-next"
+                  className={`hm-news-next${feedLoading ? ' loading' : ''}`}
                   onClick={() => {
-                    setNewsOffset((i) => (i + 1) % Math.max(news.length, 1));
-                    toast(L('Trends refreshed', '趋势已刷新'));
+                    if (feedLoading) return;
+                    void shuffleNews();
                   }}
                 >
                   <RotateCcw size={13} />
@@ -773,13 +819,21 @@ export const Home = ({ state, set }: PageProps) => {
                 </span>
               </div>
               <div className="hm-news-list">
-                {rotatedNews.map((n) => (
-                  <div className="hm-news-row" key={n}>
+                {visibleNews.map((n) => (
+                  <a
+                    className="hm-news-row"
+                    key={n.key}
+                    href={n.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={n.title}
+                  >
                     <Spline size={14} />
-	                    {n}
-	                  </div>
-	                ))}
-	              </div>
+                    <span className="hm-news-title">{n.title}</span>
+                    {n.source && <span className="hm-news-src">{n.source}</span>}
+                  </a>
+                ))}
+              </div>
 	            </div>
 	          </>
 	        )}
