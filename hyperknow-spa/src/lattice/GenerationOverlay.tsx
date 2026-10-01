@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
-import { PlanetDoodle } from './illustrations';
 import { useI18n } from './i18n';
 import { L } from './i18n/content';
 import {
@@ -15,11 +14,12 @@ import type { PageProps } from './types';
 import './shell.css';
 
 /**
- * 全屏"课程生成中"浮层 — 在线优先:同源真后端可达时按真实 SSE 帧驱动步骤清单
- * (boot → researching_the_web → generating_initial_syllabus → blueprint_ready);
- * 真实蓝图确认: 后端在 blueprint_ready 停住, 用户可审查大纲与课节、勾选单元后确认进入细化;
- * 细化阶段独立调用 LLM 每单元保存检查点, 真实回报进度, 支持断点恢复;
- * 后端不可达(静态托管/未配置/断网)无缝回退伪生成计时序列。
+ * 全屏「课程工坊」— 课程生成等待体验(暖色编辑工作室语言)。
+ * 呈现层重做(2026-10):全屏暖纸接管替代小卡浮层;主题衬线回显;编号阶段时间线由
+ * 真实 SSE 帧驱动(boot → researching_the_web → generating_initial_syllabus →
+ * blueprint_ready → 逐单元细化);整体进度条按阶段权重 × 真实单元比例;已耗时计时器。
+ * 逻辑层与旧实现逐字一致:在线优先、蓝图确认门、检查点断点恢复、abort/忙碌守卫、
+ * 积分回写;后端不可达无缝回退伪生成计时序列。
  */
 
 interface Phase {
@@ -39,6 +39,12 @@ const LIVE_STEPS: { id: GenStepId; phase: 'initial' | 'research' | 'crafting' }[
   { id: 'generating_initial_syllabus', phase: 'crafting' },
 ];
 
+const PSEUDO_PHASE_PCT: Record<'initial' | 'crafting' | 'refining', number> = {
+  initial: 16,
+  crafting: 58,
+  refining: 92,
+};
+
 const parseLines = (raw: string, fallback: string): string[] => {
   try {
     const arr = JSON.parse(raw);
@@ -47,6 +53,11 @@ const parseLines = (raw: string, fallback: string): string[] => {
     /* dict 值不是数组时退回阶段名 */
   }
   return [fallback];
+};
+
+const fmtElapsed = (ms: number) => {
+  const total = Math.floor(ms / 1000);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 };
 
 export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
@@ -69,7 +80,8 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const [ready, setReady] = useState(false);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [lineIdx, setLineIdx] = useState(0);
-  const [unitsDone, setUnitsDone] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const startedAtRef = useRef<number>(Date.now());
   const finishedRef = useRef(false);
   const remainingRef = useRef<number | null>(null);
   /* Stage 2 请求生命周期:取消/卸载必须真正 abort SSE,忙碌守卫挡连击(重复 confirm
@@ -86,6 +98,14 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
 
   const cg = 'chatResponse.courseGeneration';
   const phase = PHASES[phaseIdx];
+
+  /* 已耗时计时:挂起即走,完成/失败/确认门暂停在原地(用户回看耗时) */
+  const clockRunning = !ready && !failed && !insufficient;
+  useEffect(() => {
+    if (!query || !clockRunning) return;
+    const iv = window.setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 1000);
+    return () => window.clearInterval(iv);
+  }, [query, clockRunning]);
 
   const finish = (gen: ReturnType<typeof buildGeneratedCourse>, persisted = false) => {
     if (finishedRef.current) return;
@@ -138,11 +158,14 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     stage2BusyRef.current = true;
     const ctrl = new AbortController();
     stage2CtrlRef.current = ctrl;
+    startedAtRef.current = Date.now();
+    setElapsedMs(0);
     setWaitingConfirmation(false);
     setStage2Active(true);
     setFailed(false);
     setActivePhase('crafting');
-    setStepStatus((s) => ({ ...s, generating_initial_syllabus: 'loading' }));
+    /* 蓝图已确认完成:03 保持 done,细化进度由 04 的单元计数承载 */
+    setStepStatus((s) => ({ ...s, generating_initial_syllabus: 'completed' }));
 
     const unitsToGenerate = customUnits || selectedUnitIds;
 
@@ -203,6 +226,8 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     if (!query) return;
     finishedRef.current = false;
     remainingRef.current = null;
+    startedAtRef.current = Date.now();
+    setElapsedMs(0);
     setSearchProgress(null);
     setStepStatus({});
     setInsufficient(false);
@@ -318,24 +343,79 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     return () => window.clearInterval(iv);
   }, [query, ready, waitingConfirmation]);
 
-  /* 伪生成 crafting 阶段的单元计数 */
-  useEffect(() => {
-    if (mode !== 'pseudo' || phase.key !== 'crafting' || !query) return;
-    const total = 4;
-    const iv = window.setInterval(() => setUnitsDone((n) => Math.min(total, n + 1)), 850);
-    return () => window.clearInterval(iv);
-  }, [mode, phase.key, query]);
-
   if (!query) return null;
 
   const linePhase = mode === 'pseudo' ? phase.key : activePhase;
   const lines = parseLines(t(`${cg}.loadingLines.${linePhase}`), t(`${cg}.phase.${linePhase}`));
   const line = lines[lineIdx % lines.length];
-  const totalUnits = 4;
-  const unitsLabel =
-    phase.key === 'crafting' && unitsDone >= totalUnits
-      ? t(`${cg}.sessionsRefined_other`, { count: 12 })
-      : t(`${cg}.unitsExpanded`, { current: Math.max(1, unitsDone), total: totalUnits });
+
+  /* ———— 阶段时间线(唯一事实:stepStatus + 确认门 + stage2 计数)———— */
+  type StageState = 'pending' | 'active' | 'done';
+  const stepState = (id: GenStepId): StageState => {
+    const st = stepStatus[id];
+    if (st === 'completed') return 'done';
+    if (st === 'loading') return 'active';
+    return 'pending';
+  };
+  const boot = stepState('boot');
+  const research = stepState('researching_the_web');
+  const syllabus = stepState('generating_initial_syllabus');
+  const refine: StageState = ready ? 'done' : stage2Active ? 'active' : waitingConfirmation ? 'pending' : 'pending';
+  const confirmGate = waitingConfirmation && !!blueprint;
+
+  const stages: { num: string; label: string; state: StageState; aux?: React.ReactNode }[] =
+    mode === 'pseudo'
+      ? PHASES.map((p, i) => ({
+          num: `0${i + 1}`,
+          label: t(`${cg}.phase.${p.key}`),
+          state: (i < phaseIdx ? 'done' : i === phaseIdx ? 'active' : 'pending') as StageState,
+          aux: i === phaseIdx ? line : undefined,
+        }))
+      : [
+          {
+            num: '01',
+            label: L('Parsing your request', '解析学习需求'),
+            state: boot,
+          },
+          {
+            num: '02',
+            label: L('Researching authoritative sources', '检索权威资料'),
+            state: research,
+            aux:
+              research === 'done' && searchProgress && (searchProgress.sources ?? 0) > 0 ? (
+                L(`Found ${searchProgress.sources} sources`, `已检索到 ${searchProgress.sources} 条来源`)
+              ) : research === 'done' && searchProgress?.status === 'not_triggered' ? (
+                L('Web search bypassed — built from model knowledge', '无需外部检索，基于模型知识构建')
+              ) : undefined,
+          },
+          {
+            num: '03',
+            label: L('Drafting the course blueprint', '起草课程蓝图'),
+            state: confirmGate ? 'done' : syllabus,
+            aux: confirmGate ? L('Awaiting your review below', '蓝图已就绪，请在下方审查确认') : undefined,
+          },
+          {
+            num: '04',
+            label: L('Refining unit content', '细化单元内容'),
+            state: refine,
+            aux:
+              stage2Active && liveTotalUnits > 0 ? (
+                L(`Unit ${liveCurrentUnit}/${liveTotalUnits}: ${liveUnitTitle}`, `第 ${liveCurrentUnit}/${liveTotalUnits} 单元：${liveUnitTitle}`)
+              ) : confirmGate ? (
+                L('Starts after you confirm the blueprint', '确认蓝图后开始')
+              ) : undefined,
+          },
+        ];
+
+  /* 整体进度:阶段权重(06/18/26/50)× 阶段内真实比例;确认门停在 50%。 */
+  const stagePct = (st: StageState) => (st === 'done' ? 1 : 0);
+  let pct: number;
+  if (ready) pct = 100;
+  else if (mode === 'pseudo') pct = PSEUDO_PHASE_PCT[phase.key];
+  else if (confirmGate) pct = 50;
+  else if (stage2Active && liveTotalUnits > 0) pct = 50 + Math.round((48 * liveCurrentUnit) / liveTotalUnits);
+  else pct = 6 * stagePct(boot) + 18 * stagePct(research) + 26 * stagePct(syllabus);
+  pct = Math.max(4, Math.min(100, pct));
 
   const toggleUnit = (unitId: string) => {
     setSelectedUnitIds((prev) =>
@@ -343,270 +423,128 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     );
   };
 
+  const headline = insufficient
+    ? L('Out of credits', '积分不足')
+    : failed
+      ? L('Generation interrupted', '生成中断')
+      : ready
+        ? L('Your course is ready', '课程已就绪')
+        : confirmGate
+          ? L('Review the blueprint', '审查课程蓝图')
+          : L('Crafting your course', '正在为你打造这门课');
+
   return (
-    <div className="gen-veil" role="dialog" aria-label={t(`${cg}.phase.crafting`)}>
-      <div className="gen-card" style={{ maxWidth: waitingConfirmation ? 460 : 400 }}>
-        <div className={`gen-orbie${mode !== 'pseudo' ? ' busy' : ''}`}>
-          <PlanetDoodle size={58} />
-        </div>
+    <div className="gen-veil" role="dialog" aria-label={headline}>
+      <div className="gen-atelier">
+        <div className="gen-kicker">LATTICE ATELIER · {t(`${cg}.phase.crafting`)}</div>
+        <h2 className="gen-topic" title={query}>
+          “{query}”
+        </h2>
 
         {insufficient || failed ? (
-          <div className="gen-phase" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            <div style={{ fontWeight: 700 }}>
-              {insufficient ? L('Out of credits', '积分不足') : L('Generation interrupted', '生成中断')}
-            </div>
-            <div style={{ maxWidth: 340, whiteSpace: 'normal', lineHeight: 1.6, color: 'var(--ink-500)', fontSize: 13 }}>
+          <div className="gen-alert" role="status">
+            <div className="gen-alert-title">{headline}</div>
+            <p className="gen-alert-body">
               {insufficient
                 ? L(
                     'A course costs 10 credits. You get 20 free credits every day (2 per chat), resetting at midnight Beijing time.',
                     '生成一门课程需要 10 积分。每天免费获得 20 积分（对话 2/次），北京时间零点自动重置。',
                   )
-                : L('Generation encountered an issue. Your checkpoints are saved; you can resume anytime.', '课程生成发生异常。检查点已安全落库，您可以从断点无缝恢复。')}
-            </div>
+                : L(
+                    'Generation hit an issue. Your checkpoint is safely stored — resume anytime without paying twice.',
+                    '生成遇到异常。检查点已安全落库，可随时恢复，不会重复扣积分。',
+                  )}
+            </p>
             {blueprintUuid && !insufficient && (
-              <button
-                type="button"
-                className="btn primary"
-                style={{ marginTop: 8, padding: '6px 16px', fontSize: 13, borderRadius: 6 }}
-                onClick={() => confirmAndStartStage2()}
-              >
-                {L('Resume from Checkpoint', '从检查点恢复生成')}
+              <button type="button" className="gen-resume" onClick={() => confirmAndStartStage2()}>
+                {L('Resume from checkpoint', '从检查点恢复生成')}
               </button>
             )}
           </div>
         ) : ready ? (
-          <div className="gen-phase">{t(`${cg}.courseReady`)}</div>
-        ) : waitingConfirmation && blueprint ? (
-          /* 真实蓝图阶段：审查大纲、挑选单元、确认开始细化（复用品牌深绿与SVG，兼容计划数量与节数时长） */
-          <div className="gen-blueprint-review" style={{ textAlign: 'left', width: '100%', marginTop: 8 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--coral-600)', marginBottom: 4, textAlign: 'center' }}>
-              {L('Review Course Blueprint', '审查并确认课程蓝图')}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--ink-600)', marginBottom: 10, textAlign: 'center', lineHeight: 1.4 }}>
-              <strong>{blueprint.courseTitle}</strong>
-              {blueprint.courseDescription && (
-                <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 4 }}>
-                  {blueprint.courseDescription}
-                </div>
-              )}
-            </div>
+          <div className="gen-ready" role="status">{t(`${cg}.courseReady`)}</div>
+        ) : (
+          <>
+            <ol className="gen-stages">
+              {stages.map((s) => (
+                <li key={s.num} className={`gen-stage ${s.state}`}>
+                  <span className="gen-stage-num">{s.num}</span>
+                  <span className="gen-stage-ico" aria-hidden="true">
+                    {s.state === 'done' ? (
+                      <Check size={13} strokeWidth={3} />
+                    ) : s.state === 'active' ? (
+                      <span className="gen-dot" />
+                    ) : null}
+                  </span>
+                  <span className="gen-stage-body">
+                    <span className="gen-stage-label">{s.label}</span>
+                    {s.aux ? (
+                      <span className="gen-stage-aux">{s.aux}</span>
+                    ) : s.state === 'active' && mode === 'live' && line && !confirmGate ? (
+                      <span className="gen-stage-aux" key={line}>{line}</span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
 
-            {/* 服务端计划指标兼容展示：单元数/节数/预估时长 */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                gap: 14,
-                marginBottom: 10,
-                fontSize: 11.5,
-                color: 'var(--coral-600)',
-                background: 'var(--sand-150)',
-                padding: '6px 12px',
-                borderRadius: 8,
-                border: '1px solid #EBDFC8',
-              }}
-            >
-              <span>{L(`Units: ${blueprint.units?.length || blueprint.totalUnits || 0}`, `单元：${blueprint.units?.length || blueprint.totalUnits || 0}`)}</span>
+            <div className="gen-meter" aria-hidden="true">
+              <span className="gen-meter-fill" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="gen-meta">
+              <span className="gen-meta-pct">{pct}%</span>
+              <span className="gen-meta-elapsed">{L('Elapsed', '已耗时')} {fmtElapsed(elapsedMs)}</span>
+            </div>
+          </>
+        )}
+
+        {confirmGate && blueprint && (
+          <div className="gen-blueprint">
+            <div className="gen-bp-title">{blueprint.courseTitle}</div>
+            {blueprint.courseDescription && <div className="gen-bp-desc">{blueprint.courseDescription}</div>}
+            <div className="gen-bp-metrics">
+              <span>{L(`Units ${blueprint.units?.length || blueprint.totalUnits || 0}`, `单元 ${blueprint.units?.length || blueprint.totalUnits || 0}`)}</span>
               <span>
                 {L(
-                  `Lectures: ${
-                    blueprint.totalLectures ||
-                    blueprint.units?.reduce((acc, u) => acc + (u.lectureCount || 3), 0) ||
-                    0
-                  }`,
-                  `讲次：${
-                    blueprint.totalLectures ||
-                    blueprint.units?.reduce((acc, u) => acc + (u.lectureCount || 3), 0) ||
-                    0
-                  }`,
+                  `Lectures ${blueprint.totalLectures || blueprint.units?.reduce((acc, u) => acc + (u.lectureCount || 3), 0) || 0}`,
+                  `讲次 ${blueprint.totalLectures || blueprint.units?.reduce((acc, u) => acc + (u.lectureCount || 3), 0) || 0}`,
                 )}
               </span>
               <span>
                 {L(
-                  `Est. Time: ${
-                    blueprint.estimatedMinutes
-                      ? `${blueprint.estimatedMinutes}m`
-                      : `${(blueprint.units?.length || 4) * 45}m`
-                  }`,
-                  `预估时长：${
-                    blueprint.estimatedMinutes
-                      ? `${blueprint.estimatedMinutes} 分钟`
-                      : `${(blueprint.units?.length || 4) * 45} 分钟`
-                  }`,
+                  `≈ ${blueprint.estimatedMinutes ? `${blueprint.estimatedMinutes} min` : `${(blueprint.units?.length || 4) * 45} min`}`,
+                  `≈ ${blueprint.estimatedMinutes ? `${blueprint.estimatedMinutes} 分钟` : `${(blueprint.units?.length || 4) * 45} 分钟`}`,
                 )}
               </span>
             </div>
-
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-700)', marginBottom: 6 }}>
-              {L('Select Units to Generate:', '选择要生成的单元：')}
-            </div>
-
-            <div
-              style={{
-                maxHeight: 200,
-                overflowY: 'auto',
-                border: '1px solid #EADCC3',
-                borderRadius: 8,
-                padding: '8px 10px',
-                background: 'var(--sand-100)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-              }}
-            >
+            <div className="gen-bp-hint">{L('Uncheck anything you do not need — unchecked units cost nothing.', '不需要的单元可以取消勾选——未勾选的单元不扣积分。')}</div>
+            <div className="gen-bp-list" role="group" aria-label={L('Units to generate', '要生成的单元')}>
               {blueprint.units?.map((u, idx) => {
                 const uId = u.unitId || `unit-${idx + 1}`;
                 const checked = selectedUnitIds.includes(uId);
                 return (
-                  <label
-                    key={uId}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 8,
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      color: checked ? 'var(--ink-900)' : 'var(--ink-300)',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleUnit(uId)}
-                      style={{ marginTop: 2, accentColor: 'var(--coral-600)' }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{u.title}</div>
+                  <label key={uId} className={`gen-bp-unit${checked ? ' on' : ''}`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleUnit(uId)} />
+                    <span className="gen-bp-unit-num">{String(idx + 1).padStart(2, '0')}</span>
+                    <span className="gen-bp-unit-body">
+                      <span className="gen-bp-unit-title">{u.title}</span>
                       {u.objectives && u.objectives.length > 0 && (
-                        <div style={{ fontSize: 11, color: '#52796F', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                            <circle cx="8" cy="8" r="7" stroke="#C24A2E" strokeWidth="2" />
-                            <circle cx="8" cy="8" r="3" fill="#D9A441" />
-                          </svg>
-                          <span>{u.objectives[0]}</span>
-                        </div>
+                        <span className="gen-bp-unit-obj">{u.objectives[0]}</span>
                       )}
-                    </div>
+                    </span>
                   </label>
                 );
               })}
             </div>
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'center' }}>
-              <button
-                type="button"
-                className="btn primary"
-                style={{
-                  padding: '8px 20px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  background: 'var(--coral-600)',
-                  color: 'var(--white)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(22, 78, 70, 0.25)',
-                }}
-                disabled={selectedUnitIds.length === 0}
-                onClick={() => confirmAndStartStage2()}
-              >
-                {L(`Confirm & Generate (${selectedUnitIds.length} units)`, `确认大纲并生成 (${selectedUnitIds.length} 个单元)`)}
-              </button>
-            </div>
+            <button
+              type="button"
+              className="gen-bp-confirm"
+              disabled={selectedUnitIds.length === 0}
+              onClick={() => confirmAndStartStage2()}
+            >
+              {L(`Confirm & generate ${selectedUnitIds.length} units`, `确认大纲，生成 ${selectedUnitIds.length} 个单元`)}
+            </button>
           </div>
-        ) : mode === 'live' ? (
-          <div className="gen-steps">
-            {LIVE_STEPS.map((s) => {
-              const st = stepStatus[s.id] ?? 'pending';
-              return (
-                <div key={s.id} className={`gen-step ${st}`}>
-                  <span className="gen-step-ico">{st === 'completed' ? <Check size={13} strokeWidth={3} /> : <span className="gen-dot" />}</span>
-                  <span className="gen-step-label">{t(`${cg}.phase.${s.phase}`)}</span>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="gen-phase">{t(`${cg}.phase.${mode === 'pseudo' ? phase.key : 'initial'}`)}</div>
-        )}
-
-        {mode === 'live' && !ready && !waitingConfirmation && searchProgress && (
-          <div
-            className="gen-search-status"
-            style={{
-              fontSize: 12,
-              color: (searchProgress.sources ?? 0) > 0 ? '#059669' : 'var(--ink-500)',
-              marginTop: 6,
-              textAlign: 'center',
-              maxWidth: 360,
-              lineHeight: 1.4,
-            }}
-          >
-            {(searchProgress.sources ?? 0) > 0 ? (
-              <span>
-                {L(`Found ${searchProgress.sources} reference sources`, `已检索到 ${searchProgress.sources} 条权威资料`)}
-                {searchProgress.titles && searchProgress.titles.length > 0 && (
-                  <span
-                    style={{
-                      display: 'block',
-                      fontSize: 11,
-                      color: 'var(--ink-300)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      marginTop: 2,
-                    }}
-                  >
-                    {searchProgress.titles[0]}
-                  </span>
-                )}
-              </span>
-            ) : searchProgress.status && searchProgress.status !== 'success' ? (
-              <span style={{ color: 'var(--ink-300)' }}>
-                {searchProgress.status === 'not_triggered'
-                  ? L('Bypassed web search, using structured model knowledge', '无需外部检索，已基于大模型知识库直接构建')
-                  : (searchProgress.reason || L('Web search unavailable, continuing with model knowledge', '未获取到外部研学资料，已结合知识库继续生成'))}
-              </span>
-            ) : null}
-          </div>
-        )}
-
-        {stage2Active && liveTotalUnits > 0 && !ready && (
-          <div
-            className="gen-stage2-progress"
-            style={{
-              marginTop: 10,
-              padding: '6px 12px',
-              background: '#ECFDF5',
-              borderRadius: 6,
-              border: '1px solid #A7F3D0',
-              color: '#065F46',
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {L(
-              `Refining Unit ${liveCurrentUnit}/${liveTotalUnits}: ${liveUnitTitle}`,
-              `正在细化第 ${liveCurrentUnit}/${liveTotalUnits} 单元：${liveUnitTitle}`,
-            )}
-          </div>
-        )}
-
-        {!ready && !waitingConfirmation && <div className="gen-line" key={`${linePhase}-${lineIdx}`}>{line}</div>}
-
-        {mode === 'pseudo' && !ready && (
-          <>
-            <div className="gen-track">
-              {PHASES.map((p, i) => (
-                <span
-                  key={p.key}
-                  className={`gen-seg${i < phaseIdx ? ' done' : i === phaseIdx ? ' active' : ''}`}
-                  style={{ '--gen-dur': `${p.ms}ms` } as React.CSSProperties}
-                />
-              ))}
-            </div>
-            {phase.key !== 'initial' && <div className="gen-units">{unitsLabel}</div>}
-          </>
         )}
 
         <button className="gen-cancel" type="button" onClick={cancel}>
