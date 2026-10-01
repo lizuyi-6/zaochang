@@ -64,6 +64,6 @@ export async function GET(request: Request) {
     cacheSet(cacheKey, items);
     return Response.json({ success: true, data: { day: dayKey, round, items, cached: false } });
   } catch {
-    return jsonError("feed_failed", 500);
+    return Response.json({ error: "feed_failed" }, { status: 500 });
   }
 }
