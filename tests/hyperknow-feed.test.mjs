@@ -65,3 +65,17 @@ test('mergeFeedItems:新鲜优先(带时间倒序,无时间按原序垫后)+脏�
   ]);
   assert.deepEqual(items.map((it) => it.title), ['昨日的最新研究进展', '两年前的旧闻报道一则', '无时间戳的正常报道', '时间字段异常的报道']);
 });
+
+test('mergeFeedItems:同文异域转载按归一标题判重(标点/空白差异不影响)', () => {
+  const items = mergeFeedItems([
+    [
+      { title: '刷新多项纪录！我国硬核科技与重大工程捷报频传', url: 'https://news.china.com.cn/a' },
+      { title: '刷新多项纪录！我国硬核科技与重大工程捷报频传', url: 'http://www.81.cn/b' }, // 同文异域转载
+      { title: '刷新多项纪录：我国硬核科技与重大工程捷报频传', url: 'https://xhby.net/c' }, // 标点差异归一同题
+      { title: '另一篇独立报道内容标题', url: 'https://other.com/d' },
+    ],
+  ]);
+  assert.equal(items.length, 2);
+  assert.equal(items[0].source, 'news.china.com.cn'); // 首现者留
+  assert.equal(items[1].title, '另一篇独立报道内容标题');
+});
