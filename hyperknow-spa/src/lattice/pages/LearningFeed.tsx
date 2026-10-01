@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar,
   MoreVertical,
@@ -19,7 +19,7 @@ import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
 import { toast } from '../toast';
 import { fetchConversations, fetchMarketCourses, type ConvRow, type MarketCourse } from '../backend';
-import { courseJoinKey, isCourseJoined, DEMO_COURSE_KEY } from '../courseJoinMemory';
+import { courseJoinKey, isCourseJoined } from '../courseJoinMemory';
 import './LearningFeed.css';
 
 interface DayCell {
