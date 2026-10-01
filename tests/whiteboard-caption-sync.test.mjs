@@ -873,22 +873,26 @@ test('Regression 14: liveLessonFromPlan handles intermediate quick_checks with e
   assert.equal(s4.systemEnd, true, '最后一步讲座带有 systemEnd 标志');
 });
 
-test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates 1-2 sentence micro-explanations, diagram invariant, and intermediate answer-gated checks', () => {
-  // 提示词必须约束 1-2 句微讲解，杜绝长篇独白，保留关键不变量
-  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /1 to 2/i, 'Prompt 必须要求 1-2 句紧凑微讲解');
-  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /At least one diagram MUST be included/i, '必须保留 diagram 不变量');
-  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /FINAL step must always be a quick check/i, '必须保留 FINAL quick_check 不变量');
-  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /intermediate checkpoint/i, 'Prompt 必须包含阶段性互动卡点要求');
-  assert.doesNotMatch(WHITEBOARD_INSTRUCTOR_PROMPT, /3 to 5 full/i, '旧版 3-5 句长独白要求必须已被移除');
+test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures (10-14 steps, 2-4 sentence narration), diagram invariant, and answer-gated checks', () => {
+  // 用户反馈"每一讲都讲的很少就结束了"→ 提示词从 5-7 步微讲座升级为 10-14 步完整讲座
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /10 to 14 steps/i, 'Prompt 必须要求 10-14 步完整讲座');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /2 to 4 crisp, conversational sentences/i, 'Prompt 必须要求每步 2-4 句旁白');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /FULL-LENGTH lecture/i, '必须定义为完整讲座而非微讲座');
+  assert.doesNotMatch(WHITEBOARD_INSTRUCTOR_PROMPT, /micro-lecture|5 to 7 bite-sized|strictly 1 to 2/i, '旧版微讲座要求必须已被移除');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /at least one Mermaid diagram/i, '必须保留 diagram 不变量');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3 quick_check steps/i, '必须保留 3 处 quick_check(含终末)不变量');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Worked Example/i, '必须包含实例演示步');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Common Mistakes/i, '必须包含常见误区步');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3-5 substantive bullet points/i, '卡片必须要求 3-5 条实质要点');
 
-  // fallbackLecturePlan 必须具备紧凑微讲解与阶段性测试
+  // fallbackLecturePlan 保持紧凑(仅上游故障应急路径):5 步 + 阶段快测
   const zhPlan = fallbackLecturePlan('认知心理学');
   assert.equal(zhPlan.steps.length, 5);
   // 中间第 3 步 (index 2) 为阶段快测
   assert.equal(zhPlan.steps[2].board_action.type, 'quick_check', '降级计划第 3 步必须为阶段性快测');
   assert.ok(zhPlan.steps[2].board_action.explanation, '阶段快测必须有 explanation');
 
-  // 每步旁白均必须为 1-2 句紧凑微讲解 (<= 60 汉字)
+  // 每步旁白均必须为紧凑微讲解 (<= 60 汉字)
   for (const [idx, step] of zhPlan.steps.entries()) {
     assert.ok(step.spoken_text.length <= 60, `第 ${idx + 1} 步降级旁白 (${step.spoken_text.length}字) 必须简明紧凑`);
   }
