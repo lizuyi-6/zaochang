@@ -21,6 +21,8 @@ import {
 import type { PageProps } from '../types';
 import { chatUserMessage } from '../data';
 import { chatLive, pingBackend, translateLive } from '../backend';
+import { markupToPlain } from '../markup';
+import { AssistantMarkup } from '../AssistantMarkup';
 import { L } from '../i18n/content';
 import { LANGUAGES, useI18n } from '../i18n';
 import { AvatarCat } from '../illustrations';
@@ -169,7 +171,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           return next;
         });
       } else if (state.autoSpeak && acc.trim()) {
-        void tts.speak(acc, state.voice, state.speed);
+        void tts.speak(markupToPlain(acc), state.voice, state.speed);
       }
       setStreaming(false);
     })();
@@ -194,14 +196,14 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   /* ---------------- 真实动作:复制 / 翻译 / 朗读 / 语音 / 附件 / 状态 ---------------- */
 
   const copyMessage = async (idx: number) => {
-    const text = msgs[idx]?.text ?? '';
+    const text = markupToPlain(msgs[idx]?.text ?? '');
     if (!text.trim()) return;
     const ok = await copyText(text);
     toast(ok ? t('chatResponse.copied') : L('Could not copy', '复制失败'));
   };
 
   const readAloud = async (idx: number) => {
-    const text = msgs[idx]?.text ?? '';
+    const text = markupToPlain(msgs[idx]?.text ?? '');
     if (!text.trim()) return;
     if (speakingIdx === idx) {
       tts.stop();
@@ -399,11 +401,12 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         </>
       )}
 
-      {/* 追加对话:用户发送的真实消息 + 导师回复(在线流式/离线演示) */}
+      {/* 追加对话:用户发送的真实消息 + 导师回复(在线流式/离线演示)。
+          导师回复走富文本渲染(Markdown + content-section 容器),用户消息保持纯文本。 */}
       {msgs.map((m, i) => (
         <div key={i} className={`cp-bubble-row ${m.role === 'user' ? ' user' : ''}`}>
           <div className={`cp-bubble ${m.role === 'user' ? ' user' : ''}`}>
-            {m.text}
+            {m.role === 'assistant' ? <AssistantMarkup text={m.text} /> : m.text}
             {m.attachments && m.attachments.length > 0 && (
               <div className="cp-bubble-files">
                 {m.attachments.map((a) => (
@@ -487,7 +490,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
                 <X size={13} />
               </button>
             </div>
-            <div className="cp-translation-body">{tr.text || L('Translating…', '翻译中…')}</div>
+            <div className="cp-translation-body">{tr.text ? <AssistantMarkup text={tr.text} /> : L('Translating…', '翻译中…')}</div>
           </div>
         );
       })}
