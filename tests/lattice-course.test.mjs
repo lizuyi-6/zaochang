@@ -52,8 +52,8 @@ function loadTsModule(url) {
   return fakeModule.exports;
 }
 
-const gen = loadTsModule(new URL("src/replica/generate.ts", spa));
-const data = loadTsModule(new URL("src/replica/data.ts", spa));
+const gen = loadTsModule(new URL("src/lattice/generate.ts", spa));
+const data = loadTsModule(new URL("src/lattice/data.ts", spa));
 
 const sessionTotal = (units) =>
   units.reduce((n, u) => n + u.lectures.reduce((m, l) => m + l.sessions.length, 0), 0);
@@ -195,7 +195,7 @@ test("大纲 fallback 跟随查询语言,且结构含项目与测验讲次", () 
 });
 
 test("课程页进度指示器由单元真实结构驱动,不再写死节点数", () => {
-  const source = readFileSync(new URL("src/replica/pages/CourseJourney.tsx", spa), "utf8");
+  const source = readFileSync(new URL("src/lattice/pages/CourseJourney.tsx", spa), "utf8");
   assert.doesNotMatch(source, /Array\.from\(\{\s*length:\s*\d+\s*\}/, "进度条节点不许再写死数量");
   assert.match(source, /unit\.lectures\.flatMap/, "进度条节点必须来自当前单元的讲次/小节");
 });

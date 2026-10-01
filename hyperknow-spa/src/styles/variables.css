@@ -6,12 +6,36 @@
   --font-board-table: "Handlee", "Caveat", cursive;
   --font-board-standard: var(--font-sans);
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-  /* legacy aliases (old pages still reference these) */
-  --font-satoshi: var(--font-sans);
-  --font-satoshi-regular: var(--font-sans);
-  --font-satoshi-bold: var(--font-sans);
 
   /* 见界 LATTICE — 暖纸 · 墨 · 珊瑚 · 琥珀(与主站「暖色编辑工作室」同族) */
+
+  /* ———— 暖色色阶(单一事实源:改主题只动这里)————
+     ink = 墨字/深面,sand = 纸面/边线,coral = 品牌交互色。 */
+  --white: #ffffff;
+  --ink-900: #241B10;
+  --ink-700: #453722;
+  --ink-600: #5A4A30;
+  --ink-500: #6E6152;
+  --ink-400: #9C8D75;
+  --ink-300: #A69A85;
+  --ink-250: #B8A98E;
+  --sand-100: #FAF4E8;
+  --sand-150: #F6EEDD;
+  --sand-200: #F3EADA;
+  --sand-300: #EADCC3;
+  --sand-400: #DED1B6;
+  --sand-450: #D9C0A4;
+  --sand-500: #D8C7A9;
+  --sand-600: #C4B191;
+  --coral-050: #FBEADF;
+  --coral-500: #DF6548;
+  --coral-600: #C24A2E;
+  --coral-700: #B4472B;
+  --coral-800: #7A2D12;
+  --mint: #B9ECC8;
+  --signal-amber: #F59E0B;
+  --signal-green: #10B981;
+
   --app-bg: #F7F1E4;
   --panel-bg: #FFFDF8;
   --sidebar-bg: #F3EBDA;
@@ -22,26 +46,26 @@
   --surface-soft: #F5EDDC;
   --surface-hover: #F0E5CF;
   --selected-bg: #FBE9DC;
-  --selected-border: #DF6548;
+  --selected-border: var(--coral-500);
   --selected-text: #8A2E14;
   --accent-amber: #D9A441;
   --accent-amber-ink: #79571D;
   --accent-amber-soft: #F7EAC8;
   --accent-sage: #9C9370;
-  --focus-ring: #C24A2E;
+  --focus-ring: var(--coral-600);
   --atlas-dot: #E9DCC2;
 
   /* Text */
-  --text-primary: #241B10;
-  --text-body: #3D3120;
-  --text-secondary: #6E6152;
-  --text-muted: #7D6F5A;
-  --text-tertiary: #7D6F5A;
-  --text-faint: #7D6F5A;
-  --text-ghost: #B5A48A;
+  --text-primary: var(--ink-900);
+  --text-body: var(--ink-900);
+  --text-secondary: var(--ink-500);
+  --text-muted: var(--ink-500);
+  --text-tertiary: var(--ink-500);
+  --text-faint: var(--ink-500);
+  --text-ghost: var(--ink-250);
 
   /* Brand / accents; semantic and board colors remain independent. */
-  --color-primary: #C24A2E;
+  --color-primary: var(--coral-600);
   --color-primary-hover: #A63D24;
   --color-primary-light: rgba(194, 74, 46, 0.08);
   --dark-pill: #241B10;

@@ -1,31 +1,31 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { AppState } from './replica/types';
-import { initialAppState } from './replica/types';
-import { ReplicaSidebar } from './replica/Sidebar';
-import { ReplicaHeader } from './replica/Header';
-import SettingsModal from './replica/SettingsModal';
-import { SignIn } from './replica/pages/SignIn';
-import { Onboarding } from './replica/pages/Onboarding';
-import { Home } from './replica/pages/Home';
-import { I18nProvider } from './replica/i18n';
-import { GenerationOverlay } from './replica/GenerationOverlay';
-import { ToastHost } from './replica/toast';
-import { courseFromBackend } from './replica/generate';
-import { fetchConversations, fetchCourseDetail, fetchMarketCourses, fetchMe } from './replica/backend';
-import { toast } from './replica/toast';
-import { L } from './replica/i18n/content';
-import './replica/replica.css';
+import type { AppState } from './lattice/types';
+import { initialAppState } from './lattice/types';
+import { LatticeSidebar } from './lattice/Sidebar';
+import { LatticeHeader } from './lattice/Header';
+import SettingsModal from './lattice/SettingsModal';
+import { SignIn } from './lattice/pages/SignIn';
+import { Onboarding } from './lattice/pages/Onboarding';
+import { Home } from './lattice/pages/Home';
+import { I18nProvider } from './lattice/i18n';
+import { GenerationOverlay } from './lattice/GenerationOverlay';
+import { ToastHost } from './lattice/toast';
+import { courseFromBackend } from './lattice/generate';
+import { fetchConversations, fetchCourseDetail, fetchMarketCourses, fetchMe } from './lattice/backend';
+import { toast } from './lattice/toast';
+import { L } from './lattice/i18n/content';
+import './lattice/shell.css';
 
 /* 次级页面按需加载:登录/引导/首页保持同步(首屏体验),重页面(白板/聊天/课程等)
  * 拆成独立 chunk,首包不再背负全量代码。命名导出需映射为 default。 */
-const HistoryPage = React.lazy(() => import('./replica/pages/HistoryPage').then(m => ({ default: m.HistoryPage })));
-const LearningFeed = React.lazy(() => import('./replica/pages/LearningFeed').then(m => ({ default: m.LearningFeed })));
-const CoursesPage = React.lazy(() => import('./replica/pages/CoursesPage'));
-const CourseJourney = React.lazy(() => import('./replica/pages/CourseJourney'));
-const MarketplacePage = React.lazy(() => import('./replica/pages/MarketplacePage'));
-const PlansPage = React.lazy(() => import('./replica/pages/PlansPage').then(m => ({ default: m.PlansPage })));
-const ChatPage = React.lazy(() => import('./replica/pages/ChatPage').then(m => ({ default: m.ChatPage })));
-const WhiteboardPage = React.lazy(() => import('./replica/whiteboard/WhiteboardPage').then(m => ({ default: m.WhiteboardPage })));
+const HistoryPage = React.lazy(() => import('./lattice/pages/HistoryPage').then(m => ({ default: m.HistoryPage })));
+const LearningFeed = React.lazy(() => import('./lattice/pages/LearningFeed').then(m => ({ default: m.LearningFeed })));
+const CoursesPage = React.lazy(() => import('./lattice/pages/CoursesPage'));
+const CourseJourney = React.lazy(() => import('./lattice/pages/CourseJourney'));
+const MarketplacePage = React.lazy(() => import('./lattice/pages/MarketplacePage'));
+const PlansPage = React.lazy(() => import('./lattice/pages/PlansPage').then(m => ({ default: m.PlansPage })));
+const ChatPage = React.lazy(() => import('./lattice/pages/ChatPage').then(m => ({ default: m.ChatPage })));
+const WhiteboardPage = React.lazy(() => import('./lattice/whiteboard/WhiteboardPage').then(m => ({ default: m.WhiteboardPage })));
 
 /* ---------------- hash routing ---------------- */
 
@@ -264,8 +264,8 @@ export const App: React.FC = () => {
       <div className={`hk-root${shell ? ' hk-shell' : ''}${state.sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <div className="hk-dotfield" />
 
-        {shell && <ReplicaSidebar state={state} set={set} />}
-        {shell && <ReplicaHeader state={state} set={set} />}
+        {shell && <LatticeSidebar state={state} set={set} />}
+        {shell && <LatticeHeader state={state} set={set} />}
 
         {s === 'signin' && <SignIn state={state} set={set} />}
         {s === 'onboarding' && <Onboarding state={state} set={set} />}

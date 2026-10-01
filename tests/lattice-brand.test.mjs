@@ -10,7 +10,7 @@ const spaRequire = createRequire(new URL("package.json", spa));
 const ts = spaRequire("typescript");
 const React = spaRequire("react");
 const { renderToStaticMarkup } = spaRequire("react-dom/server");
-const sourceURL = new URL("src/replica/illustrations.tsx", spa);
+const sourceURL = new URL("src/lattice/illustrations.tsx", spa);
 const source = readFileSync(sourceURL, "utf8");
 const compiled = ts.transpileModule(source, {
   fileName: fileURLToPath(sourceURL),
@@ -170,8 +170,8 @@ test("lattice-brand: document title and key localized auth branding contain no o
   assert.match(title, /LATTICE/i);
   assert.doesNotMatch(title, /hyperknow/i);
   /* 字典已按语言拆到 i18n/locales/<lang>.json(首包只载当前语言),品牌断言逐文件执行 */
-  for (const localeFile of readdirSync(new URL("src/replica/i18n/locales", spa))) {
-    const strings = JSON.parse(readFileSync(new URL(`src/replica/i18n/locales/${localeFile}`, spa), "utf8"));
+  for (const localeFile of readdirSync(new URL("src/lattice/i18n/locales", spa))) {
+    const strings = JSON.parse(readFileSync(new URL(`src/lattice/i18n/locales/${localeFile}`, spa), "utf8"));
     for (const key of ["welcomeToHyperknow", "createAccountSubtitle", "termsAndPolicy"]) {
       assert.equal(typeof strings.auth?.[key], "string", `${localeFile}: ${key}`);
       assert.doesNotMatch(strings.auth[key], /hyperknow/i, `${localeFile}: ${key}`);

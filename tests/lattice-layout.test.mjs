@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { diagramBox, renderDiagram } from '../hyperknow-spa/src/replica/whiteboard/diagram.ts';
+import { diagramBox, renderDiagram } from '../hyperknow-spa/src/lattice/whiteboard/diagram.ts';
 
 const require = createRequire(new URL('../hyperknow-spa/package.json', import.meta.url));
 const ts = require('typescript');
-const source = readFileSync(new URL('../hyperknow-spa/src/replica/whiteboard/liveLesson.ts', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../hyperknow-spa/src/lattice/whiteboard/liveLesson.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;

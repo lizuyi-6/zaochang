@@ -57,14 +57,14 @@ function loadTsModule(url) {
   return fakeModule.exports;
 }
 
-const whiteboardModule = loadTsModule(new URL('src/replica/whiteboard/WhiteboardPage.tsx', spa));
+const whiteboardModule = loadTsModule(new URL('src/lattice/whiteboard/WhiteboardPage.tsx', spa));
 const { runCaptionSync, STARTUP_TIMEOUT_MS } = whiteboardModule;
-const actionsModule = loadTsModule(new URL('src/replica/actions.ts', spa));
+const actionsModule = loadTsModule(new URL('src/lattice/actions.ts', spa));
 const { tts, DEFAULT_PLAYBACK_RATE } = actionsModule;
-const liveLessonModule = loadTsModule(new URL('src/replica/whiteboard/liveLesson.ts', spa));
+const liveLessonModule = loadTsModule(new URL('src/lattice/whiteboard/liveLesson.ts', spa));
 const { liveLessonFromPlan } = liveLessonModule;
-const { lessonDelay } = loadTsModule(new URL('src/replica/whiteboard/lessonDelay.ts', spa));
-const { choiceIndexFromInput } = loadTsModule(new URL('src/replica/whiteboard/choiceInput.ts', spa));
+const { lessonDelay } = loadTsModule(new URL('src/lattice/whiteboard/lessonDelay.ts', spa));
+const { choiceIndexFromInput } = loadTsModule(new URL('src/lattice/whiteboard/choiceInput.ts', spa));
 import { WHITEBOARD_INSTRUCTOR_PROMPT, fallbackLecturePlan } from '../app/api/_lib/hyperknow/prompts.ts';
 
 test('interjection cooldown advances while lecture is paused; normal lesson time does not', async () => {
@@ -976,7 +976,7 @@ test('Regression 16: Interaction gating skip and pause-resume race safety', asyn
 });
 
 test('Regression 17: Unified caption/player dock contracts and 44px accessible touch targets', () => {
-  const cssPath = fileURLToPath(new URL('src/replica/whiteboard/whiteboard.css', spa));
+  const cssPath = fileURLToPath(new URL('src/lattice/whiteboard/whiteboard.css', spa));
   const cssContent = readFileSync(cssPath, 'utf8');
 
   // 1. 验证统一底栏 dock 容器与样式存在
@@ -996,7 +996,7 @@ test('Regression 17: Unified caption/player dock contracts and 44px accessible t
 });
 
 test('Regression 18: Whiteboard high-contrast ink, font fallbacks, and writing item visibility', () => {
-  const cssPath = fileURLToPath(new URL('src/replica/whiteboard/whiteboard.css', spa));
+  const cssPath = fileURLToPath(new URL('src/lattice/whiteboard/whiteboard.css', spa));
   const cssContent = readFileSync(cssPath, 'utf8');
   const varsPath = fileURLToPath(new URL('src/styles/variables.css', spa));
   const varsContent = readFileSync(varsPath, 'utf8');
