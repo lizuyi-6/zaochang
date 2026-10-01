@@ -153,7 +153,8 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         { signal: ctrl.signal, conversationId: convIdRef.current ?? undefined, mode: state.replyMode },
       );
       if (!stillMine()) return;
-      if (!result.ok) {
+      /* 工程未开 strict:真值检查不收窄判别联合,必须用字面量判别 */
+      if (result.ok === false) {
         const fallback =
           result.reason === 'insufficient'
             ? L(
@@ -274,7 +275,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         });
       },
     });
-    if (result.ok) {
+    if (result.ok === true) {
       setTranslations((prev) => ({ ...prev, [idx]: { lang, text: result.text, loading: false } }));
       return;
     }
