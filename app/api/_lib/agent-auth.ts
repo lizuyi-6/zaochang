@@ -66,3 +66,60 @@ export function isAgentWriteAllowed(method: string, pathname: string): boolean {
   ];
   return caps.some((cap) => cap.method === method && cap.pathname === pathname);
 }
+
+// ———— 视觉验收入场票(机器通道 → 浏览器会话)————
+// 线上 /lattice/ 有登录门禁(302 → /signin),Bearer token 通不了浏览器。
+// 流程:持 token 调 /api/admin/visual-session 铸票 → 浏览器访问 enter URL 消费票 →
+// 植入正式会话 cookie(HttpOnly)→ 门禁放行。票无状态(HMAC 签名,10 分钟 TTL),
+// 不入库:只有能铸票的人(token 持有者)才拿得到票,重放不产生超出 token 的权力。
+export const VISUAL_TICKET_TTL_SECONDS = 600;
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function hmacSign(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return toBase64Url(new Uint8Array(sig));
+}
+
+function constantTimeEqualsStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// 铸票:v1.<exp epoch秒>.<nonce hex>.<hmac(exp+nonce)>。纯函数(secret 注入)。
+export async function signVisualTicket(secret: string, nowMs: number = Date.now()): Promise<string> {
+  const exp = Math.floor(nowMs / 1000) + VISUAL_TICKET_TTL_SECONDS;
+  const nonce = toBase64Url(crypto.getRandomValues(new Uint8Array(12)));
+  const sig = await hmacSign(secret, `visual-session:${exp}:${nonce}`);
+  return `v1.${exp}.${nonce}.${sig}`;
+}
+
+// 验票:签名常量时间比对 + 未过期。返回 { ok: true } 或 { ok: false, reason }。
+export async function verifyVisualTicket(
+  secret: string,
+  ticket: string | null | undefined,
+  nowMs: number = Date.now(),
+): Promise<{ ok: true } | { ok: false; reason: "malformed" | "bad_signature" | "expired" }> {
+  if (!ticket) return { ok: false, reason: "malformed" };
+  const parts = ticket.split(".");
+  if (parts.length !== 4 || parts[0] !== "v1") return { ok: false, reason: "malformed" };
+  const [, expRaw, nonce, sig] = parts;
+  if (!/^\d+$/.test(expRaw) || !/^[A-Za-z0-9_-]+$/.test(nonce)) return { ok: false, reason: "malformed" };
+  const expected = await hmacSign(secret, `visual-session:${expRaw}:${nonce}`);
+  if (!constantTimeEqualsStr(sig, expected)) return { ok: false, reason: "bad_signature" };
+  if (Number(expRaw) * 1000 <= nowMs) return { ok: false, reason: "expired" };
+  return { ok: true };
+}
