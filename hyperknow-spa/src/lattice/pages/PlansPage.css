@@ -71,7 +71,7 @@
   box-shadow: 0 10px 28px rgba(36, 27, 16, 0.08);
 }
 .pp-card.current {
-  border-color: var(--signal-green);
+  border-color: var(--color-primary);
 }
 
 .pp-popular {

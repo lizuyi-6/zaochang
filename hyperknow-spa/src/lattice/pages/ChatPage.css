@@ -72,7 +72,7 @@
   animation: cp-fade 0.35s ease both;
 }
 .cp-bubble {
-  background: #eff0f3;
+  background: var(--coral-050);
   border-radius: 16px;
   padding: 14px 18px;
   max-width: 590px;
@@ -112,7 +112,7 @@
   color: var(--ink-500);
 }
 .cp-stage svg {
-  color: #3b6ff6;
+  color: var(--color-primary);
 }
 .cp-stage.dark {
   color: var(--ink-900);
@@ -133,7 +133,7 @@
   padding: 4px 12px;
   font-size: 12px;
   font-weight: 500;
-  color: #5b6472;
+  color: var(--ink-500);
 }
 .cp-pipeline > .cp-stage.dark {
   margin-top: 16px;
@@ -364,7 +364,7 @@
   margin: 0 0 18px;
   border: 1px solid var(--sand-300);
   border-radius: 12px;
-  background: #FBFCFD;
+  background: var(--white);
   overflow: hidden;
 }
 .cp-translation-head {

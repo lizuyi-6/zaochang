@@ -76,7 +76,7 @@ function ListCard({ course, onClick }: { course: CourseCard; onClick: () => void
             <Logo size={14} />
           </span>
           <span>{L('Lattice Learning Lab', '见界学习研究室')}</span>
-          <BadgeCheck size={14} color="#3B82F6" />
+          <BadgeCheck size={14} color="#C24A2E" />
         </div>
         <div className="mp-card-title">{course.title}</div>
         <div className="mp-card-desc">{course.description}</div>

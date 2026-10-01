@@ -52,7 +52,7 @@ export const Toggle: React.FC<{ on: boolean; onChange?: (v: boolean) => void; la
         width: 44,
         height: 24,
         borderRadius: 999,
-        background: on ? '#4C6696' : 'var(--sand-400)',
+        background: on ? 'var(--color-primary)' : 'var(--sand-400)',
         position: 'relative',
         cursor: 'pointer',
         transition: 'background 0.15s',
