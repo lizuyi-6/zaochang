@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import RippleButton from "../components/motion/ripple-button";
 import { products, type CommunityPost } from "../lib/community-data";
 import { formatZhDateTime } from "../lib/format";
 import { refreshShellState } from "../components/shell-state-sync";
@@ -417,13 +418,17 @@ export function FeedClient() {
                     </select>
                   </div>
                   <span>{text.length}/280</span>
-                  <button
+                  <RippleButton
                     className="composer-send"
+                    type="submit"
                     disabled={sending || text.trim().length < 2}
+                    accent="#ff5c3d"
+                    surface="#171816"
+                    ink="#ffffff"
                   >
                     {sending ? "发布中" : "发布"}
                     <Send size={16} />
-                  </button>
+                  </RippleButton>
                 </motion.div>
               )}
             </AnimatePresence>

@@ -1,8 +1,9 @@
 "use client";
 
-import { LayoutGroup, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowDownUp, Check, Grid2X2, List, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import ElasticTabs from "../components/motion/elastic-tabs";
 import { ProductCard } from "../components/product-card";
 import { products as seedProducts, type Product } from "../lib/community-data";
 import { hydrateProductRow } from "../lib/product-hydrate";
@@ -56,11 +57,15 @@ export function DiscoverClient() {
 
       <section className="discover-controls">
         <label className="inline-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="在探索页中搜索" /></label>
-        <LayoutGroup>
-          <div className="category-tabs">
-            {categories.map((item) => <button key={item} onClick={() => setCategory(item)} className={category === item ? "active" : ""}>{category === item && <motion.i layoutId="category-active" />}<span>{item}</span></button>)}
-          </div>
-        </LayoutGroup>
+        <ElasticTabs
+          className="category-tabs"
+          ariaLabel="作品分类"
+          accent="#ff5c3d"
+          value={category}
+          onChange={setCategory}
+          renderPanels={false}
+          items={categories.map((item) => ({ id: item, label: item }))}
+        />
         <div className="discover-actions">
           <button onClick={() => setSort((value) => value === "趋势" ? "最新" : value === "最新" ? "最多体验" : "趋势")}><ArrowDownUp size={15} /> {sort}</button>
           <button className={filtersOpen || priceFilter !== "all" || sourceFilter !== "all" ? "active" : ""} onClick={() => setFiltersOpen((value) => !value)} aria-label="筛选" title="筛选" aria-expanded={filtersOpen}><SlidersHorizontal size={16} /></button>
