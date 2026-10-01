@@ -203,6 +203,36 @@ export const App: React.FC = () => {
     };
   }, [state.screen, state.marketStale, state.marketCourses, set]);
 
+  /* 历史会话按身份重拉:启动装载只跑一次,浏览器会话在页面存活期间被换掉时
+   * (多账户切换/验收通道写 cookie)不重拉就会把上一账户的会话留在 state 里
+   * 展示——"聊天记录串号"的观感来源。身份邮箱一变即重拉,并回填真实账户列表。 */
+  const convLoadedEmailRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const email = state.identity?.email ?? null;
+    if (convLoadedEmailRef.current === email) return;
+    convLoadedEmailRef.current = email;
+    let alive = true;
+    void fetchConversations().then((rows) => {
+      if (alive) set({ conversations: rows });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [state.identity?.email, set]);
+
+  /* 进入历史/聊天页时静默刷新一次列表:其他标签页新建的会话、会话期间
+   * cookie 被替换等场景下,内存列表可能落后于服务端真值。 */
+  useEffect(() => {
+    if (state.screen !== 'history' && state.screen !== 'chat') return;
+    let alive = true;
+    void fetchConversations().then((rows) => {
+      if (alive && rows) set({ conversations: rows });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [state.screen, set]);
+
   /* 真实课程 UUID 深链与详情加载，带 loading / error 状态保护，彻底废除伪造课程 */
   useEffect(() => {
     const isCourseScreen = state.screen === 'coursePreview' || state.screen === 'courseJourney';

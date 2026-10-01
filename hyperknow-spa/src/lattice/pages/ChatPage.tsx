@@ -92,6 +92,23 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     }
   }, [state.activeConversationId]);
 
+  /* 账户身份变化:中断在途流并清空本地消息/会话绑定/译文,
+   * 上一账户的会话内容绝不允许滞留到下一账户的视图里(串号防线第二道)。 */
+  const identityEmailRef = useRef(state.identity?.email ?? null);
+  useEffect(() => {
+    const email = state.identity?.email ?? null;
+    if (identityEmailRef.current === email) return;
+    identityEmailRef.current = email;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    convIdRef.current = null;
+    setStreaming(false);
+    setMsgs([]);
+    setTranslations({});
+    setFeedback({});
+    setSpeakingIdx(null);
+  }, [state.identity?.email]);
+
   /* 朗读状态跟随播放器(播完自动熄灭按钮) */
   useEffect(() => tts.subscribe((on) => !on && setSpeakingIdx(null)), []);
 

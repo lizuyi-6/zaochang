@@ -211,7 +211,9 @@
   bottom: 20px;
   display: flex;
   justify-content: center;
-  z-index: 24;
+  /* 必须高于侧栏(z-30):菜单在 wrap 内,fixed wrap 自成层叠上下文,
+   * 菜单的 z-90 只在 wrap 内部生效——wrap 低于侧栏时工具/模型菜单整体滑进侧栏底下 */
+  z-index: 35;
   pointer-events: none;
 }
 .cp-composer {
