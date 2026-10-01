@@ -51,6 +51,13 @@ function hostOf(url: string): string {
   }
 }
 
+/** 标题有效字符(汉字/字母/数字)少于该值视为栏目页/索引页而非文章,弃用。 */
+const MIN_TITLE_CHARS = 6;
+
+function titleWeight(title: string): number {
+  return (title.match(/[\p{L}\p{N}]/gu) ?? []).length;
+}
+
 /** 解析检索结果的 time 字段("2026-02-03T12:36:00" 或 "2022-01-30 00:00:00"),不可解析为 NaN。 */
 function hitTimeMs(time: unknown): number {
   if (typeof time !== "string") return Number.NaN;
@@ -70,7 +77,7 @@ export function mergeFeedItems(groups: WebSearchHit[][], cap = 12): FeedItem[] {
     for (const hit of group) {
       if (!hit || typeof hit.url !== "string" || !/^https?:\/\//i.test(hit.url)) continue;
       const title = String(hit.title ?? "").trim();
-      if (title.includes("![")) continue;
+      if (title.includes("![") || (title !== "" && titleWeight(title) < MIN_TITLE_CHARS)) continue;
       const key = hit.url.replace(/[#?].*$/, "");
       if (seen.has(key)) continue;
       seen.add(key);
