@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Sparkle, ZoomIn, X } from 'lucide-react';
 import {
   INK,
+  VIOLET,
   type BoardAnnot,
   type BoardItem,
   type BoardTable,
@@ -17,6 +18,7 @@ import {
   computeBoundingBox,
   type CameraState,
   type Point2D,
+  type ViewportInsets,
 } from './camera';
 
 /**
@@ -212,9 +214,9 @@ function charW(ch: string, size: number, seg: Seg): number {
 }
 
 const segStyle = (seg: Seg, item: BoardItem): React.CSSProperties => ({
-  fontWeight: seg.b || item.weight === 700 ? 700 : item.weight ?? 400,
+  fontWeight: seg.b || item.weight === 700 ? 700 : item.weight ?? 500,
   fontStyle: seg.i ? 'italic' : undefined,
-  color: seg.red ? '#C0392B' : seg.violet ? undefined : item.color,
+  color: seg.red ? '#C0392B' : seg.violet ? VIOLET : (item.color ?? INK),
 });
 
 function segClass(seg: Seg): string {
@@ -238,6 +240,7 @@ export interface BoardProps {
   annots: BoardAnnot[];
   isFollowing?: boolean;
   onUserInteraction?: () => void;
+  insets?: ViewportInsets;
 }
 
 export const Board: React.FC<BoardProps> = ({
@@ -257,29 +260,30 @@ export const Board: React.FC<BoardProps> = ({
   annots,
   isFollowing = true,
   onUserInteraction,
+  insets,
 }) => {
   const [lightboxImage, setLightboxImage] = useState<{ url: string; caption?: string } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // 2D Camera state: { x, y, zoom }
   const [camera, setCamera] = useState<CameraState>({ x: -panX, y: 0, zoom });
   const viewportRef = useRef<HTMLDivElement>(null);
 
-  // Keep camera zoom in sync with prop if not interacting
+  // Keep camera zoom in sync with prop if changed externally (e.g. Chrome zoom buttons)
   useEffect(() => {
     setCamera((prev) => {
       if (Math.abs(prev.zoom - zoom) > 0.001) {
+        if (viewportRef.current) {
+          const rect = viewportRef.current.getBoundingClientRect();
+          const center = { x: rect.width / 2, y: rect.height / 2 };
+          return zoomAtPoint(prev, center, zoom);
+        }
         return { ...prev, zoom };
       }
       return prev;
     });
   }, [zoom]);
 
-  // Sync panX if prop changes externally (e.g. page flip button)
-  useEffect(() => {
-    if (isFollowing) {
-      setCamera((prev) => ({ ...prev, x: -panX }));
-    }
-  }, [panX, isFollowing]);
 
   const flats = useMemo(() => {
     const m = new Map<string, Flat>();
@@ -305,52 +309,79 @@ export const Board: React.FC<BoardProps> = ({
     const vpRect = vp.getBoundingClientRect();
     if (vpRect.width <= 0 || vpRect.height <= 0) return;
 
-    // Determine target elements
-    let targetElements: Array<{ x: number; y: number; width?: number; height?: number }> = [];
+    // Collect elements in this step
+    const latestBoardStep = Math.max(...items.filter((it) => it.step <= targetStep).map((it) => it.step));
+    const stepItems = items.filter((it) => it.step === latestBoardStep);
+    let targetElements = stepItems.map((it) => {
+      const d = it.diagram ? diagrams.get(it.id) : null;
+      return {
+        x: it.x,
+        y: it.y,
+        width: d ? d.w : (it.w ?? 340),
+        height: d ? d.h : it.image ? (it.image.width ?? 340) + 64 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
+      };
+    });
 
-    if (targetWritingId) {
-      const item = items.find((it) => it.id === targetWritingId);
-      if (item) {
-        const d = item.diagram ? diagrams.get(item.id) : null;
-        targetElements = [{
-          x: item.x,
-          y: item.y,
-          width: d ? d.w : (item.w ?? 340),
-          height: d ? d.h : item.image ? (item.w ?? 340) + 64 : (item.lines.length * (item.mono ? MONO_LH : item.size * 1.24)),
-        }];
-      }
-    }
-
-    if (targetElements.length === 0) {
-      const stepItems = items.filter((it) => it.step === targetStep);
-      targetElements = stepItems.map((it) => {
+    if (targetElements.length === 0 && targetWritingId) {
+      const it = items.find((i) => i.id === targetWritingId);
+      if (it) {
         const d = it.diagram ? diagrams.get(it.id) : null;
-        return {
+        targetElements = [{
           x: it.x,
           y: it.y,
           width: d ? d.w : (it.w ?? 340),
-          height: d ? d.h : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
-        };
-      });
+          height: d ? d.h : it.image ? (it.image.width ?? 340) + 64 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
+        }];
+      }
     }
 
     const box = computeBoundingBox(targetElements);
     if (!box) return;
 
-    setCamera((prev) => {
-      const padding = 24;
-      const visible = box.minX * prev.zoom + prev.x >= padding
-        && box.minY * prev.zoom + prev.y >= padding
-        && box.maxX * prev.zoom + prev.x <= vpRect.width - padding
-        && box.maxY * prev.zoom + prev.y <= vpRect.height - padding;
-      return visible ? prev : focusBox(box, vpRect, prev.zoom, padding);
-    });
-  }, [isFollowing, items, diagrams]);
+    const layout = vp.closest('.wb-app-layout');
+    const toolbar = layout?.querySelector('.wb-top-bar')?.getBoundingClientRect();
+    const dock = layout?.querySelector('.wb-unified-dock')?.getBoundingClientRect();
+    const currentInsets: ViewportInsets = insets ?? {
+      top: toolbar ? Math.max(0, toolbar.bottom - vpRect.top) + 12 : 76,
+      bottom: dock ? Math.max(0, vpRect.bottom - dock.top) + 12 : 104,
+      left: vpRect.width <= 640 ? 8 : 32,
+      right: vpRect.width <= 640 ? 8 : 32,
+    };
+    const safeLeft = Math.max(0, currentInsets.left ?? 32);
+    const safeTop = Math.max(0, currentInsets.top ?? 76);
+    const safeRight = vpRect.width - Math.max(0, currentInsets.right ?? 32);
+    const safeBottom = vpRect.height - Math.max(0, currentInsets.bottom ?? 104);
 
-  // Auto-focus on writingId or step change
+    setCamera((prev) => {
+      const boxLeft = box.minX * prev.zoom + prev.x;
+      const boxRight = box.maxX * prev.zoom + prev.x;
+      const boxTop = box.minY * prev.zoom + prev.y;
+      const boxBottom = box.maxY * prev.zoom + prev.y;
+
+      const isComfortablyVisible =
+        boxLeft >= safeLeft + 16 &&
+        boxTop >= safeTop + 16 &&
+        boxRight <= safeRight - 16 &&
+        boxBottom <= safeBottom - 16;
+
+      if (isComfortablyVisible && prev.zoom >= 0.85) {
+        return prev;
+      }
+
+      const next = focusBox(box, vpRect, prev.zoom, 48, currentInsets, true);
+      if (onZoomChange && Math.abs(prev.zoom - next.zoom) > 0.01) {
+        onZoomChange(next.zoom);
+      }
+      return next;
+    });
+  }, [isFollowing, items, diagrams, insets, onZoomChange]);
+
+  // Auto-focus on writingId, step change, or resume following
   useEffect(() => {
-    focusTarget(writingId, step);
-  }, [writingId, step, focusTarget]);
+    if (isFollowing) {
+      focusTarget(writingId, step);
+    }
+  }, [writingId, step, isFollowing, focusTarget]);
 
   // Handle window resize and font/image loaded
   useEffect(() => {
@@ -360,7 +391,13 @@ export const Board: React.FC<BoardProps> = ({
       }
     };
     const observer = new ResizeObserver(handleResize);
-    if (viewportRef.current) observer.observe(viewportRef.current);
+    if (viewportRef.current) {
+      observer.observe(viewportRef.current);
+      const layout = viewportRef.current.closest('.wb-app-layout');
+      for (const element of layout?.querySelectorAll('.wb-top-bar, .wb-unified-dock') ?? []) {
+        observer.observe(element);
+      }
+    }
     let active = true;
     void document.fonts.ready.then(() => { if (active) handleResize(); });
     return () => { active = false; observer.disconnect(); };
@@ -398,11 +435,13 @@ export const Board: React.FC<BoardProps> = ({
     if (g.pointers.size === 1) {
       g.startCam = { ...camera };
       g.isDragging = true;
+      setIsDragging(true);
     } else if (g.pointers.size === 2) {
       const [p1, p2] = Array.from(g.pointers.values());
       g.initialDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
       g.initialCenter = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
       g.startCam = { ...camera };
+      setIsDragging(true);
     }
   };
 
@@ -464,8 +503,10 @@ export const Board: React.FC<BoardProps> = ({
       g.startPointers.set(remainingId, remainingPt);
       g.startCam = { ...camera };
       g.isDragging = true;
+      setIsDragging(true);
     } else if (g.pointers.size === 0) {
       g.isDragging = false;
+      setIsDragging(false);
     }
   };
 
@@ -531,6 +572,7 @@ export const Board: React.FC<BoardProps> = ({
         style={{
           transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
           transformOrigin: '0 0',
+          transition: isDragging ? 'none' : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
         <div className={`wb-dots${dots ? '' : ' off'}`} style={{ width: 3600, height: 2400 }} />
@@ -539,8 +581,11 @@ export const Board: React.FC<BoardProps> = ({
             if (item.step > step) return null;
             const flat = flats.get(item.id)!;
             const writeTotal = itemCharCount(item);
-            const isWriting = item.step === step && (progress[item.id] ?? 0) < writeTotal;
-            const shown = item.step < step ? flat.total : progress[item.id] ?? 0;
+            const isWriting = writingId === item.id;
+            const isDone = item.step < step || (progress[item.id] ?? 0) >= writeTotal;
+            const hasStarted = isDone || isWriting || (progress[item.id] ?? 0) > 0;
+            if (!hasStarted) return null;
+            const shown = isDone ? flat.total : (progress[item.id] ?? 0);
             const lh = item.mono ? MONO_LH : item.size * 1.24;
 
             const diagram = item.diagram ? diagrams.get(item.id) : undefined;
@@ -735,7 +780,7 @@ function renderLine(lineChars: FlatChar[], shown: number, isWriting: boolean, it
       <span
         key={key++}
         className={segClass(accSeg)}
-        style={{ ...segStyle(accSeg, item), ...(accPending ? { color: '#D9D5CC' } : undefined) }}
+        style={{ ...segStyle(accSeg, item), ...(accPending ? { color: '#9CA3AF' } : undefined) }}
       >
         {acc}
       </span>,
@@ -790,7 +835,7 @@ const TableBlock: React.FC<{ table: BoardTable; rowsShown: number; standard: boo
   return (
     <div className="wb-table" style={{ left: table.x, top: table.y, width: totalW, height: totalH }}>
       <svg width={totalW} height={totalH} viewBox={`0 0 ${totalW} ${totalH}`}>
-        <path d={gridPaths} stroke="#D4CFBF" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+        <path d={gridPaths} stroke="#9CA3AF" strokeWidth="1.4" fill="none" strokeLinecap="round" />
       </svg>
       {table.cells.map((row, r) =>
         row.map((cell, c) => {

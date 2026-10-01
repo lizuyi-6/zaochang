@@ -18,7 +18,7 @@ import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
 import { AwardPhone, AwardPopper, DeskWriter, TrophyPerson } from '../illustrations';
 import { getAwards, getIntroCopy, type PopupKind } from './lessonScript';
-import { audioCheck, openFeedbackMail, type AudioCheckResult } from '../actions';
+import { audioCheck, openFeedbackMail, tts, type AudioCheckResult } from '../actions';
 import { modelCheck, pingBackend } from '../backend';
 import { uploadFile } from '../materials';
 import { toast } from '../toast';
@@ -294,7 +294,7 @@ const VOICES: { id: string; name: string; g: [string, string] }[] = [
   { id: 'firm', name: 'Professional', g: ['#7FD1C4', '#6FB6D9'] },
   { id: 'lively', name: 'Lively', g: ['#A3D16E', '#66C97F'] },
 ];
-const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const SPEEDS = [0.5, 0.75, 0.85, 1, 1.25, 1.5, 2];
 
 export interface SessionSettingsValue {
   voice: string;
@@ -313,10 +313,13 @@ export const SessionSettings: React.FC<{
   const [saved, setSaved] = useState(false);
   const cur = VOICES.find((v) => v.id === value.voice) ?? VOICES[1];
   const update = (patch: Partial<SessionSettingsValue>) => {
+    if (typeof patch.speed === 'number') {
+      tts.setPlaybackRate(patch.speed);
+    }
     onChange({ ...value, ...patch });
     setSaved(true);
   };
-  const speedIdx = SPEEDS.indexOf(value.speed);
+  const speedIdx = Math.max(0, SPEEDS.indexOf(value.speed));
   return (
     <div
       style={{ position: 'absolute', inset: 0, zIndex: 60, background: 'rgba(15,23,42,0.18)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -646,27 +649,87 @@ export const QuickCheck: React.FC<{
   question: string;
   options: string[];
   selected: number | null;
+  answer?: number;
+  feedback?: 'correct' | 'incorrect' | null;
+  explanation?: string;
   onSelect: (i: number) => void;
+  onContinue?: () => void;
+  onSkip?: () => void;
   centerX?: number;
-}> = ({ question, options, selected, onSelect }) => {
+}> = ({ question, options, selected, answer, feedback, explanation, onSelect, onContinue, onSkip }) => {
   const { t } = useI18n();
   return (
-  <div className="wb-quickcheck">
-    <div className="q">{question}</div>
-    <div className="opts">
-      {options.map((o, i) => (
-        <button
-          key={o}
-          className={`opt${selected === i ? ' sel' : selected !== null ? ' dim' : ''}`}
-          onClick={() => onSelect(i)}
-        >
-          {o}
-          {selected === i && <Check size={14} />}
-        </button>
-      ))}
+    <div className="wb-quickcheck">
+      <div className="q">{question}</div>
+      <div className="opts">
+        {options.map((o, i) => {
+          let optClass = 'opt';
+          if (selected === i) {
+            optClass += feedback === 'correct' ? ' sel correct' : feedback === 'incorrect' ? ' sel wrong' : ' sel';
+          } else if (feedback === 'incorrect' && i === answer) {
+            optClass += ' reveal-correct';
+          } else if (selected !== null) {
+            optClass += ' dim';
+          }
+          return (
+            <button
+              key={o}
+              className={optClass}
+              onClick={() => onSelect(i)}
+              disabled={selected !== null}
+            >
+              {o}
+              {selected === i && (feedback === 'incorrect' ? <X size={14} /> : <Check size={14} />)}
+              {feedback === 'incorrect' && i === answer && <Check size={14} />}
+            </button>
+          );
+        })}
+      </div>
+
+      {feedback && (
+        <div className={`wb-qc-feedback ${feedback}`}>
+          {feedback === 'correct' ? (
+            <>
+              <Check size={16} />
+              <span>{explanation || L('Correct!', '回答正确！')}</span>
+            </>
+          ) : (
+            <>
+              <X size={16} />
+              <span>
+                {typeof answer === 'number' && options[answer]
+                  ? `${L('Correct answer: ', '正确答案：')}${options[answer]}${explanation ? `。${explanation}` : ''}`
+                  : (explanation || L('Not quite. Review the core concept above.', '回答不太准确，请参考上一步的核心要点。'))}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+      {selected !== null ? (
+        <div className="wb-qc-actions">
+          {onContinue && (
+            <button className="wb-qc-btn primary" onClick={onContinue}>
+              {L('Continue', '继续')}
+            </button>
+          )}
+          {onSkip && (
+            <button className="wb-qc-btn" onClick={onSkip}>
+              {L('Skip', '跳过')}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="wb-qc-foot">
+          <span className="helper">{t('courseSession.ask.orTypeHint')}</span>
+          {onSkip && (
+            <button className="wb-qc-skip-link" onClick={onSkip}>
+              {L('Skip check', '跳过')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
-    <div className="helper">{t('courseSession.ask.orTypeHint')}</div>
-  </div>
   );
 };
 

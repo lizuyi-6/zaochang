@@ -4,6 +4,8 @@
 // 注意:Node 的类型剥离只覆盖 .ts/.mts,本文件(.mjs)必须是纯 JavaScript。
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
 import { MAX_REQUEST_BYTES, prepareRequestBody } from "../worker/request-body.ts";
 import { withSecurityHeaders } from "../app/lib/security-policy.ts";
 import { createDocDataCache } from "../app/api/_lib/doc-data-cache.ts";
@@ -365,6 +367,10 @@ test("security: 非 HTML 响应不写 CSP,但保留 nosniff/XFO 与 body", async
 // ---- purge registry(纯 D1 工厂,worker cron 的唯一数据源)----
 
 const { purgeRegistry, runPurgeRegistry } = await import("../app/api/_lib/purge/index.ts");
+const { cleanupOrphanedHyperknowImages } = await import("../app/api/_lib/purge/hyperknow-images.ts");
+const { finalizeHyperknowImageCache } = await import("../app/api/_lib/hyperknow/image-cache.ts");
+const { completeScannedUploadSql, failScannedUploadSql } = await import("../app/api/_lib/hyperknow/image-upload-state.ts");
+const { HYPERKNOW_IMAGE_CLEANUP_CRON, RETENTION_PURGE_CRON, scheduledPurgePlan } = await import("../worker/purge-schedule.ts");
 const { oidcDiscoveryDocument } = await import("../app/api/_lib/oauth-discovery.ts");
 
 function fakeD1(failLabels = []) {
@@ -422,6 +428,268 @@ test("purge: 单条失败不阻断后续,日志含 label 且返回计数", async
   assert.ok(logs.every((message) => /^\[cron-purge\] ok [\w.-]+ changes=3$/.test(message)));
   // 最后一条(sessions)在失败之后仍执行——注册表顺序不受影响。
   assert.ok(logs.at(-1).includes("sessions.auth_sessions"));
+});
+
+function createHyperknowCleanupFixture({ status = "clean", afterCandidateRead, failRowDelete = false } = {}) {
+  const sqlite = new DatabaseSync(":memory:");
+  const state = { failRowDelete };
+  sqlite.exec(`
+    CREATE TABLE uploaded_files (
+      key TEXT PRIMARY KEY, owner_email TEXT NOT NULL, original_name TEXT NOT NULL,
+      media_type TEXT NOT NULL, byte_size INTEGER NOT NULL, visibility TEXT NOT NULL,
+      purpose TEXT NOT NULL, sha256 TEXT NOT NULL, scan_status TEXT NOT NULL,
+      scan_engine TEXT, scan_signature TEXT, quarantine_key TEXT,
+      hyperknow_image INTEGER NOT NULL, hyperknow_image_cleanup_token TEXT,
+      hyperknow_image_cleanup_expires_at TEXT, created_at TEXT NOT NULL, scanned_at TEXT
+    );
+    CREATE TABLE hk_lecture_images (
+      cache_key TEXT PRIMARY KEY, user_email TEXT NOT NULL, status TEXT NOT NULL,
+      lease_token TEXT, lease_expires_at TEXT, url TEXT NOT NULL, caption TEXT,
+      updated_at TEXT
+    );
+  `);
+  const legacyMigration = readFileSync(new URL("../drizzle/0014_furry_vapor.sql", import.meta.url), "utf8");
+  const triggerStart = legacyMigration.indexOf("CREATE TRIGGER `uploaded_files_scan_transition_guard`");
+  assert.ok(triggerStart >= 0, "fixture loads the production pre-0026 scan guard");
+  sqlite.exec(legacyMigration.slice(triggerStart));
+  const cleanupMigration = readFileSync(new URL("../drizzle/0026_far_spyke.sql", import.meta.url), "utf8");
+  sqlite.exec(cleanupMigration);
+  sqlite.prepare(`INSERT INTO uploaded_files
+    (key, owner_email, original_name, media_type, byte_size, visibility, purpose, sha256,
+     scan_status, hyperknow_image, created_at)
+    VALUES ('image-a.png', 'learner@example.com', 'image.png', 'image/png', 128,
+      'private', 'general', 'sha256', ?, 1, datetime('now', '-20 minutes'))`).run(status);
+  sqlite.prepare(`INSERT INTO hk_lecture_images
+    (cache_key, user_email, status, lease_token, lease_expires_at, url)
+    VALUES ('cache-a', 'learner@example.com', 'pending', 'lease-a', '2999-01-01T00:00:00.000Z', '')`).run();
+
+  let afterSelectUsed = false;
+  const db = {
+    prepare(sql) {
+      let values = [];
+      return {
+        bind(...boundValues) { values = boundValues; return this; },
+        async all() {
+          const results = sqlite.prepare(sql).all(...values);
+          if (!afterSelectUsed && sql.includes("FROM uploaded_files AS f")) {
+            afterSelectUsed = true;
+            await afterCandidateRead?.();
+          }
+          return { results };
+        },
+        async run() {
+          if (state.failRowDelete && sql.trimStart().startsWith("DELETE FROM uploaded_files")) {
+            throw new Error("simulated D1 delete failure");
+          }
+          const result = sqlite.prepare(sql).run(...values);
+          return { meta: { changes: Number(result.changes) } };
+        },
+      };
+    },
+  };
+  return {
+    db,
+    state,
+    getUpload() { return sqlite.prepare("SELECT * FROM uploaded_files WHERE key = 'image-a.png'").get(); },
+    getCache() { return sqlite.prepare("SELECT * FROM hk_lecture_images WHERE cache_key = 'cache-a'").get(); },
+    expireCleanupClaim() {
+      sqlite.prepare(`UPDATE uploaded_files SET hyperknow_image_cleanup_expires_at = datetime('now', '-1 minute') WHERE key = 'image-a.png'`).run();
+    },
+    close() { sqlite.close(); },
+  };
+}
+
+const finalizeCleanupFixtureCache = (db) => finalizeHyperknowImageCache(db, {
+  url: "/api/uploads/image-a.png",
+  caption: "caption",
+  cacheKey: "cache-a",
+  userEmail: "learner@example.com",
+  leaseToken: "lease-a",
+  now: new Date().toISOString(),
+  uploadedKey: "image-a.png",
+});
+
+function imageBucket({ objects = ["image-a.png", "quarantine/image-a"], failDelete } = {}) {
+  const state = new Set(objects);
+  const calls = [];
+  return {
+    state,
+    calls,
+    async delete(key) {
+      calls.push(key);
+      if (await failDelete?.(key, calls.length)) throw new Error(`simulated R2 failure: ${key}`);
+      state.delete(key);
+    },
+  };
+}
+
+test("purge hyperknow images: finalizer wins between candidate read and atomic claim", async () => {
+  let finalizeResult;
+  const fixture = createHyperknowCleanupFixture({
+    afterCandidateRead: async () => { finalizeResult = await finalizeCleanupFixtureCache(fixture.db); },
+  });
+  const bucket = imageBucket();
+  try {
+    const result = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: assert.fail });
+    assert.equal(finalizeResult.meta.changes, 1, "cache URL is committed before cleaner claims the row");
+    assert.deepEqual(result, { deleted: 0, retained: 0, failed: 0 });
+    assert.deepEqual(bucket.calls, [], "claim must fail after the cache URL becomes a reference");
+    assert.equal(fixture.getCache().url, "/api/uploads/image-a.png");
+    assert.equal(fixture.getUpload().hyperknow_image, 1);
+    assert.equal(fixture.getUpload().hyperknow_image_cleanup_token, null);
+    assert.deepEqual([...bucket.state].sort(), ["image-a.png", "quarantine/image-a"]);
+  } finally { fixture.close(); }
+});
+
+test("uploaded-files guard: scan state stays one-way while cleanup-only claims are permitted", async () => {
+  const fixture = createHyperknowCleanupFixture({ status: "pending" });
+  try {
+    const transition = await fixture.db.prepare(completeScannedUploadSql).bind("clamav", "image-a.png").run();
+    assert.equal(transition.meta.changes, 1, "pending may transition to clean when no cleanup claim exists");
+    assert.equal(fixture.getUpload().scan_status, "clean");
+    await assert.rejects(
+      fixture.db.prepare("UPDATE uploaded_files SET scan_status = 'pending' WHERE key = ?").bind("image-a.png").run(),
+      /uploaded_file_scan_state_immutable/,
+    );
+    await assert.rejects(
+      fixture.db.prepare("UPDATE uploaded_files SET scan_engine = 'forged' WHERE key = ?").bind("image-a.png").run(),
+      /uploaded_file_scan_state_immutable/,
+    );
+  } finally { fixture.close(); }
+});
+
+test("purge hyperknow images: atomic claim blocks a concurrent cache finalizer", async () => {
+  const fixture = createHyperknowCleanupFixture();
+  const bucket = imageBucket();
+  let finalizeResult;
+  bucket.delete = async (key) => {
+    bucket.calls.push(key);
+    if (bucket.calls.length === 1) finalizeResult = await finalizeCleanupFixtureCache(fixture.db);
+    bucket.state.delete(key);
+  };
+  try {
+    const result = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: assert.fail });
+    assert.equal(finalizeResult.meta.changes, 0, "finalizer cannot publish a URL while cleanup owns the claim");
+    assert.deepEqual(result, { deleted: 1, retained: 0, failed: 0 });
+    assert.equal(fixture.getUpload(), undefined, "claimed row is removed only after both R2 deletes");
+    assert.equal(fixture.getCache().url, "");
+    assert.equal(fixture.getCache().status, "pending");
+    assert.deepEqual([...bucket.state], []);
+  } finally { fixture.close(); }
+});
+
+test("purge hyperknow images: same-sweep late write keeps a tombstone after upload turns terminal", async () => {
+  const fixture = createHyperknowCleanupFixture({ status: "pending" });
+  const bucket = imageBucket();
+  let injected = false;
+  let blockedCompletion;
+  bucket.delete = async (key) => {
+    bucket.calls.push(key);
+    bucket.state.delete(key);
+    if (key === "image-a.png" && !injected) {
+      injected = true;
+      // The upload's R2 put lands after the cleaner deleted the key. Its completion
+      // loses to the cleanup token; simulate the compensating R2 delete failing, then
+      // the uploader recording its terminal error before this sweep finalizes D1.
+      bucket.state.add(key);
+      blockedCompletion = await fixture.db.prepare(completeScannedUploadSql).bind("scanner", "image-a.png").run();
+      await fixture.db.prepare(failScannedUploadSql).bind("image-a.png").run();
+    }
+  };
+  try {
+    const result = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: assert.fail });
+    assert.deepEqual(result, { deleted: 0, retained: 1, failed: 0 });
+    assert.deepEqual(bucket.calls, ["image-a.png", "quarantine/image-a"]);
+    assert.equal(blockedCompletion.meta.changes, 0, "late scanner completion cannot clear the cleanup claim");
+    assert.equal(fixture.getUpload().scan_status, "error", "the upload may become terminal during this sweep");
+    assert.ok(fixture.getUpload().hyperknow_image_cleanup_token, "the original pending candidate remains a durable tombstone");
+    assert.equal(bucket.state.has("image-a.png"), true, "the failed compensating delete leaves a late object");
+    assert.equal((await finalizeCleanupFixtureCache(fixture.db)).meta.changes, 0, "tombstone blocks cache publication");
+
+    // The next sweep observes a terminal candidate and can safely remove its marker.
+    fixture.expireCleanupClaim();
+    const retry = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: assert.fail });
+    assert.deepEqual(retry, { deleted: 1, retained: 0, failed: 0 });
+    assert.equal(fixture.getUpload(), undefined, "terminal failed upload row is removed after the late object is swept");
+    assert.deepEqual([...bucket.state], []);
+  } finally { fixture.close(); }
+});
+
+test("purge hyperknow images: R2 failure before taking effect retains marker and retries", async () => {
+  const fixture = createHyperknowCleanupFixture();
+  let failOnce = true;
+  const bucket = imageBucket({ failDelete: async (key) => {
+    if (key === "image-a.png" && failOnce) { failOnce = false; return true; }
+    return false;
+  } });
+  const errors = [];
+  try {
+    const first = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: (message) => errors.push(message) });
+    assert.deepEqual(first, { deleted: 0, retained: 0, failed: 1 });
+    assert.equal(fixture.getUpload().hyperknow_image, 1);
+    assert.ok(fixture.getUpload().hyperknow_image_cleanup_token, "failed attempt keeps its expiring claim");
+    assert.deepEqual([...bucket.state].sort(), ["image-a.png", "quarantine/image-a"]);
+    assert.match(errors[0], /simulated R2 failure: image-a.png/);
+
+    fixture.expireCleanupClaim();
+    const retry = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: assert.fail });
+    assert.deepEqual(retry, { deleted: 1, retained: 0, failed: 0 });
+    assert.equal(fixture.getUpload(), undefined);
+    assert.deepEqual([...bucket.state], []);
+  } finally { fixture.close(); }
+});
+
+test("purge hyperknow images: quarantine delete failure leaves final object deleted and marker retryable", async () => {
+  const fixture = createHyperknowCleanupFixture();
+  let failOnce = true;
+  const bucket = imageBucket({ failDelete: async (key) => {
+    if (key.startsWith("quarantine/") && failOnce) { failOnce = false; return true; }
+    return false;
+  } });
+  try {
+    const first = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error() {} });
+    assert.deepEqual(first, { deleted: 0, retained: 0, failed: 1 });
+    assert.equal(bucket.state.has("image-a.png"), false, "first R2 delete took effect");
+    assert.equal(bucket.state.has("quarantine/image-a"), true, "failed quarantine delete did not take effect");
+    assert.equal(fixture.getUpload().hyperknow_image, 1);
+    assert.ok(fixture.getUpload().hyperknow_image_cleanup_token);
+
+    fixture.expireCleanupClaim();
+    const retry = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: assert.fail });
+    assert.deepEqual(retry, { deleted: 1, retained: 0, failed: 0 });
+    assert.equal(fixture.getUpload(), undefined);
+    assert.deepEqual([...bucket.state], []);
+  } finally { fixture.close(); }
+});
+
+test("purge hyperknow images: D1 failure after both R2 deletes keeps retry marker", async () => {
+  const fixture = createHyperknowCleanupFixture({ failRowDelete: true });
+  const bucket = imageBucket();
+  const errors = [];
+  try {
+    const first = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: (message) => errors.push(message) });
+    assert.deepEqual(first, { deleted: 0, retained: 0, failed: 1 });
+    assert.deepEqual([...bucket.state], [], "both external deletes took effect before D1 failed");
+    assert.equal(fixture.getUpload().hyperknow_image, 1, "durable marker remains after external state changed");
+    assert.ok(fixture.getUpload().hyperknow_image_cleanup_token, "failed claim remains as an expiry-delayed retry gate");
+    assert.match(errors[0], /simulated D1 delete failure/);
+
+    fixture.state.failRowDelete = false;
+    fixture.expireCleanupClaim();
+    const retry = await cleanupOrphanedHyperknowImages(fixture.db, bucket, { log() {}, error: assert.fail });
+    assert.deepEqual(retry, { deleted: 1, retained: 0, failed: 0 });
+    assert.equal(fixture.getUpload(), undefined, "retry removes the marker after idempotent R2 deletes");
+    assert.deepEqual([...bucket.state], []);
+  } finally { fixture.close(); }
+});
+
+test("scheduled purge plan: 15-minute image cleanup and six-hour retention cron match production config", () => {
+  const config = readFileSync(new URL("../wrangler.prod.jsonc", import.meta.url), "utf8");
+  assert.ok(config.includes(`"${RETENTION_PURGE_CRON}"`));
+  assert.ok(config.includes(`"${HYPERKNOW_IMAGE_CLEANUP_CRON}"`));
+  assert.deepEqual(scheduledPurgePlan(HYPERKNOW_IMAGE_CLEANUP_CRON), { retention: false, hyperknowImages: true });
+  assert.deepEqual(scheduledPurgePlan(RETENTION_PURGE_CRON), { retention: true, hyperknowImages: true });
+  assert.deepEqual(scheduledPurgePlan("unexpected cron"), { retention: false, hyperknowImages: false });
 });
 
 // ---- OIDC discovery(轻量模块,worker 不再加载完整 provider)----

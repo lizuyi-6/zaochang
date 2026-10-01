@@ -6,10 +6,12 @@ import { generateCourseBlueprint, generateUnitDetails, repairUnit } from "../../
 import { resolveConfigOrThrow } from "../../_lib/hyperknow/config";
 import { finalizeCourseDependencies } from "../../_lib/hyperknow/dag-finalizer";
 import {
+  acquireCourseTaskLease,
   createCourseTask,
   getCourse,
   getCourseTask,
   markCourseTaskStatus,
+  releaseCourseTaskLease,
   saveCourse,
   saveCourseTaskUnitCheckpoint,
   updateCourseTaskBlueprint,
@@ -36,6 +38,17 @@ import {
 import type { CourseBlueprint, CourseUnit } from "../../_lib/hyperknow/prompts";
 
 export const dynamic = "force-dynamic";
+
+// A client retry key always names the same server-owned task UUID for this member.
+async function taskUuidForKey(userEmail: string, key: string): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest(
+    "SHA-256", new TextEncoder().encode(`${userEmail.toLowerCase()}\0${key}`),
+  )).slice(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x80; // RFC 9562 UUIDv8 (application-defined hash)
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 function frame(data: Record<string, unknown>): Uint8Array {
   return new TextEncoder().encode(`event: frame\ndata: ${JSON.stringify(data)}\n\n`);
@@ -66,8 +79,11 @@ export async function POST(request: Request) {
         ? input.courseUuid.trim()
         : null;
     const brief = input.brief && typeof input.brief === "object" ? input.brief : undefined;
-    const idempotencyKey = typeof input.idempotencyKey === "string" && input.idempotencyKey.trim()
+    const explicitKey = typeof input.idempotencyKey === "string" && input.idempotencyKey.trim()
       ? input.idempotencyKey.trim()
+      : null;
+    const idempotencyKey = explicitKey
+      ? explicitKey
       : (resumeUuid ?? undefined);
     const action = typeof input.action === "string" ? input.action.trim() : undefined;
     const requireConfirmation = Boolean(input.requireConfirmation);
@@ -113,6 +129,39 @@ export async function POST(request: Request) {
       } catch {
         return Response.json({ error: "invalid_task_blueprint" }, { status: 500 });
       }
+      if (!Array.isArray(blueprint.units) || blueprint.units.length === 0) {
+        return Response.json({ error: "invalid_task_blueprint" }, { status: 500 });
+      }
+
+      let storedSelection: string[] | null = null;
+      if (task.selectedUnitsJson) {
+        try {
+          const parsed = JSON.parse(task.selectedUnitsJson) as unknown;
+          if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === "string")) throw new Error("invalid selection");
+          storedSelection = parsed;
+        } catch {
+          return Response.json({ error: "invalid_task_selection" }, { status: 500 });
+        }
+      }
+      if (selectedUnits && selectedUnits.length === 0) {
+        return Response.json({ error: "selected_units_required" }, { status: 400 });
+      }
+      const requestedSelection = selectedUnits ?? storedSelection ?? blueprint.units.map((unit) => unit.unitId);
+      const selectedSet = new Set(requestedSelection);
+      const canonicalSelection = blueprint.units.filter((unit) => selectedSet.has(unit.unitId)).map((unit) => unit.unitId);
+      if (canonicalSelection.length === 0 || canonicalSelection.length !== selectedSet.size) {
+        return Response.json({ error: "invalid_selected_units" }, { status: 400 });
+      }
+      if (storedSelection && JSON.stringify(canonicalSelection) !== JSON.stringify(storedSelection)) {
+        return Response.json({ error: "selected_units_conflict" }, { status: 409 });
+      }
+      const taskLeaseToken = crypto.randomUUID();
+      if (!await acquireCourseTaskLease(
+        resumeUuid, member.email, JSON.stringify(canonicalSelection), taskLeaseToken,
+      )) {
+        return Response.json({ error: "concurrent_operation_in_progress" }, { status: 409 });
+      }
+      const targetBlueprintUnits = blueprint.units.filter((unit) => selectedSet.has(unit.unitId));
 
       /* Stage2 逐单元真实生成:每单元一次 LLM 调用(~30-60s),8+ 单元课程系统性超过
        * 300s 通用上限,会被服务端截断逼用户手动恢复——单元检查点已让恢复廉价,
@@ -141,11 +190,6 @@ export async function POST(request: Request) {
               } catch {
                 completedUnits = [];
               }
-
-              // 过滤保留审查选中的单元
-              const targetBlueprintUnits = selectedUnits && selectedUnits.length > 0
-                ? blueprint.units.filter((u) => selectedUnits.includes(u.unitId))
-                : blueprint.units;
 
               const totalUnits = targetBlueprintUnits.length;
               const taskLanguage = blueprint.language || (brief?.language ? String(brief.language) : "zh-CN");
@@ -204,7 +248,7 @@ export async function POST(request: Request) {
 
                 completedUnits[i] = unit;
                 // 保存检查点
-                await saveCourseTaskUnitCheckpoint(resumeUuid, member.email, unit, i, totalUnits);
+                await saveCourseTaskUnitCheckpoint(resumeUuid, member.email, unit, i, totalUnits, taskLeaseToken);
 
                 push({
                   type: "course_unit_progress",
@@ -233,9 +277,9 @@ export async function POST(request: Request) {
               };
 
               // 落库持久化完整课程
-              await saveCourse(resumeUuid, member.email, completeCourse as unknown as Record<string, unknown>);
-              await markCourseTaskStatus(resumeUuid, member.email, "completed");
-              await markCreditChargeCompleted(idempotencyKey ?? resumeUuid, member.email);
+              await saveCourse(resumeUuid, member.email, completeCourse as unknown as Record<string, unknown>, taskLeaseToken);
+              await markCourseTaskStatus(resumeUuid, member.email, "completed", undefined, taskLeaseToken);
+              await markCreditChargeCompleted(task.creditKey ?? resumeUuid, member.email);
 
               push({ type: "course_structure_ready", course_uuid: resumeUuid, course: completeCourse });
             } catch (error) {
@@ -243,9 +287,19 @@ export async function POST(request: Request) {
                 /* 客户端断开/超时 */
               } else {
                 console.error("[hyperknow-course-gen] stage 2 unit generation failure:", error);
-                await markCourseTaskStatus(resumeUuid, member.email, "failed", error instanceof Error ? error.message : String(error));
+                try {
+                  await markCourseTaskStatus(resumeUuid, member.email, "failed",
+                    error instanceof Error ? error.message : String(error), taskLeaseToken);
+                } catch (leaseError) {
+                  console.error("[hyperknow-course-gen] failed to record stage 2 error:", leaseError);
+                }
                 push({ type: "course_generation_error", message: "Unit generation failed" });
               }
+            }
+            try {
+              await releaseCourseTaskLease(resumeUuid, member.email, taskLeaseToken);
+            } catch (leaseError) {
+              console.error("[hyperknow-course-gen] failed to release stage 2 lease:", leaseError);
             }
             try {
               controller.close();
@@ -284,7 +338,16 @@ export async function POST(request: Request) {
       }
 
       const existingTask = await getCourseTask(resumeUuid, member.email);
-      if (existingTask && existingTask.status === "blueprint_ready" && existingTask.blueprintJson) {
+      if (!existingTask) {
+        // A supplied UUID is strictly a resume request, never a new-task identifier.
+        return Response.json({ error: "course_task_not_found" }, { status: 404 });
+      }
+      if (existingTask.leaseToken && existingTask.leaseExpiresAt
+        && Date.parse(existingTask.leaseExpiresAt) > Date.now()) {
+        return Response.json({ error: "concurrent_operation_in_progress" }, { status: 409 });
+      }
+      if (existingTask.blueprintJson
+        && ["blueprint_ready", "failed", "generating_units"].includes(existingTask.status)) {
         // 蓝图已就绪，等待确认
         const blueprint = JSON.parse(existingTask.blueprintJson);
         const stream = new ReadableStream<Uint8Array>({
@@ -309,6 +372,43 @@ export async function POST(request: Request) {
       }
     }
 
+    const courseUuid = resumeUuid || (explicitKey
+      ? await taskUuidForKey(member.email, explicitKey)
+      : crypto.randomUUID());
+    if (!resumeUuid && explicitKey) {
+      const task = await getCourseTask(courseUuid, member.email);
+      if (task) {
+        if (task.query !== query || task.briefJson !== (brief ? JSON.stringify(brief) : null)) {
+          return Response.json({ error: "idempotency_key_reused" }, { status: 409 });
+        }
+        const course = await getCourse(courseUuid, member.email);
+        if (course) {
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(frame({ type: "course_generation_started", course_uuid: courseUuid, resumed: true }));
+              controller.enqueue(frame({ type: "course_structure_ready", course_uuid: courseUuid, course: course.course, resumed: true }));
+              controller.close();
+            },
+          });
+          return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" } });
+        }
+        if (task.leaseToken && task.leaseExpiresAt && Date.parse(task.leaseExpiresAt) > Date.now()) {
+          return Response.json({ error: "concurrent_operation_in_progress" }, { status: 409 });
+        }
+        if (task.blueprintJson && ["blueprint_ready", "failed", "generating_units"].includes(task.status)) {
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(frame({ type: "course_generation_started", course_uuid: courseUuid, resumed: true }));
+              controller.enqueue(frame({ type: "blueprint_ready", course_uuid: courseUuid,
+                blueprint: JSON.parse(task.blueprintJson!), requires_confirmation: true }));
+              controller.close();
+            },
+          });
+          return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" } });
+        }
+      }
+    }
+
     // ── 分支 3: 新建课程任务 (Stage 1: 蓝图生成与可选自动级联) ───────────────────
     // 配置缺失在流开始前暴露(fail-closed,干净 JSON)。
     try {
@@ -319,7 +419,7 @@ export async function POST(request: Request) {
     }
 
     // DB 原子幂等扣费与任务租约冲突拦截 (409 不放行，故障恢复不重复扣款，D1 batch 一致)
-    const { remaining: remainingCredits, conflict } = await consumeCreditsIdempotent(
+    const { remaining: remainingCredits, conflict, charged } = await consumeCreditsIdempotent(
       member.email,
       HK_COURSE_COST,
       idempotencyKey,
@@ -327,6 +427,14 @@ export async function POST(request: Request) {
 
     if (conflict) {
       return Response.json({ error: "concurrent_operation_in_progress" }, { status: 409 });
+    }
+
+    if (!resumeUuid && explicitKey && !charged) {
+      // Legacy completed keys lack a task binding; do not give them fresh free work.
+      const task = await getCourseTask(courseUuid, member.email);
+      if (!task || task.query !== query || task.briefJson !== (brief ? JSON.stringify(brief) : null)) {
+        return Response.json({ error: "idempotency_key_reused" }, { status: 409 });
+      }
     }
 
     if (remainingCredits === null) {
@@ -337,13 +445,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const courseUuid = resumeUuid || crypto.randomUUID();
-
     // 持久化任务表初始状态
     await createCourseTask({
       id: courseUuid,
       userEmail: member.email,
       query,
+      creditKey: explicitKey,
       briefJson: brief ? JSON.stringify(brief) : null,
       status: "pending",
     });
@@ -354,6 +461,7 @@ export async function POST(request: Request) {
       start(controller) {
         void (async () => {
           let closed = false;
+          let autoLeaseToken: string | null = null;
           const push = (data: Record<string, unknown>) => {
             if (closed) return;
             try {
@@ -547,6 +655,13 @@ export async function POST(request: Request) {
               blueprint.units.length,
               "blueprint_ready",
             );
+            if (!requireConfirmation) {
+              autoLeaseToken = crypto.randomUUID();
+              if (!await acquireCourseTaskLease(courseUuid, member.email,
+                JSON.stringify(blueprint.units.map((unit) => unit.unitId)), autoLeaseToken, 360_000)) {
+                throw new Error("course_task_lease_conflict");
+              }
+            }
 
             // 下发真实蓝图供用户审查与确认
             push({
@@ -621,7 +736,8 @@ export async function POST(request: Request) {
               generatedUnits.push(concreteUnit);
 
               // 检查点落库
-              await saveCourseTaskUnitCheckpoint(courseUuid, member.email, concreteUnit, i, blueprint.units.length);
+              await saveCourseTaskUnitCheckpoint(courseUuid, member.email, concreteUnit, i,
+                blueprint.units.length, autoLeaseToken!);
 
               push({
                 type: "course_unit_progress",
@@ -649,8 +765,8 @@ export async function POST(request: Request) {
               units: generatedUnits,
             };
 
-            await saveCourse(courseUuid, member.email, course as unknown as Record<string, unknown>);
-            await markCourseTaskStatus(courseUuid, member.email, "completed");
+            await saveCourse(courseUuid, member.email, course as unknown as Record<string, unknown>, autoLeaseToken!);
+            await markCourseTaskStatus(courseUuid, member.email, "completed", undefined, autoLeaseToken!);
             await markCreditChargeCompleted(idempotencyKey ?? courseUuid, member.email);
 
             push({ type: "course_structure_ready", course_uuid: courseUuid, course });
@@ -659,12 +775,28 @@ export async function POST(request: Request) {
               /* 客户端断开/超时 */
             } else {
               console.error("[hyperknow-course-gen] failure:", error instanceof Error ? error.message : error);
+              if (autoLeaseToken) {
+                try {
+                  await markCourseTaskStatus(courseUuid, member.email, "failed",
+                    error instanceof Error ? error.message : String(error), autoLeaseToken);
+                } catch (leaseError) {
+                  console.error("[hyperknow-course-gen] failed to record auto-generation error:", leaseError);
+                }
+              }
               push({ type: "course_generation_error", message: "Course generation failed" });
             }
+          } finally {
+            if (autoLeaseToken) {
+              try {
+                await releaseCourseTaskLease(courseUuid, member.email, autoLeaseToken);
+              } catch (leaseError) {
+                console.error("[hyperknow-course-gen] failed to release auto-generation lease:", leaseError);
+              }
+            }
+            try {
+              controller.close();
+            } catch {}
           }
-          try {
-            controller.close();
-          } catch {}
         })();
       },
     });

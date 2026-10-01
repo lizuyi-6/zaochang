@@ -80,14 +80,36 @@ export type StoredCourse = {
   course: Record<string, unknown>;
 };
 
-export async function saveCourse(courseUuid: string, userEmail: string, course: Record<string, unknown>): Promise<void> {
-  await database()
-    .prepare(
-      `INSERT INTO hk_courses (uuid, user_email, title, course_json) VALUES (?, ?, ?, ?)
-       ON CONFLICT(uuid) DO UPDATE SET course_json = excluded.course_json, title = excluded.title`,
-    )
-    .bind(courseUuid, userEmail, String(course.courseTitle ?? ""), JSON.stringify(course))
-    .run();
+export async function saveCourse(
+  courseUuid: string,
+  userEmail: string,
+  course: Record<string, unknown>,
+  taskLeaseToken?: string,
+): Promise<void> {
+  const title = String(course.courseTitle ?? "");
+  const courseJson = JSON.stringify(course);
+  const result = taskLeaseToken
+    ? await database()
+      .prepare(
+        `INSERT INTO hk_courses (uuid, user_email, title, course_json)
+         SELECT ?, ?, ?, ? WHERE EXISTS (
+           SELECT 1 FROM hk_course_tasks WHERE id = ? AND user_email = ?
+             AND lease_token = ? AND lease_expires_at > ?
+         )
+         ON CONFLICT(uuid) DO UPDATE SET course_json = excluded.course_json, title = excluded.title
+         WHERE hk_courses.user_email = excluded.user_email`,
+      )
+      .bind(courseUuid, userEmail, title, courseJson, courseUuid, userEmail, taskLeaseToken, new Date().toISOString())
+      .run()
+    : await database()
+      .prepare(
+        `INSERT INTO hk_courses (uuid, user_email, title, course_json) VALUES (?, ?, ?, ?)
+         ON CONFLICT(uuid) DO UPDATE SET course_json = excluded.course_json, title = excluded.title
+         WHERE hk_courses.user_email = excluded.user_email`,
+      )
+      .bind(courseUuid, userEmail, title, courseJson)
+      .run();
+  if (Number(result.meta.changes ?? 0) !== 1) throw new Error("course_owner_or_lease_conflict");
 }
 
 export async function listCourses(userEmail: string): Promise<StoredCourse[]> {
@@ -138,6 +160,7 @@ export type StoredCourseTask = {
   id: string;
   userEmail: string;
   query: string;
+  creditKey: string | null;
   briefJson: string | null;
   researchHitsJson: string | null;
   blueprintJson: string | null;
@@ -158,42 +181,87 @@ export async function createCourseTask(task: {
   id: string;
   userEmail: string;
   query: string;
+  creditKey?: string | null;
   briefJson?: string | null;
   researchHitsJson?: string | null;
   blueprintJson?: string | null;
   status?: string;
   totalUnits?: number;
 }): Promise<void> {
-  await database()
+  const result = await database()
     .prepare(
-      `INSERT INTO hk_course_tasks (id, user_email, query, brief_json, research_hits_json, blueprint_json, status, total_units)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO hk_course_tasks (id, user_email, query, credit_key, brief_json, research_hits_json, blueprint_json, status, total_units)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          query = excluded.query,
+         credit_key = COALESCE(hk_course_tasks.credit_key, excluded.credit_key),
          brief_json = excluded.brief_json,
          research_hits_json = excluded.research_hits_json,
          blueprint_json = excluded.blueprint_json,
          status = excluded.status,
          total_units = excluded.total_units,
-         updated_at = CURRENT_TIMESTAMP`,
+         lease_token = NULL,
+         lease_expires_at = NULL,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE hk_course_tasks.user_email = excluded.user_email
+         AND (hk_course_tasks.credit_key IS NULL OR excluded.credit_key IS NULL
+              OR hk_course_tasks.credit_key = excluded.credit_key)
+         AND (hk_course_tasks.lease_token IS NULL OR hk_course_tasks.lease_expires_at <= ?)`,
     )
     .bind(
       task.id,
       task.userEmail,
       task.query,
+      task.creditKey ?? null,
       task.briefJson ?? null,
       task.researchHitsJson ?? null,
       task.blueprintJson ?? null,
       task.status ?? "pending",
       task.totalUnits ?? 0,
+      new Date().toISOString(),
     )
+    .run();
+  if (Number(result.meta.changes ?? 0) !== 1) throw new Error("course_task_owner_conflict");
+}
+
+export async function acquireCourseTaskLease(
+  id: string,
+  userEmail: string,
+  selectedUnitsJson: string,
+  token: string,
+  durationMs = 960_000,
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const expires = new Date(Date.now() + durationMs).toISOString();
+  const result = await database()
+    .prepare(
+      `UPDATE hk_course_tasks
+       SET lease_token = ?, lease_expires_at = ?, selected_units_json = COALESCE(selected_units_json, ?),
+           status = 'generating_units', updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_email = ?
+         AND status IN ('blueprint_ready', 'failed', 'generating_units')
+         AND (lease_token IS NULL OR lease_expires_at <= ?)
+         AND (selected_units_json IS NULL OR selected_units_json = ?)
+         AND NOT EXISTS (SELECT 1 FROM hk_courses WHERE uuid = ?)`,
+    )
+    .bind(token, expires, selectedUnitsJson, id, userEmail, now, selectedUnitsJson, id)
+    .run();
+  return Number(result.meta.changes ?? 0) === 1;
+}
+
+export async function releaseCourseTaskLease(id: string, userEmail: string, token: string): Promise<void> {
+  await database()
+    .prepare(`UPDATE hk_course_tasks SET lease_token = NULL, lease_expires_at = NULL, status = 'failed',
+              updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND user_email = ? AND lease_token = ?`)
+    .bind(id, userEmail, token)
     .run();
 }
 
 export async function getCourseTask(id: string, userEmail: string): Promise<StoredCourseTask | null> {
   const row = await database()
     .prepare(
-      `SELECT id, user_email, query, brief_json, research_hits_json, blueprint_json, selected_units_json,
+      `SELECT id, user_email, query, credit_key, brief_json, research_hits_json, blueprint_json, selected_units_json,
               units_json, current_unit_index, total_units, status, lease_token, lease_expires_at,
               error_message, version, created_at, updated_at
        FROM hk_course_tasks WHERE id = ? AND user_email = ?`,
@@ -203,6 +271,7 @@ export async function getCourseTask(id: string, userEmail: string): Promise<Stor
       id: string;
       user_email: string;
       query: string;
+      credit_key: string | null;
       brief_json: string | null;
       research_hits_json: string | null;
       blueprint_json: string | null;
@@ -223,6 +292,7 @@ export async function getCourseTask(id: string, userEmail: string): Promise<Stor
     id: row.id,
     userEmail: row.user_email,
     query: row.query,
+    creditKey: row.credit_key,
     briefJson: row.brief_json,
     researchHitsJson: row.research_hits_json,
     blueprintJson: row.blueprint_json,
@@ -247,14 +317,15 @@ export async function updateCourseTaskBlueprint(
   totalUnits: number,
   status: string = "blueprint_ready",
 ): Promise<void> {
-  await database()
+  const result = await database()
     .prepare(
       `UPDATE hk_course_tasks
        SET blueprint_json = ?, total_units = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND user_email = ?`,
+       WHERE id = ? AND user_email = ? AND lease_token IS NULL`,
     )
     .bind(blueprintJson, totalUnits, status, id, userEmail)
     .run();
+  if (Number(result.meta.changes ?? 0) !== 1) throw new Error("course_task_lease_conflict");
 }
 
 export async function saveCourseTaskUnitCheckpoint(
@@ -263,8 +334,12 @@ export async function saveCourseTaskUnitCheckpoint(
   unit: unknown,
   unitIndex: number,
   totalUnits: number,
+  taskLeaseToken?: string,
 ): Promise<void> {
   const task = await getCourseTask(id, userEmail);
+  if (!task || (taskLeaseToken && task.leaseToken !== taskLeaseToken)) {
+    throw new Error("course_task_lease_lost");
+  }
   let units: unknown[] = [];
   try {
     units = JSON.parse(task?.unitsJson || "[]");
@@ -275,14 +350,17 @@ export async function saveCourseTaskUnitCheckpoint(
   units[unitIndex] = unit;
   const filteredUnits = units.filter(Boolean);
 
-  await database()
+  const result = await database()
     .prepare(
       `UPDATE hk_course_tasks
        SET units_json = ?, current_unit_index = ?, total_units = ?, status = 'generating_units', updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND user_email = ?`,
+       WHERE id = ? AND user_email = ?
+          AND ((? IS NULL AND lease_token IS NULL) OR (lease_token = ? AND lease_expires_at > ?))`,
     )
-    .bind(JSON.stringify(filteredUnits), unitIndex + 1, totalUnits, id, userEmail)
+    .bind(JSON.stringify(filteredUnits), unitIndex + 1, totalUnits, id, userEmail,
+      taskLeaseToken ?? null, taskLeaseToken ?? null, new Date().toISOString())
     .run();
+  if (Number(result.meta.changes ?? 0) !== 1) throw new Error("course_task_lease_lost");
 }
 
 export async function markCourseTaskStatus(
@@ -290,15 +368,19 @@ export async function markCourseTaskStatus(
   userEmail: string,
   status: string,
   errorMessage?: string,
+  taskLeaseToken?: string,
 ): Promise<void> {
-  await database()
+  const result = await database()
     .prepare(
       `UPDATE hk_course_tasks
-       SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND user_email = ?`,
+       SET status = ?, error_message = ?, lease_token = NULL, lease_expires_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_email = ?
+         AND ((? IS NULL AND lease_token IS NULL) OR lease_token = ?)`,
     )
-    .bind(status, errorMessage ?? null, id, userEmail)
+    .bind(status, errorMessage ?? null, id, userEmail, taskLeaseToken ?? null, taskLeaseToken ?? null)
     .run();
+  if (Number(result.meta.changes ?? 0) !== 1) throw new Error("course_task_lease_lost");
 }
 
 function safeJson(text: string): Record<string, unknown> {

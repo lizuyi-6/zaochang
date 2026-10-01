@@ -69,9 +69,9 @@ export interface BoardTable {
   cells: { t: string; hl?: boolean; sw?: [string, string] }[][]; // [row][col]; sw = explicit standard-mode line break
 }
 
-export const VIOLET = '#6A45D9';
-export const INK = '#333330';
-export const MONO = '#8A8A8A';
+export const VIOLET = '#5B21B6';
+export const INK = '#18181B';
+export const MONO = '#1E293B';
 
 /** Panel conversation entry. */
 export interface PanelEntry {
@@ -100,7 +100,7 @@ export interface LessonStep {
   /** pause point: wait for typed answer */
   awaitAnswer?: boolean;
   /** quick-check choice popup on the board */
-  awaitChoice?: { question: string; options: string[]; answer: number };
+  awaitChoice?: { question: string; options: string[]; answer: number; explanation?: string };
   /** pan the board to PAN_X at step start */
   pan?: boolean;
   /** extra beat (ms) after step content completes */

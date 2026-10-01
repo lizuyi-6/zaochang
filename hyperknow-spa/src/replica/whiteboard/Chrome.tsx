@@ -5,9 +5,9 @@ import {
   ChevronRight,
   Download,
   Flag,
-  Keyboard,
   LocateFixed,
   MessageCircleMore,
+  Mic,
   MicOff,
   Minus,
   Pause,
@@ -19,8 +19,10 @@ import {
   X,
 } from 'lucide-react';
 import { ExportMenu } from './Popups';
-import { getIntroCopy } from './lessonScript';
+import { getIntroCopy, type Rich } from './lessonScript';
+import { CaptionBar } from './CaptionBar';
 import { CAMERA_ZOOM_STEPS } from './camera';
+import type { PlayStatus } from './Panel';
 import type { ExportFormat, ExportPage } from '../boardExport';
 
 export const WhiteboardChrome: React.FC<{
@@ -48,6 +50,11 @@ export const WhiteboardChrome: React.FC<{
   titleOverride?: string;
   isFollowing?: boolean;
   onResumeFollow?: () => void;
+  caption?: Rich | null;
+  capShown?: number;
+  typing?: boolean;
+  quickCheckActive?: boolean;
+  status?: PlayStatus;
 }> = (p) => {
   const [exportOpen, setExportOpen] = useState(false);
   const [zoomTip, setZoomTip] = useState<'in' | 'out' | null>(null);
@@ -159,35 +166,58 @@ export const WhiteboardChrome: React.FC<{
         </div>
       </header>
 
-      {/* Bottom bar transport / action controls with flex layout */}
-      <footer className="wb-bottom-bar" aria-label="Playback and conversation actions">
-        {/* Bottom-left transport */}
-        <div className="wb-cluster wb-cluster-bottom-left">
-          <button className="wb-chrome-btn" onClick={p.onTogglePause} aria-label={p.paused ? 'Resume' : 'Pause'}>
-            {p.paused || p.idle ? <Play size={17} style={{ marginLeft: 2 }} /> : <Pause size={17} />}
-          </button>
-          <MuteButton muted={p.muted} onToggle={p.onToggleMute} />
-        </div>
+      {/* Unified Caption & Player Dock */}
+      <footer className="wb-unified-dock-container" aria-label="Playback and conversation actions">
+        <div className="wb-unified-dock">
+          {/* Left: Playback controls */}
+          <div className="wb-dock-transport">
+            <button
+              className="wb-dock-btn"
+              onClick={p.onTogglePause}
+              aria-label={p.paused ? 'Resume' : 'Pause'}
+              title={p.paused ? 'Resume' : 'Pause'}
+            >
+              {p.paused || p.idle ? <Play size={18} style={{ marginLeft: 2 }} /> : <Pause size={18} />}
+            </button>
+            <MuteButton muted={p.muted} onToggle={p.onToggleMute} />
+          </div>
 
-        {/* Bottom-right conversation buttons */}
-        <div className="wb-cluster wb-cluster-bottom-right">
-          {p.panelOpen ? (
-            <button className="wb-fab" onClick={p.onTogglePanel} aria-label="Collapse conversation">
+          {/* Center: Live caption / status */}
+          <div className="wb-dock-caption-area">
+            {p.caption ? (
+              <CaptionBar caption={p.caption} shown={p.capShown ?? 0} typing={p.typing ?? false} />
+            ) : (
+              <div className="wb-dock-caption-placeholder">
+                {p.quickCheckActive ? (
+                  <span className="wb-dock-qc-hint">Check your understanding above</span>
+                ) : p.paused ? (
+                  <span className="wb-dock-paused-hint">Paused</span>
+                ) : p.status === 'explaining' ? (
+                  <span className="wb-dock-explaining-hint">Tutor explaining...</span>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          {/* Right: Interaction actions */}
+          <div className="wb-dock-actions">
+            <button
+              className={`wb-dock-btn${p.voiceOn ? ' active' : ''}`}
+              onClick={p.onMicFab}
+              aria-label={p.voiceOn ? 'Microphone on' : 'Microphone off'}
+              title={p.voiceOn ? 'Microphone on' : 'Microphone off'}
+            >
+              {p.voiceOn ? <Mic size={18} /> : <MicOff size={18} />}
+            </button>
+            <button
+              className={`wb-dock-btn${p.panelOpen ? ' panel-active' : ''}`}
+              onClick={p.onTogglePanel}
+              aria-label={p.panelOpen ? 'Close transcript' : 'Open transcript'}
+              title={p.panelOpen ? 'Close transcript' : 'Open transcript'}
+            >
               <MessageCircleMore size={18} />
             </button>
-          ) : (
-            <div className="wb-fab-group">
-              <button className="wb-fab mic-off" onClick={p.onMicFab} aria-label="Microphone">
-                <MicOff size={17} />
-              </button>
-              <button className="wb-fab" onClick={p.onTogglePanel} aria-label="Type">
-                <Keyboard size={17} />
-              </button>
-              <button className="wb-fab" onClick={p.onTogglePanel} aria-label="Open conversation">
-                <MessageCircleMore size={18} />
-              </button>
-            </div>
-          )}
+          </div>
         </div>
       </footer>
     </>
@@ -199,14 +229,15 @@ const MuteButton: React.FC<{ muted: boolean; onToggle: () => void }> = ({ muted,
   return (
     <div className="wb-btn-anchor">
       <button
-        className="wb-chrome-btn"
-        style={{ color: muted ? '#111' : '#525252' }}
+        className="wb-dock-btn"
+        style={{ color: muted ? '#DC2626' : undefined }}
         onClick={onToggle}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         aria-label={muted ? 'Unmute' : 'Mute'}
+        title={muted ? 'Unmute' : 'Mute'}
       >
-        {muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
+        {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </button>
       {(hover || muted) && (
         <div className="wb-tooltip below-caret" style={{ left: '50%', transform: 'translateX(-50%)', bottom: 52 }}>

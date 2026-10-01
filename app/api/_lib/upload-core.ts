@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { database } from "./community";
 import { inspectUpload, scanUpload, UploadSecurityError } from "./upload-security";
+import { completeScannedUploadSql, failScannedUploadSql } from "./hyperknow/image-upload-state";
 
 // 可复用的「扫描后入库」上传管线:与 app/api/uploads/route.ts 同源同安全语义。
 // 写库默认 'pending',ClamAV 扫描通过(clean)才置为 clean 并把对象从 quarantine
@@ -51,6 +52,7 @@ export async function storeScannedUpload(args: {
   ownerEmail: string;
   visibility: "public" | "private";
   purpose: string;
+  hyperknowImage?: boolean;
 }): Promise<StoredUpload> {
   const inspected = await inspectUpload(args.file);
   const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
@@ -62,8 +64,8 @@ export async function storeScannedUpload(args: {
   await db.prepare(
     `INSERT INTO uploaded_files
      (key, owner_email, original_name, media_type, byte_size, visibility,
-      purpose, sha256, scan_status, quarantine_key)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+      purpose, sha256, scan_status, quarantine_key, hyperknow_image)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
   ).bind(
     key,
     args.ownerEmail,
@@ -74,6 +76,7 @@ export async function storeScannedUpload(args: {
     args.purpose,
     inspected.sha256,
     quarantineKey,
+    args.hyperknowImage === true ? 1 : 0,
   ).run();
 
   try {
@@ -105,23 +108,14 @@ export async function storeScannedUpload(args: {
       },
     });
     await bucket.delete(quarantineKey);
-    const updated = await db.prepare(
-      `UPDATE uploaded_files
-       SET scan_status = 'clean', scan_engine = ?, scan_signature = NULL,
-           quarantine_key = NULL, scanned_at = CURRENT_TIMESTAMP
-         WHERE key = ? AND scan_status = 'pending'`,
-    ).bind(scan.engine, key).run();
+    const updated = await db.prepare(completeScannedUploadSql).bind(scan.engine, key).run();
     if (updated.meta.changes !== 1) {
       await bucket.delete(key);
       throw new UploadSecurityError("upload_scan_state_conflict", 503);
     }
   } catch (error) {
     await bucket.delete(quarantineKey).catch(() => undefined);
-    await db.prepare(
-      `UPDATE uploaded_files
-       SET scan_status = 'error', quarantine_key = NULL, scanned_at = CURRENT_TIMESTAMP
-       WHERE key = ? AND scan_status = 'pending'`,
-    ).bind(key).run().catch(() => undefined);
+    await db.prepare(failScannedUploadSql).bind(key).run().catch(() => undefined);
     throw error;
   }
 

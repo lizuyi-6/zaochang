@@ -119,63 +119,65 @@ export function parseNextSteps(jsonStr: string): NextStepsData {
 
 // ── Whiteboard Instructor(白板讲师 + 举手插话)────────────────────────────
 export const WHITEBOARD_INSTRUCTOR_PROMPT = `# Role: Hyperknow Whiteboard Instructor
-You are an expert tutor delivering an engaging, in-depth interactive visual lecture on an infinite digital whiteboard.
-You break comprehensive explanations into sequential visual STEPS, speaking with natural, conversational voice cadences while placing cards, diagrams, and formulas on the board.
+You are an expert tutor delivering an engaging, interactive micro-lecture on an infinite digital whiteboard.
+You break explanations into sequential, progressive STEPS, speaking with concise 1-2 sentence micro-explanations while progressively building cards, diagrams, formulas, and interactive checkpoints on the board.
 
 ## Pedagogical Structure Requirements:
-1. Lecture Depth and Scale:
-   - Deliver a substantial, thorough lesson consisting of 5 to 7 progressive steps.
-   - Never output a superficial 2-3 step lesson. Each step must build upon previous concepts.
-   - Recommended step progression:
-     * Step 1: Hook & Core Intuition (overview card: real-world analogy, motivation, why this matters)
-     * Step 2: Key Concepts & Formal Definitions (card: clear definitions, bullet points, mental model)
-     * Step 3: Architecture / Workflow / System Mechanics (diagram: Mermaid flowchart, sequence, or taxonomy)
-     * Step 4: Step-by-Step Deep Dive (card/formula: practical implementation, mechanics, or code walkthrough)
-     * Step 5: Real-world Practical Patterns & Pitfalls (card: best practices, common traps, dos and don'ts)
-     * Final Step: Understanding Check (quick_check: interactive multiple-choice question)
+1. Lecture Progression & Micro-Steps:
+   - Deliver a progressive lesson consisting of 5 to 7 bite-sized steps.
+   - Build concepts incrementally. Never dump large walls of text at once.
+   - Recommended progression structure:
+     * Step 1: Hook & Core Intuition (overview card: relatable analogy, motivation, 1-2 key takeaways)
+     * Step 2: System Mechanics & Flow (diagram: valid Mermaid flowchart or sequence)
+     * Step 3: Intermediate Checkpoint (quick_check: interactive multiple-choice check to gate and verify understanding before proceeding)
+     * Step 4: Step-by-Step Nuance / Best Practices (card or formula: focused practical implementation or key pitfalls)
+     * Step 5: Advanced Application or Synthesis (card: synthesis or real-world application)
+     * Final Step: Mastery Check (quick_check: final understanding check)
 
-2. Spoken Narration Depth ("spoken_text"):
-   - Each step's "spoken_text" is what you speak aloud to the student (synthesized via TTS).
-   - Each step MUST contain at least 3 to 5 full, natural spoken sentences (approx. 60-120 words in English, or 100-200 Chinese characters in Chinese).
-   - Proactively teach: explain the "why", point out key details on the board ("Take a look at the card on the board...", "Notice in this diagram..."), use relatable analogies, and maintain an encouraging, lively lecture tone.
-   - NEVER output brief 1-sentence summaries. The spoken explanation must carry real pedagogical substance.
+2. Micro-Explanation Spoken Narration ("spoken_text"):
+   - Each step's "spoken_text" is spoken aloud to the student (synthesized via TTS).
+   - Each step MUST contain strictly 1 to 2 crisp, conversational sentences (approx. 20-40 words in English, or 25-60 Chinese characters in Chinese).
+   - Point directly to what is appearing on the board right now ("Notice the core workflow in this flowchart...", "Let's check our understanding on this key distinction...").
+   - NEVER output long monologue paragraphs or multi-sentence lectures. Keep each step concise, agile, and interactive.
 
 3. Board Action Elements ("board_action"):
-   - type: "card" (rich HTML content with <p>, <ul>, <li>, <code>, or <strong>; title should be concise and clear)
-   - type: "formula" (LaTeX math expression; put the bare LaTeX in "content" WITHOUT $ or $$ delimiters, keep it on one line)
-   - type: "diagram" (valid Mermaid flowchart code in "content"; every node label MUST stay on a single line — use <br> instead of line breaks inside [ ] or { })
+   - type: "card" (rich HTML with concise title and short bullet points)
+   - type: "formula" (LaTeX math expression; bare LaTeX in "latex" or "content" without delimiters)
+   - type: "diagram" (valid Mermaid flowchart code in "code" or "content"; single-line node labels)
    - At least one diagram MUST be included in the lecture to visualize structure, workflow, or lifecycle. A lecture with no diagram at all is a failed lecture.
+   - At least one intermediate checkpoint (type: "quick_check") MUST be included before the final step to gate and verify understanding.
    - The FINAL step must always be a quick check:
-     type: "quick_check" with "question", "options" (array of 3-4 distinct choices), "answer" (0-based index of the correct option)
+     type: "quick_check" with "question", "options" (array of 3-4 distinct choices), "answer" (0-based index of the correct option), and "explanation".
 
 Output your response strictly as JSON:
 {
   "steps": [
     {
       "step_id": "step_1",
-      "spoken_text": "Engaging, conversational 3-5 sentence spoken explanation introducing the core intuition.",
+      "spoken_text": "Crisp 1-2 sentence micro-explanation introducing the core intuition.",
       "board_action": {
         "type": "card",
         "title": "Title",
-        "content": "<p>HTML content with <strong>key highlights</strong></p>"
+        "content": "<p>Key insight with <strong>bold highlights</strong></p>"
       }
     },
     {
       "step_id": "step_2",
-      "spoken_text": "Detailed 3-5 sentence spoken walkthrough of the mechanics and workflow.",
+      "spoken_text": "1-2 sentence explanation walking through the visual mechanics.",
       "board_action": {
         "type": "diagram",
         "code": "graph TD\\n  A[Start] --> B[Process]\\n  B --> C[Output]"
       }
     },
     {
-      "step_id": "step_N",
-      "spoken_text": "Now, let us verify our understanding with a quick checkpoint.",
+      "step_id": "step_3",
+      "spoken_text": "Let us pause and verify this concept before we move forward.",
       "board_action": {
         "type": "quick_check",
         "question": "Question text",
         "options": ["Option A", "Option B", "Option C"],
-        "answer": 0
+        "answer": 0,
+        "explanation": "Option A correctly reflects the core mechanism."
       }
     }
   ]
@@ -195,15 +197,15 @@ export type BoardAction =
   | { type: "formula"; latex?: string }
   | { type: "diagram"; code?: string }
   | { type: "image"; prompt?: string; caption?: string; url?: string; width?: number; height?: number }
-  | { type: "quick_check"; question?: string; options?: string[]; answer?: number };
+  | { type: "quick_check"; question?: string; options?: string[]; answer?: number; explanation?: string };
 
 export type LectureStep = { step_id: string; spoken_text: string; board_action: BoardAction };
 // degraded: 本计划来自确定性 fallback 而非模型输出(供路由在响应/日志中区分降级与成功)。
 export type LecturePlan = { steps: LectureStep[]; degraded?: boolean };
 
-// 讲座计划的确定性 fallback(5 步完整教学:导论+图解+视角+避坑+快测)。
+// 讲座计划的确定性 fallback(5 步完整微教学:导论+图解+阶段小测+避坑+终末快测)。
 // 通用人文/社科/理工适配,语言感知:显式 language 或主题含汉字时输出中文,
-// 每步含 3-4 句详实口语化讲解词,杜绝把计算机术语生搬硬套到所有主题。
+// 每步含 1-2 句紧凑微讲解词,含阶段快测与终末快测,杜绝长篇独白。
 export function fallbackLecturePlan(topic: string, learnerName = "", language = ""): LecturePlan {
   const zh = /^zh/i.test(language.trim()) || /[一-鿿]/.test(topic);
   if (zh) {
@@ -212,7 +214,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
       steps: [
         {
           step_id: "step_1",
-          spoken_text: `${greet}欢迎来到今天的专题课，我们来深入探索${topic}。在探索这一主题时，最核心的价值在于建立清晰的思维框架与本质认知。在展开具体细节前，我们先建立对它的基本直觉与核心思考维度。`,
+          spoken_text: `${greet}今天我们来深入探索${topic}的核心思维框架。`,
           board_action: {
             type: "card",
             title: topic,
@@ -221,7 +223,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
         },
         {
           step_id: "step_2",
-          spoken_text: `请看白板中央的结构流程图，这里清晰展现了${topic}的核心脉络。从背景与现实情境切入，通过核心机制的传导与互动，最终映射到具体的实践表现与深远影响。理清这一传导逻辑，是掌握它的关键。`,
+          spoken_text: `请看流程图，理清${topic}的核心传导逻辑。`,
           board_action: {
             type: "diagram",
             code: `graph TD\n  Context["现实背景与核心情境"] --> Mechanism["核心概念与关键机制"]\n  Mechanism --> Interaction["多维要素的相互作用"]\n  Interaction --> Outcome["具体实践与深远影响"]`,
@@ -229,16 +231,21 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
         },
         {
           step_id: "step_3",
-          spoken_text: `现在我们来看第三步的关键视角与分析方法。在理解和运用${topic}时，最有效的方法是结合具体情境进行多维审视。正如卡片中总结的方法论准则，抓住关键线索能帮我们快速洞察问题本质。`,
+          spoken_text: `先通过随堂小测确认你对传导机制的理解。`,
           board_action: {
-            type: "card",
-            title: "核心分析视角",
-            content: `<p><strong>关键认知准则：</strong></p><ol><li><strong>情境化审视：</strong>将具体问题置于完整背景中理解。</li><li><strong>多维关联：</strong>探究个体经验与宏观结构的双向互动。</li><li><strong>本质洞察：</strong>透过表象提炼底层驱动机制与规律。</li></ol>`,
+            type: "quick_check",
+            question: `在理清 ${topic} 的传导机制时，最核心的着眼点是什么？`,
+            options: [
+              "把握核心机制与多维要素间的动态互动",
+              "仅做孤立片面的静态表面记录",
+            ],
+            answer: 0,
+            explanation: "各要素之间的动态互动是传导逻辑的核心枢纽。",
           },
         },
         {
           step_id: "step_4",
-          spoken_text: `接下来提醒大家注意在理解${topic}时最容易出现的几个认知误区。很多人容易脱离情境进行片面归因，或者混淆相关与因果关系。请务必记住卡片上的避坑提示，保持全面而严谨的批判性思维。`,
+          spoken_text: `请注意卡片上的避坑提示，在分析时保持批判性思维。`,
           board_action: {
             type: "card",
             title: "常见认知误区与避坑指南",
@@ -247,7 +254,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
         },
         {
           step_id: "step_5",
-          spoken_text: `最后，我们通过一个小测验来快速检验对本节核心要点的理解。请看白板上的题目，思考后选择你认为最符合${topic}核心视角的选项，我们马上揭晓答案。`,
+          spoken_text: `最后通过这道综合测验，检验本节核心要点的掌握情况。`,
           board_action: {
             type: "quick_check",
             question: `在深入理解 ${topic} 时，以下哪种思考方式最符合其核心视角？`,
@@ -258,6 +265,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
               "将所有现象归结为单一偶然因素，忽视规律与结构作用",
             ],
             answer: 0,
+            explanation: "将具体现象置于宏观结构与动态情境中多维审视，能精准把握底层驱动规律与各要素间的深层联系。",
           },
         },
       ],
@@ -268,7 +276,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
     steps: [
       {
         step_id: "step_1",
-        spoken_text: `${greet} Today we are diving into ${topic}. Exploring this subject helps us develop clear analytical frameworks and deep intuitive understanding. Before examining specific details, let us first establish our foundational perspective.`,
+        spoken_text: `${greet} Today we are diving into the foundational framework of ${topic}.`,
         board_action: {
           type: "card",
           title: topic,
@@ -277,7 +285,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
       },
       {
         step_id: "step_2",
-        spoken_text: `Notice the structured flowchart on the board illustrating the core progression of ${topic}. We move from foundational context into core mechanisms, observe their interactions, and identify realistic outcomes.`,
+        spoken_text: `Notice the flowchart illustrating the key mechanics of ${topic}.`,
         board_action: {
           type: "diagram",
           code: `graph TD\n  Context["Foundational Context & Context"] --> Mechanism["Core Mechanisms & Concepts"]\n  Mechanism --> Interaction["Dynamic Interactions & Relationships"]\n  Interaction --> Outcome["Real-World Outcomes & Impact"]`,
@@ -285,16 +293,21 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
       },
       {
         step_id: "step_3",
-        spoken_text: "Now let us examine the primary analytical perspectives. When applying this knowledge, the most robust approach is contextualized, multi-dimensional inquiry. As summarized on the board, tracing these core threads makes complex analysis manageable.",
+        spoken_text: `Let us pause for a quick check to verify your intuition on this flow.`,
         board_action: {
-          type: "card",
-          title: "Core Analytical Principles",
-          content: `<p><strong>Key Inquiry Guidelines:</strong></p><ol><li><strong>Contextual Understanding:</strong> Interpreting observations within their broader context.</li><li><strong>Multi-Dimensional Linkages:</strong> Connecting individual cases to overarching structures.</li><li><strong>Root-Cause Insight:</strong> Looking past surface phenomena to discover underlying drivers.</li></ol>`,
+          type: "quick_check",
+          question: `When analyzing the mechanics of ${topic}, what is the primary focus?`,
+          options: [
+            "Tracing dynamic interactions between core mechanisms",
+            "Recording isolated surface observations without context",
+          ],
+          answer: 0,
+          explanation: "Tracing dynamic interactions reveals the true underlying mechanism.",
         },
       },
       {
         step_id: "step_4",
-        spoken_text: "Here are several common cognitive traps when analyzing this subject. Oversimplifying cause and effect or analyzing issues in isolation frequently leads to skewed conclusions. Keep the guidelines on the card in mind.",
+        spoken_text: `Keep these analytical pitfalls in mind to avoid oversimplified conclusions.`,
         board_action: {
           type: "card",
           title: "Common Pitfalls to Avoid",
@@ -303,7 +316,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
       },
       {
         step_id: "step_5",
-        spoken_text: "To wrap up today's lesson, let us test your understanding with a quick question. Review the options on the board and select the most appropriate analytical approach.",
+        spoken_text: `To wrap up today's lesson, answer this final checkpoint on our core perspective.`,
         board_action: {
           type: "quick_check",
           question: `When analyzing ${topic}, which of the following represents the most comprehensive analytical approach?`,
@@ -314,6 +327,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
             "Ignoring historical and environmental context altogether",
           ],
           answer: 0,
+          explanation: "Examining phenomena within their broader context reveals systemic interactions and root causes.",
         },
       },
     ],

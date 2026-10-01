@@ -61,7 +61,7 @@ test("consumeMessagesSse: 跨 chunk 断行与无尾换行的尾行都能解析",
     // 同一 chunk 内两行 + 断行
     new TextEncoder().encode(`data: ${JSON.stringify({ type: "content_block_delta", delta: { type: "thinking_delta", thinking: "考" } })}\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: "答" } })}\ndata: {"broken`),
     // 尾行无换行(前导 \n 终结上一条被截断的坏行)
-    new TextEncoder().encode(`\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: "案" } })}`),
+    new TextEncoder().encode(`\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: "案" } })}\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "end_turn" } })}\ndata: ${JSON.stringify({ type: "message_stop" })}`),
   ];
   const chunks = [];
   for await (const chunk of consumeMessagesSse(new Blob(frames).stream())) chunks.push(chunk);
@@ -71,6 +71,22 @@ test("consumeMessagesSse: 跨 chunk 断行与无尾换行的尾行都能解析",
     { type: "text", text: "答" },
     { type: "text", text: "案" },
   ]);
+});
+
+test("consumeMessagesSse: partial/error/truncation are not successful terminal states", async () => {
+  const data = (event) => `data: ${JSON.stringify(event)}\n\n`;
+  const partial = data({ type: "content_block_delta", delta: { type: "text_delta", text: "partial" } });
+  const collect = async (wire) => {
+    const chunks = [];
+    for await (const chunk of consumeMessagesSse(new Blob([wire]).stream())) chunks.push(chunk);
+    return chunks;
+  };
+  await assert.rejects(collect(partial), /ai_upstream_incomplete/);
+  await assert.rejects(collect(partial + data({ type: "error", error: { type: "overloaded_error" } })), /ai_upstream_stream_error/);
+  await assert.rejects(collect(data({ type: "error", error: { type: "overloaded_error" } })), /ai_upstream_stream_error/);
+  await assert.rejects(collect(partial + data({ type: "message_delta", delta: { stop_reason: "max_tokens" } }) + data({ type: "message_stop" })), /ai_upstream_incomplete/);
+  await assert.rejects(collect(partial + data({ type: "message_delta", delta: { stop_reason: "end_turn" } })), /ai_upstream_incomplete/);
+  assert.deepEqual(await collect(partial + data({ type: "message_delta", delta: { stop_reason: "end_turn" } }) + data({ type: "message_stop" })), [{ type: "text", text: "partial" }]);
 });
 
 test("sanitizeTtsText: 剥 HTML/截 500 字/空兜底", () => {

@@ -314,8 +314,19 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
           question: action.question ?? L('Quick check', '快速检查'),
           options,
           answer: Math.min(Math.max(action.answer ?? 0, 0), options.length - 1),
+          explanation: (action as { explanation?: string }).explanation,
         };
       }
+    }
+
+    const aType = action.type as string;
+    if (
+      aType === 'question' ||
+      aType === 'await_answer' ||
+      Boolean((step as unknown as { await_answer?: boolean }).await_answer) ||
+      Boolean((step as unknown as { awaitAnswer?: boolean }).awaitAnswer)
+    ) {
+      lessonStep.awaitAnswer = true;
     }
 
     if (idx === plan.steps.length - 1) {

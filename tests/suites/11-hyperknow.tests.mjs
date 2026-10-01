@@ -19,8 +19,11 @@ import {
   resetAiUpstream,
   setAiUpstreamForceFail,
   setAiUpstreamJsonResponse,
+  setAiUpstreamUnitDelay,
+  setImageUpstreamDelay,
   authHeaders,
   executeD1Sql,
+  executeLocalD1,
   queryLocalD1,
   searchRequests,
   lastStepfunSearchRequest,
@@ -617,6 +620,44 @@ export function register() {
     // 积分仍然为 10，严守 10 积分定价不擅改，无二次扣费
     const info2 = await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json();
     assert.equal(info2.data.subscription.remaining_credits, 10, "幂等恢复与重试不重复扣费");
+
+    const replay = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers: { ...headers, "x-hk-web-search-provider": "off" },
+      body: JSON.stringify({ query: "High Throughput Pipelines", brief, idempotencyKey }),
+    });
+    assert.equal(replay.status, 200);
+    const replayFrames = await readHkFrames(replay);
+    assert.equal(replayFrames.find((f) => f.type === "course_structure_ready")?.course_uuid, courseUuid,
+      "同一幂等键及同一请求只能返回原课程 UUID");
+
+    const reused = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers: { ...headers, "x-hk-web-search-provider": "off" },
+      body: JSON.stringify({ query: "Different free course", brief, idempotencyKey }),
+    });
+    assert.equal(reused.status, 409, "同一幂等键不得创建另一门免费课程");
+    assert.equal((await reused.json()).error, "idempotency_key_reused");
+    const reusedTasks = await queryLocalD1(`SELECT id FROM hk_course_tasks WHERE user_email = '${email}' AND query = 'Different free course'`);
+    assert.equal(reusedTasks.length, 0, "不同请求不得落库新任务");
+    const info3 = await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json();
+    assert.equal(info3.data.subscription.remaining_credits, 10, "拒绝复用后积分不得变化");
+
+    const strangerEmail = `hk-idemp-stranger-${runId}@example.com`;
+    const strangerHeaders = authHeaders("越权用户", strangerEmail);
+    const overwrite = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers: { ...strangerHeaders, "x-hk-web-search-provider": "off" },
+      body: JSON.stringify({ query: "replacement course", resumeUuid: courseUuid }),
+    });
+    assert.equal(overwrite.status, 404, "已知他人 UUID 也不能借恢复流程覆写课程");
+    assert.equal((await overwrite.json()).error, "course_task_not_found");
+    const ownerCourse = await fetch(`${baseUrl}/api/hyperknow/courses/${courseUuid}`, { headers });
+    assert.equal(ownerCourse.status, 200);
+    const savedRows = await queryLocalD1(`SELECT title, user_email FROM hk_courses WHERE uuid = '${courseUuid}'`);
+    assert.equal(savedRows.length, 1);
+    assert.equal(savedRows[0].user_email, email);
+    assert.equal(savedRows[0].title, ready1.course.courseTitle, "他人恢复请求不得改变原课程标题");
   });
 
   test("hyperknow whiteboard plan: 服务端按权限与精确上下文解析讲次，兼容旧课 topic", async () => {
@@ -709,6 +750,9 @@ export function register() {
     assert.equal(genData.success, true);
     assert.equal(genData.cached, false);
     assert.match(genData.url, /^\/api\/uploads\//);
+    const generatedKey = decodeURIComponent(genData.url.split("/").at(-1));
+    const generatedMarker = await queryLocalD1(`SELECT hyperknow_image FROM uploaded_files WHERE key = '${generatedKey}'`);
+    assert.equal(generatedMarker[0]?.hyperknow_image, 1, "生图上传必须留下供定时清理器识别的标记");
     assert.equal(imageUpstreamCount, 1);
     assert.equal(lastImageRequest.prompt, prompt);
     assert.equal(lastImageRequest.size, "1024x1024");
@@ -744,6 +788,113 @@ export function register() {
     assert.equal(imageUpstreamCount, 1, "缓存命中不得重复调用上游生图 API");
   });
 
+  test("hyperknow whiteboard image: 同名局部 session 跨课程不得串用缓存", async () => {
+    resetAiUpstream();
+    const email = `hk-image-scope-${runId}@example.com`;
+    const headers = authHeaders("配图隔离用户", email);
+    const firstCourse = "091d5945-4f34-4bfc-9d3b-c34b76d62ee5";
+    const secondCourse = "c18a2301-3f42-4bfc-9d3b-c34b76d62ea1";
+    const context = { unitId: "unit-1", lectureId: "lec-1-1", sessionId: "sess-1-1-1" };
+    const image = async (courseUuid, prompt) => {
+      const response = await fetch(`${baseUrl}/api/hyperknow/whiteboard/image`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ courseUuid, ...context, prompt, caption: prompt }),
+      });
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    const first = await image(firstCourse, "Sociology field diagram");
+    assert.equal(first.cached, false);
+    assert.equal(imageUpstreamCount, 1);
+    const second = await image(secondCourse, "Machine learning gradient diagram");
+    assert.equal(second.cached, false, "另一门课即使使用相同局部 sessionId 也必须重新生图");
+    assert.notEqual(second.url, first.url);
+    assert.equal(second.caption, "Machine learning gradient diagram");
+    assert.equal(imageUpstreamCount, 2);
+    const sameSession = await image(firstCourse, "A later prompt in the same session");
+    assert.equal(sameSession.cached, true, "同一课程小节仍只允许一张图");
+    assert.equal(sameSession.url, first.url);
+    assert.equal(imageUpstreamCount, 2);
+
+    const invalid = await fetch(`${baseUrl}/api/hyperknow/whiteboard/image`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ courseUuid: firstCourse, ...context, unitId: "unit-missing", prompt: "invalid tree" }),
+    });
+    assert.equal(invalid.status, 404);
+    assert.equal((await invalid.json()).error, "course_session_not_found");
+    assert.equal(imageUpstreamCount, 2, "无效课节路径不得触发上游生图");
+  });
+
+  test("hyperknow whiteboard image: 活跃租约阻止第二次上游调用，失败租约可恢复", async () => {
+    resetAiUpstream();
+    const email = `hk-image-lease-${runId}@example.com`;
+    const headers = authHeaders("生图租约用户", email);
+    const body = { prompt: "Lease guarded anatomy diagram", sessionId: `lease-${runId}` };
+    const first = await fetch(`${baseUrl}/api/hyperknow/whiteboard/image`, {
+      method: "POST", headers, body: JSON.stringify(body),
+    });
+    assert.equal(first.status, 200);
+    await first.json();
+    assert.equal(imageUpstreamCount, 1);
+    const rows = await queryLocalD1(`SELECT cache_key FROM hk_lecture_images WHERE user_email = '${email}'`);
+    assert.equal(rows.length, 1);
+    const cacheKey = rows[0].cache_key;
+    const future = new Date(Date.now() + 60_000).toISOString();
+    await executeLocalD1(`UPDATE hk_lecture_images SET status = 'pending', url = '', lease_token = 'other-worker',
+      lease_expires_at = '${future}' WHERE cache_key = '${cacheKey}'`);
+
+    const blocked = await fetch(`${baseUrl}/api/hyperknow/whiteboard/image`, {
+      method: "POST", headers, body: JSON.stringify(body),
+    });
+    assert.equal(blocked.status, 409, "等待 15 秒后原租约仍有效时必须拒绝第二次生图");
+    assert.equal((await blocked.json()).error, "image_generation_in_progress");
+    assert.equal(imageUpstreamCount, 1, "未取得租约不得消耗第二次上游调用");
+
+    await executeLocalD1(`UPDATE hk_lecture_images SET status = 'failed', lease_token = NULL,
+      lease_expires_at = NULL WHERE cache_key = '${cacheKey}'`);
+    const retry = await fetch(`${baseUrl}/api/hyperknow/whiteboard/image`, {
+      method: "POST", headers, body: JSON.stringify(body),
+    });
+    assert.equal(retry.status, 200);
+    assert.equal((await retry.json()).cached, false);
+    assert.equal(imageUpstreamCount, 2, "失败租约接管后才允许再次调用上游");
+  });
+
+  test("hyperknow whiteboard image: 上传后失去租约不会写缓存且清理新资产", async () => {
+    resetAiUpstream();
+    setImageUpstreamDelay(1200);
+    const email = `hk-image-lost-${runId}@example.com`;
+    const headers = authHeaders("租约失效用户", email);
+    const request = fetch(`${baseUrl}/api/hyperknow/whiteboard/image`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ prompt: "Lease theft diagram", sessionId: `lost-${runId}` }),
+    });
+    let rows = [];
+    for (let attempt = 0; attempt < 30; attempt++) {
+      rows = await queryLocalD1(`SELECT cache_key, lease_token FROM hk_lecture_images WHERE user_email = '${email}'`);
+      if (rows.length === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(rows.length, 1, "首请求必须真实取得 pending 租约");
+    assert.ok(rows[0].lease_token);
+    await executeLocalD1(`UPDATE hk_lecture_images SET lease_token = 'stolen-by-other-worker'
+      WHERE cache_key = '${rows[0].cache_key}'`);
+    const response = await request;
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, "image_lease_lost");
+    assert.equal(imageUpstreamCount, 1, "故障发生前上游调用确实已经生效");
+    const cache = await queryLocalD1(`SELECT status, url, lease_token FROM hk_lecture_images WHERE cache_key = '${rows[0].cache_key}'`);
+    assert.equal(cache[0].status, "pending");
+    assert.equal(cache[0].url, "", "失去租约的进程不得回填缓存 URL");
+    assert.equal(cache[0].lease_token, "stolen-by-other-worker");
+    const uploaded = await queryLocalD1(`SELECT key FROM uploaded_files WHERE owner_email = '${email}'`);
+    assert.equal(uploaded.length, 0, "上传已生效后缓存失败时必须清理未引用的资产记录");
+    setImageUpstreamDelay(0);
+  });
+
   test("hyperknow course-generation: 真实蓝图确认流、独立单元LLM调用检查点、并发租约409拦截", async () => {
     resetAiUpstream();
     const email = `hk-task-${runId}@example.com`;
@@ -768,6 +919,19 @@ export function register() {
     const courseUuid = bpFrame.course_uuid;
     assert.ok(courseUuid);
 
+    const strangerEmail = `hk-task-stranger-${runId}@example.com`;
+    const strangerResume = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers: { ...authHeaders("越权用户", strangerEmail), "x-hk-web-search-provider": "off" },
+      body: JSON.stringify({ query: "hijacked blueprint", resumeUuid: courseUuid }),
+    });
+    assert.equal(strangerResume.status, 404, "蓝图阶段的任务 UUID 也不得跨用户覆写");
+    assert.equal((await strangerResume.json()).error, "course_task_not_found");
+    const originalTask = await queryLocalD1(`SELECT user_email, query FROM hk_course_tasks WHERE id = '${courseUuid}'`);
+    assert.equal(originalTask.length, 1);
+    assert.equal(originalTask[0].user_email, email);
+    assert.equal(originalTask[0].query, "Distributed Consensus Systems");
+
     // 验证流在蓝图阶段正常关闭，未提前虚假发出 course_structure_ready
     assert.equal(frames1.some((f) => f.type === "course_structure_ready"), false, "蓝图确认前绝不可提前发出 course_structure_ready");
 
@@ -790,6 +954,7 @@ export function register() {
     assert.equal(conflictJson.error, "concurrent_operation_in_progress");
 
     // 3. Stage 2: 用户确认蓝图并指定选中单元，真实调用 LLM 每单元保存检查点
+    setAiUpstreamUnitDelay(1000);
     const stage2Res = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
       method: "POST",
       headers,
@@ -800,7 +965,20 @@ export function register() {
       }),
     });
     assert.equal(stage2Res.status, 200);
+    const parallelStage2 = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ resumeUuid: courseUuid, action: "confirm_blueprint", selectedUnits: ["unit-1", "unit-2"] }),
+    });
+    assert.equal(parallelStage2.status, 409, "第二个确认请求不得并发生成同一课程");
+    assert.equal((await parallelStage2.json()).error, "concurrent_operation_in_progress");
+    const storedSelection = await queryLocalD1(`SELECT selected_units_json, lease_token FROM hk_course_tasks WHERE id = '${courseUuid}'`);
+    assert.equal(storedSelection.length, 1);
+    assert.deepEqual(JSON.parse(storedSelection[0].selected_units_json), ["unit-1", "unit-2"],
+      "用户确认的单元范围必须先落库，供断点恢复使用");
+    assert.ok(storedSelection[0].lease_token, "二阶段生成期间必须持有任务租约");
     const frames2 = await readHkFrames(stage2Res);
+    setAiUpstreamUnitDelay(0);
 
     // 验证逐单元进度帧与检查点
     const unitProgressFrames = frames2.filter((f) => f.type === "course_unit_progress");
@@ -815,6 +993,74 @@ export function register() {
     // 验证 hk_course_tasks 更新为 completed
     const completedTasks = await queryLocalD1(`SELECT status, current_unit_index FROM hk_course_tasks WHERE id = '${courseUuid}'`);
     assert.equal(completedTasks[0].status, "completed");
+  });
+
+  test("hyperknow course-generation: 二阶段失败后沿用已持久化的单元选择", async () => {
+    resetAiUpstream();
+    const email = `hk-selected-${runId}@example.com`;
+    const headers = authHeaders("选单恢复用户", email);
+    const first = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers: { ...headers, "x-hk-web-search-provider": "off" },
+      body: JSON.stringify({ query: "Selected Unit Recovery", idempotencyKey: `selected-${runId}`, requireConfirmation: true }),
+    });
+    assert.equal(first.status, 200);
+    const blueprint = (await readHkFrames(first)).find((f) => f.type === "blueprint_ready");
+    assert.ok(blueprint);
+    const courseUuid = blueprint.course_uuid;
+    const chargeKey = `selected-${runId}`;
+    const taskBinding = await queryLocalD1(`SELECT credit_key FROM hk_course_tasks WHERE id = '${courseUuid}' AND user_email = '${email}'`);
+    assert.equal(taskBinding[0]?.credit_key, chargeKey, "任务必须持久绑定最初扣费的幂等键");
+    const beforeCompletion = await queryLocalD1(`SELECT status FROM hk_credit_charges WHERE key = '${chargeKey}' AND user_email = '${email}'`);
+    assert.equal(beforeCompletion[0]?.status, "pending", "蓝图就绪时课程尚未交付，计费记录保持 pending");
+    const creditsAfterBlueprint = (await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json()).data.subscription.remaining_credits;
+    assert.equal(creditsAfterBlueprint, 10, "蓝图就绪时余额已实际扣除 10");
+
+    setAiUpstreamForceFail(true);
+    const failed = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ resumeUuid: courseUuid, action: "confirm_blueprint", selectedUnits: ["unit-1", "unit-2"] }),
+    });
+    assert.equal(failed.status, 200);
+    const failedFrames = await readHkFrames(failed);
+    assert.equal(failedFrames.some((f) => f.type === "course_generation_error"), true,
+      "上游失败条件必须真的触发二阶段错误帧");
+    const failedTask = await queryLocalD1(`SELECT status, selected_units_json, lease_token FROM hk_course_tasks WHERE id = '${courseUuid}'`);
+    assert.equal(failedTask[0].status, "failed");
+    assert.deepEqual(JSON.parse(failedTask[0].selected_units_json), ["unit-1", "unit-2"]);
+    assert.equal(failedTask[0].lease_token, null, "失败后租约必须释放供恢复");
+    const afterFailure = await queryLocalD1(`SELECT status FROM hk_credit_charges WHERE key = '${chargeKey}' AND user_email = '${email}'`);
+    assert.equal(afterFailure[0]?.status, "pending", "课程未落库时不得标记计费完成");
+    const creditsAfterFailure = (await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json()).data.subscription.remaining_credits;
+    assert.equal(creditsAfterFailure, 10, "二阶段失败不重复扣费，也不伪称费用未生效");
+
+    resetAiUpstream();
+    await executeLocalD1(`UPDATE hk_course_tasks SET status = 'generating_units',
+      lease_token = 'expired-worker', lease_expires_at = '2020-01-01T00:00:00.000Z'
+      WHERE id = '${courseUuid}'`);
+    const replay = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: "Selected Unit Recovery", idempotencyKey: `selected-${runId}`, requireConfirmation: true }),
+    });
+    assert.equal(replay.status, 200, "过期租约的原任务应返回原蓝图供恢复");
+    const replayBlueprint = (await readHkFrames(replay)).find((f) => f.type === "blueprint_ready");
+    assert.equal(replayBlueprint?.course_uuid, courseUuid, "重放不得新建任务或课程");
+    const resumed = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ resumeUuid: courseUuid, action: "confirm_blueprint" }),
+    });
+    assert.equal(resumed.status, 200);
+    const ready = (await readHkFrames(resumed)).find((f) => f.type === "course_structure_ready");
+    assert.ok(ready);
+    assert.deepEqual(ready.course.units.map((unit) => unit.unitId), ["unit-1", "unit-2"],
+      "恢复请求未携带选单时也只能生成原先选中的单元");
+    const afterDelivery = await queryLocalD1(`SELECT status FROM hk_credit_charges WHERE key = '${chargeKey}' AND user_email = '${email}'`);
+    assert.equal(afterDelivery[0]?.status, "completed", "完整课程落库后原幂等键的计费记录必须完成");
+    const creditsAfterDelivery = (await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json()).data.subscription.remaining_credits;
+    assert.equal(creditsAfterDelivery, 10, "成功恢复课程不得第二次扣费");
   });
 
   test("hyperknow translate: SSE 逐帧、提示词契约、不落库、余额不足 402", async () => {
@@ -927,7 +1173,7 @@ export function register() {
     assert.equal(await info(), 20, "新账户每日额度 20");
 
     // 余额 3:对话(2)成功 → 剩 1。
-    await executeD1Sql(`UPDATE hk_credits SET balance = 3 WHERE user_email = '${email}'`);
+    await executeLocalD1(`UPDATE hk_credits SET balance = 3 WHERE user_email = '${email}'`);
     const chat = await fetch(`${baseUrl}/api/hyperknow/chat`, {
       method: "POST",
       headers,
@@ -948,7 +1194,7 @@ export function register() {
     assert.deepEqual((await blocked.json()).credit_info, { remaining: 1, max: 20 });
 
     // 余额 1 < 课程 10 → 课程生成同样 402,且不得产生伪生成兜底空间(纯 JSON 响应)。
-    await executeD1Sql(`UPDATE hk_credits SET balance = 1 WHERE user_email = '${email}'`);
+    await executeLocalD1(`UPDATE hk_credits SET balance = 1 WHERE user_email = '${email}'`);
     const blockedCourse = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
       method: "POST",
       headers,
@@ -959,7 +1205,7 @@ export function register() {
     assert.equal((await blockedCourse.json()).error, "insufficient_credits");
 
     // 跨北京日界懒重置:reset_date 落后 → 读取即整额续满,行日期翻到今天。
-    await executeD1Sql(`UPDATE hk_credits SET reset_date = '2000-01-01' WHERE user_email = '${email}'`);
+    await executeLocalD1(`UPDATE hk_credits SET reset_date = '2000-01-01' WHERE user_email = '${email}'`);
     assert.equal(await info(), 20, "跨天后读取触发懒重置,额度续满");
     const rows = await queryLocalD1(`SELECT balance, reset_date FROM hk_credits WHERE user_email = '${email}'`);
     assert.equal(rows.length, 1);

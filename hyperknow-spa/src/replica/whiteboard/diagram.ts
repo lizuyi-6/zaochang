@@ -338,7 +338,7 @@ export function renderDiagram(code: string): RenderedDiagram | null {
       const lw = e.label.length * CHAR_W * 0.82 + 10;
       edgeLabels.push(
         `<rect x="${(lx - lw / 2).toFixed(1)}" y="${ly - 12}" width="${lw.toFixed(1)}" height="17" rx="4" fill="#FCFCFC" opacity="0.92"/>` +
-          `<text x="${lx.toFixed(1)}" y="${ly}" text-anchor="middle" font-size="14" fill="#5a5a55">${esc(e.label)}</text>`,
+          `<text x="${lx.toFixed(1)}" y="${ly}" text-anchor="middle" font-size="14" fill="#374151">${esc(e.label)}</text>`,
       );
     }
   });
@@ -353,15 +353,15 @@ export function renderDiagram(code: string): RenderedDiagram | null {
         })
         .join('');
       return (
-        `<path d="${nodePath(n.id, p.x, p.y, p.w, p.h, n.shape)}" fill="#FDFDFB" stroke="#4a4a45" stroke-width="1.7" stroke-linejoin="round"/>` +
-        `<text font-family="'Caveat','Segoe Print',cursive" font-size="${FONT}" font-weight="600" fill="#333330" text-anchor="middle">${texts}</text>`
+        `<path d="${nodePath(n.id, p.x, p.y, p.w, p.h, n.shape)}" fill="#FDFDFB" stroke="#27272A" stroke-width="1.8" stroke-linejoin="round"/>` +
+        `<text font-family="'Caveat','Segoe Print',cursive" font-size="${FONT}" font-weight="600" fill="#18181B" text-anchor="middle">${texts}</text>`
       );
     })
     .join('');
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" class="wb-diagram-svg" role="img">` +
-    `<g fill="none" stroke="#5c5c56" stroke-width="1.6" stroke-linecap="round">${edgePaths.map((d) => `<path d="${d}"/>`).join('')}</g>` +
+    `<g fill="none" stroke="#27272A" stroke-width="1.8" stroke-linecap="round">${edgePaths.map((d) => `<path d="${d}"/>`).join('')}</g>` +
     edgeLabels.join('') +
     nodeSvg +
     '</svg>';

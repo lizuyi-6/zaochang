@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node -e \"const fs=require('fs');const p='../public/lattice/index.html';if(fs.existsSync(p)){fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/\\r\\r\\n/g,'\\n').replace(/\\r\\n/g,'\\n'),'utf8');}\"",
     "lint": "oxlint",
     "preview": "vite preview"
   },

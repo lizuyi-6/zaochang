@@ -136,7 +136,7 @@ export const initialAppState: AppState = {
   marketStale: false,
   activeConversationId: null,
   voice: 'warm',
-  speed: 1,
+  speed: 0.85,
   replyMode: 'standard',
   autoSpeak: false,
   whiteboardMode: 'lecture',

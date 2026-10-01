@@ -39,24 +39,61 @@ export async function* consumeMessagesSse(body: ReadableStream<Uint8Array>, sign
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let stopReason: string | null = null;
+  let messageStopped = false;
+  const abort = () => { void reader.cancel(signal?.reason).catch(() => {}); };
+  signal?.addEventListener("abort", abort, { once: true });
+  const readLine = (line: string): StreamChunk[] => {
+    if (!line.startsWith("data:")) return [];
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") return [];
+    let event: {
+      type?: unknown;
+      error?: unknown;
+      delta?: { stop_reason?: unknown };
+    };
+    try {
+      event = JSON.parse(data) as typeof event;
+    } catch {
+      return [];
+    }
+    if (event.type === "error" || event.error) throw new Error("ai_upstream_stream_error");
+    if (event.type === "message_delta") {
+      if (typeof event.delta?.stop_reason === "string") {
+        stopReason = event.delta.stop_reason;
+        if (stopReason !== "end_turn") throw new Error("ai_upstream_incomplete");
+      }
+      return [];
+    }
+    if (event.type === "message_stop") {
+      if (stopReason !== "end_turn") throw new Error("ai_upstream_incomplete");
+      messageStopped = true;
+      return [];
+    }
+    if (messageStopped && event.type === "content_block_delta") throw new Error("ai_upstream_stream_error");
+    return parseMessagesSseLine(line);
+  };
   try {
     for (;;) {
+      signal?.throwIfAborted();
       const { done, value } = await reader.read();
+      signal?.throwIfAborted();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
       for (const line of lines) {
-        for (const chunk of parseMessagesSseLine(line)) yield chunk;
+        for (const chunk of readLine(line)) yield chunk;
       }
     }
     // 尾行(无换行结尾)同样要解析——上游偶尔最后一帧不带换行。
-    for (const chunk of parseMessagesSseLine(buffer)) yield chunk;
+    buffer += decoder.decode();
+    for (const chunk of readLine(buffer)) yield chunk;
+    if (!messageStopped) throw new Error("ai_upstream_incomplete");
   } finally {
+    signal?.removeEventListener("abort", abort);
+    await reader.cancel().catch(() => {});
     reader.releaseLock();
-    if (signal?.aborted) {
-      /* 客户端断开:调用方捕获 AbortError 后静默收尾 */
-    }
   }
 }
 

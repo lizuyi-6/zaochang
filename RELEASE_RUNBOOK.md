@@ -16,7 +16,7 @@ node scripts/check-env-split.mjs
 node scripts/check-migrations.mjs   # 需 CLOUDFLARE_API_TOKEN;有序逐条对账,CI deploy 阶段强制执行
 ```
 
-判定要求：测试 `failed=0`、`skipped=0`、`todo=0`（总数以 node:test 当次输出为准，当前 173）；迁移生成器输出无结构变化；迁移对账数量/hash/created_at 逐位一致；高危或严重依赖漏洞为发布阻断项。中危告警必须登记受影响依赖、可利用条件与暂缓原因。
+判定要求：测试 `failed=0`、`skipped=0`、`todo=0`（总数以 node:test 当次输出为准）；迁移生成器输出无结构变化；迁移对账数量/hash/created_at 逐位一致；高危或严重依赖漏洞为发布阻断项。中危告警必须登记受影响依赖、可利用条件与暂缓原因。
 
 ## 2. 运行时配置
 
@@ -35,7 +35,7 @@ ZAOCHANG_ADMIN_EMAILS
 
 ## 3. 数据与迁移
 
-1. 迁移水位以 journal 为准（当前 `0000` 至 `0019_community_counter_triggers`，共 20 条，forward-only）。部署门禁是 `scripts/check-migrations.mjs` 的有序逐条对账（数量 + 每条账目 + created_at），由 deploy 工作流自动执行；手工发布前也必须先跑通，任一错位即停止发布。账目 hash 口径：SQL sha256（CRLF 原样/LF 归一）或迁移 tag（生产 `0013`–`0018` 为 tag 入帐批次，检查器输出 limited verification；tag 与所在位置不相等仍 fail-closed）。
+1. 迁移水位以 journal 为准（当前 `0000` 至 `0026_far_spyke`，共 27 条，forward-only）。部署门禁是 `scripts/check-migrations.mjs` 的有序逐条对账（数量 + 每条账目 + created_at），由 deploy 工作流自动执行；手工发布前也必须先跑通，任一错位即停止发布。账目 hash 口径：SQL sha256（CRLF 原样/LF 归一）或迁移 tag（生产 `0013`–`0018` 为 tag 入帐批次，检查器输出 limited verification；tag 与所在位置不相等仍 fail-closed）。手工执行 SQL 不会自动写 `__drizzle_migrations`，须按 Cloudflare runbook 的步骤备份、逐条应用并回填 journal 对应账目，再运行 fail-closed 对账。
 2. 保存发布前 D1 数据导出或平台快照，并记录时间与版本。
 3. 在包含历史 `product_orders` 与 `product_likes` 引用的隔离数据库按 `0000` 至 journal 最新顺序重放，要求全部退出码为 0，且引用的 `product_id` 不变。
 4. 核对所有迁移前用户产品均变为 `status=review_status=pending_review`、`review_version=1`、`approved_version=0`，并已进入管理员预审队列。
