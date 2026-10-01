@@ -176,6 +176,24 @@ export function asciiSafeJson(value: unknown): string {
   );
 }
 
+/**
+ * 请求体 JSON 解码:先 UTF-8 严格解码,失败退 GBK。Windows 终端 curl/脚本会把
+ * 中文按本地码页(936)发字节,request.json() 的宽容解码会把它们变成 U+FFFD——
+ * 替换不可逆,消息与标题永久乱码(2026-10-01 实锤)。浏览器 fetch 恒为 UTF-8,
+ * 不受此兜底影响;两个解码都失败返回 null,由调用方走参数错误分支。
+ */
+export function decodeRequestBodyJson<T = Record<string, unknown>>(bytes: Uint8Array): T | null {
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as T;
+  } catch {
+    try {
+      return JSON.parse(new TextDecoder("gbk").decode(bytes)) as T;
+    } catch {
+      return null;
+    }
+  }
+}
+
 export type WebSearchHit = { title: string; url: string; snippet: string; time?: string };
 
 /**

@@ -12,6 +12,7 @@ import {
   asciiSafeJson,
   resolveStepfunChatCompletionsUrl,
   resolveStepfunSearchUrl,
+  decodeRequestBodyJson,
   extractStepfunHits,
   resolveStepfunImagesUrl,
   inspectBase64Image,
@@ -190,6 +191,18 @@ test("resolveStepfunSearchUrl: 从 AI base origin 派生独立搜索终端,忽�
   assert.equal(resolveStepfunSearchUrl("https://api.stepfun.ai/v1"), "https://api.stepfun.ai/v1/search");
   assert.equal(resolveStepfunSearchUrl("http://127.0.0.1:8787"), "http://127.0.0.1:8787/v1/search");
   assert.equal(resolveStepfunSearchUrl("https://my-proxy.internal/ai/custom"), "https://my-proxy.internal/v1/search");
+});
+
+test("decodeRequestBodyJson: UTF-8 直通,GBK 字节兜底还原,双失败返回 null", () => {
+  // 合法 UTF-8(浏览器 fetch 路径)原样解析
+  const utf8 = new TextEncoder().encode(JSON.stringify({ message: "系统讲解" }));
+  assert.deepEqual(decodeRequestBodyJson(utf8), { message: "系统讲解" });
+  // GBK 字节(Windows 终端按码页 936 发送):UTF-8 严格解码必失败,退 GBK 还原。
+  // GBK: 系=CFB5 统=CDB3 讲=BDB2 解=BDE2
+  const gbk = new Uint8Array([0x7b, 0x22, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x3a, 0x22, 0xcf, 0xb5, 0xcd, 0xb3, 0xbd, 0xb2, 0xbd, 0xe2, 0x22, 0x7d]);
+  assert.deepEqual(decodeRequestBodyJson(gbk), { message: "系统讲解" });
+  // 彻底坏体:两个解码都出不来合法 JSON
+  assert.equal(decodeRequestBodyJson(new Uint8Array([0xff, 0xfe, 0x00, 0x01])), null);
 });
 
 test("extractStepfunHits: 仅解析真实 tool_calls 的 results，映射 summary 为 snippet，校验 HTTP(S) 与去重截断", () => {
