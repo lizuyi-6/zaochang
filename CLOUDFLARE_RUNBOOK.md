@@ -83,6 +83,7 @@ AI_CHAT_API_KEY              AI_CHAT_MODEL
 AI_CHAT_MODEL_EXPERT(可选)
 AI_CHAT_EXPERT_TRANSPORT(可选,=messages 时专家模型走 Anthropic Messages API /v1/messages,如 StepFun step-explore)
 HYPERKNOW_AI_MODEL(可选) HYPERKNOW_AI_BASE_URL(可选) HYPERKNOW_TTS_BASE_URL(可选)
+ZAOCHANG_AGENT_TOKEN(可选;admin API 机器通道,见 §6)
 (TURNSTILE_* 仅 staging)
 ```
 
@@ -216,7 +217,30 @@ const r=await fetch("/api/uploads",{method:"POST",body:fd});console.log("UPLOAD"
   (apex DNS 仍指盒子 IP + 盒子 443 当时对外)。判据:CF Worker observability 里**没有**对应
   `POST /api/uploads`。已靠关盒子 nginx 443 修复;若复发,先查盒子 `journalctl -u zaochang.service`。
 
-## 6. 排障速查
+## 6. Admin API 机器通道(agent token)
+
+线上人类入口有登录门禁(GitHub OAuth/邮箱验证码 + `ZAOCHANG_ADMIN_EMAILS` 白名单),
+自动化脚本与 AI 运维过不了这道门。机器通道用 Bearer token 走同一套业务代码路径:
+
+```bash
+# 启用(生成强随机 token;值永不入库):
+npx wrangler secret put ZAOCHANG_AGENT_TOKEN --config wrangler.prod.jsonc
+# 验证(第一跳永远是自描述端点):
+curl -fsS -H "Authorization: Bearer $ZAOCHANG_AGENT_TOKEN" https://aetherstudio.top/api/admin/capabilities
+# 读管理队列 / 写(仅列名操作):
+curl -fsS -H "Authorization: Bearer $ZAOCHANG_AGENT_TOKEN" https://aetherstudio.top/api/admin/moderation
+# 吊销 = 删除 secret(立即 fail-closed):
+npx wrangler secret delete ZAOCHANG_AGENT_TOKEN --config wrangler.prod.jsonc
+```
+
+- **读面**:capabilities/moderation/invitations/incubation 四个 GET(`requireAdminOrAgent` 放行)。
+- **写面**:`AGENT_ADMIN_CAPABILITIES`(app/api/_lib/agent-auth.ts)精确列名:moderation PATCH、
+  invitations POST/PATCH、incubation PATCH;worker 入口 fail-closed,未列名一律 `403 agent_scope_forbidden`。
+- **永不开放**:DELETE、财务(/api/payments、/api/v1/fruit/*)、uploads、oauth —— 不可逆与资金操作人类专属。
+- token 未配置时整条通道静默不存在(零行为变化);Bearer 头浏览器不会自动携带,无 CSRF 面
+ (同源断言对 agent 豁免,cookie 会话照常校验)。契约测试:tests/agent-admin-api.test.mjs。
+
+## 7. 排障速查
 
 | 症状 | 查 | 多半原因 |
 |---|---|---|
@@ -231,14 +255,14 @@ const r=await fetch("/api/uploads",{method:"POST",body:fd});console.log("UPLOAD"
 | 邮箱验证码 502 `email_send_http_5xx/网络错` | CF 控制台 Email Service 发送日志;收件域是否拒收 | 发送失败时验证码行即删,无幻影状态;重试即重新发码 |
 | 问 AI 返回空/戛然而止 | 上游模型是否换成新的混合推理模型(推理 token 计入 `max_tokens`) | 预算由 `READING_AI_REASONING_HEADROOM` 按模式垫高;换非推理模型可调小,换更长思维链模型需调大(实测 800 裸预算 ⇒ 正文为空) |
 
-## 7. 回滚
+## 8. 回滚
 
 - **Worker 回滚**:`npx wrangler rollback --config wrangler.prod.jsonc`(或 deploy 上一 version)。
 - **盒子旧应用**(应急,已 disable):`systemctl enable --now zaochang.service`;要对外还需恢复
   nginx `zaochang-preview`(备份在 `/etc/nginx/sites-available/zaochang-preview.bak-20260809`)+ 把 apex/www DNS 指回 `39.96.196.207`。
 - **scanner/tunnel 不动**:回滚 Web 不影响上传扫描。
 
-## 8. 残留 / 待办(不阻断)
+## 9. 残留 / 待办(不阻断)
 
 1. apex/www 的 **A 记录仍指盒子 IP `39.96.196.207`**(proxied;route 边缘接管故可用)。建议在 CF 控制台改成占位 `192.0.2.1`(proxied),彻底摘掉盒子 IP 暴露。需 DNS write 权限(本地/MCP 都没有 → 控制台)。
 2. CF 控制台删未用的旧 dashboard tunnel `e617e40b-2a9a-48f7-8cb4-98c0fc4837da`(先删其 private route 才能删 tunnel)。

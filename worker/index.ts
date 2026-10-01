@@ -7,7 +7,7 @@ import { oidcDiscoveryDocument } from "../app/api/_lib/oauth-discovery";
 import { runPurgeRegistry } from "../app/api/_lib/purge";
 import { cleanupOrphanedHyperknowImages } from "../app/api/_lib/purge/hyperknow-images";
 import { scheduledPurgePlan } from "./purge-schedule";
-import { AGENT_WRITE_CAPABILITIES, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
+import { isAgentWriteAllowed, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
 import { prepareRequestBody } from "./request-body";
 import { handleWithAnonCache } from "./anon-cache";
 import { isLatticePath, cookieValue, latticeGateRedirect } from "./lattice-gate";
@@ -63,9 +63,7 @@ const worker = {
     if (request.method !== "GET" && env.ZAOCHANG_AGENT_TOKEN) {
       const token = parseBearerToken(request.headers.get("authorization"));
       if (isValidAgentToken(token, env.ZAOCHANG_AGENT_TOKEN)) {
-        const allowed = AGENT_WRITE_CAPABILITIES.some(
-          (cap) => cap.method === request.method && cap.pathname === url.pathname,
-        );
+        const allowed = isAgentWriteAllowed(request.method, url.pathname);
         if (!allowed) {
           // 必须排空请求体再早返回:此分支在 prepareRequestBody 之前返回,路由不会读到 body。
           // 若不排空,未消费的字节会残留在 keep-alive 连接里,污染下一个请求的 HTTP 组帧,

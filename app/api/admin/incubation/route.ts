@@ -1,4 +1,4 @@
-import { requireAdmin } from "../../_lib/access-control";
+import { requireAdminOrAgent } from "../../_lib/access-control";
 import { guardWrite } from "../../_lib/route-guards";
 import { adminAuditStatement } from "../../_lib/admin";
 import { database, jsonError } from "../../_lib/community";
@@ -7,7 +7,7 @@ const STAGES = ["提交申请", "资料审核", "初步沟通", "项目评估", 
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminOrAgent();
     const projects = await database().prepare(
       `SELECT id, user_email AS userEmail, name, project_type AS projectType, one_liner AS oneLiner,
               status, current_task AS currentTask, assigned_owner AS assignedOwner,
@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const guarded = await guardWrite(request, { member: "admin", sameOrigin: true });
+    const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
     if (guarded instanceof Response) return guarded;
     const admin = guarded.member;
     const input = await request.json() as Record<string, unknown>;

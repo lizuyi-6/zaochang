@@ -680,7 +680,8 @@ export async function startPreviewServer({ warmDatabase = false } = {}) {
   nextServer.stdout.on("data", (chunk) => { output += chunk.toString(); });
   nextServer.stderr.on("data", (chunk) => { output += chunk.toString(); });
 
-  const deadline = Date.now() + 30000;
+  // 就绪窗口 90s:wrangler dev 在 Windows 负载机首次 SSR 编译可到 40-50s,30s 会误杀。
+  const deadline = Date.now() + 90000;
   let consecutiveHealthyReads = 0;
   let healthReads = 0;
   while (Date.now() < deadline) {

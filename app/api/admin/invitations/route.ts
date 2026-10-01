@@ -1,4 +1,4 @@
-import { requireAdmin } from "../../_lib/access-control";
+import { requireAdminOrAgent } from "../../_lib/access-control";
 import { guardWrite } from "../../_lib/route-guards";
 import { createInvitation, listInvitations, revokeInvitation } from "../../_lib/invitations";
 import { jsonError } from "../../_lib/community";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminOrAgent();
     return await listInvitations();
   } catch (error) {
     return jsonError(error);
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const guarded = await guardWrite(request, { member: "admin", sameOrigin: true });
+    const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
     if (guarded instanceof Response) return guarded;
     const input = await request.json() as Record<string, unknown>;
     return await createInvitation(guarded.member, input);
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const guarded = await guardWrite(request, { member: "admin", sameOrigin: true });
+    const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
     if (guarded instanceof Response) return guarded;
     const input = await request.json() as Record<string, unknown>;
     return await revokeInvitation(guarded.member, input);
