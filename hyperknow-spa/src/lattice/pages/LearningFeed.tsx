@@ -115,15 +115,32 @@ export const LearningFeed: React.FC<PageProps> = ({ state, set }) => {
   const [activity, setActivity] = useState<Record<string, string[]>>({});
   const [market, setMarket] = useState<MarketCourse[] | null>(null);
 
-  /* 账户切换/登录后重载计划与活动数据 */
+  /* scope 归属迁移:身份是异步落定的——落定前('demo'期)的增删属于当前用户,
+   * 并入真账户计划(按 id 去重);账户间正常切换时改动各归其位。 */
+  const scopeRef = useRef(scope);
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
   useEffect(() => {
-    setTasks(loadPlan(scope));
+    const prev = scopeRef.current;
+    if (prev === scope) return;
+    scopeRef.current = scope;
+    const carried = tasksRef.current;
+    if (prev === 'demo' && carried.length > 0) {
+      const existing = loadPlan(scope);
+      const ids = new Set(existing.map((t) => t.id));
+      const merged = [...existing, ...carried.filter((t) => !ids.has(t.id))];
+      savePlan(scope, merged);
+      setTasks(merged);
+    } else {
+      savePlan(prev, carried);
+      setTasks(loadPlan(scope));
+    }
     setSelectedKey(dateKeyOf(new Date()));
   }, [scope]);
 
   useEffect(() => {
-    savePlan(scope, tasks);
-  }, [scope, tasks]);
+    savePlan(scopeRef.current, tasks);
+  }, [tasks]);
 
   /* 真实学习活动:会话按日聚合(标题供"那天学了什么"展示) */
   useEffect(() => {
