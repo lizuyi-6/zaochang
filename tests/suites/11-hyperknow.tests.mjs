@@ -380,19 +380,11 @@ export function register() {
     assert.equal(response.status, 200);
     const frames = await readHkFrames(response);
 
-    // 阶跃搜索请求契约断言: 单次研究(无自动重试)、独立模型 step-3.7-flash、非流式、tools/tool_choice
+    // 阶跃独立搜索 API 请求契约断言: 单次研究(无自动重试)、POST /v1/search、体只带 query
     assert.equal(stepfunSearchRequests.length, 1, "StepFun 搜索每次课程单次研究，不重复搜索");
-    assert.equal(lastStepfunSearchRequest.model, "step-3.7-flash", "默认使用独立的 HK_WEB_SEARCH_MODEL=step-3.7-flash");
-    assert.equal(lastStepfunSearchRequest.stream, false, "非流式 Chat Completions");
-    assert.equal(lastStepfunSearchRequest.tool_choice, "auto", "tool_choice 必须为 auto");
-    assert.deepEqual(lastStepfunSearchRequest.tools, [
-      {
-        type: "web_search",
-        function: {
-          description: "检索课程主题相关的官方文档、权威教程与最新资料",
-        },
-      },
-    ], "tools 声明 web_search 工具格式与描述");
+    assert.equal(lastStepfunSearchRequest.query, query, "请求体携带研学查询词");
+    assert.equal(lastStepfunSearchRequest.model, undefined, "独立搜索 API 与模型解耦,不再带 model");
+    assert.equal(lastStepfunSearchRequest.tools, undefined, "chat 内置 web_search 工具协议已弃用");
 
     // SSE 进度与来源透传
     const progress = frames.find((f) => f.type === "course_generation_progress");

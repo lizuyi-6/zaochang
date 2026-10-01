@@ -176,7 +176,7 @@ export function asciiSafeJson(value: unknown): string {
   );
 }
 
-export type WebSearchHit = { title: string; url: string; snippet: string };
+export type WebSearchHit = { title: string; url: string; snippet: string; time?: string };
 
 /**
  * 将 AI baseUrl 规整为 StepFun Chat Completions 终端地址:
@@ -191,6 +191,21 @@ export function resolveStepfunChatCompletionsUrl(aiBaseUrl: string): string {
     url = `${url}/chat/completions`;
   }
   return url;
+}
+
+/**
+ * 将 AI baseUrl 规整为 StepFun 独立网页搜索 API 终端(官方推荐与模型解耦的
+ * POST /v1/search;2026-10-01 实测:chat 内置 web_search 工具在套餐通道恒不触发,
+ * 同一 key 打独立 /v1/search 正常返回):取 baseUrl origin 拼 /v1/search,
+ * 忽略套餐路径前缀,不硬编码官方地址。
+ */
+export function resolveStepfunSearchUrl(aiBaseUrl: string): string {
+  const trimmed = aiBaseUrl.trim().replace(/\/+$/, "");
+  try {
+    return `${new URL(trimmed).origin}/v1/search`;
+  } catch {
+    return `${trimmed}/v1/search`;
+  }
 }
 
 /**

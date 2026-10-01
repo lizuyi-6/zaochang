@@ -93,7 +93,7 @@ export const valid1024PngBase64 = generate1024PngBase64();
 
 /** 假 Tavily 搜索上游收到的 /search 请求体(课程生成联网研学断言用)。 */
 export const searchRequests = [];
-/** 假 StepFun Chat Completions 搜索请求体与模式控制 */
+/** 假 StepFun 独立网页搜索 API(/v1/search)请求体与模式控制 */
 export let lastStepfunSearchRequest = null;
 export const stepfunSearchRequests = [];
 export let stepfunSearchMockOutcome = "success";
@@ -152,21 +152,23 @@ export async function startFakeAiUpstream() {
     }
     return "";
   };
-  aiServer = createServer(async (request, response) => {
-    // 五种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
-    // 专家模型与 Hyperknow Agent 共用)、/v1/audio/speech(Hyperknow TTS)、
-    // /v1/images/generations(StepFun 生图)、/search(假 Tavily——课程生成的联网研学)。
-    const isMessages = request.url === "/v1/messages";
-    const isTts = request.url === "/v1/audio/speech";
-    const isSearch = request.url === "/search";
-    const isImages = request.url === "/v1/images/generations";
-    if (
-      request.method !== "POST" ||
-      (!isMessages && !isTts && !isSearch && !isImages && request.url !== "/v1/chat/completions")
-    ) {
-      response.writeHead(404).end();
-      return;
-    }
+    aiServer = createServer(async (request, response) => {
+      // 六种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
+      // 专家模型与 Hyperknow Agent 共用)、/v1/audio/speech(Hyperknow TTS)、
+      // /v1/images/generations(StepFun 生图)、/v1/search(StepFun 独立搜索——
+      // 课程研学与首页资讯)、/search(假 Tavily)。
+      const isMessages = request.url === "/v1/messages";
+      const isTts = request.url === "/v1/audio/speech";
+      const isSearch = request.url === "/search";
+      const isImages = request.url === "/v1/images/generations";
+      const isStepSearch = request.url === "/v1/search";
+      if (
+        request.method !== "POST" ||
+        (!isMessages && !isTts && !isSearch && !isImages && !isStepSearch && request.url !== "/v1/chat/completions")
+      ) {
+        response.writeHead(404).end();
+        return;
+      }
     if (request.headers.authorization !== `Bearer ${isSearch ? "test-search-key" : "test-ai-key"}`) {
       response.writeHead(401, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "unauthorized" }));
@@ -344,8 +346,9 @@ export async function startFakeAiUpstream() {
       response.end(JSON.stringify({ id: "msg_fake", type: "message", role: "assistant", content: [{ type: "text", text }], stop_reason: "end_turn" }));
       return;
     }
-    // StepFun web_search Chat Completions 非流式调用:
-    if (request.url === "/v1/chat/completions" && Array.isArray(body.tools) && body.tools.some((t) => t?.type === "web_search")) {
+    // StepFun 独立网页搜索 API(POST /v1/search,官方推荐与模型解耦;
+    // 2026-10-01 实测套餐通道 chat 内置 web_search 工具恒不触发):
+    if (request.url === "/v1/search") {
       lastStepfunSearchRequest = body;
       stepfunSearchRequests.push(body);
       if (stepfunSearchMockOutcome === "auth_failed") {
@@ -363,63 +366,22 @@ export async function startFakeAiUpstream() {
         response.end(JSON.stringify({ error: "upstream_fail" }));
         return;
       }
-      if (stepfunSearchMockOutcome === "not_triggered") {
-        response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({
-          choices: [{ message: { role: "assistant", content: "No tool calls needed." } }],
-        }));
-        return;
-      }
       if (stepfunSearchMockOutcome === "no_results") {
         response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({
-          choices: [
-            {
-              message: {
-                role: "assistant",
-                content: null,
-                tool_calls: [
-                  {
-                    id: "call_empty",
-                    type: "web_search",
-                    function: {
-                      name: "web_search",
-                      results: [],
-                    },
-                  },
-                ],
-              },
-            },
-          ],
-        }));
+        response.end(JSON.stringify({ query: String(body.query ?? ""), category: "web", results: [] }));
         return;
       }
-      const q = String(body.messages?.[0]?.content ?? "topic");
+      const q = String(body.query ?? "topic");
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({
-        choices: [
+        query: q,
+        category: "web",
+        results: [
           {
-            message: {
-              role: "assistant",
-              content: null,
-              tool_calls: [
-                {
-                  id: "call_stepfun_1",
-                  type: "web_search",
-                  function: {
-                    name: "web_search",
-                    results: [
-                      {
-                        index: 1,
-                        title: `StepFun Docs: ${q}`,
-                        url: `https://stepfun.research.test/${encodeURIComponent(q)}`,
-                        summary: `Verified curriculum outline and documentation for ${q}.`,
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
+            title: `StepFun Docs: ${q}`,
+            url: `https://stepfun.research.test/${encodeURIComponent(q)}`,
+            snippet: `Verified curriculum outline and documentation for ${q}.`,
+            time: "2026-09-30T08:00:00",
           },
         ],
       }));
