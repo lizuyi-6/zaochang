@@ -955,3 +955,28 @@
   .hm-cap { height: 44px; padding: 0 18px; }
   .hm-news-pill { height: 44px; }
 }
+
+/* 「今日值得学」动态源:锚行继承原行样式;标题截断 + 域名签;换一批加载态 */
+a.hm-news-row {
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+a.hm-news-row:hover { background: var(--panel-bg); }
+.hm-news-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-news-src {
+  color: var(--text-muted);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.hm-news-next.loading { opacity: 0.45; pointer-events: none; }
+.hm-news-next.loading svg { animation: hm-spin 0.9s linear infinite; }
+@keyframes hm-spin { to { transform: rotate(360deg); } }

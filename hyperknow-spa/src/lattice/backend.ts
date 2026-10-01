@@ -823,3 +823,35 @@ export async function fetchConversations(): Promise<ConvRow[] | null> {
     return null;
   }
 }
+
+/* ---------------- 首页「今日值得学」动态资讯源(阶跃联网搜索现查) ---------------- */
+
+export interface DailyFeedItem {
+  title: string;
+  url: string;
+  /** 域名(展示用,如 nature.com) */
+  source: string;
+}
+
+/** 拉取今日动态(轮次递增 = 换一批出新);不可达/未配置返回 null(回退静态列表)。 */
+export async function fetchDailyFeed(round = 0): Promise<DailyFeedItem[] | null> {
+  try {
+    const res = await fetch(`/api/hyperknow/feed?round=${Math.max(0, Math.floor(round))}`, {
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { success?: boolean; data?: { items?: unknown } };
+    const items = json?.success && Array.isArray(json.data?.items) ? json.data.items : [];
+    const clean = (items as Array<unknown>)
+      .map((it) => it as { title?: unknown; url?: unknown; source?: unknown })
+      .filter((it) => typeof it.title === 'string' && typeof it.url === 'string' && /^https?:\/\//i.test(it.url))
+      .map((it) => ({
+        title: it.title as string,
+        url: it.url as string,
+        source: typeof it.source === 'string' ? it.source : '',
+      }));
+    return clean.length > 0 ? clean : null;
+  } catch {
+    return null;
+  }
+}
