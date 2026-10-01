@@ -1,0 +1,1 @@
+ALTER TABLE `uploaded_files` ADD `hyperknow_image` integer DEFAULT false NOT NULL;

@@ -5,10 +5,12 @@ import { storeScannedUpload } from "../upload-core";
 import { database } from "../community";
 import { enforceRateLimit, rateLimitKey } from "../rate-limit";
 import { beijingToday, parseTimestampMs } from "./credits";
+import { accessError } from "../errors";
+import { finalizeHyperknowImageCache } from "./image-cache";
 
 export const HK_MAX_DAILY_IMAGES = 10;
 const IMAGE_PARAMS_SIGNATURE = "n1_1024x1024_b64json";
-const IMAGE_CACHE_VERSION = "v1";
+const IMAGE_CACHE_VERSION = "v2";
 
 export interface GenerateImageResult {
   url: string;
@@ -64,10 +66,10 @@ export async function generateLectureImage(args: {
   prompt: string;
   caption?: string;
   userEmail: string;
-  sessionId?: string;
+  scopeKey: string;
   signal?: AbortSignal;
 }): Promise<GenerateImageResult> {
-  const { prompt, caption, userEmail, sessionId, signal } = args;
+  const { prompt, caption, userEmail, scopeKey, signal } = args;
 
   // 0. 总开关检查
   const values = env as unknown as Record<string, string | undefined>;
@@ -82,7 +84,7 @@ export async function generateLectureImage(args: {
   }
 
   const imageModel = values.HK_IMAGE_MODEL?.trim() || values.HYPERKNOW_IMAGE_MODEL?.trim() || "step-image-edit-2";
-  const sessionKey = sessionId?.trim() || "global";
+  const sessionKey = scopeKey;
   const cacheKey = `${userEmail}:${sessionKey}:${imageModel}:${IMAGE_PARAMS_SIGNATURE}:${IMAGE_CACHE_VERSION}`;
 
   await ensureImageCacheTable();
@@ -92,9 +94,9 @@ export async function generateLectureImage(args: {
     const cached = await database()
       .prepare(
         `SELECT url, caption, status FROM hk_lecture_images
-         WHERE (cache_key = ? OR (session_id = ? AND user_email = ?)) AND status = 'completed' AND url != ''`,
+         WHERE cache_key = ? AND user_email = ? AND status = 'completed' AND url != ''`,
       )
-      .bind(cacheKey, sessionKey, userEmail)
+      .bind(cacheKey, userEmail)
       .first<{ url: string; caption: string | null; status: string }>();
 
     if (cached && cached.url) {
@@ -158,9 +160,9 @@ export async function generateLectureImage(args: {
       };
     }
 
-    if (existing && existing.status === "pending") {
+    if (existing && (existing.status === "pending" || existing.status === "failed")) {
       const expires = parseTimestampMs(existing.lease_expires_at);
-      if (expires > Date.now()) {
+      if (existing.status === "pending" && expires > Date.now()) {
         // 另一实例正在执行，轮询等待其落库 (最多等待 15s)
         const startWait = Date.now();
         while (Date.now() - startWait < 15_000) {
@@ -192,7 +194,7 @@ export async function generateLectureImage(args: {
         .prepare(
           `UPDATE hk_lecture_images
            SET status = 'pending', lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
-           WHERE cache_key = ? AND (lease_expires_at <= ? OR status != 'completed')`,
+           WHERE cache_key = ? AND ((status = 'pending' AND lease_expires_at <= ?) OR status = 'failed')`,
         )
         .bind(leaseToken, leaseExpiresAt, cacheKey, new Date().toISOString())
         .run();
@@ -218,7 +220,11 @@ export async function generateLectureImage(args: {
     }
   }
 
+  // A timed-out waiter still cannot start an external image request while the owner holds the lease.
+  if (!hasLease) throw accessError("image_generation_in_progress", 409);
+
   // 3. 执行上游生图与安全管线
+  let uploadedKey: string | null = null;
   try {
     // 每日配额检查 (HK_MAX_DAILY_IMAGES = 10)
     const quotaKey = await rateLimitKey("hk-image-daily", `${userEmail}:${beijingToday()}`);
@@ -282,19 +288,26 @@ export async function generateLectureImage(args: {
       ownerEmail: userEmail,
       visibility: "private",
       purpose: "general",
+      hyperknowImage: true,
     });
+    uploadedKey = stored.key;
 
     const url = `/api/uploads/${encodeURIComponent(stored.key)}`;
 
     // 成功落库缓存并释放租约锁
-    await database()
-      .prepare(
-        `UPDATE hk_lecture_images
-         SET status = 'completed', url = ?, caption = ?, lease_token = NULL, lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-         WHERE cache_key = ?`,
-      )
-      .bind(url, caption ?? cleanPrompt, cacheKey)
-      .run();
+    const cacheWrite = await finalizeHyperknowImageCache(database(), {
+      url,
+      caption: caption ?? cleanPrompt,
+      cacheKey,
+      userEmail,
+      leaseToken,
+      now: new Date().toISOString(),
+      uploadedKey: stored.key,
+    });
+    if (Number(cacheWrite.meta.changes ?? 0) !== 1) {
+      throw accessError("image_lease_lost", 409);
+    }
+    uploadedKey = null;
 
     return {
       url,
@@ -304,6 +317,19 @@ export async function generateLectureImage(args: {
       cached: false,
     };
   } catch (err) {
+    if (uploadedKey) {
+      // Upload became effective before cache finalization failed. Delete R2 first so a D1
+      // failure leaves the generated-image marker available for the scheduled retry worker.
+      try {
+        await (env as unknown as { UPLOADS: R2Bucket }).UPLOADS.delete(uploadedKey);
+        await database()
+          .prepare(`DELETE FROM uploaded_files WHERE key = ? AND owner_email = ? AND purpose = 'general' AND hyperknow_image = 1 AND hyperknow_image_cleanup_token IS NULL`)
+          .bind(uploadedKey, userEmail)
+          .run();
+      } catch (cleanupError) {
+        console.error("[hyperknow-image] orphan upload cleanup failed:", cleanupError);
+      }
+    }
     // 发生异常时，如果持有租约，清理 pending 状态防止卡死
     try {
       await database()

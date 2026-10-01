@@ -5,6 +5,8 @@ import { resolvePublicAppOrigin } from "../app/lib/public-origin";
 import { withSecurityHeaders } from "../app/lib/security-policy";
 import { oidcDiscoveryDocument } from "../app/api/_lib/oauth-discovery";
 import { runPurgeRegistry } from "../app/api/_lib/purge";
+import { cleanupOrphanedHyperknowImages } from "../app/api/_lib/purge/hyperknow-images";
+import { scheduledPurgePlan } from "./purge-schedule";
 import { AGENT_WRITE_CAPABILITIES, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
 import { prepareRequestBody } from "./request-body";
 import { handleWithAnonCache } from "./anon-cache";
@@ -14,6 +16,7 @@ import { SESSION_COOKIE, sessionUserFromTokenValue, safeReturnPath } from "../ap
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  UPLOADS?: R2Bucket;
   APP_ENV?: string;
   PUBLIC_APP_ORIGIN?: string;
   ZAOCHANG_AGENT_TOKEN?: string;
@@ -39,8 +42,18 @@ interface ExecutionContext {
 
 const worker = {
   // wrangler.prod.jsonc triggers.crons 触发;本地 dev/测试不会触发,行为零变化。
-  async scheduled(_controller: unknown, env: Env): Promise<void> {
-    if (env.DB) await runPurgeRegistry(env.DB);
+  async scheduled(controller: { cron?: string }, env: Env): Promise<void> {
+    if (!env.DB) return;
+    const purgePlan = scheduledPurgePlan(controller.cron);
+    // Generated-image cleanup retries every 15 minutes; unrelated retention purges stay
+    // on their existing six-hour cadence.
+    if (purgePlan.retention) await runPurgeRegistry(env.DB);
+    if (!purgePlan.hyperknowImages) return;
+    if (env.UPLOADS) {
+      await cleanupOrphanedHyperknowImages(env.DB, env.UPLOADS);
+    } else {
+      console.error("[cron-purge] failed hyperknow-images: UPLOADS binding unavailable");
+    }
   },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);

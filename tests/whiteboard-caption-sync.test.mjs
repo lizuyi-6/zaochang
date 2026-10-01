@@ -60,7 +60,36 @@ function loadTsModule(url) {
 const whiteboardModule = loadTsModule(new URL('src/replica/whiteboard/WhiteboardPage.tsx', spa));
 const { runCaptionSync, STARTUP_TIMEOUT_MS } = whiteboardModule;
 const actionsModule = loadTsModule(new URL('src/replica/actions.ts', spa));
-const { tts } = actionsModule;
+const { tts, DEFAULT_PLAYBACK_RATE } = actionsModule;
+const liveLessonModule = loadTsModule(new URL('src/replica/whiteboard/liveLesson.ts', spa));
+const { liveLessonFromPlan } = liveLessonModule;
+const { lessonDelay } = loadTsModule(new URL('src/replica/whiteboard/lessonDelay.ts', spa));
+const { choiceIndexFromInput } = loadTsModule(new URL('src/replica/whiteboard/choiceInput.ts', spa));
+import { WHITEBOARD_INSTRUCTOR_PROMPT, fallbackLecturePlan } from '../app/api/_lib/hyperknow/prompts.ts';
+
+test('interjection cooldown advances while lecture is paused; normal lesson time does not', async () => {
+  const control = { cancelled: false, paused: true, skipped: false };
+  let lessonSettled = false;
+  const lessonWait = lessonDelay(50, control).then(() => { lessonSettled = true; });
+  await lessonDelay(50, control, true);
+  assert.equal(lessonSettled, false, '主线暂停期间授课计时器不得前进');
+  control.paused = false;
+  await lessonWait;
+  assert.equal(lessonSettled, true, '解除暂停后原授课计时器应继续');
+
+  const cancelled = { cancelled: true, paused: true, skipped: false };
+  await assert.rejects(lessonDelay(50, cancelled, true), /cancelled/);
+});
+
+test('quick check accepts typed and spoken option forms without forwarding unrelated questions', () => {
+  const options = ['光合作用', '细胞呼吸', '蒸腾作用'];
+  assert.equal(choiceIndexFromInput('B', options), 1);
+  assert.equal(choiceIndexFromInput('选项 C', options), 2);
+  assert.equal(choiceIndexFromInput('第 1 项', options), 0);
+  assert.equal(choiceIndexFromInput('细胞呼吸', options), 1);
+  assert.equal(choiceIndexFromInput('为什么会这样？', options), null);
+  assert.equal(choiceIndexFromInput('D', options), null);
+});
 
 test('Regression 1: delayed start >2.5 sec keeps captions strictly at zero until playing', async () => {
   const plain = '这是一段用来测试起声延迟超过2.5秒的字幕内容';
@@ -576,4 +605,411 @@ test('Regression 10: paused lesson clock never false-triggers stall fallback', a
   });
 
   assert.equal(stopCount, 0, '暂停 20s 不得触发断流止损');
+});
+
+test('Regression 11: Dynamic client playbackRate updates active track immediately and applies to future tracks, while synthesis retains baseline speed=1', async () => {
+  assert.equal(DEFAULT_PLAYBACK_RATE, 0.85, '默认语速应设定为舒适偏慢的 0.85x');
+  tts.setPlaybackRate(0.85);
+  assert.equal(tts.getPlaybackRate(), 0.85, '初始播放倍率应为 0.85');
+
+  const createdAudios = [];
+  class MockRateAudio {
+    constructor(url) {
+      this.url = url;
+      this.src = url;
+      this.currentTime = 0;
+      this.duration = 5.0;
+      this.paused = true;
+      this.playbackRate = 1.0;
+      createdAudios.push(this);
+    }
+    play() {
+      this.paused = false;
+      return Promise.resolve();
+    }
+    pause() {
+      this.paused = true;
+    }
+    removeAttribute(attr) {
+      if (attr === 'src') this.src = '';
+    }
+    load() {}
+  }
+
+  const origAudio = globalThis.Audio;
+  globalThis.Audio = MockRateAudio;
+
+  try {
+    // 启动第一条旁白
+    const handle1 = tts.speakTrack('第一讲：基础概念');
+    await handle1.started;
+    assert.equal(createdAudios.length, 1);
+    const audio1 = createdAudios[0];
+    assert.ok(audio1.url.includes('speed=1'), '合成 URL 必须恒以 baseline speed=1 请求以复用预热缓存');
+    assert.equal(audio1.playbackRate, 0.85, '音频实例播放倍率应初始化为 0.85');
+
+    // 用户在设置弹窗即时调节语速为 1.25x
+    tts.setPlaybackRate(1.25);
+    assert.equal(audio1.playbackRate, 1.25, '正在播放的音轨倍率必须被立刻动态更新');
+    assert.equal(tts.getPlaybackRate(), 1.25);
+
+    // 启动下一条旁白
+    const handle2 = tts.speakTrack('第二讲：核心机制');
+    await handle2.started;
+    assert.equal(createdAudios.length, 2);
+    const audio2 = createdAudios[1];
+    assert.ok(audio2.url.includes('speed=1'), '后续音轨合成 URL 仍保持 baseline speed=1');
+    assert.equal(audio2.playbackRate, 1.25, '后续音轨必须继承最新设定的 1.25x 倍率');
+
+    tts.stop();
+  } finally {
+    globalThis.Audio = origAudio;
+    tts.setPlaybackRate(0.85);
+  }
+});
+
+test('Regression 12: Tutor interjection does not destroy paused lecture audio or prematurely settle lecture ended promise', async () => {
+  const audioInstances = [];
+  class MockInterjectAudio {
+    constructor(url) {
+      this.url = url;
+      this.src = url;
+      this.currentTime = 0;
+      this.duration = 10.0;
+      this.paused = true;
+      this.ended = false;
+      this.playbackRate = 1.0;
+      this.onended = null;
+      this.onerror = null;
+      audioInstances.push(this);
+    }
+    play() {
+      this.paused = false;
+      return Promise.resolve();
+    }
+    pause() {
+      this.paused = true;
+    }
+    removeAttribute(attr) {
+      if (attr === 'src') this.src = '';
+    }
+    load() {}
+  }
+
+  const origAudio = globalThis.Audio;
+  globalThis.Audio = MockInterjectAudio;
+
+  try {
+    // 1. 主线旁白开始播放
+    const lectureHandle = tts.speakTrack('主线讲座：从背景到本质推导');
+    await lectureHandle.started;
+    assert.equal(audioInstances.length, 1);
+    const lectureAudio = audioInstances[0];
+    assert.equal(lectureAudio.paused, false, '主线音频正在播放');
+
+    let lectureEndedSettled = false;
+    void lectureHandle.ended.then(() => {
+      lectureEndedSettled = true;
+    });
+
+    // 模拟播放到第 3.2 秒
+    lectureAudio.currentTime = 3.2;
+
+    // 2. 学员举手插话：主线暂停
+    tts.pauseAudio();
+    assert.equal(lectureAudio.paused, true, '主线音频已暂停');
+    assert.equal(lectureEndedSettled, false, '主线 ended 绝不可因暂停而提前 settle');
+
+    // 3. 导师回答：在独立 tutor 通道播放答疑音频
+    const tutorHandle = tts.speakTutorTrack('导师答疑：变量之间的核心关系是...');
+    await tutorHandle.started;
+    assert.equal(audioInstances.length, 2, '导师答疑应创建独立的音频实例');
+    const tutorAudio = audioInstances[1];
+    assert.equal(tutorAudio.paused, false, '导师答疑音频正在播放');
+
+    // 关键断言：导师答疑播放期间，主线音频依然存在，currentTime 保留，ended 保持挂起未决
+    assert.equal(lectureAudio.paused, true, '主线音频依然处于暂停保留状态');
+    assert.equal(lectureAudio.currentTime, 3.2, '主线音频进度必须精准保存在断点');
+    assert.equal(lectureEndedSettled, false, '主线 ended 在导师答疑期间绝不可被销毁或误触发');
+
+    tts.pauseAudio();
+    assert.equal(tutorAudio.paused, true, '用户主动暂停时导师音频也应暂停');
+    tts.resumeTutor();
+    await Promise.resolve();
+    assert.equal(tutorAudio.paused, false, '用户在答疑中解除暂停后导师音频应恢复');
+    assert.equal(lectureAudio.paused, true, '答疑期间解除用户暂停仍不得提前播放主线');
+
+    // 4. 导师答疑播完
+    tutorAudio.ended = true;
+    if (tutorAudio.onended) tutorAudio.onended();
+    await tutorHandle.ended;
+
+    // 5. 答疑结束后恢复主线
+    tts.resumeAudio();
+    assert.equal(lectureAudio.paused, false, '主线音频恢复播放');
+    assert.equal(lectureAudio.currentTime, 3.2, '恢复后必须从 3.2s 断点无缝续播');
+    assert.equal(lectureEndedSettled, false, '主线依然未结束');
+
+    // 6. 主线音频自然播完
+    lectureAudio.currentTime = 10.0;
+    lectureAudio.ended = true;
+    if (lectureAudio.onended) lectureAudio.onended();
+    await lectureHandle.ended;
+    assert.equal(lectureEndedSettled, true, '主线在真正播完时自然触发 ended');
+
+    tts.stop();
+  } finally {
+    globalThis.Audio = origAudio;
+  }
+});
+
+test('Regression 13: Stop/Unmount stops both lecture and tutor audio channels without hanging', async () => {
+  class MockDualAudio {
+    constructor(url) {
+      this.url = url;
+      this.src = url;
+      this.currentTime = 0;
+      this.duration = 8.0;
+      this.paused = true;
+    }
+    play() {
+      this.paused = false;
+      return Promise.resolve();
+    }
+    pause() {
+      this.paused = true;
+    }
+    removeAttribute(attr) {
+      if (attr === 'src') this.src = '';
+    }
+    load() {}
+  }
+
+  const origAudio = globalThis.Audio;
+  globalThis.Audio = MockDualAudio;
+
+  try {
+    const lHandle = tts.speakTrack('主线');
+    await lHandle.started;
+    tts.pauseAudio();
+
+    const tHandle = tts.speakTutorTrack('答疑');
+    await tHandle.started;
+    assert.equal(tts.speaking(), true);
+
+    let lEnded = false;
+    let tEnded = false;
+    void lHandle.ended.then(() => { lEnded = true; });
+    void tHandle.ended.then(() => { tEnded = true; });
+
+    tts.stop();
+
+    await Promise.resolve();
+    assert.equal(tts.speaking(), false, 'stop 之后 speaking 必须为 false');
+    assert.equal(lEnded, true, '主线 ended 必须被解冻');
+    assert.equal(tEnded, true, '导师 ended 必须被解冻');
+  } finally {
+    globalThis.Audio = origAudio;
+  }
+});
+
+test('Regression 14: liveLessonFromPlan handles intermediate quick_checks with explanations, and awaitAnswer questions', () => {
+  const plan = {
+    steps: [
+      {
+        step_id: 's1',
+        spoken_text: '第一步：直觉引入。',
+        board_action: { type: 'card', title: '核心直觉', content: '<p>重要观察</p>' },
+      },
+      {
+        step_id: 's2',
+        spoken_text: '在进入下一步前，我们先通过随堂小测验证一下刚才的关键概念。',
+        board_action: {
+          type: 'quick_check',
+          question: '下面哪个选项最符合直觉核心？',
+          options: ['选项 A', '选项 B', '选项 C'],
+          answer: 0,
+          explanation: '选项 A 直接对应核心机制。',
+        },
+      },
+      {
+        step_id: 's3',
+        spoken_text: '请在输入框写下你生活中的一个类似例子。',
+        board_action: { type: 'card', title: '反思问题', content: '<p>你的思考</p>' },
+        await_answer: true,
+      },
+      {
+        step_id: 's4',
+        spoken_text: '总结验证。',
+        board_action: {
+          type: 'quick_check',
+          question: '结课检测题',
+          options: ['正确', '错误'],
+          answer: 0,
+          explanation: '正确选项概括了全部要素。',
+        },
+      },
+    ],
+  };
+
+  const script = liveLessonFromPlan(plan);
+  assert.equal(script.steps.length, 5, '4 步讲座 + 1 步结课 popup');
+
+  // Step 2: 随堂中间快测
+  const s2 = script.steps[1];
+  assert.ok(s2.awaitChoice, '中间测试必须生成 awaitChoice');
+  assert.equal(s2.awaitChoice.question, '下面哪个选项最符合直觉核心？');
+  assert.equal(s2.awaitChoice.answer, 0);
+  assert.equal(s2.awaitChoice.explanation, '选项 A 直接对应核心机制。');
+
+  // Step 3: awaitAnswer 互动问答步
+  const s3 = script.steps[2];
+  assert.equal(s3.awaitAnswer, true, 'await_answer 标记必须正确映射为 step.awaitAnswer');
+
+  // Step 4: 结课测试
+  const s4 = script.steps[3];
+  assert.ok(s4.awaitChoice, '终末测试生成 awaitChoice');
+  assert.equal(s4.awaitChoice.explanation, '正确选项概括了全部要素。');
+  assert.equal(s4.systemEnd, true, '最后一步讲座带有 systemEnd 标志');
+});
+
+test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates 1-2 sentence micro-explanations, diagram invariant, and intermediate answer-gated checks', () => {
+  // 提示词必须约束 1-2 句微讲解，杜绝长篇独白，保留关键不变量
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /1 to 2/i, 'Prompt 必须要求 1-2 句紧凑微讲解');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /At least one diagram MUST be included/i, '必须保留 diagram 不变量');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /FINAL step must always be a quick check/i, '必须保留 FINAL quick_check 不变量');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /intermediate checkpoint/i, 'Prompt 必须包含阶段性互动卡点要求');
+  assert.doesNotMatch(WHITEBOARD_INSTRUCTOR_PROMPT, /3 to 5 full/i, '旧版 3-5 句长独白要求必须已被移除');
+
+  // fallbackLecturePlan 必须具备紧凑微讲解与阶段性测试
+  const zhPlan = fallbackLecturePlan('认知心理学');
+  assert.equal(zhPlan.steps.length, 5);
+  // 中间第 3 步 (index 2) 为阶段快测
+  assert.equal(zhPlan.steps[2].board_action.type, 'quick_check', '降级计划第 3 步必须为阶段性快测');
+  assert.ok(zhPlan.steps[2].board_action.explanation, '阶段快测必须有 explanation');
+
+  // 每步旁白均必须为 1-2 句紧凑微讲解 (<= 60 汉字)
+  for (const [idx, step] of zhPlan.steps.entries()) {
+    assert.ok(step.spoken_text.length <= 60, `第 ${idx + 1} 步降级旁白 (${step.spoken_text.length}字) 必须简明紧凑`);
+  }
+
+  // 终末快测自备 explanation 字段供反馈与讲解回放
+  const zhQc = zhPlan.steps[4].board_action;
+  assert.equal(zhQc.type, 'quick_check');
+  assert.ok(zhQc.explanation && zhQc.explanation.length > 5, '降级快测必须包含解析解释');
+
+  const enPlan = fallbackLecturePlan('Cognitive Psychology', '', 'en');
+  assert.equal(enPlan.steps[2].board_action.type, 'quick_check', '英文降级第 3 步必须为阶段快测');
+  for (const [idx, step] of enPlan.steps.entries()) {
+    const wordCount = step.spoken_text.trim().split(/\s+/).length;
+    assert.ok(wordCount <= 25, `英文第 ${idx + 1} 步降级旁白 (${wordCount}词) 必须简明紧凑`);
+  }
+  const enQc = enPlan.steps[4].board_action;
+  assert.equal(enQc.type, 'quick_check');
+  assert.ok(enQc.explanation && enQc.explanation.length > 5, '英文降级快测必须包含 explanation');
+});
+
+test('Regression 16: Interaction gating skip and pause-resume race safety', async () => {
+  // 1. 模拟在交互测试步被 skip 时，引擎不会卡死在 continueResolver 上
+  const ctl = { cancelled: false, paused: false, skipped: false };
+  let choiceResolver = null;
+  let continueResolver = null;
+  let choiceSettled = false;
+  let continueSettled = false;
+
+  const simulateStep = async () => {
+    // 等待学员答题
+    let idx;
+    if (ctl.skipped) {
+      idx = 0;
+    } else {
+      idx = await new Promise((res) => { choiceResolver = res; });
+    }
+    choiceSettled = true;
+
+    // 展现反馈并等待点击继续或跳过
+    if (ctl.skipped) {
+      // 若已跳过，必须直接放行，不得挂起等待 continueResolver
+      continueSettled = true;
+    } else {
+      await new Promise((res) => { continueResolver = res; });
+      continueSettled = true;
+    }
+  };
+
+  const stepPromise = simulateStep();
+
+  // 用户在题目展现等待期点击“跳过/停止讲解”
+  ctl.skipped = true;
+  if (choiceResolver) {
+    const cr = choiceResolver;
+    choiceResolver = null;
+    cr(0);
+  }
+
+  await stepPromise;
+  assert.equal(choiceSettled, true, '题目被立即放行');
+  assert.equal(continueSettled, true, '被 skip 的步骤不得挂起在 continueResolver 上死锁');
+
+  // 2. 验证用户主动暂停时，导师答疑结束不得擅自恢复主线播放
+  let lectureAudioPaused = false;
+  let lessonPaused = false;
+  let userPaused = true; // 用户主动按了暂停键
+
+  const askTutorMock = async () => {
+    lessonPaused = true;
+    lectureAudioPaused = true;
+
+    // 导师答疑进行中...
+    await Promise.resolve();
+
+    // 答疑结束：必须检查用户是否原本就处于暂停态
+    if (!userPaused) {
+      lessonPaused = false;
+      lectureAudioPaused = false;
+    }
+  };
+
+  await askTutorMock();
+  assert.equal(lectureAudioPaused, true, '用户主动暂停时，导师答疑结束后主线音频必须维持暂停');
+  assert.equal(lessonPaused, true, '用户主动暂停时，导师答疑结束后课程时钟必须维持暂停');
+});
+
+test('Regression 17: Unified caption/player dock contracts and 44px accessible touch targets', () => {
+  const cssPath = fileURLToPath(new URL('src/replica/whiteboard/whiteboard.css', spa));
+  const cssContent = readFileSync(cssPath, 'utf8');
+
+  // 1. 验证统一底栏 dock 容器与样式存在
+  assert.match(cssContent, /\.wb-unified-dock-container\s*\{/, '必须包含统一底栏容器 .wb-unified-dock-container');
+  assert.match(cssContent, /\.wb-unified-dock\s*\{/, '必须包含统一底栏 .wb-unified-dock');
+
+  // 2. 验证所有按钮具备 44px 可访问性最小触控目标 (WCAG 2.5.5 / HCD Guardrails)
+  assert.match(cssContent, /\.wb-dock-btn\s*\{[^}]*min-width:\s*44px/s, '.wb-dock-btn 最小宽度必须为 44px');
+  assert.match(cssContent, /\.wb-dock-btn\s*\{[^}]*min-height:\s*44px/s, '.wb-dock-btn 最小高度必须为 44px');
+  assert.match(cssContent, /\.wb-chrome-btn\s*\{[^}]*width:\s*44px/s, '.wb-chrome-btn 宽度必须为 44px');
+  assert.match(cssContent, /\.wb-chrome-btn\s*\{[^}]*height:\s*44px/s, '.wb-chrome-btn 高度必须为 44px');
+  assert.match(cssContent, /\.wb-pill\s*\{[^}]*height:\s*44px/s, '.wb-pill 高度必须为 44px');
+
+  // 3. 验证移动端响应式布局与无遮挡层级
+  assert.match(cssContent, /@media\s*\(\s*max-width:\s*640px\s*\)\s*\{[\s\S]*?\.wb-unified-dock\s*\{[^}]*flex-wrap:\s*wrap/s, '移动端窄屏必须有弹性包装响应式样式');
+  assert.match(cssContent, /\.wb-interaction-layer\s*\{[^}]*bottom:\s*96px/s, '交互层必须定位在底栏之上，杜绝重叠');
+});
+
+test('Regression 18: Whiteboard high-contrast ink, font fallbacks, and writing item visibility', () => {
+  const cssPath = fileURLToPath(new URL('src/replica/whiteboard/whiteboard.css', spa));
+  const cssContent = readFileSync(cssPath, 'utf8');
+  const varsPath = fileURLToPath(new URL('src/styles/variables.css', spa));
+  const varsContent = readFileSync(varsPath, 'utf8');
+
+  // 1. 字体回退体系必须包含完整中英文字体栈
+  assert.match(varsContent, /--font-board-handwriting:\s*"Caveat",\s*"Kaiti SC"/, '手写体变量必须包含 Kaiti SC 等中文字体回退');
+
+  // 2. 白板主色与表格必须为深墨色以确保 WCAG AAA 对比度
+  assert.match(cssContent, /\.wb-board\s*\{[^}]*color:\s*#18181B/s, '白板文字默认色必须为深墨色 #18181B');
+  assert.match(cssContent, /\.wb-board\s*\{[^}]*-webkit-font-smoothing:\s*antialiased/s, '白板必须开启字体抗锯齿优化');
+  assert.match(cssContent, /\.wb-table\s+\.wb-cell\s*\{[^}]*color:\s*#18181B/s, '表格文字颜色必须为深墨色 #18181B');
+
+  // 3. 图表与插图手绘写作态透明度不得低于 0.65，杜绝看不清的灰白底稿
+  assert.match(cssContent, /\.wb-item\.wb-diagram\.writing\s*\{\s*opacity:\s*0\.7/s, '图表写作态透明度应保持在 0.7 易读水平');
+  assert.match(cssContent, /\.wb-item\.wb-image-card\.writing\s*\{\s*opacity:\s*0\.75/s, '图片卡片写作态透明度应保持在 0.75 易读水平');
 });

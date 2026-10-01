@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PageProps } from '../types';
 import { Board, itemCharCount, richLen } from './Board';
-import { CaptionBar } from './CaptionBar';
 import { ConversationPanel, type PlayStatus, type VoiceState } from './Panel';
 import { WhiteboardChrome } from './Chrome';
 import {
@@ -40,6 +39,8 @@ import { uploadFile } from '../materials';
 import { toast } from '../toast';
 import { listenOnce, prefetchTts, tts, type SpeakHandle, type SpeakStart } from '../actions';
 import { takePrefetchedEntry } from './planPrefetch';
+import { lessonDelay } from './lessonDelay';
+import { choiceIndexFromInput } from './choiceInput';
 import './whiteboard.css';
 
 type Stage = 'intro' | 'talk' | 'play';
@@ -402,7 +403,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const BOARD_TABLE = lesson.table;
   const BOARD_ANNOTS = lesson.annots;
   const USER_ANSWERS = lesson.userAnswers;
-  const CHOICE_STEP = LESSON_STEPS.find((s) => s.awaitChoice) ?? null;
+  const FIRST_CHOICE_STEP = LESSON_STEPS.find((s) => s.awaitChoice) ?? null;
 
   const [{ ff: ffParam, auto, hold, idle: idleParam }] = useState(hashParams);
   /* 课程页"练习"进入 → 直跳随堂练习(quick check)那一步;直播计划未决时启动瞬再求值 */
@@ -424,26 +425,49 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const [status, setStatus] = useState<PlayStatus>('idle');
   const [systemEnd, setSystemEnd] = useState(false);
   const [popup, setPopup] = useState<PopupKind | null>(null);
-  const [quickCheck, setQuickCheck] = useState<{ selected: number | null } | null>(null);
+  const [quickCheck, setQuickCheck] = useState<{
+    stepId: number;
+    question: string;
+    options: string[];
+    answer: number;
+    explanation?: string;
+    selected: number | null;
+    feedback: 'correct' | 'incorrect' | null;
+  } | null>(null);
   /* 举手插话进行中(导师取答案;面板/药丸展示"聆听中") */
   const [asking, setAsking] = useState(false);
 
   // ----- chrome / ui state -----
-  /* 面板默认开仅限桌面:移动端面板是全屏浮层,默认开会遮住整块板书与字幕,
-   * 核心教学不可见——窄屏默认关,用户经 FAB 主动打开 */
-  const [panelOpen, setPanelOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768);
+  /* 面板默认关，保持白板沉浸感与宽阔居中视野；用户按需开启时在桌面平滑分栏预留空间，窄屏弹层 */
+  const [panelOpen, setPanelOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [isFollowing, setIsFollowing] = useState(true);
   const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
   const [muted, setMuted] = useState(false);
   const [voice, setVoice] = useState<VoiceState>('off');
   const [input, setInput] = useState('');
-  const [settings, setSettings] = useState<SessionSettingsValue>({ voice: 'calm', speed: 1, font: 'handwriting', dots: true });
+  const [settings, setSettings] = useState<SessionSettingsValue>({
+    voice: state.voice || 'calm',
+    speed: state.speed || 0.85,
+    font: 'handwriting',
+    dots: true,
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const [idleOpen, setIdleOpen] = useState(false);
+
+  useEffect(() => {
+    if (!panelOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPanelOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [panelOpen]);
 
   // ----- engine control refs -----
   const ctl = useRef({ cancelled: false, paused: false, skipped: false });
@@ -472,6 +496,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const answerResolver = useRef<((text: string) => void) | null>(null);
   const popupResolver = useRef<(() => void) | null>(null);
   const choiceResolver = useRef<((i: number) => void) | null>(null);
+  const continueResolver = useRef<(() => void) | null>(null);
   const started = useRef(false);
   const voiceTimer = useRef<number | null>(null);
   const voiceTimers = useRef<number[]>([]);
@@ -485,46 +510,27 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const narrationRef = useRef({ voice: settings.voice, speed: settings.speed, muted });
   narrationRef.current = { voice: settings.voice, speed: settings.speed, muted };
 
-  /* 旁白预热:参数与 typeCaption 起声完全一致(音色/语速),静音不预热。
+  useEffect(() => {
+    tts.setPlaybackRate(settings.speed);
+  }, [settings.speed]);
+
+  /* 旁白预热:以基准语速 1.0 合成(与 actions.ts 实播请求保持一致命中缓存),静音不预热。
    * 上游 MISS 为整段合成(TTFB ~2.5s+55ms/字),长段落必超字幕引擎 8s 起声上限
    * 被止损成无声步——借响应 private 缓存在前一步播放期合成好后几步。 */
   const prefetchNarration = useCallback((rich: Rich | undefined) => {
     if (!rich) return;
-    const { voice: vk, speed, muted: silent } = narrationRef.current;
+    const { voice: vk, muted: silent } = narrationRef.current;
     if (silent) return;
     prefetchTts(
       rich.map((seg) => seg.t).join(''),
       vk,
-      speed,
+      1,
     );
   }, []);
 
-  /* Pause-aware delay: accumulates only while unpaused; resolves immediately if skipped; rejects on unmount. */
+  /* Course clock pauses; interjection cooldown opts into wall time. */
   const wait = useCallback(
-    (ms: number) =>
-      new Promise<void>((resolve, reject) => {
-        let left = ms;
-        let last = Date.now();
-        const iv = window.setInterval(() => {
-          if (ctl.current.cancelled) {
-            window.clearInterval(iv);
-            reject(new Error('cancelled'));
-            return;
-          }
-          if (ctl.current.skipped) {
-            window.clearInterval(iv);
-            resolve();
-            return;
-          }
-          const now = Date.now();
-          if (!ctl.current.paused) left -= now - last;
-          last = now;
-          if (left <= 0) {
-            window.clearInterval(iv);
-            resolve();
-          }
-        }, 50);
-      }),
+    (ms: number, runWhilePaused = false) => lessonDelay(ms, ctl.current, runWhilePaused),
     [],
   );
 
@@ -682,7 +688,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       // 若后续步骤先被取消/失败,capTask 的迟到拒绝不得成为未处理拒绝
       void capTask.catch(() => {});
       if (BOARD_TABLE?.step === s.id) await revealTable();
-      for (const it of items) await writeItem(it.id);
+      for (const it of items) {
+        await writeItem(it.id);
+        if (!ctl.current.skipped) await wait(240);
+      }
       for (const an of BOARD_ANNOTS.filter((a) => a.step === s.id)) await drawAnnot(an.id);
       const narration = await capTask;
       // 旁白播完才进下一步(60s 安全上限防上游挂起)——否则下一步一开讲就把
@@ -692,27 +701,66 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       if (s.awaitChoice) {
         // quick check: no "your turn" status line in the panel (ref 53)
         setStatus('idle');
-        setQuickCheck({ selected: null });
+        const choice = s.awaitChoice;
+        setQuickCheck({
+          stepId: s.id,
+          question: choice.question,
+          options: choice.options,
+          answer: choice.answer,
+          explanation: choice.explanation,
+          selected: null,
+          feedback: null,
+        });
+
         let idx: number;
         if (auto) {
           await wait(1400);
-          idx = s.awaitChoice.answer;
+          idx = choice.answer;
+        } else if (ctl.current.skipped) {
+          idx = choice.answer;
         } else {
           idx = await new Promise<number>((res) => {
             choiceResolver.current = res;
           });
         }
         choiceResolver.current = null;
-        setQuickCheck({ selected: idx });
-        setEntries((prev) => [...prev, userBubble(`u${s.id}`, s.awaitChoice!.options[idx])]);
+
+        const isCorrect = idx === choice.answer;
+        const fbKind: 'correct' | 'incorrect' = isCorrect ? 'correct' : 'incorrect';
+        setQuickCheck((prev) => (prev ? { ...prev, selected: idx, feedback: fbKind } : null));
+        setEntries((prev) => [...prev, userBubble(`u${s.id}`, choice.options[idx])]);
+
+        // Tutor feedback bubble & spoken audio feedback
+        const fbExplanation = choice.explanation ? ` ${choice.explanation}` : '';
+        const fbText = isCorrect
+          ? `${L('Correct!', '回答正确！')}${fbExplanation}`.trim()
+          : `${L('Not quite. The correct answer is: ', '不太准确哦。正确答案是：')}${choice.options[choice.answer]}。${choice.explanation || ''}`.trim();
+        setEntries((prev) => [...prev, tutorBubble(`qc-fb-${s.id}-${Date.now()}`, fbText)]);
+
+        const { voice: vk, speed: spkSpeed, muted: silent } = narrationRef.current;
+        const spokenFb = !silent ? tts.speakTutorTrack(fbText, vk, spkSpeed) : null;
+
+        if (auto) {
+          await wait(1500);
+          if (spokenFb) await Promise.race([spokenFb.ended, wait(4000)]);
+        } else if (ctl.current.skipped) {
+          if (spokenFb) tts.stopTutor();
+        } else {
+          await new Promise<void>((res) => {
+            continueResolver.current = res;
+          });
+          continueResolver.current = null;
+          if (spokenFb) tts.stopTutor();
+        }
+
         setCaption(null);
-        await wait(1500);
         setQuickCheck(null);
         setStatus('explaining');
       }
 
       if (s.awaitAnswer) {
         setStatus('yourturn');
+        setPanelOpen(true);
         let text: string;
         if (auto) {
           await wait(1200);
@@ -737,10 +785,22 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           });
         }
         answerResolver.current = null;
-        if (text) setEntries((prev) => [...prev, userBubble(`u${s.id}`, text)]);
-        setCaption(null); // ref 50: caption area empties once the learner answers
+        if (text) {
+          setEntries((prev) => [...prev, userBubble(`u${s.id}`, text)]);
+          const ackText = L(
+            'Thoughtful response! Let us connect this to what comes next.',
+            '很好的思考！顺着这个思路，我们来看接下来的核心关键。'
+          );
+          setEntries((prev) => [...prev, tutorBubble(`ack-${s.id}-${Date.now()}`, ackText)]);
+          const { voice: vk, speed: spkSpeed, muted: silent } = narrationRef.current;
+          const spokenAck = !silent ? tts.speakTutorTrack(ackText, vk, spkSpeed) : null;
+          try {
+            await wait(1500);
+            if (spokenAck) await Promise.race([spokenAck.ended, wait(6000)]);
+          } catch {}
+        }
+        setCaption(null);
         setStatus('explaining');
-        await wait(400);
       }
 
       if (s.popup) {
@@ -777,7 +837,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     if (stage !== 'play' || started.current || planPending) return;
     if (liveTopic === null && !state.bootReady) return;
     started.current = true;
-    const ff = practiceEntry ? (CHOICE_STEP?.id ?? ffParam ?? 1) : ffParam;
+    const ff = practiceEntry ? (FIRST_CHOICE_STEP?.id ?? ffParam ?? 1) : ffParam;
     const startFrom = ff ?? 1;
     if (ff !== null) applyFastForward(ff);
     // 起讲前先预热开头两条旁白(演示课/练习直入不走 plan 就绪预热)
@@ -811,6 +871,22 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       if (voiceTimer.current) window.clearTimeout(voiceTimer.current);
       voiceTimers.current.forEach((t) => window.clearTimeout(t));
       pendingTimers.current.forEach((t) => window.clearTimeout(t));
+      if (choiceResolver.current) {
+        choiceResolver.current(0);
+        choiceResolver.current = null;
+      }
+      if (continueResolver.current) {
+        continueResolver.current();
+        continueResolver.current = null;
+      }
+      if (answerResolver.current) {
+        answerResolver.current('');
+        answerResolver.current = null;
+      }
+      if (popupResolver.current) {
+        popupResolver.current();
+        popupResolver.current = null;
+      }
       tts.stop();
     },
     [],
@@ -854,34 +930,41 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       setAsking(true);
       setLessonPaused(true); // 主线暂停(声画同步,与暂停键同语义)
       tts.pauseAudio();
-      const sid = LESSON_STEPS.find((s) => s.id === stepRef.current)?.sid ?? '';
-      const ans = await interjectLive(sessionId, sid, question);
-      if (ctl.current.cancelled) return;
-      askingRef.current = false;
-      setAsking(false);
-      const answerText =
-        ans?.answerText ?? L('(The tutor could not be reached — the lecture continues.)', '(暂时联系不上导师——课程继续。)');
-      setEntries((prev) => [...prev, tutorBubble(`a-${Date.now()}`, answerText)]);
-      const resume = ans?.resumeTransition ?? '';
-      if (resume) {
-        const timer = window.setTimeout(() => {
-          if (!ctl.current.cancelled) setEntries((prev) => [...prev, tutorBubble(`r-${Date.now()}`, resume)]);
-        }, 1200);
-        pendingTimers.current.push(timer);
-      }
-      /* 答疑朗读(TTS 单例:插话会打断当前旁白,字幕随之补全);尊重静音 */
-      const { voice: vk, speed, muted: silent } = narrationRef.current;
-      const spoken = ans && !silent ? tts.speakTrack(answerText, vk, speed) : null;
       try {
+        const sid = LESSON_STEPS.find((s) => s.id === stepRef.current)?.sid ?? '';
+        const ans = await interjectLive(sessionId, sid, question);
+        if (ctl.current.cancelled) return;
+        const answerText =
+          ans?.answerText ?? L('(The tutor could not be reached — the lecture continues.)', '(暂时联系不上导师——课程继续。)');
+        setEntries((prev) => [...prev, tutorBubble(`a-${Date.now()}`, answerText)]);
+        const resume = ans?.resumeTransition ?? '';
+        if (resume) {
+          const timer = window.setTimeout(() => {
+            if (!ctl.current.cancelled) setEntries((prev) => [...prev, tutorBubble(`r-${Date.now()}`, resume)]);
+          }, 1200);
+          pendingTimers.current.push(timer);
+        }
+        /* 答疑朗读不销毁主线旁白；用户主动暂停时不启动新音频。 */
+        const { voice: vk, speed, muted: silent } = narrationRef.current;
+        const spoken = ans && !silent && !pausedRef.current ? tts.speakTutorTrack(answerText, vk, speed) : null;
         /* 原版节奏:答疑后 5s 恢复主线;连不上导师缩短等待 */
-        await wait(ans ? 5000 : 1500);
-        if (spoken) await Promise.race([spoken.ended, wait(8000)]);
+        await wait(ans ? 5000 : 1500, true);
+        if (spoken) await Promise.race([spoken.ended, wait(8000, true)]);
       } catch {
-        return; // unmount cancelled
-      }
-      if (!ctl.current.cancelled) {
-        setLessonPaused(false);
-        tts.resumeAudio();
+        if (!ctl.current.cancelled) {
+          setEntries((prev) => [...prev, tutorBubble(`a-${Date.now()}`,
+            L('(The tutor could not be reached — the lecture continues.)', '(暂时联系不上导师——课程继续。)'))]);
+        }
+      } finally {
+        askingRef.current = false;
+        tts.stopTutor();
+        if (!ctl.current.cancelled) {
+          setAsking(false);
+          if (!pausedRef.current) {
+            setLessonPaused(false);
+            tts.resumeAudio();
+          }
+        }
       }
     },
     [LESSON_STEPS, liveScript, wait, setLessonPaused],
@@ -894,16 +977,27 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       toast(L('The tutor is still answering your last question', '导师还在回答上一个问题'));
       return;
     }
-    setInput('');
-    if (answerResolver.current) {
+    if (choiceResolver.current) {
+      const index = choiceIndexFromInput(text, quickCheck?.options ?? []);
+      if (index === null) {
+        toast(L('Please enter a choice letter, number, or exact option', '请输入选项字母、序号或完整选项内容'));
+        return;
+      }
+      setInput('');
+      const resolve = choiceResolver.current;
+      choiceResolver.current = null;
+      resolve(index);
+    } else if (answerResolver.current) {
+      setInput('');
       const res = answerResolver.current;
       answerResolver.current = null;
       res(text); // runner appends the user bubble
     } else {
+      setInput('');
       setEntries((prev) => [...prev, userBubble(`free-${Date.now()}`, text)]);
       void askTutor(text);
     }
-  }, [input, askTutor]);
+  }, [input, askTutor, quickCheck]);
 
   /* 语音提问/作答:Web Speech API 一次性真转写(替代旧版 canned 台词)。
    * 等答案时转写即答案;自由时段转写即举手插话。 */
@@ -918,6 +1012,17 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     }
     const startedListening = listenOnce(
       (text) => {
+        if (choiceResolver.current) {
+          const index = choiceIndexFromInput(text, quickCheck?.options ?? []);
+          if (index === null) {
+            toast(L('Please say a choice letter, number, or exact option', '请说出选项字母、序号或完整选项内容'));
+            return;
+          }
+          const resolve = choiceResolver.current;
+          choiceResolver.current = null;
+          resolve(index);
+          return;
+        }
         setEntries((prev) => [...prev, userBubble(`v-${Date.now()}`, text)]);
         const res = answerResolver.current;
         if (res) {
@@ -933,23 +1038,44 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     if (voiceTimer.current) window.clearTimeout(voiceTimer.current);
     voiceTimer.current = window.setTimeout(() => setVoice('listening'), 700);
     setVoice('preparing');
-  }, [voice, askTutor]);
+  }, [voice, askTutor, quickCheck]);
 
   const handleTogglePause = useCallback(() => {
     // 音频与课程步进同暂停同恢复:元素不销毁,从断点续播(无需重读整句);
     // setLessonPaused 同时给授课时钟结账,暂停时长不计入起声/断流超时。
-    const next = !ctl.current.paused;
+    const next = !pausedRef.current;
+    pausedRef.current = next;
+    setPaused(next);
+    if (askingRef.current) {
+      if (next) tts.pauseAudio();
+      else tts.resumeTutor();
+      return;
+    }
     setLessonPaused(next);
     if (next) tts.pauseAudio();
     else tts.resumeAudio();
-    setPaused(next);
   }, [setLessonPaused]);
 
   /* 右侧面板停止/结束按钮:立即停止当前音频,解除当前步手写与字幕等待,快速收尾并进入下一步 */
   const handleStopExplaining = useCallback(() => {
     tts.stop();
     ctl.current.skipped = true;
-  }, []);
+    if (choiceResolver.current) {
+      const cr = choiceResolver.current;
+      choiceResolver.current = null;
+      cr(quickCheck?.answer ?? 0);
+    }
+    if (continueResolver.current) {
+      const cnr = continueResolver.current;
+      continueResolver.current = null;
+      cnr();
+    }
+    if (answerResolver.current) {
+      const ar = answerResolver.current;
+      answerResolver.current = null;
+      ar('');
+    }
+  }, [quickCheck]);
 
   /* 面板"加图片":真实上传到 /api/uploads,成功后作为一条图片记录进入对话记录 */
   const imageRef = useRef<HTMLInputElement>(null);
@@ -997,7 +1123,6 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     });
   }, [finished, set, state.identity, state.energy]);
 
-  const choiceVisible = quickCheck !== null;
   // play triangle whenever the tutor isn't actively explaining (await, popup, end)
   const idle = status !== 'explaining' || popup !== null;
   const placeholder = status === 'yourturn' ? L('Your answer here...', '在这里写下你的回答…') : L('Ask a question...', '问一个问题…');
@@ -1006,46 +1131,65 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     <>
       <main className="wb-canvas-area" aria-label="Interactive whiteboard">
         <Board
-        step={step}
-        progress={progress}
-        writingId={writingId}
-        panX={panX}
-        zoom={zoom}
-        onZoomChange={(z) => setZoom(z)}
-        standardFont={settings.font === 'standard'}
-        dots={settings.dots}
-        tableRows={tableRows}
-        annotsDone={annotsDone}
-        annotActive={annotActive}
-        items={BOARD_ITEMS}
-        table={BOARD_TABLE}
-        annots={BOARD_ANNOTS}
-        isFollowing={isFollowing}
-        onUserInteraction={() => setIsFollowing(false)}
-      />
+          step={step}
+          progress={progress}
+          writingId={writingId}
+          panX={panX}
+          zoom={zoom}
+          onZoomChange={(z) => setZoom(z)}
+          standardFont={settings.font === 'standard'}
+          dots={settings.dots}
+          tableRows={tableRows}
+          annotsDone={annotsDone}
+          annotActive={annotActive}
+          items={BOARD_ITEMS}
+          table={BOARD_TABLE}
+          annots={BOARD_ANNOTS}
+          isFollowing={isFollowing}
+          onUserInteraction={() => setIsFollowing(false)}
+        />
 
-      {/* Structured interaction overlay layer above canvas, non-overlapping with footer */}
-      <section className="wb-interaction-layer" aria-live="polite">
-        {!quickCheck && (
-          <CaptionBar caption={caption} shown={capShown} typing={typing} centerX={0} raised={choiceVisible} />
-        )}
-        {quickCheck && CHOICE_STEP?.awaitChoice && (
-          <QuickCheck
-            question={CHOICE_STEP.awaitChoice.question}
-            options={CHOICE_STEP.awaitChoice.options}
-            selected={quickCheck.selected}
-            onSelect={(i) => {
-              if (quickCheck.selected === null && choiceResolver.current) {
-                const res = choiceResolver.current;
-                choiceResolver.current = null;
-                res(i);
-              }
-            }}
-            centerX={0}
-          />
-        )}
-        {(voice === 'listening' || asking) && <ListenPill centerX={0} />}
-      </section>
+        {/* Structured interaction overlay layer above canvas, non-overlapping with footer */}
+        <section className="wb-interaction-layer" aria-live="polite">
+          {quickCheck && (
+            <QuickCheck
+              question={quickCheck.question}
+              options={quickCheck.options}
+              selected={quickCheck.selected}
+              answer={quickCheck.answer}
+              feedback={quickCheck.feedback}
+              explanation={quickCheck.explanation}
+              onSelect={(i) => {
+                if (quickCheck.selected === null && choiceResolver.current) {
+                  const res = choiceResolver.current;
+                  choiceResolver.current = null;
+                  res(i);
+                }
+              }}
+              onContinue={() => {
+                if (continueResolver.current) {
+                  const res = continueResolver.current;
+                  continueResolver.current = null;
+                  res();
+                }
+              }}
+              onSkip={() => {
+                if (choiceResolver.current) {
+                  const res = choiceResolver.current;
+                  choiceResolver.current = null;
+                  res(quickCheck.answer);
+                }
+                if (continueResolver.current) {
+                  const res = continueResolver.current;
+                  continueResolver.current = null;
+                  res();
+                }
+              }}
+              centerX={0}
+            />
+          )}
+          {(voice === 'listening' || asking) && <ListenPill centerX={0} />}
+        </section>
       </main>
     </>
   );
@@ -1126,6 +1270,11 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         titleOverride={genLectureTitle}
         isFollowing={isFollowing}
         onResumeFollow={() => setIsFollowing(true)}
+        caption={caption}
+        capShown={capShown}
+        typing={typing}
+        quickCheckActive={quickCheck !== null}
+        status={status}
       />
 
       {connOpen && (

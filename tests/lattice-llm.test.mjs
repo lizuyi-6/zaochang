@@ -44,10 +44,22 @@ test('LLM: Messages 404 falls back once to Chat Completions', async () => {
 });
 test('LLM: Messages success preserves its native parser', async () => {
   let calls = 0;
-  const api = client('https://test/v1', async () => { calls++; return response('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"你好"}}\n'); });
+  const api = client('https://test/v1', async () => { calls++; return response('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"你好"}}\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\ndata: {"type":"message_stop"}\n'); });
   assert.deepEqual(await collect(api.streamChat(messages)), [{ type: 'text', text: '你好' }]);
   assert.equal(calls, 1);
 });
+for (const [label, text, error] of [
+  ['missing terminal', 'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"partial"}}\n', /ai_upstream_incomplete/],
+  ['upstream error', 'data: {"type":"error","error":{"type":"overloaded_error"}}\n', /ai_upstream_stream_error/],
+  ['token limit', 'data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"}}\ndata: {"type":"message_stop"}\n', /ai_upstream_incomplete/],
+]) {
+  test(`LLM: Messages ${label} fails without protocol replay`, async () => {
+    let calls = 0;
+    const api = client('https://test/v1', async () => { calls++; return response(text); });
+    await assert.rejects(collect(api.streamChat(messages)), error);
+    assert.equal(calls, 1);
+  });
+}
 for (const status of [401, 403, 429]) {
   test(`LLM: ${status} does not fall back`, async () => {
     let calls = 0;

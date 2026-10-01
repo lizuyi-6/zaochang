@@ -171,12 +171,27 @@ export function openFeedbackMail(text: string, subject = L('Hyperknow feedback',
 
 /* ---------------- 朗读(TTS,走 /api/hyperknow/tts/stream) ---------------- */
 
-let audioEl: HTMLAudioElement | null = null;
+export const DEFAULT_PLAYBACK_RATE = 0.85;
+let currentPlaybackRate = DEFAULT_PLAYBACK_RATE;
+
+let lectureAudioEl: HTMLAudioElement | null = null;
+let tutorAudioEl: HTMLAudioElement | null = null;
+
 const ttsListeners = new Set<(on: boolean) => void>();
 const notifyTts = (on: boolean) => ttsListeners.forEach((l) => l(on));
 
-/** 播放与预热共用同一 URL 构造:参数一致才能命中同一条缓存。 */
-function ttsStreamUrl(text: string, voice: string, speed: number): string {
+function notifyIfStopped(): void {
+  const stillPlaying = Boolean(
+    (lectureAudioEl && !lectureAudioEl.paused && !lectureAudioEl.ended) ||
+    (tutorAudioEl && !tutorAudioEl.paused && !tutorAudioEl.ended)
+  );
+  if (!stillPlaying) {
+    notifyTts(false);
+  }
+}
+
+/** 播放与预热共用同一 URL 构造:合成端恒用基准语速 1.0,确保预热与实播命中同一条服务端/浏览器缓存。 */
+function ttsStreamUrl(text: string, voice: string, speed = 1): string {
   return `/api/hyperknow/tts/stream?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&speed=${speed}`;
 }
 
@@ -186,11 +201,12 @@ const ttsPrefetched = new Set<string>();
  * 超过字幕引擎 8s 起声上限就会被止损成无声估算步。利用响应 private max-age=3600
  * 的浏览器缓存,在前一步播放期间把后一步合成完毕,起声即缓存命中。
  * 尽力而为:失败静默,字幕引擎的既有超时/回退路径不受影响。
+ * 恒以 speed=1 合成,客户端通过 playbackRate 变速,实现 100% 缓存复用。
  */
-export function prefetchTts(text: string, voice = 'warm', speed = 1): void {
+export function prefetchTts(text: string, voice = 'warm', _speed = 1): void {
   const body = text.trim().slice(0, 1500);
   if (!body || typeof fetch === 'undefined') return;
-  const url = ttsStreamUrl(body, voice, speed);
+  const url = ttsStreamUrl(body, voice, 1);
   if (ttsPrefetched.has(url)) return;
   ttsPrefetched.add(url);
   void fetch(url)
@@ -212,13 +228,14 @@ export interface SpeakHandle {
 }
 
 type Track = { settleStarted: (v: SpeakStart) => void; settleEnded: () => void };
-let currentTrack: Track | null = null;
+let lectureTrack: Track | null = null;
+let tutorTrack: Track | null = null;
 
-function stopAudio(): void {
-  const el = audioEl;
-  const track = currentTrack;
-  audioEl = null;
-  currentTrack = null;
+function stopLectureAudio(): void {
+  const el = lectureAudioEl;
+  const track = lectureTrack;
+  lectureAudioEl = null;
+  lectureTrack = null;
   if (el) {
     el.pause();
     try {
@@ -227,17 +244,155 @@ function stopAudio(): void {
     } catch {}
     el.onended = null;
     el.onerror = null;
-    notifyTts(false);
   }
-  // 主动停止也要解冻等待方(课程步进在等 ended)。
   if (track) {
     track.settleStarted('stopped');
     track.settleEnded();
   }
+  notifyIfStopped();
+}
+
+function stopTutorAudio(): void {
+  const el = tutorAudioEl;
+  const track = tutorTrack;
+  tutorAudioEl = null;
+  tutorTrack = null;
+  if (el) {
+    el.pause();
+    try {
+      el.removeAttribute('src');
+      el.load();
+    } catch {}
+    el.onended = null;
+    el.onerror = null;
+  }
+  if (track) {
+    track.settleStarted('stopped');
+    track.settleEnded();
+  }
+  notifyIfStopped();
+}
+
+function stopAllAudio(): void {
+  stopTutorAudio();
+  stopLectureAudio();
+}
+
+function playTrackOnChannel(
+  channel: 'lecture' | 'tutor',
+  text: string,
+  voice = 'warm',
+  speed = 1,
+): SpeakHandle {
+  const body = text.trim();
+  if (!body) return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
+
+  if (typeof Audio === 'undefined') {
+    return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
+  }
+
+  // 语速配置: 若调用方显式传入了有效非 1 语速，更新客户端基准播放倍率
+  if (typeof speed === 'number' && Number.isFinite(speed) && speed > 0 && speed !== 1) {
+    currentPlaybackRate = speed;
+  }
+
+  if (channel === 'lecture') {
+    // 新开主线旁白步: 停止旧主线旁白与任何残留的导师答疑音频
+    stopTutorAudio();
+    stopLectureAudio();
+  } else {
+    // 导师答疑插话: 仅停止旧导师音频，绝不销毁已暂停的主线旁白！
+    stopTutorAudio();
+  }
+
+  // 服务端合成恒以 speed=1 发起, 保持与预热完全一致的 URL 缓存键
+  const url = ttsStreamUrl(body.slice(0, 1500), voice, 1);
+  const el = new Audio(url);
+  try {
+    el.playbackRate = currentPlaybackRate;
+  } catch {}
+
+  let resolveStarted!: (v: SpeakStart) => void;
+  let resolveEnded!: () => void;
+  const started = new Promise<SpeakStart>((res) => { resolveStarted = res; });
+  const ended = new Promise<void>((res) => { resolveEnded = res; });
+  const track: Track = {
+    settleStarted: (v) => resolveStarted(v),
+    settleEnded: () => resolveEnded(),
+  };
+
+  if (channel === 'lecture') {
+    lectureAudioEl = el;
+    lectureTrack = track;
+  } else {
+    tutorAudioEl = el;
+    tutorTrack = track;
+  }
+
+  const isCurrent = () => (channel === 'lecture' ? lectureAudioEl === el && lectureTrack === track : tutorAudioEl === el && tutorTrack === track);
+
+  const detach = () => {
+    if (channel === 'lecture') {
+      if (lectureAudioEl === el) lectureAudioEl = null;
+      if (lectureTrack === track) lectureTrack = null;
+    } else {
+      if (tutorAudioEl === el) tutorAudioEl = null;
+      if (tutorTrack === track) tutorTrack = null;
+    }
+    notifyIfStopped();
+  };
+
+  el.onended = () => {
+    detach();
+    track.settleStarted('started');
+    track.settleEnded();
+  };
+  el.onerror = () => {
+    detach();
+    track.settleStarted('error');
+    track.settleEnded();
+  };
+
+  void el.play().then(
+    () => {
+      // 若在 play() 异步完成前已被主动停止，立刻掐断声音并卸载资源
+      if (!isCurrent()) {
+        try {
+          el.pause();
+          el.removeAttribute('src');
+          el.load();
+        } catch {}
+        return;
+      }
+      notifyTts(true);
+      track.settleStarted('started');
+    },
+    () => {
+      if (!isCurrent()) return;
+      detach();
+      track.settleStarted('error');
+      track.settleEnded();
+    },
+  );
+
+  const getProgress = (): AudioProgress | null => {
+    const currentEl = channel === 'lecture' ? lectureAudioEl : tutorAudioEl;
+    if (!el || currentEl !== el) return null;
+    const cur = typeof el.currentTime === 'number' && Number.isFinite(el.currentTime) ? el.currentTime : 0;
+    const dur = el.duration;
+    const validDur = typeof dur === 'number' && Number.isFinite(dur) && dur > 0;
+    const ratio = validDur ? Math.max(0, Math.min(1, cur / dur)) : (Number.isFinite(cur) ? -1 : 0);
+    return { currentTime: cur, duration: dur, ratio };
+  };
+
+  return { started, ended, getProgress };
 }
 
 export const tts = {
-  speaking: (): boolean => !!audioEl && !audioEl.paused,
+  speaking: (): boolean =>
+    Boolean((lectureAudioEl && !lectureAudioEl.paused && !lectureAudioEl.ended) ||
+            (tutorAudioEl && !tutorAudioEl.paused && !tutorAudioEl.ended)),
+
   /** 订阅播放状态(按钮的高亮/停止态用)。返回退订函数。 */
   subscribe(cb: (on: boolean) => void): () => void {
     ttsListeners.add(cb);
@@ -245,92 +400,66 @@ export const tts = {
       ttsListeners.delete(cb);
     };
   },
-  stop: stopAudio,
+
+  /** 动态更新客户端播放倍率:立即对当前播放音频生效,并作为后续音频默认倍率 */
+  setPlaybackRate(rate: number): void {
+    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) return;
+    currentPlaybackRate = rate;
+    if (lectureAudioEl) {
+      try { lectureAudioEl.playbackRate = rate; } catch {}
+    }
+    if (tutorAudioEl) {
+      try { tutorAudioEl.playbackRate = rate; } catch {}
+    }
+  },
+
+  getPlaybackRate(): number {
+    return currentPlaybackRate;
+  },
+
+  stop: stopAllAudio,
+  stopTutor: stopTutorAudio,
+
   /**
-   * 课程旁白:返回播放句柄,调用方(白板步进)用它等"真正起声"与"播完"——
-   * 音频是节奏的时钟,字幕与下一步都以它对齐,避免冷合成延迟造成的声画错位与截断。
-   * 同一时刻只有一条旁白(新开一条会停掉旧的)。
+   * 课程旁白主线通道:返回播放句柄,等"真正起声"与"播完"。
+   * 新开主线步会停掉旧步,但不会被答疑插话销毁。
    */
   speakTrack(text: string, voice = 'warm', speed = 1): SpeakHandle {
-    const body = text.trim();
-    if (!body) return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
-    stopAudio();
-    if (typeof Audio === 'undefined') {
-      return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
-    }
-    const url = ttsStreamUrl(body.slice(0, 1500), voice, speed);
-    const el = new Audio(url);
-    audioEl = el;
-    let resolveStarted!: (v: SpeakStart) => void;
-    let resolveEnded!: () => void;
-    const started = new Promise<SpeakStart>((res) => { resolveStarted = res; });
-    const ended = new Promise<void>((res) => { resolveEnded = res; });
-    const track: Track = {
-      // promise 重复 settle 是无操作,不需要额外标志位。
-      settleStarted: (v) => resolveStarted(v),
-      settleEnded: () => resolveEnded(),
-    };
-    currentTrack = track;
-    const detach = () => {
-      if (audioEl === el) {
-        audioEl = null;
-        notifyTts(false);
-      }
-      if (currentTrack === track) currentTrack = null;
-    };
-    el.onended = () => {
-      detach();
-      track.settleStarted('started');
-      track.settleEnded();
-    };
-    el.onerror = () => {
-      detach();
-      track.settleStarted('error');
-      track.settleEnded();
-    };
-    void el.play().then(
-      () => {
-        // 若在 play() 异步完成前已被主动停止(如起声超时切估算或用户跳过/卸载),
-        // 必须立刻掐断声音并卸载资源,杜绝迟到外放污染画面
-        if (currentTrack !== track || audioEl !== el) {
-          try {
-            el.pause();
-            el.removeAttribute('src');
-            el.load();
-          } catch {}
-          return;
-        }
-        notifyTts(true);
-        track.settleStarted('started');
-      },
-      () => {
-        if (currentTrack !== track && audioEl !== el) {
-          return;
-        }
-        detach();
-        track.settleStarted('error');
-        track.settleEnded();
-      },
-    );
-    const getProgress = (): AudioProgress | null => {
-      if (!el || audioEl !== el) return null;
-      const cur = typeof el.currentTime === 'number' && Number.isFinite(el.currentTime) ? el.currentTime : 0;
-      const dur = el.duration;
-      // 流式响应 duration 可能为 Infinity 或 NaN:保留 currentTime,供调用方结合语速估算窗口对齐字幕
-      const validDur = typeof dur === 'number' && Number.isFinite(dur) && dur > 0;
-      const ratio = validDur ? Math.max(0, Math.min(1, cur / dur)) : (Number.isFinite(cur) ? -1 : 0);
-      return { currentTime: cur, duration: dur, ratio };
-    };
-    return { started, ended, getProgress };
+    return playTrackOnChannel('lecture', text, voice, speed);
   },
-  /** 暂停当前旁白(课程暂停):不销毁元素,恢复时从断点继续。 */
+
+  /**
+   * 导师答疑独立通道:不影响主线暂停中的讲座音频与字幕时钟,答疑播完平滑释放。
+   */
+  speakTutorTrack(text: string, voice = 'warm', speed = 1): SpeakHandle {
+    return playTrackOnChannel('tutor', text, voice, speed);
+  },
+
+  /** 暂停全部音频(课程暂停):不销毁元素,恢复时从断点继续。 */
   pauseAudio(): void {
-    audioEl?.pause();
+    lectureAudioEl?.pause();
+    tutorAudioEl?.pause();
+    notifyTts(false);
   },
+
+  /** 插话时只恢复导师音频，主线仍由课程时钟控制。 */
+  resumeTutor(): void {
+    if (tutorAudioEl && tutorAudioEl.paused && !tutorAudioEl.ended) {
+      void tutorAudioEl.play().then(() => notifyTts(true)).catch(() => {});
+    }
+  },
+
+  /** 恢复音频:优先恢复正在作答的导师通道;否则恢复主线旁白。 */
   resumeAudio(): void {
-    const el = audioEl;
-    if (el && el.paused && !el.ended) void el.play().catch(() => {});
+    if (tutorAudioEl && tutorAudioEl.paused && !tutorAudioEl.ended) {
+      void tutorAudioEl.play().catch(() => {});
+      notifyTts(true);
+    } else if (lectureAudioEl && lectureAudioEl.paused && !lectureAudioEl.ended) {
+      void lectureAudioEl.play().catch(() => {});
+      notifyTts(true);
+    }
   },
+
   async speak(text: string, voice = 'warm', speed = 1): Promise<void> {
     const handle = this.speakTrack(text, voice, speed);
     const how = await handle.started;

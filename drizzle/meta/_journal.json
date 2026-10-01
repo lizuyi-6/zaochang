@@ -162,6 +162,34 @@
       "when": 1789052154028,
       "tag": "0022_hyperknow_tasks_and_leases",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1790414944489,
+      "tag": "0023_cool_madame_hydra",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1790416537333,
+      "tag": "0024_hyperknow_image_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1790417243244,
+      "tag": "0025_hyperknow_image_cleanup_claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1790418649098,
+      "tag": "0026_far_spyke",
+      "breakpoints": true
     }
   ]
 }

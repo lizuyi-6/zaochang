@@ -640,12 +640,13 @@ export const Home = ({ state, set }: PageProps) => {
                         {L('Voice input', '语音输入')}
                       </button>
                       <div className="hk-menu-label">{L('Speech speed', '朗读语速')}</div>
-                      {[0.5, 0.75, 1, 1.25, 1.5].map((sp) => (
+                      {[0.5, 0.75, 0.85, 1, 1.25, 1.5].map((sp) => (
                         <button
                           key={sp}
                           className={`hk-menu-item${state.speed === sp ? ' active' : ''}`}
                           onClick={() => {
                             set({ speed: sp });
+                            tts.setPlaybackRate(sp);
                             setMenu('none');
                           }}
                         >

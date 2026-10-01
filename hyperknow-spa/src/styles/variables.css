@@ -2,7 +2,7 @@
   /* Typography */
   --font-sans: "Satoshi", "MiSans", "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
   --font-display: "EB Garamond", "Songti SC", serif;
-  --font-board-handwriting: "Caveat", "Segoe Print", cursive;
+  --font-board-handwriting: "Caveat", "Kaiti SC", "STKaiti", "KaiTi", "Segoe Print", cursive;
   --font-board-table: "Handlee", "Caveat", cursive;
   --font-board-standard: var(--font-sans);
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;

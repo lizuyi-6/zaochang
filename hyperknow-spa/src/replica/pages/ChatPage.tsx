@@ -43,7 +43,7 @@ interface ChatMsg {
 
 type MenuKind = 'none' | 'translate' | 'tools' | 'mode' | 'status';
 
-const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5];
+const SPEEDS = [0.5, 0.75, 0.85, 1, 1.25, 1.5];
 
 /** Deep chat view — user prompt + agent pipeline markers + composer. */
 export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
@@ -601,6 +601,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
                 className={`hk-menu-item${state.speed === sp ? ' active' : ''}`}
                 onClick={() => {
                   set({ speed: sp });
+                  tts.setPlaybackRate(sp);
                   setMenu('none');
                 }}
               >

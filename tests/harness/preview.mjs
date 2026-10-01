@@ -38,6 +38,8 @@ export let lastTtsBodyNonAscii = false;
 export let ttsUpstreamCount = 0;
 export let lastImageRequest = null;
 export let imageUpstreamCount = 0;
+let unitResponseDelayMs = 0;
+let imageResponseDelayMs = 0;
 
 export function generate1024PngBase64() {
   const width = 1024;
@@ -113,6 +115,14 @@ export function setAiUpstreamJsonResponse(value) {
   aiUpstreamJsonOverride = value === null || value === undefined ? null : JSON.stringify(value);
 }
 
+export function setAiUpstreamUnitDelay(ms) {
+  unitResponseDelayMs = ms;
+}
+
+export function setImageUpstreamDelay(ms) {
+  imageResponseDelayMs = ms;
+}
+
 export function resetAiUpstream() {
   lastChatCompletion = null;
   aiUpstreamCount = 0;
@@ -127,6 +137,8 @@ export function resetAiUpstream() {
   stepfunSearchMockOutcome = "success";
   aiUpstreamForceFail = false;
   aiUpstreamJsonOverride = null;
+  unitResponseDelayMs = 0;
+  imageResponseDelayMs = 0;
 }
 
 export async function startFakeAiUpstream() {
@@ -198,6 +210,7 @@ export async function startFakeAiUpstream() {
     if (isImages) {
       lastImageRequest = body;
       imageUpstreamCount += 1;
+      if (imageResponseDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, imageResponseDelayMs));
       if (aiUpstreamForceFail || String(body.prompt ?? "").includes("AI-UPSTREAM-FAIL-TEST")) {
         response.writeHead(500, { "content-type": "application/json" });
         response.end(JSON.stringify({ error: "upstream_image_failed" }));
@@ -270,6 +283,7 @@ export async function startFakeAiUpstream() {
             units,
           });
         } else if (sys.includes("Unit Specialist") || usr.includes("Generate concrete lectures and sessions")) {
+          if (unitResponseDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, unitResponseDelayMs));
           const isZh = usr.includes("Language: zh-CN") || usr.includes("Simplified Chinese") || /[\u4e00-\u9fa5]/.test(usr);
           const uIdMatch = usr.match(/Unit: "([^"]+)" - "([^"]+)"/);
           const uId = uIdMatch ? uIdMatch[1] : "unit-1";
@@ -424,6 +438,7 @@ export async function startFakeAiUpstream() {
       for (const piece of sseChunks) {
         response.write(`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 1, delta: { type: "text_delta", text: piece } })}\n\n`);
       }
+      response.write(`event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "end_turn" } })}\n\n`);
       response.write(`event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`);
       response.end();
       return;
@@ -844,7 +859,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))

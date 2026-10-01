@@ -1,0 +1,1 @@
+ALTER TABLE `hk_course_tasks` ADD `credit_key` text;

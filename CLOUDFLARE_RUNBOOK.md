@@ -118,12 +118,45 @@ HYPERKNOW_AI_MODEL(可选) HYPERKNOW_AI_BASE_URL(可选) HYPERKNOW_TTS_BASE_URL(
 
 ```bash
 cd X:/zaochang
-npm test                       # 必须 failed=0/skipped=0/todo=0(当前 173 条,以 node:test 输出为准;改 dist 前先跑)
+npm ci
+npx tsc --noEmit
+npm run lint
+npm test                       # failed=0/skipped=0/todo=0;以当次 node:test 输出为准
+npm run db:generate            # 必须无 schema 漂移
+git diff --check
+node scripts/check-env-split.mjs
+npm audit --omit=dev --audit-level=high
+node scripts/check-migrations.mjs   # 有序核对生产 D1 账目
 npm run build                  # 产出 dist/server/index.js + dist/client
-npx wrangler deploy --config wrangler.prod.jsonc
 ```
 
-- `wrangler.prod.jsonc`(生产):`name=zaochang`、`routes=[apex/*, www/*]`、D1/R2/ASSETS 绑定。
+生产默认经 GitHub Actions 的 `release-gates` → `deploy-production` 发布；手动调度也会重跑上述门禁。若有新迁移，先完成下面的 D1 步骤并确认迁移检查通过，再调度部署；不要直接运行 Wrangler 绕过仓库门禁。
+
+**Drizzle 迁移手工步骤**（本仓库使用 Drizzle 账本，`wrangler d1 execute --file` 不会写入 `__drizzle_migrations`）：
+
+```bash
+# 1. 先导出生产快照；文件必须是新路径，保留在本机 ignored 的 backups/ 目录。
+npx wrangler d1 export zaochang-db --remote --config wrangler.prod.jsonc \
+  --output backups/pre-<release>-YYYYMMDD.sql
+# 用 Python sqlite3 执行导出 SQL 后运行 PRAGMA integrity_check，必须输出 ok。
+
+# 2. 只读核对生产账本与目标表结构，按 journal 顺序找出真正缺失的迁移。
+npx wrangler d1 execute zaochang-db --remote --config wrangler.prod.jsonc \
+  --command "SELECT hash, created_at FROM __drizzle_migrations ORDER BY id" --json
+
+# 3. 逐条应用缺失迁移；禁止跳过缺口或用 wrangler d1 migrations apply 创建第二套账本。
+npx wrangler d1 execute zaochang-db --remote --config wrangler.prod.jsonc \
+  --file drizzle/<missing-migration>.sql
+
+# 4. D1 execute 不写 Drizzle 账目。对每个迁移，使用 journal 的 when 和 SQL LF SHA-256 回填：
+node -e "const fs=require('node:fs'),c=require('node:crypto');const p='drizzle/<missing-migration>.sql';const s=fs.readFileSync(p,'utf8').replace(/\r\n/g,'\n');console.log(c.createHash('sha256').update(s).digest('hex'))"
+npx wrangler d1 execute zaochang-db --remote --config wrangler.prod.jsonc \
+  --command "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('<sha256>', <journal.when>)"
+
+# 5. 重跑 scripts/check-migrations.mjs（或 deploy workflow 中相同门禁）确认数量、顺序、hash、时间戳一致。
+```
+
+- `wrangler.prod.jsonc`(生产):`name=zaochang`、`routes=[apex/*, www/*]`、D1/R2/ASSETS 绑定；15 分钟 Cron 重试未引用 Hyperknow 图片对象清理，6 小时 Cron 清理业务过期行。
 - `wrangler.staging.jsonc`(预发):`name=zaochang-staging`,无 routes。
 - **两个文件名都非标准**,是故意的:防止 `@cloudflare/vite-plugin` 自动发现并把 DB/UPLOADS
   绑定重复合并,导致 `npm test` 报「binding 重名」。**不要改名成 `wrangler.toml/jsonc`。**
