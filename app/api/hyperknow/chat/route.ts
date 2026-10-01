@@ -7,7 +7,7 @@ import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/
 import { FALLBACK_GUIDELINE } from "../../_lib/hyperknow/prompts";
 import { saveConversation, getConversation } from "../../_lib/hyperknow/store";
 import { consumeCredits, currentCredits, HK_CHAT_COST, HK_DAILY_CREDITS } from "../../_lib/hyperknow/credits";
-import type { StreamChunk } from "../../_lib/hyperknow/protocol";
+import { decodeRequestBodyJson, type StreamChunk } from "../../_lib/hyperknow/protocol";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,8 @@ export async function POST(request: Request) {
     const member = await requireMember();
     const originError = assertSameOrigin(request);
     if (originError) return originError;
-    const input = (await request.json().catch(() => ({}))) as ChatRequestInput;
+    const rawBody = await request.arrayBuffer();
+    const input = decodeRequestBodyJson<ChatRequestInput>(new Uint8Array(rawBody)) ?? {};
     const message = String(input.message ?? "").trim().slice(0, MAX_MESSAGE_CHARS);
     if (!message) return Response.json({ error: "message_required" }, { status: 400 });
     // mode/ui_language 为原 WS 协议字段,接受但从不分支(原版同样只透传不使用)。
