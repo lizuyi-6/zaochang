@@ -28,12 +28,13 @@ test('feedQueries:同日同轮恒定,换轮/换日出新,恒 3 词且不重复',
   assert.equal(feedQueries('bad-input', 0).length, 3);
 });
 
-test('mergeFeedItems:去重/仅 http(s)/截断 12/域名提取', () => {
+test('mergeFeedItems:去重/仅 http(s)/短标题剔除/截断 12/域名提取', () => {
   const g1 = [
-    { title: 'A', url: 'https://example.com/a?x=1' },
-    { title: 'B', url: 'http://news.org/b' },
-    { title: 'dup', url: 'https://example.com/a' }, // 同去协议 URL,去重
-    { title: 'ftp', url: 'ftp://example.com/f' }, // 非 http(s) 过滤
+    { title: '人工智能新进展报告', url: 'https://example.com/a?x=1' },
+    { title: '航天任务再传捷报', url: 'http://news.org/b' },
+    { title: '人工智能新进展报告续篇', url: 'https://example.com/a' }, // 同去协议 URL,去重
+    { title: '短标题', url: 'https://short.cn/s' }, // 有效字符不足 6,栏目页剔除
+    { title: 'ftp://example.com/f', url: 'ftp://example.com/f' }, // 非 http(s) 过滤
   ];
   const g2 = [
     { title: '', url: 'https://bare.io/c' }, // 空标题回退 URL
@@ -45,8 +46,8 @@ test('mergeFeedItems:去重/仅 http(s)/截断 12/域名提取', () => {
   assert.equal(items[2].title, 'https://bare.io/c');
   // 截断:两组共 20 条只留 12
   const big = mergeFeedItems([
-    Array.from({ length: 15 }, (_, i) => ({ title: `t${i}`, url: `https://x.com/${i}` })),
-    Array.from({ length: 15 }, (_, i) => ({ title: `u${i}`, url: `https://y.com/${i}` })),
+    Array.from({ length: 15 }, (_, i) => ({ title: `新闻标题第${i}号`, url: `https://x.com/${i}` })),
+    Array.from({ length: 15 }, (_, i) => ({ title: `另一批新闻第${i}篇`, url: `https://y.com/${i}` })),
   ]);
   assert.equal(big.length, 12);
   assert.equal(big.every((it) => it.source.includes('.')), true);
@@ -55,12 +56,12 @@ test('mergeFeedItems:去重/仅 http(s)/截断 12/域名提取', () => {
 test('mergeFeedItems:新鲜优先(带时间倒序,无时间按原序垫后)+脏标题剔除', () => {
   const items = mergeFeedItems([
     [
-      { title: '旧闻', url: 'https://old.com/a', time: '2022-01-30 00:00:00' },
-      { title: '无时间', url: 'https://bare.io/d' },
-      { title: '新文', url: 'https://fresh.com/b', time: '2026-09-30T08:00:00' },
-      { title: '坏时间', url: 'https://weird.com/e', time: 'not-a-date' },
+      { title: '两年前的旧闻报道一则', url: 'https://old.com/a', time: '2022-01-30 00:00:00' },
+      { title: '无时间戳的正常报道', url: 'https://bare.io/d' },
+      { title: '昨日的最新研究进展', url: 'https://fresh.com/b', time: '2026-09-30T08:00:00' },
+      { title: '时间字段异常的报道', url: 'https://weird.com/e', time: 'not-a-date' },
       { title: 'FEATURE ![](images/x.jpg)', url: 'https://junk.com/f' }, // 图链脏数据剔除
     ],
   ]);
-  assert.deepEqual(items.map((it) => it.title), ['新文', '旧闻', '无时间', '坏时间']);
+  assert.deepEqual(items.map((it) => it.title), ['昨日的最新研究进展', '两年前的旧闻报道一则', '无时间戳的正常报道', '时间字段异常的报道']);
 });
