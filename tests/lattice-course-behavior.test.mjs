@@ -45,9 +45,9 @@ function loadTsModule(url) {
   return fakeModule.exports;
 }
 
-const data = loadTsModule(new URL("src/replica/data.ts", spa));
-const backend = loadTsModule(new URL("src/replica/backend.ts", spa));
-const joinMemory = loadTsModule(new URL("src/replica/courseJoinMemory.ts", spa));
+const data = loadTsModule(new URL("src/lattice/data.ts", spa));
+const backend = loadTsModule(new URL("src/lattice/backend.ts", spa));
+const joinMemory = loadTsModule(new URL("src/lattice/courseJoinMemory.ts", spa));
 
 test("封面分配策略：按主题精准匹配，杜绝一律话筒封面", () => {
   assert.equal(data.coverForTitle("人工智能导论"), "ai");

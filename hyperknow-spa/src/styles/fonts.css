@@ -1,6 +1,6 @@
-/* Self-hosted fonts for the Hyperknow 1:1 replica.
-   Files live in src/assets/fonts so vite hashes them into the build
-   and resolves URLs against the /lattice/ base automatically. */
+/* 见界自托管字体。
+   文件在 src/assets/fonts,vite 构建时哈希入产物,
+   URL 自动按 /lattice/ base 解析。 */
 
 @font-face {
   font-family: 'Satoshi';

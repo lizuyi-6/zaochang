@@ -52,7 +52,7 @@
 
 ### 3. 白板举手插话后，自动恢复等待被自身暂停状态锁住
 
-位置：[暂停感知计时器](X:/zaochang/hyperknow-spa/src/replica/whiteboard/WhiteboardPage.tsx:503)、[插话暂停](X:/zaochang/hyperknow-spa/src/replica/whiteboard/WhiteboardPage.tsx:838)、[恢复前等待](X:/zaochang/hyperknow-spa/src/replica/whiteboard/WhiteboardPage.tsx:860)。
+位置：[暂停感知计时器](X:/zaochang/hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx:503)、[插话暂停](X:/zaochang/hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx:838)、[恢复前等待](X:/zaochang/hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx:860)。
 
 在线课堂插话先执行 `setLessonPaused(true)`，答疑返回后又 `await wait(5000)`，失败时则等待 1500ms。但 `wait` 只在 `ctl.current.paused === false` 时减少剩余时间；解除暂停位于这个 await 后面。于是成功答疑和失败降级都无法自动恢复，必须有额外用户操作解除暂停/跳过，或退出课堂。
 
@@ -114,7 +114,7 @@
 
 ### 9. 切换聊天会话不清理译文，旧翻译继续写入新页面
 
-位置：[翻译调用](X:/zaochang/hyperknow-spa/src/replica/pages/ChatPage.tsx:220)、[译文渲染](X:/zaochang/hyperknow-spa/src/replica/pages/ChatPage.tsx:466)。
+位置：[翻译调用](X:/zaochang/hyperknow-spa/src/lattice/pages/ChatPage.tsx:220)、[译文渲染](X:/zaochang/hyperknow-spa/src/lattice/pages/ChatPage.tsx:466)。
 
 主聊天流已具备 abort 和会话守卫，这部分不是缺陷。但翻译以消息数组下标为 key，切换会话既不清空 translations，也不取消 translateLive 或检查会话归属。渲染无条件遍历全部译文。
 
@@ -124,7 +124,7 @@
 
 ### 10. 重新打开生成浮层恢复任务，会丢失原先选择的单元范围
 
-位置：[断点登记](X:/zaochang/hyperknow-spa/src/replica/GenerationOverlay.tsx:132)、[恢复交接](X:/zaochang/hyperknow-spa/src/replica/GenerationOverlay.tsx:217)、[后端空选单处理](X:/zaochang/app/api/hyperknow/course-generation/route.ts:143)。
+位置：[断点登记](X:/zaochang/hyperknow-spa/src/lattice/GenerationOverlay.tsx:132)、[恢复交接](X:/zaochang/hyperknow-spa/src/lattice/GenerationOverlay.tsx:217)、[后端空选单处理](X:/zaochang/app/api/hyperknow/course-generation/route.ts:143)。
 
 用户只选择部分单元生成，发生中断后通过“我的课程”的继续入口重新挂载浮层。交接只保留 uuid/query，`selectedUnitIds` 重新初始化为 `[]`，恢复请求就发送空选单。后端把空数组解释为全部蓝图单元；数据库虽有 `selected_units_json`，实际没有写入/恢复选单。
 
@@ -134,7 +134,7 @@
 
 ### 11. 快速测验提示可输入答案，但文字/语音答案没有接入选择题处理器
 
-位置：[提示文案](X:/zaochang/hyperknow-spa/src/replica/whiteboard/Popups.tsx:668)、[文字提交](X:/zaochang/hyperknow-spa/src/replica/whiteboard/WhiteboardPage.tsx:881)、[语音提交](X:/zaochang/hyperknow-spa/src/replica/whiteboard/WhiteboardPage.tsx:905)。
+位置：[提示文案](X:/zaochang/hyperknow-spa/src/lattice/whiteboard/Popups.tsx:668)、[文字提交](X:/zaochang/hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx:881)、[语音提交](X:/zaochang/hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx:905)。
 
 测验等待的是 `choiceResolver`，文字和语音入口却只处理 `answerResolver`。没有普通问答等待时，输入被送进 askTutor。界面中文明确提示“点击一个选项，或直接输入你的答案 / 提问”，实际输入答案不能完成测验，在线课还会触发第 3 项插话问题。
 

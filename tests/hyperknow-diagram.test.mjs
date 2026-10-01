@@ -1,7 +1,7 @@
 // 独立纯 Node 回归测试；使用 --experimental-strip-types 直接加载 TS，不启动浏览器或 Wrangler。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderDiagram } from "../hyperknow-spa/src/replica/whiteboard/diagram.ts";
+import { renderDiagram } from "../hyperknow-spa/src/lattice/whiteboard/diagram.ts";
 
 function nodeBoxes(code) {
   const rendered = renderDiagram(code);

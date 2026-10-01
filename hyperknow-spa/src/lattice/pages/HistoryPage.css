@@ -1,0 +1,171 @@
+/* HistoryPage (hs-) — screenshots 64 / 65 */
+
+.hs-inner {
+  max-width: 1048px; /* 1000px content + 24px side padding */
+  margin: 0 auto;
+  padding: 40px 24px 60px;
+}
+
+/* header row */
+.hs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.hs-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.hs-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.hs-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 250px;
+  height: 32px;
+  padding: 0 14px;
+  background: var(--white);
+  border: 1px solid var(--sand-300);
+  border-radius: 16px;
+  color: var(--ink-300);
+}
+.hs-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink-900);
+}
+.hs-search input::placeholder {
+  color: var(--ink-300);
+}
+.hs-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  background: var(--white);
+  border-radius: 9px;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.08);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-900);
+  transition: background 0.12s;
+}
+.hs-new-btn:hover {
+  background: var(--sand-100);
+}
+
+/* tab bar */
+.hs-tabs {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+.hs-tab {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-500);
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background 0.12s, color 0.12s;
+}
+.hs-tab.active {
+  background: var(--white);
+  border-color: var(--sand-500);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+  color: var(--ink-900);
+  font-weight: 500;
+}
+.hs-filter {
+  margin-left: auto;
+  display: flex;
+  padding: 6px;
+  color: var(--ink-600);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.hs-filter:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* group label */
+.hs-group-label {
+  margin-top: 26px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-300);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  }
+
+/* conversation list card */
+.hs-card {
+  margin-top: 14px;
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+  overflow: hidden;
+}
+.hs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 40px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.hs-row + .hs-row {
+  border-top: 1px solid #f1f2f4;
+}
+.hs-row:hover {
+  background: #fafbfc;
+}
+.hs-row-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hs-row-time {
+  font-size: 12px;
+  color: var(--ink-300);
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+/* sessions empty state */
+.hs-empty {
+  margin-top: 30px;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--ink-300);
+}
+
+/* 交互补齐:排序菜单 */
+.hs-filter { cursor: pointer; }
+.hs-filter-veil { position: fixed; inset: 0; z-index: 88; }
+.hs-sort-menu { position: absolute; top: 40px; left: 190px; z-index: 92; }
+.hs-tabs { position: relative; }
+
+/* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
+.hs-search,.hs-card { background: var(--panel-bg); border-color: var(--border-color); }
+.hs-tab.active { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-border); }
+.hs-new-btn { background: var(--color-primary); color: var(--panel-bg); }
+.hs-title { font-family: var(--font-display); color: var(--color-primary); }

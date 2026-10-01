@@ -19,7 +19,7 @@
 
 品牌标志为打开的书与上方节点。侧栏、课程提供方、引导页与静态图标使用相同构图。课程封面保留原有十个分类标识，各自以社会联系、生命结构、机器学习、人工智能、历史、提示词、心理、考试、哲学和统计为视觉主题；公开演讲封面另以声波与讲台表达。
 
-共享插画入口：`src/replica/illustrations.tsx`。
+共享插画入口：`src/lattice/illustrations.tsx`。
 静态 SVG：`public/`。
 视觉变量：`src/styles/variables.css`。
 

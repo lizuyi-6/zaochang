@@ -2,8 +2,8 @@
 // No server, build, or new dependencies; exercise the public client API with real streams.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chatLive, translateLive, generateCourseLive, fetchCourseDetail } from '../hyperknow-spa/src/replica/backend.ts';
-import { normalizeBackendCourse } from '../hyperknow-spa/src/replica/backend-course.ts';
+import { chatLive, translateLive, generateCourseLive, fetchCourseDetail } from '../hyperknow-spa/src/lattice/backend.ts';
+import { normalizeBackendCourse } from '../hyperknow-spa/src/lattice/backend-course.ts';
 
 const error = { ok: false, reason: 'error' };
 const chunk = { type: 'content_chunk', chunk: '中文🙂' };

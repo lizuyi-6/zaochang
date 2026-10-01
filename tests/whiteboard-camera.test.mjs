@@ -6,7 +6,7 @@ import {
   focusBox,
   computeBoundingBox,
   calculateFocusZoom,
-} from '../hyperknow-spa/src/replica/whiteboard/camera.ts';
+} from '../hyperknow-spa/src/lattice/whiteboard/camera.ts';
 
 test('camera zoom preserves the world point under the gesture anchor', () => {
   const camera = { x: -240, y: 90, zoom: 0.8 };

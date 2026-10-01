@@ -3,7 +3,7 @@ import './styles/variables.css'
 import './styles/fonts.css'
 import './index.css'
 import App from './App.tsx'
-import { prepareI18n } from './replica/i18n'
+import { prepareI18n } from './lattice/i18n'
 
 // NOTE: no StrictMode — its dev-only double effect mount would break the
 // scripted whiteboard player's cancellation model; production is unaffected.
