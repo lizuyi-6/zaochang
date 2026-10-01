@@ -23,6 +23,7 @@ export function ProductCard({ product, index = 0, large = false }: { product: Pr
       <Link className={`deep-product-cover theme-${product.coverTheme}`} href={`/product/${product.slug ?? product.id}`}>
         <CoverImage src={product.image} alt={`${product.title} 作品预览`} />
         <span className="deep-cover-shade" />
+        <span className="deep-product-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
         <motion.span className="deep-cover-play" whileHover={{ scale: 1.08 }}><Play size={18} fill="currentColor" /></motion.span>
         <span className="deep-price">{priceLabel}</span>
         <span className="deep-release">{product.release}</span>

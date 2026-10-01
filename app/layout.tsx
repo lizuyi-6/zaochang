@@ -5,6 +5,12 @@ import { memberInitial } from "./lib/format";
 import { getChatGPTUser } from "./chatgpt-auth";
 import { SiteShell } from "./components/site-shell";
 import "./globals.css";
+/* 编辑排版视觉系统(myui DESIGN-PREFERENCES「暖色编辑工作室」):标题与巨型数字用衬线,
+   @fontsource 按 unicode-range 子集按需下载(首页实际只拉 1-2 个子集文件);正文维持系统无衬线栈。 */
+import "@fontsource/source-serif-4/600.css";
+import "@fontsource/source-serif-4/700.css";
+import "@fontsource/noto-serif-sc/600.css";
+import "@fontsource/noto-serif-sc/900.css";
 
 export const metadata: Metadata = {
   title: { default: "造场 | 创作者的试玩社区", template: "%s | 造场" },

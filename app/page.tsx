@@ -48,15 +48,20 @@ export default async function HomePage() {
   return (
     <div className="home-layout">
       <div className="home-main">
-        <section className="home-stage">
-          <div className="home-stage-copy">
-            <span className="deep-eyebrow"><Users size={14} /> {stats ? `${stats.members} 位社区成员` : "社区数据暂不可用"}</span>
-            <h1>
-              <BlurText text="今天，大家" animateBy="letters" delay={70} />
-              <BlurText text="都在造什么" animateBy="letters" delay={70} />
-            </h1>
-            <p>这里没有“等待发布”的作品。每个想法都从一个能被试玩、被讨论的版本开始。</p>
-            <div className="home-stage-actions">
+        <section className="home-masthead">
+          <div className="masthead-meta">
+            <span className="meta-live"><span className="live-pulse" aria-hidden="true" /><Users size={13} /> {stats ? `${stats.members} 位社区成员` : "社区数据暂不可用"}</span>
+            <span>创刊号 · VOL.01</span>
+            <span>ZAOCHANG / COMMUNITY PRESS · 2026</span>
+          </div>
+          <h1 className="masthead-title">
+            <span className="masthead-mark" aria-hidden="true">※</span>
+            <BlurText text="今天，大家" animateBy="letters" delay={70} />
+            <BlurText text="都在造什么" animateBy="letters" delay={70} />
+          </h1>
+          <div className="masthead-body">
+            <p className="masthead-lede">这里没有“等待发布”的作品。每个想法都从一个能被试玩、被讨论的版本开始。</p>
+            <div className="masthead-actions">
               <Magnet magnetStrength={3} padding={70}>
                 <Link className="primary-action" href="/discover">进入现场 <ArrowRight size={17} /></Link>
               </Magnet>
@@ -64,30 +69,35 @@ export default async function HomePage() {
               <Link className="text-action" href="/studio/new">带一件作品来</Link>
             </div>
           </div>
-
-          <StageParallax className="home-stage-visual" aria-label="社区作品预览">
-            <div className="stage-grid-lines" aria-hidden="true" data-depth="" style={depthStyle(4)} />
-            <div className="floating-work work-focus" aria-hidden="true" data-depth="" style={depthStyle(16)}>
-              <span>MORI / DEEP FOCUS</span><strong>42:18</strong><i><b /></i><small>森林正在生长</small>
-            </div>
-            <div className="floating-work work-type" aria-hidden="true" data-depth="" style={depthStyle(26)}><span>字浪</span><strong>呼<br />吸</strong><small>WEIGHT 72 / FLOW 48</small></div>
-            <a className="floating-work work-hyperknow" href="/lattice/" aria-label="进入见界学习 Agent" data-depth="" style={depthStyle(11)}>
-              <span>JIANJIE / AGENT</span><strong>AI<br />研学</strong><small>白板授课 · 举手插话 ↗</small>
-            </a>
-            <div className="floating-work work-loop" aria-hidden="true" data-depth="" style={depthStyle(21)}><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>
-            <div className="stage-orbit orbit-one" aria-hidden="true" data-depth="" style={depthStyle(6)} /><div className="stage-orbit orbit-two" aria-hidden="true" data-depth="" style={depthStyle(8)} />
-            <span className="stage-coordinate coordinate-one" aria-hidden="true" data-depth="" style={depthStyle(3)}>X 31.42 / Y 18.07</span>
-            <span className="stage-coordinate coordinate-two" aria-hidden="true" data-depth="" style={depthStyle(3)}>SIGNAL / OPEN</span>
-            <Link className="galaxy-gateway" href="/galaxy" aria-label="进入造场产品银河">
-              <span className="galaxy-gateway-sky" aria-hidden="true"><i /><i /><b /></span>
-              <span className="galaxy-gateway-copy">
-                <small>PRODUCT / ECOSYSTEM</small>
-                <strong>产品银河</strong>
-                <em>EXPLORE <ArrowUpRight size={13} /></em>
-              </span>
-            </Link>
-          </StageParallax>
         </section>
+
+        <StageParallax className="home-stage-visual" aria-label="社区作品预览">
+          <div className="stage-grid-lines" aria-hidden="true" data-depth="" style={depthStyle(4)} />
+          {/* 珊瑚几何星芒:PULSAR 式四角星构成,舞台视觉锚点(用户明确喜欢的标识语言)。 */}
+          <svg className="stage-star" viewBox="0 0 340 340" width="340" height="340" aria-hidden="true" data-depth="" style={depthStyle(10)}>
+            <path d="M170 8 L204 136 L332 170 L204 204 L170 332 L136 204 L8 170 L136 136 Z" fill="currentColor" />
+            <circle cx="170" cy="170" r="26" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+          <div className="floating-work work-focus" aria-hidden="true" data-depth="" style={depthStyle(16)}>
+            <span>MORI / DEEP FOCUS</span><strong>42:18</strong><i><b /></i><small>森林正在生长</small>
+          </div>
+          <div className="floating-work work-type" aria-hidden="true" data-depth="" style={depthStyle(26)}><span>字浪</span><strong>呼<br />吸</strong><small>WEIGHT 72 / FLOW 48</small></div>
+          <a className="floating-work work-hyperknow" href="/lattice/" aria-label="进入见界学习 Agent" data-depth="" style={depthStyle(11)}>
+            <span>JIANJIE / AGENT</span><strong>AI<br />研学</strong><small>白板授课 · 举手插话 ↗</small>
+          </a>
+          <div className="floating-work work-loop" aria-hidden="true" data-depth="" style={depthStyle(21)}><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>
+          <div className="stage-orbit orbit-one" aria-hidden="true" data-depth="" style={depthStyle(6)} /><div className="stage-orbit orbit-two" aria-hidden="true" data-depth="" style={depthStyle(8)} />
+          <span className="stage-coordinate coordinate-one" aria-hidden="true" data-depth="" style={depthStyle(3)}>X 31.42 / Y 18.07</span>
+          <span className="stage-coordinate coordinate-two" aria-hidden="true" data-depth="" style={depthStyle(3)}>SIGNAL / OPEN</span>
+          <Link className="galaxy-gateway" href="/galaxy" aria-label="进入造场产品银河">
+            <span className="galaxy-gateway-sky" aria-hidden="true"><i /><i /><b /></span>
+            <span className="galaxy-gateway-copy">
+              <small>PRODUCT / ECOSYSTEM</small>
+              <strong>产品银河</strong>
+              <em>EXPLORE <ArrowUpRight size={13} /></em>
+            </span>
+          </Link>
+        </StageParallax>
 
         <section className="home-signal-strip">
           <div><span>社区成员</span><strong><Metric value={stats?.members ?? null} /></strong><small><Users size={12} /> 账号记录</small></div>
@@ -103,14 +113,14 @@ export default async function HomePage() {
         </Reveal>
 
         <section className="home-section">
-          <div className="deep-section-heading"><div><span className="deep-eyebrow"><Flame size={14} /> 产品精选</span><h2>现在可以直接体验</h2></div><Link href="/discover">查看全部 <ArrowRight size={15} /></Link></div>
+          <div className="deep-section-heading"><div><span className="deep-eyebrow"><Flame size={14} /> SEC. 01 · 产品精选</span><h2>现在可以直接体验</h2></div><Link href="/discover">查看全部 <ArrowRight size={15} /></Link></div>
           <div className="home-product-grid">
             {products.slice(0, 4).map((product, index) => <ProductCard key={product.id} product={product} index={index} large={index === 0} />)}
           </div>
         </section>
 
         <Reveal className="home-community-band">
-          <div className="community-band-copy"><span className="deep-eyebrow"><Radio size={14} /> 社区现场</span><h2>作品发布以后，故事才真正开始。</h2><p>版本反馈、失败记录、共创招募和突然出现的新方向，都发生在作品页之外。</p><Link className="primary-action light" href="/feed">进入动态 <ArrowRight size={16} /></Link></div>
+          <div className="community-band-copy"><span className="deep-eyebrow"><Radio size={14} /> SEC. 02 · 社区现场</span><h2>作品发布以后，故事才真正开始。</h2><p>版本反馈、失败记录、共创招募和突然出现的新方向，都发生在作品页之外。</p><Link className="primary-action light" href="/feed">进入动态 <ArrowRight size={16} /></Link></div>
           <div className="community-band-feed">
             {recentPosts.map((post) => <article key={post.id}><span className={`deep-avatar ${post.color}`}>{post.ownerInitial}</span><div><strong>{post.ownerName}</strong><small>{post.createdAt}</small><p>{post.content}</p><span><Heart size={13} /> {post.likes} <b>·</b> {post.comments} 条讨论</span></div></article>)}
             {recentPosts.length === 0 && <div className="community-band-empty"><Radio size={19} /><strong>还没有公开动态</strong><span>第一条真实过程记录发布后会出现在这里。</span></div>}
