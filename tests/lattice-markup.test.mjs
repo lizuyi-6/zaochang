@@ -123,3 +123,34 @@ test('生产实测样本(E2E 发现的渲染 bug 原文形态)', () => {
   assert.equal(blocks[0].kind, 'p');
   assert.equal(blocks[1].kind, 'section');
 });
+
+test('HTML 表格:th 进表头,td 进表体,单元格保留行内样式', () => {
+  const blocks = parseMarkup(
+    '<div content-section="application"><p>推荐:</p><table><tr><th>场景</th><th>选择</th></tr><tr><td><strong>人像</strong></td><td>f/1.8</td></tr><tr><td>风光</td><td>f/8</td></tr></table></div>',
+  );
+  assert.equal(blocks.length, 1);
+  const sec = blocks[0];
+  const table = sec.blocks[1];
+  assert.equal(table.kind, 'table');
+  assert.deepEqual(table.head.map((c) => c.map((i) => i.text)), [['场景'], ['选择']]);
+  assert.equal(table.rows.length, 2);
+  assert.equal(table.rows[0][0][0].text, '人像');
+  assert.equal(table.rows[0][0][0].bold, true);
+  assert.equal(table.rows[1][1][0].text, 'f/8');
+  // 标签间纯空白不生成幽灵单元格(容器内形态)
+  const loose = parseMarkup('<div><table>\n  <tr>\n    <td>a</td>\n    <td>b</td>\n  </tr>\n</table></div>');
+  assert.equal(loose[0].kind, 'table');
+  assert.equal(loose[0].rows.length, 1);
+  assert.equal(loose[0].rows[0].length, 2);
+});
+
+test('整段仅一个公式的 <p> 升格为数学块(生产 core_equations 实测形态)', () => {
+  const blocks = parseMarkup(
+    '<div content-section="core_equations"><p>$$R(D) = min(Q)$$</p><p>其中 $R$ 是码率。</p></div>',
+  );
+  const [math, p] = blocks[0].blocks;
+  assert.equal(math.kind, 'math');
+  assert.equal(math.text, 'R(D) = min(Q)');
+  assert.equal(p.kind, 'p');
+  assert.equal(p.inlines.length, 3);
+});

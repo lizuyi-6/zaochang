@@ -62,3 +62,7 @@ next-env.d.ts
 
 # 宣传片媒体素材(3.6G 视频/音频,不入库)
 /promo/
+
+# 临时验收产物(cookie/流抓包等)一律不入库
+.tmp-*
+hyperknow-spa/.ssr-harness.mjs
