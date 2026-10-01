@@ -1241,7 +1241,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           setZoom(z);
           setIsFollowing(false);
         }}
-        page={panX > 0 ? 2 : 1}
+        page={lesson.pageSplitX ? (panX > 0 ? 2 : 1) : 1}
         pageCount={lesson.pageSplitX ? 2 : 1}
         onPage={(p) => {
           setPanX(p <= 1 ? 0 : PAN_X);
