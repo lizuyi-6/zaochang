@@ -239,6 +239,9 @@ npx wrangler secret delete ZAOCHANG_AGENT_TOKEN --config wrangler.prod.jsonc
 - **永不开放**:DELETE、财务(/api/payments、/api/v1/fruit/*)、uploads、oauth —— 不可逆与资金操作人类专属。
 - token 未配置时整条通道静默不存在(零行为变化);Bearer 头浏览器不会自动携带,无 CSRF 面
  (同源断言对 agent 豁免,cookie 会话照常校验)。契约测试:tests/agent-admin-api.test.mjs。
+- **视觉验收(浏览器过门禁)**:`GET /api/admin/visual-session`(带 Bearer)→ 返回一次性入场
+  URL(HMAC 票,10 分钟 TTL)→ 浏览器访问该 URL → 植入正式会话 cookie 并 302 进 /lattice/。
+  用于自动化截图/上线前视觉验收(2026-10-01 已跑通全 12 路由)。
 
 ## 7. 排障速查
 
