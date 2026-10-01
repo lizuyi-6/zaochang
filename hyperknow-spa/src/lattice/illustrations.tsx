@@ -15,12 +15,63 @@ export const Sparkle: React.FC<{ x: number; y: number; s?: number; color?: strin
   />
 );
 
+/* ---------------- 种子哈希与饰层(封面唯一性的引擎) ---------------- */
+
+/** FNV-1a:同一种子恒定同一封面,不同课程(标题/UUID)得到不同饰层与构图。 */
+export const hashSeed = (seed: string | number): number => {
+  const s = String(seed);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+};
+
+/** 种子驱动的星座饰层:3-5 枚记号落在上下边带,符号取自六种排印记号。 */
+const Constellation: React.FC<{ h: number; ink: string; acc: string }> = ({ h, ink: ik, acc }) => {
+  const marks: React.ReactNode[] = [];
+  const count = 3 + ((h >>> 7) % 3);
+  for (let i = 0; i < count; i++) {
+    const v = h >>> (10 + i * 3);
+    const x = 20 + (v % 161);
+    const below = (v >>> 3) % 2 === 1;
+    const y = below ? 109 + ((v >>> 4) % 15) : 16 + ((v >>> 4) % 13);
+    const kind = (v >>> 6) % 6;
+    const key = `c${i}`;
+    if (kind === 0) marks.push(<circle key={key} cx={x} cy={y} r={1.9} fill={ik} fillOpacity=".5" />);
+    else if (kind === 1) marks.push(<circle key={key} cx={x} cy={y} r={2.8} stroke={acc} strokeWidth="1.3" fill="none" />);
+    else if (kind === 2) marks.push(<path key={key} d={`M${x - 3} ${y} h6 M${x} ${y - 3} v6`} stroke={ik} strokeOpacity=".55" strokeWidth="1.2" strokeLinecap="round" />);
+    else if (kind === 3) marks.push(<path key={key} d={`M${x} ${y - 3.2} L${x + 2.5} ${y} L${x} ${y + 3.2} L${x - 2.5} ${y} Z`} fill={acc} fillOpacity=".9" />);
+    else if (kind === 4) marks.push(<Sparkle key={key} x={x} y={y} s={3.4} color={acc} />);
+    else marks.push(<path key={key} d={`M${x - 4} ${y} h8`} stroke={ik} strokeOpacity=".45" strokeWidth="1.3" strokeLinecap="round" />);
+  }
+  return <>{marks}</>;
+};
+
+/** 种子驱动的框角饰:四角 L 刻线 或 藏书票缎带 + 双划线。 */
+const CornerDress: React.FC<{ h: number; ink: string; acc: string }> = ({ h, ink: ik, acc }) =>
+  (h >>> 5) & 1 ? (
+    <>
+      <path d="M15 23 V16 H22 M178 23 V16 H171 M15 117 V124 H22 M178 117 V124 H171" stroke={ik} strokeOpacity=".4" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+    </>
+  ) : (
+    <>
+      <path d="M170 10 v13 l-5 -4 -5 4 V10 Z" fill={acc} fillOpacity=".92" />
+      <path d="M22 125 h28 M22 128 h16" stroke={ik} strokeOpacity=".4" strokeWidth="1.2" strokeLinecap="round" />
+    </>
+  );
+
 /** Shared open-page mark. Keep span > svg + span for mark-only CSS. */
 export const Logo: React.FC<{ size?: number }> = ({ size = 24 }) => (
   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
     <svg width={size} height={size * 0.9} viewBox="0 0 32 32" fill="none" role="img" aria-label="见界 · LATTICE" focusable="false">
+      {/* 双页书:外廓 + 内页弧线 + 书脊缝线 + 琥珀日轮与光晖 */}
       <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke={ink} strokeWidth="1.8" strokeLinejoin="round" fill={paper} />
-      <path d="M16 10v18 M16 6v4" stroke={ink} strokeWidth="1.8" /><circle cx="16" cy="4" r="2" fill={amber} />
+      <path d="M6 12.5c2.6-.5 5.4-.2 7.4 1M6 17c2.6-.5 5.4-.2 7.4 1M6 21.5c2.6-.5 5.4-.2 7.4 1M18.6 13.5c2-1.2 4.8-1.5 7.4-1M18.6 18c2-1.2 4.8-1.5 7.4-1M18.6 22.5c2-1.2 4.8-1.5 7.4-1" stroke={ink} strokeOpacity=".4" strokeWidth="1" strokeLinecap="round" />
+      <path d="M16 10v18M16 6v4" stroke={ink} strokeWidth="1.8" />
+      <circle cx="16" cy="4" r="2" fill={amber} />
+      <path d="M12.4 2.6 11.6 1.6M19.6 2.6l.8-1M13.6 0.6 q2.4 -1 4.8 0" stroke={amber} strokeWidth="1" strokeLinecap="round" fill="none" />
     </svg>
     <span style={{ fontWeight: 700, fontSize: size * 0.75, letterSpacing: '0.04em', color: ink, whiteSpace: 'nowrap' }}>见界 · LATTICE</span>
   </span>
@@ -29,12 +80,21 @@ export const Logo: React.FC<{ size?: number }> = ({ size = 24 }) => (
 /** Orbiting atlas guide, retaining its legacy public name. */
 export const Ufo: React.FC<{ size?: number }> = ({ size = 70 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size * 0.62} viewBox="0 0 100 62" fill="none">
+    {/* 星野 + 光晕 */}
     <circle cx="50" cy="30" r="23" fill={sage} opacity="0.25" />
+    <Sparkle x={12} y={12} s={3} color={amber} /><Sparkle x={90} y={18} s={2.6} color={ink} /><circle cx="82" cy="8" r="1.3" fill={sage} />
+    {/* 碟身:舱体 + 舷窗 + 观测灯 */}
     <ellipse cx="50" cy="33" rx="42" ry="13" transform="rotate(-12 50 33)" stroke={rule} />
+    <ellipse cx="50" cy="34.5" rx="40" ry="10" transform="rotate(-12 50 33)" stroke={rule} strokeOpacity=".4" strokeWidth="0.8" />
     <path d="M50 45 Q37 36 23 39 V16 Q38 14 50 24 Q62 14 77 16 V39 Q63 36 50 45Z" fill={paper} stroke={ink} strokeWidth="1.8" strokeLinejoin="round" />
     <path d="M50 24 V45 M29 23 Q39 22 44 28 M29 29 Q38 28 44 34 M56 28 Q64 22 71 23 M56 34 Q64 28 71 29" stroke={ink} strokeWidth="1.2" />
+    <circle cx="31" cy="41" r="1.6" fill={amber} /><circle cx="68" cy="35" r="1.6" fill={amber} />
+    {/* 牵引光束吊起一本小书 */}
+    <path d="M30 40 22 56 M40 37 38 57" stroke={amber} strokeWidth="1" strokeDasharray="2 2.6" />
+    <path d="M24 60 h12 v8 h-12 z M27 60 v8 M33 60 v8" fill={paper} stroke={ink} strokeWidth="1.2" />
     <path d="M18 44 L50 10 L83 39" stroke={ink} strokeDasharray="2 4" />
-    <circle cx="50" cy="10" r="4" fill={amber} /><circle cx="18" cy="44" r="2.5" fill={ink} /><circle cx="83" cy="39" r="2.5" fill={ink} />
+    <circle cx="50" cy="10" r="4" fill={amber} /><circle cx="50" cy="10" r="6.4" stroke={amber} strokeWidth="0.8" fill="none" strokeOpacity=".6" />
+    <circle cx="18" cy="44" r="2.5" fill={ink} /><circle cx="83" cy="39" r="2.5" fill={ink} />
   </svg>
 );
 
@@ -56,117 +116,165 @@ export const UfoBadge: React.FC<{ size?: number }> = ({ size = 96 }) => (
   </div>
 );
 
-/** Rocket-riding girl (onboarding steps 2/3). */
+/** Rocket-riding girl (onboarding steps 2/3) — 精绘:舷窗环、铆钉、围巾、云絮。 */
 export const RocketGirl: React.FC<{ size?: number }> = ({ size = 170 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 170 170" fill="none">
     <circle cx="88" cy="88" r="62" fill={sage} opacity="0.16" />
     <path d="M26 154 H150 M26 159 H48" stroke={rule} strokeWidth="0.8" />
+    <Sparkle x={140} y={40} s={6} /><Sparkle x={30} y={50} s={5} /><Sparkle x={120} y={140} s={5} />
+    <circle cx={150} cy={70} r={1.6} fill={sage} /><circle cx={22} cy={92} r={1.6} fill={sage} /><path d="M146 118 q5 -3 9 0" stroke={rule} strokeWidth="1.2" fill="none" strokeLinecap="round" />
     {/* motion squiggles */}
     <path d="M18 118 q6 -4 12 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
     <path d="M14 130 q7 -5 14 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
-    {/* rocket body */}
-    <path d="M60 108 Q100 128 138 96 Q142 92 138 88 Q98 60 62 88 Q52 96 60 108 Z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
-    {/* rocket nose + fins in periwinkle */}
-    <path d="M138 96 Q152 92 150 84 Q140 80 132 86 Z" fill="#B3A284" stroke={ink} strokeWidth="2" />
-    <path d="M64 106 Q52 118 44 112 Q50 100 60 96 Z" fill="#B3A284" stroke={ink} strokeWidth="2" />
-    <circle cx="112" cy="92" r="7" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
-    {/* flames */}
+    {/* rocket body:纸色舱体 + 铆钉 + 舷窗环 */}
+    <path d="M60 108 Q100 128 138 96 Q142 92 138 88 Q98 60 62 88 Q52 96 60 108 Z" fill={paper} stroke={ink} strokeWidth="2.4" />
+    <path d="M66 96 Q98 114 130 94" stroke={ink} strokeOpacity=".25" strokeWidth="1" fill="none" />
+    <circle cx="76" cy="98" r="1.1" fill={ink} fillOpacity=".5" /><circle cx="122" cy="104" r="1.1" fill={ink} fillOpacity=".5" /><circle cx="99" cy="113" r="1.1" fill={ink} fillOpacity=".5" />
+    {/* rocket nose + fins */}
+    <path d="M138 96 Q152 92 150 84 Q140 80 132 86 Z" fill={sage} stroke={ink} strokeWidth="2" />
+    <path d="M64 106 Q52 118 44 112 Q50 100 60 96 Z" fill={sage} stroke={ink} strokeWidth="2" />
+    <circle cx="112" cy="92" r="7" fill={paper} stroke={ink} strokeWidth="2" />
+    <circle cx="112" cy="92" r="4.2" fill="#EAF0F6" stroke={ink} strokeWidth="1" />
+    {/* flames + 云絮 */}
     <path d="M52 100 q-14 2 -22 12 M54 106 q-10 6 -14 14" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
-    {/* rider: body */}
+    <path d="M36 118 q4 -4 8 -1 q2 -4 7 -2" stroke={sage} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    {/* rider: body + 围巾 */}
     <path d="M88 84 q-2 -18 6 -26" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
-    <circle cx="98" cy="48" r="9" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
-    {/* hair bun */}
+    <path d="M92 60 q8 4 14 2 M92 62 q7 6 13 5" stroke={amber} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+    <circle cx="98" cy="48" r="9" fill={paper} stroke={ink} strokeWidth="2.2" />
+    <circle cx="95.5" cy="47" r="1.1" fill={ink} /><path d="M96 52 q2.5 1.8 5 .4" stroke={ink} strokeWidth="1.2" fill="none" strokeLinecap="round" />
+    {/* hair bun + 飞发 */}
     <circle cx="104" cy="40" r="4.5" fill={ink} />
     <path d="M90 46 q8 -10 16 -2" stroke={ink} strokeWidth="2" fill={ink} />
-    {/* raised waving arm */}
+    <path d="M88 40 q-5 -2 -7 -6 M89 43 q-6 0 -9 -3" stroke={ink} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+    {/* raised waving arm + pencil hand */}
     <path d="M92 62 q-10 -12 -16 -20" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    {/* pencil/pointer in other hand */}
     <path d="M94 64 q10 2 18 6" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    <path d="M112 70 l10 3 -8 4 z" fill="#D9A441" stroke={ink} strokeWidth="1.4" />
+    <path d="M112 70 l10 3 -8 4 z" fill={amber} stroke={ink} strokeWidth="1.4" />
     {/* legs side-saddle */}
     <path d="M88 84 q-8 8 -16 12 M90 86 q-4 10 -12 16" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    <Sparkle x={140} y={40} s={6} /><Sparkle x={30} y={50} s={5} /><Sparkle x={120} y={140} s={5} />
   </svg>
 );
 
-/** Astronaut (onboarding step 5 top illustration). */
+/** Astronaut (onboarding step 5 top illustration) — 精绘:背包、导管、胸牌、系绳。 */
 export const Astronaut: React.FC<{ size?: number }> = ({ size = 105 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size * 1.1} viewBox="0 0 105 115" fill="none">
     <circle cx="52" cy="55" r="43" fill={sage} opacity="0.16" />
     <path d="M9 102 H95 M9 107 H31" stroke={rule} strokeWidth="0.8" />
-    <circle cx="52" cy="34" r="14" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
-    <circle cx="52" cy="34" r="9" fill="#F2E8D4" stroke={ink} strokeWidth="1.6" />
-    <path d="M44 52 q8 -6 16 0 l4 20 q-12 6 -24 0 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
-    <path d="M42 58 q-12 2 -18 -8 M62 58 q12 0 16 -10" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    <path d="M46 74 q-4 12 -12 18 M58 74 q2 12 10 18" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     <Sparkle x={16} y={20} s={5} /><Sparkle x={90} y={16} s={6} /><Sparkle x={88} y={60} s={4} />
+    <circle cx={20} cy={44} r={1.5} fill={sage} /><circle cx={86} cy={40} r={1.3} fill={ink} fillOpacity=".6" />
+    {/* backpack + 导管 */}
+    <rect x="36" y="46" width="32" height="22" rx="6" fill="#EFE6CE" stroke={ink} strokeWidth="1.6" />
+    <path d="M40 68 q0 8 8 9 M64 68 q0 8 -8 9" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    {/* helmet + 面罩反光 */}
+    <circle cx="52" cy="34" r="14" fill={paper} stroke={ink} strokeWidth="2.2" />
+    <circle cx="52" cy="34" r="9" fill="#F2E8D4" stroke={ink} strokeWidth="1.6" />
+    <path d="M47 29 a7 7 0 0 1 7 -2" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" opacity=".9" />
+    <circle cx="52" cy="34" r="1.2" fill={ink} /><path d="M50 38 h4" stroke={ink} strokeWidth="1" strokeLinecap="round" opacity=".7" />
+    {/* torso + 胸牌按钮 */}
+    <path d="M44 52 q8 -6 16 0 l4 20 q-12 6 -24 0 z" fill={paper} stroke={ink} strokeWidth="2.2" />
+    <rect x="48" y="58" width="8" height="5" rx="1.2" fill={amber} stroke={ink} strokeWidth="0.9" />
+    <circle cx="49" cy="66" r="0.9" fill={ink} /><circle cx="52.5" cy="66" r="0.9" fill={ink} /><circle cx="56" cy="66" r="0.9" fill={ink} />
+    {/* arms + 系绳到浮游扳手 */}
+    <path d="M42 58 q-12 2 -18 -8 M62 58 q12 0 16 -10" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+    <path d="M78 48 q10 -4 12 2" stroke={ink} strokeWidth="1" strokeDasharray="2 2.4" fill="none" />
+    <path d="M90 46 h6 M93 43.5 v5" stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
+    {/* legs + 漂浮环 */}
+    <path d="M46 74 q-4 12 -12 18 M58 74 q2 12 10 18" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     <circle cx="20" cy="90" r="6" stroke={ink} strokeWidth="1.8" fill="#F2E8D4" />
-    <circle cx="92" cy="94" r="4" stroke={ink} strokeWidth="1.6" fill="#F7F1E4" />
+    <circle cx="20" cy="90" r="2.4" stroke={ink} strokeWidth="1" fill="none" />
+    <circle cx="92" cy="94" r="4" stroke={ink} strokeWidth="1.6" fill={paper} />
   </svg>
 );
 
-/** Person writing at desk with 5 stars (onboarding step 6 / "Still there?" popup). */
+/** Person writing at desk with 5 stars — 精绘:稿纸行、墨水瓶、蒸汽杯、书立。 */
 export const DeskWriter: React.FC<{ size?: number; stars?: boolean }> = ({ size = 110, stars = true }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 110 110" fill="none">
     <circle cx="55" cy="62" r="38" fill={sage} opacity="0.16" />
     <path d="M17 104 H93 M17 109 H39" stroke={rule} strokeWidth="0.8" />
-    {/* 5 stars arc */}
     {stars && [22, 38, 54, 70, 86].map((x, i) => (
-      <path key={i} d={`M ${x} ${16 + Math.abs(i - 2) * 3} l2.2 4.4 4.8 0.7 -3.5 3.4 0.8 4.8 -4.3 -2.2 -4.3 2.2 0.8 -4.8 -3.5 -3.4 4.8 -0.7 z`} fill="#D9A441" stroke={ink} strokeWidth="1.2" />
+      <path key={i} d={`M ${x} ${16 + Math.abs(i - 2) * 3} l2.2 4.4 4.8 0.7 -3.5 3.4 0.8 4.8 -4.3 -2.2 -4.3 2.2 0.8 -4.8 -3.5 -3.4 4.8 -0.7 z`} fill={amber} stroke={ink} strokeWidth="1.2" />
     ))}
-    {/* head */}
-    <circle cx="55" cy="46" r="8" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
+    {/* head + 鬓发 */}
+    <circle cx="55" cy="46" r="8" fill={paper} stroke={ink} strokeWidth="2.2" />
     <circle cx="60" cy="39" r="4" fill={ink} />
     <path d="M47 44 q8 -9 16 -2" stroke={ink} strokeWidth="2" fill={ink} />
+    <circle cx="52.5" cy="46" r="0.9" fill={ink} /><path d="M53 50 q2 1.4 4 .4" stroke={ink} strokeWidth="1" fill="none" strokeLinecap="round" />
     {/* body leaning over desk */}
     <path d="M50 56 q-8 10 -6 22" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
-    {/* arm writing */}
+    {/* arm writing + 笔尖轨迹 */}
     <path d="M52 60 q10 4 14 12" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     <path d="M66 72 l4 8" stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
-    {/* desk */}
+    <path d="M70 81 q3 1 5 0" stroke={ink} strokeWidth="0.9" fill="none" strokeLinecap="round" opacity=".7" />
+    {/* desk + 桌腿撑 */}
     <path d="M14 84 h82" stroke={ink} strokeWidth="2.6" strokeLinecap="round" />
     <path d="M20 84 v14 M90 84 v14" stroke={ink} strokeWidth="2.2" strokeLinecap="round" />
-    {/* notebook */}
-    <path d="M56 78 h22 v6 h-22 z" fill="#F7F1E4" stroke={ink} strokeWidth="1.8" />
-    {/* pencil cup */}
-    <path d="M24 72 h10 v12 h-10 z" fill="#F7F1E4" stroke={ink} strokeWidth="1.8" />
+    <path d="M20 90 h6 M84 90 h6" stroke={ink} strokeOpacity=".35" strokeWidth="1.2" strokeLinecap="round" />
+    {/* notebook with ruled lines */}
+    <path d="M56 78 h22 v6 h-22 z" fill={paper} stroke={ink} strokeWidth="1.8" />
+    <path d="M59 80 h15 M59 82 h10" stroke={ink} strokeOpacity=".45" strokeWidth="0.9" strokeLinecap="round" />
+    {/* pencil cup + 墨水瓶 */}
+    <path d="M24 72 h10 v12 h-10 z" fill={paper} stroke={ink} strokeWidth="1.8" />
     <path d="M27 72 l-2 -8 M31 72 l3 -8" stroke={ink} strokeWidth="1.4" strokeLinecap="round" />
-    {/* book stack */}
-    <path d="M84 76 h14 M86 80 h12" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M40 78 h8 v6 h-8 z" fill="#EFE6CE" stroke={ink} strokeWidth="1.3" />
+    <path d="M42 78 v-2 h4 v2" stroke={ink} strokeWidth="1.2" fill="none" />
+    {/* 蒸汽咖啡 + 书立 */}
+    <path d="M28 60 h7 v-5 h-7 z" fill={paper} stroke={ink} strokeWidth="1.1" />
+    <path d="M30 53 q1.4 -2 0 -4 M33 53 q1.4 -2 0 -4" stroke={sage} strokeWidth="1" fill="none" strokeLinecap="round" />
+    <path d="M84 76 h14 M86 80 h12 M88 84 h8" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M97 76 v8" stroke={ink} strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
 
-/** Person sitting cross-legged petting a cat (onboarding step 8). */
+/** Person sitting cross-legged petting a cat — 精绘:虎纹猫、毛线球、盆栽、爱心。 */
 export const CatPerson: React.FC<{ size?: number }> = ({ size = 105 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size * 0.85} viewBox="0 0 105 90" fill="none">
     <circle cx="53" cy="45" r="36" fill={sage} opacity="0.16" />
     <path d="M17 85 H89 M17 90 H39" stroke={rule} strokeWidth="0.8" />
-    <circle cx="42" cy="22" r="9" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
+    <circle cx="42" cy="22" r="9" fill={paper} stroke={ink} strokeWidth="2.2" />
     <path d="M33 20 q9 -11 18 -1" stroke={ink} strokeWidth="2.2" fill={ink} />
+    <circle cx="39.5" cy="22.5" r="0.9" fill={ink} /><path d="M40 26.5 q2 1.4 4 .3" stroke={ink} strokeWidth="0.9" fill="none" strokeLinecap="round" />
     <path d="M36 34 q-6 14 2 24" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
-    {/* crossed legs */}
-    <path d="M24 66 q14 -8 28 0 q-14 8 -28 0 Z" fill="#F7F1E4" stroke={ink} strokeWidth="2.2" />
+    {/* crossed legs + 衣褶 */}
+    <path d="M24 66 q14 -8 28 0 q-14 8 -28 0 Z" fill={paper} stroke={ink} strokeWidth="2.2" />
     <path d="M38 60 q10 -6 20 0" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+    <path d="M30 63 q6 -2.4 10 -1 M46 63 q5 -1.8 9 0" stroke={ink} strokeOpacity=".35" strokeWidth="1" fill="none" strokeLinecap="round" />
     {/* arm petting */}
     <path d="M44 42 q14 4 22 12" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    {/* cat */}
-    <ellipse cx="80" cy="62" rx="13" ry="8" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
-    <circle cx="90" cy="55" r="6" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
-    <path d="M87 50 l-2 -5 4 3 M93 50 l2 -5 -4 3" fill="#F7F1E4" stroke={ink} strokeWidth="1.6" />
-    <path d="M68 60 q-8 -2 -10 -8" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
+    {/* cat:耳簇、虎纹、尾弯 */}
+    <ellipse cx="80" cy="62" rx="13" ry="8" fill={paper} stroke={ink} strokeWidth="2" />
+    <path d="M74 57 q4 -1.6 7 0 M72 62 q4 -1.6 8 0" stroke={ink} strokeOpacity=".4" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+    <circle cx="90" cy="55" r="6" fill={paper} stroke={ink} strokeWidth="2" />
+    <path d="M87 50 l-2 -5 4 3 M93 50 l2 -5 -4 3" fill={paper} stroke={ink} strokeWidth="1.6" />
+    <circle cx="92" cy="55" r="0.9" fill={ink} />
+    <path d="M67 60 q-8 -2 -10 -8" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
+    {/* yarn + 心 + 盆栽 */}
+    <circle cx="24" cy="74" r="4.4" fill={amber} stroke={ink} strokeWidth="1.2" />
+    <path d="M20.5 72.5 q3.5 2 7 .5 M21 76 q3 -2.4 6.4 -.6" stroke={ink} strokeWidth="0.8" fill="none" strokeOpacity=".7" />
+    <path d="M60 18 q-2 -3 1.4 -4.2 q2.6 -.8 3.4 1.4 q.8 -2.2 3.4 -1.4 q3.4 1.2 1.4 4.2 q-2.6 3 -4.8 4.6 q-2.2 -1.6 -4.8 -4.6Z" fill={ink} fillOpacity=".75" />
+    <path d="M14 26 h8 v-6 M18 20 q-1.6 -3 1 -4.4" stroke={sage} strokeWidth="1.1" fill="none" strokeLinecap="round" />
     <Sparkle x={12} y={14} s={4} /><Sparkle x={96} y={20} s={5} />
   </svg>
 );
 
-/** A reader within an open architectural atlas, for the welcome-back screen. */
+/** A reader within an open architectural atlas — 精绘:地毯纹、边几、更多书脊。 */
 export const WelcomeReader: React.FC<{ size?: number }> = ({ size = 260 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size * 0.94} viewBox="0 0 260 245" fill="none">
     <path d="M51 201 V96 a79 79 0 0 1 158 0 V201Z" fill={sage} opacity="0.3" />
     <path d="M67 201 V98 a63 63 0 0 1 126 0 V201 M83 201 V100 a47 47 0 0 1 94 0 V201" stroke={rule} />
+    <path d="M100 201 v-46 m60 46 v-46" stroke={rule} strokeOpacity=".5" strokeWidth="0.8" />
     <circle cx="191" cy="49" r="21" fill={amber} />
+    <path d="M178 38 q13 -8 26 0 M176 49 q15 -9 30 0" stroke={paper} strokeOpacity=".5" strokeWidth="1.2" fill="none" />
     <path d="M27 210 H230 M36 218 H94 M159 218 H217" stroke={ink} strokeWidth="1.2" />
     <path d="M39 67 L130 31 L225 107 L187 189" stroke={ink} strokeWidth="0.8" strokeDasharray="3 5" />
     <circle cx="39" cy="67" r="4" fill={ink} /><circle cx="130" cy="31" r="3" fill={amber} /><circle cx="225" cy="107" r="4" fill={ink} />
+    {/* 边几与杯 */}
+    <path d="M216 150 h26 M222 150 v22 M236 150 v22 M218 172 h20" stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M224 141 h10 v8 h-10 z M236 143 h4 v3 h-4" fill={paper} stroke={ink} strokeWidth="1.3" />
+    {/* 拱窗 */}
+    <path d="M28 118 v-24 a12 12 0 0 1 24 0 v24" stroke={rule} strokeWidth="1.4" fill="none" />
+    <path d="M40 94 v24 M28 106 h24" stroke={rule} strokeOpacity=".5" strokeWidth="0.9" />
+    {/* figure:座椅 + 身形 + 展卷 */}
     <path d="M88 171 H161 V182 H88Z M98 182 V207 M153 182 V207" fill={ink} stroke={ink} strokeWidth="2" />
     <path d="M109 147 L150 149 L148 172 L125 178 L113 204 H99 L108 168Z" fill={ink} />
     <path d="M145 169 L168 194 L158 203 L129 177" fill={ink} />
@@ -178,151 +286,184 @@ export const WelcomeReader: React.FC<{ size?: number }> = ({ size = 260 }) => (
     <path d="M107 110 L90 128 L114 137 M144 110 L164 128 L142 139" stroke={ink} strokeWidth="2" strokeLinecap="round" />
     <path d="M128 128 Q114 117 99 120 L106 149 Q118 148 130 156 Q140 146 155 146 L160 117 Q143 118 128 128Z" fill={amber} stroke={ink} strokeWidth="1.6" strokeLinejoin="round" />
     <path d="M128 128 L130 156 M107 129 L121 135 M109 136 L122 141 M137 134 L151 126 M137 141 L150 133" stroke={ink} />
+    {/* 地毯 + 左侧盆栽 + 右侧书堆 */}
+    <path d="M96 214 h96 m-84 6 h72 m-58 6 h44" stroke={rule} strokeWidth="1.2" strokeLinecap="round" />
     <path d="M33 179 Q36 151 28 133 Q47 137 45 158 M35 169 Q58 163 56 145 Q38 147 35 169 M30 180 H50 L47 202 H34Z" fill={sage} stroke={ink} strokeWidth="1.2" />
+    <path d="M36 172 q5 -2 9 0 M38 186 q4 -1.6 8 0" stroke={paper} strokeWidth="1.2" fill="none" strokeOpacity=".6" />
     <path d="M185 174 H214 V184 H185Z M181 185 H216 V195 H181Z M187 196 H218 V206 H187Z" fill={paper} stroke={ink} strokeWidth="1.2" />
     <path d="M190 179 H207 M186 190 H209 M192 201 H211" stroke={sage} />
+    <path d="M188 174 v-8 l4 4 4 -6" stroke={amber} strokeWidth="1.4" fill="none" strokeLinecap="round" />
   </svg>
 );
 
-/** Award figure: curly-haired person holding a yellow phone (award 1). */
+/** Award figure: curly-haired person holding a yellow phone — 精绘:衣纹、影线、惊喜线。 */
 export const AwardPhone: React.FC<{ size?: number }> = ({ size = 160 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 160 160" fill="none">
     <circle cx="80" cy="82" r="62" fill={sage} opacity="0.16" />
     <path d="M18 148 H142 M18 153 H40" stroke={rule} strokeWidth="0.8" />
+    <Sparkle x={30} y={38} s={4.6} color={amber} /><Sparkle x={132} y={54} s={4} /><circle cx={122} cy={30} r={1.6} fill={sage} />
     {/* curly hair */}
-    <circle cx="80" cy="34" r="15" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
+    <circle cx="80" cy="34" r="15" fill={paper} stroke={ink} strokeWidth="2.4" />
     <path d="M64 30 q-4 -10 6 -12 q2 -8 10 -6 q8 -4 12 4 q8 0 6 10 q4 8 -4 12" stroke={ink} strokeWidth="2.2" fill={ink} />
-    {/* face */}
+    {/* face + 惊讶眉 */}
     <circle cx="75" cy="36" r="1.4" fill={ink} /><circle cx="85" cy="36" r="1.4" fill={ink} />
-    <path d="M76 42 q4 3 8 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
-    {/* cream long-sleeve top */}
-    <path d="M64 54 q16 -8 32 0 l4 34 q-20 8 -40 0 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
-    {/* arms holding phone at chest */}
+    <path d="M72.6 31.6 q2.4 -1.6 4.6 -.4 M82.6 31.2 q2.4 -1.4 4.6 .2" stroke={ink} strokeWidth="1" fill="none" strokeLinecap="round" />
+    <path d="M76 42 q4 3.4 8 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+    {/* cream top + 衣纹影线 */}
+    <path d="M64 54 q16 -8 32 0 l4 34 q-20 8 -40 0 z" fill={paper} stroke={ink} strokeWidth="2.4" />
+    <path d="M72 60 l-2 24 M88 60 l2 24" stroke={ink} strokeOpacity=".2" strokeWidth="1.1" fill="none" />
+    {/* arms holding phone */}
     <path d="M66 60 q-8 10 0 20 M94 60 q8 10 0 20" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    {/* yellow phone */}
-    <rect x="72" y="66" width="16" height="24" rx="3" fill="#D9A441" stroke={ink} strokeWidth="2" transform="rotate(-8 80 78)" />
+    {/* yellow phone + 屏幕光 */}
+    <rect x="72" y="66" width="16" height="24" rx="3" fill={amber} stroke={ink} strokeWidth="2" transform="rotate(-8 80 78)" />
+    <path d="M76.5 72 l9 -1.4 M76 77 l9 -1.4 M75.6 81 l6 -1" stroke={paper} strokeWidth="1.5" strokeLinecap="round" transform="rotate(-8 80 78)" />
     <circle cx="80" cy="86" r="1.6" fill={ink} />
-    {/* black wide pants */}
-    <path d="M66 92 l-6 44 q8 4 14 0 l4 -36 M94 92 l6 44 q-8 4 -14 0 l-4 -36" fill="#C24A2E" stroke={ink} strokeWidth="2.2" />
-    {/* shoes */}
+    {/* 呼出气泡 */}
+    <path d="M96 46 q4 -4 8 -1 M100 40 q5 -3 9 1" stroke={sage} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+    {/* black wide pants + 鞋 */}
+    <path d="M66 92 l-6 44 q8 4 14 0 l4 -36 M94 92 l6 44 q-8 4 -14 0 l-4 -36" fill={ink} stroke={ink} strokeWidth="2.2" />
     <path d="M56 138 q8 6 16 2 M88 140 q8 4 16 -2" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
   </svg>
 );
 
-/** Award figure: person holding a yellow plaque aloft with confetti (awards 2/3). */
+/** Award figure: person holding a yellow plaque aloft with confetti — 精绘:彩带、更密彩屑。 */
 export const AwardPopper: React.FC<{ size?: number }> = ({ size = 170 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 170 160" fill="none">
     <circle cx="84" cy="80" r="62" fill={sage} opacity="0.16" />
     <path d="M22 146 H146 M22 151 H44" stroke={rule} strokeWidth="0.8" />
-    {/* confetti burst: yellow squares/sparkles + ink squiggles, up-right */}
-    <rect x="104" y="14" width="6" height="6" fill="#D9A441" transform="rotate(18 107 17)" />
-    <rect x="132" y="26" width="5" height="5" fill="#D9A441" transform="rotate(-14 134 28)" />
-    <rect x="118" y="48" width="4.5" height="4.5" fill="#D9A441" transform="rotate(30 120 50)" />
+    {/* confetti: 方/圆/三角 + 飘带 */}
+    <rect x="104" y="14" width="6" height="6" fill={amber} transform="rotate(18 107 17)" />
+    <rect x="132" y="26" width="5" height="5" fill={amber} transform="rotate(-14 134 28)" />
+    <rect x="118" y="48" width="4.5" height="4.5" fill={amber} transform="rotate(30 120 50)" />
     <rect x="146" y="52" width="5" height="5" fill="none" stroke={ink} strokeWidth="1.5" transform="rotate(12 148 54)" />
     <rect x="96" y="34" width="4" height="4" fill="none" stroke={ink} strokeWidth="1.5" transform="rotate(-24 98 36)" />
-    <circle cx="140" cy="10" r="2.2" fill="#D9A441" />
-    <circle cx="112" cy="66" r="2" fill="none" stroke={ink} strokeWidth="1.4" />
-    <circle cx="154" cy="34" r="2" fill="#D9A441" />
-    <Sparkle x={124} y={8} s={5} color="#D9A441" /><Sparkle x={156} y={20} s={4} color="#D9A441" />
-    <Sparkle x={88} y={18} s={4} color="#D9A441" /><Sparkle x={142} y={72} s={5} />
+    <circle cx="140" cy="10" r="2.2" fill={amber} /><circle cx="112" cy="66" r="2" fill="none" stroke={ink} strokeWidth="1.4" /><circle cx="154" cy="34" r="2" fill={amber} />
+    <path d="M126 62 l3.4 2 -3.4 2 -1.4 -3.8 Z" fill={ink} fillOpacity=".7" />
+    <path d="M92 22 l2.8 1.6 -2.8 1.6 z" fill={ink} fillOpacity=".7" />
+    <Sparkle x={124} y={8} s={5} color={amber} /><Sparkle x={156} y={20} s={4} color={amber} />
+    <Sparkle x={88} y={18} s={4} color={amber} /><Sparkle x={142} y={72} s={5} />
     <path d="M96 56 q8 -6 12 2 q-8 4 -12 -2 M128 40 q6 -8 12 -2 M150 44 q6 -4 10 2" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
-    <path d="M108 78 q4 4 10 2" stroke="#D9A441" strokeWidth="2" fill="none" strokeLinecap="round" />
-    {/* person leaning back, facing right */}
-    <circle cx="56" cy="38" r="14" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
-    {/* curly hair: puffs */}
+    <path d="M108 78 q4 4 10 2" stroke={amber} strokeWidth="2" fill="none" strokeLinecap="round" />
+    {/* 飘带 */}
+    <path d="M96 30 q-8 8 -2 16 q5 7 -2 12 M138 60 q7 5 3 13 M120 34 q-6 6 -1 12" stroke={sage} strokeWidth="1.4" fill="none" strokeLinecap="round" />
+    {/* person leaning back */}
+    <circle cx="56" cy="38" r="14" fill={paper} stroke={ink} strokeWidth="2.4" />
     <path d="M42 34 q-6 -10 4 -14 q0 -9 10 -8 q6 -7 13 -2 q9 -2 9 7 q6 5 0 11 q2 8 -6 9 l-2 -6 q4 -5 0 -9 q-4 -6 -10 -3 q-8 -3 -11 4 q-7 1 -5 9 z" fill={ink} />
     <circle cx="52" cy="40" r="1.4" fill={ink} /><circle cx="61" cy="40" r="1.4" fill={ink} />
     <path d="M52 46 q4 3 8 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
-    {/* cream long-sleeve top */}
-    <path d="M42 58 q14 -8 30 -2 l6 34 q-20 10 -38 2 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
-    {/* arms raised holding plaque */}
+    <path d="M42 58 q14 -8 30 -2 l6 34 q-20 10 -38 2 z" fill={paper} stroke={ink} strokeWidth="2.4" />
+    <path d="M52 64 l0 26 M66 62 l4 26" stroke={ink} strokeOpacity=".2" strokeWidth="1.1" fill="none" />
+    {/* arms raised + plaque */}
     <path d="M66 62 q16 -8 24 -16 M68 74 q14 -2 24 -12" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    {/* yellow plaque tilted up-right */}
     <g transform="rotate(-18 92 48)">
-      <rect x="78" y="34" width="30" height="22" rx="2.5" fill="#D9A441" stroke={ink} strokeWidth="2" />
+      <rect x="78" y="34" width="30" height="22" rx="2.5" fill={amber} stroke={ink} strokeWidth="2" />
       <path d="M83 41 h20 M83 47 h14" stroke={ink} strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M78 34 l6 -6 M108 34 l6 -6" stroke={amber} strokeWidth="2.6" strokeLinecap="round" />
     </g>
-    {/* black wide pants */}
-    <path d="M44 92 l-8 44 q8 4 14 0 l6 -34 M76 94 l4 44 q8 2 14 -2 l-4 -40" fill="#C24A2E" stroke={ink} strokeWidth="2.2" />
+    {/* wide pants + shoes */}
+    <path d="M44 92 l-8 44 q8 4 14 0 l6 -34 M76 94 l4 44 q8 2 14 -2 l-4 -40" fill={ink} stroke={ink} strokeWidth="2.2" />
     <path d="M32 138 q8 6 16 2 M80 140 q8 4 16 -2" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
   </svg>
 );
 
-/** Trophy person mid-jump (UNIT COMPLETE / onboarding finale). */
+/** Trophy person mid-jump — 精绘:星芒、运动弧、奖杯高光。 */
 export const TrophyPerson: React.FC<{ size?: number }> = ({ size = 150 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size * 1.15} viewBox="0 0 150 172" fill="none">
     <circle cx="76" cy="84" r="62" fill={sage} opacity="0.16" />
     <path d="M14 150 H138 M14 155 H36" stroke={rule} strokeWidth="0.8" />
-    {/* trophy aloft */}
+    {/* trophy aloft + 星芒 + 高光 */}
     <g transform="translate(96 6)">
-      <path d="M10 8 h24 v10 q0 10 -12 12 q-12 -2 -12 -12 z" fill="#D9A441" stroke={ink} strokeWidth="2.2" />
+      <path d="M10 8 h24 v10 q0 10 -12 12 q-12 -2 -12 -12 z" fill={amber} stroke={ink} strokeWidth="2.2" />
+      <path d="M14 11 h16 M14 14.5 h16" stroke={paper} strokeOpacity=".7" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M10 10 q-8 0 -6 8 q2 6 8 4 M34 10 q8 0 6 8 q-2 6 -8 4" stroke={ink} strokeWidth="2" fill="none" />
-      <path d="M22 30 v6 M14 40 h16 l-2 -4 h-12 z" stroke={ink} strokeWidth="2.2" fill="#D9A441" />
+      <path d="M22 30 v6 M14 40 h16 l-2 -4 h-12 z" stroke={ink} strokeWidth="2.2" fill={amber} />
       <text x="22" y="22" textAnchor="middle" fontSize="11" fontWeight="700" fill={ink}>1</text>
+      <path d="M-6 4 l4 4 M50 2 l-4 4 M22 -6 v5" stroke={amber} strokeWidth="1.6" strokeLinecap="round" />
     </g>
-    {/* motion ticks */}
+    {/* motion ticks + 地面弹跳弧 */}
     <path d="M86 14 l-6 -6 M84 26 l-8 -2" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
-    {/* head */}
-    <circle cx="66" cy="56" r="13" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
+    <path d="M40 146 q14 -7 28 0 M76 148 q12 -6 24 0" stroke={rule} strokeWidth="1.2" fill="none" strokeLinecap="round" />
+    {/* head + 束发 + 飞扬发丝 */}
+    <circle cx="66" cy="56" r="13" fill={paper} stroke={ink} strokeWidth="2.4" />
     <circle cx="72" cy="46" r="6" fill={ink} />
     <path d="M54 52 q10 -12 22 -4" stroke={ink} strokeWidth="2.2" fill={ink} />
+    <path d="M52 50 q-6 -2 -8 -7 M53 54 q-6 1 -10 -2" stroke={ink} strokeWidth="1.4" fill="none" strokeLinecap="round" />
     <circle cx="62" cy="58" r="1.3" fill={ink} /><circle cx="71" cy="58" r="1.3" fill={ink} />
     <path d="M62 64 q4 3 8 0" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
-    {/* body */}
-    <path d="M58 72 q14 -6 24 2 l2 30 q-16 8 -30 0 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
-    {/* right arm up to trophy */}
+    {/* body + 衣褶 */}
+    <path d="M58 72 q14 -6 24 2 l2 30 q-16 8 -30 0 z" fill={paper} stroke={ink} strokeWidth="2.4" />
+    <path d="M66 78 l-1 22 M76 78 l1 22" stroke={ink} strokeOpacity=".2" strokeWidth="1.1" fill="none" />
+    {/* arms */}
     <path d="M78 76 q14 -10 20 -28" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    {/* left arm trailing */}
     <path d="M56 80 q-14 6 -20 16" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
-    {/* jumping legs (knees tucked) */}
-    <path d="M60 106 q-12 8 -10 22 q8 4 14 -2 M80 106 q10 10 6 24 q-8 4 -14 -2" fill="#C24A2E" stroke={ink} strokeWidth="2.2" />
+    {/* jumping legs */}
+    <path d="M60 106 q-12 8 -10 22 q8 4 14 -2 M80 106 q10 10 6 24 q-8 4 -14 -2" fill={ink} stroke={ink} strokeWidth="2.2" />
     <path d="M46 130 q8 6 16 0 M74 132 q8 6 16 0" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
     <Sparkle x={18} y={30} s={6} /><Sparkle x={136} y={60} s={5} /><Sparkle x={30} y={100} s={4} />
+    <circle cx={122} cy={118} r={1.6} fill={sage} /><circle cx={16} cy={72} r={1.4} fill={ink} fillOpacity=".6" />
   </svg>
 );
 
-/** Skateboard kid (LECTURE COMPLETE practice prompt). */
+/** Skateboard kid — 精绘:头盔、坡道、背包、速度线。 */
 export const SkaterKid: React.FC<{ size?: number }> = ({ size = 150 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 150 150" fill="none">
     <circle cx="77" cy="77" r="57" fill={sage} opacity="0.16" />
     <path d="M20 138 H134 M20 143 H42" stroke={rule} strokeWidth="0.8" />
-    <circle cx="78" cy="34" r="12" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
+    {/* 坡道弧 + 速度线 */}
+    <path d="M14 120 q34 -14 62 -6" stroke={rule} strokeWidth="1.2" fill="none" strokeLinecap="round" strokeDasharray="3 4" />
+    <path d="M16 100 h20 M22 112 h16 M12 88 h14" stroke={ink} strokeWidth="2" strokeLinecap="round" />
+    <Sparkle x={124} y={26} s={5} /><circle cx={136} cy={62} r={1.6} fill={sage} />
+    {/* head + 头盔条纹 */}
+    <circle cx="78" cy="34" r="12" fill={paper} stroke={ink} strokeWidth="2.4" />
     <path d="M66 30 q10 -12 24 -2 q0 6 -4 6 q-10 -6 -20 2 z" fill={ink} />
-    {/* torso leaning */}
-    <path d="M70 50 q14 -2 20 8 l-4 24 q-14 4 -24 -4 z" fill="#F7F1E4" stroke={ink} strokeWidth="2.4" />
-    {/* arms out for balance */}
+    <path d="M70 24.5 q7 -5.5 15 -1.5" stroke={paper} strokeOpacity=".6" strokeWidth="1.3" fill="none" strokeLinecap="round" />
+    <circle cx="82.5" cy="34" r="1.1" fill={ink} /><path d="M80 39 q2.4 1.6 5 .4" stroke={ink} strokeWidth="1.1" fill="none" strokeLinecap="round" />
+    {/* torso + 背包 */}
+    <path d="M70 50 q14 -2 20 8 l-4 24 q-14 4 -24 -4 z" fill={paper} stroke={ink} strokeWidth="2.4" />
+    <rect x="62" y="54" width="10" height="14" rx="3" fill={sage} stroke={ink} strokeWidth="1.5" transform="rotate(-6 67 61)" />
+    <path d="M64 58 h6 M64 61 h6" stroke={paper} strokeWidth="1" strokeLinecap="round" transform="rotate(-6 67 61)" />
+    {/* arms out */}
     <path d="M70 56 q-16 -2 -26 -10 M88 60 q14 2 24 -4" stroke={ink} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     {/* crouched legs */}
     <path d="M68 84 q-10 10 -4 22 M86 86 q8 8 4 20" stroke={ink} strokeWidth="2.6" fill="none" strokeLinecap="round" />
-    {/* skateboard */}
-    <path d="M40 116 q35 10 70 0 q4 6 -4 8 q-31 8 -62 0 q-8 -2 -4 -8 Z" fill="#D9A441" stroke={ink} strokeWidth="2.2" />
-    <circle cx="58" cy="130" r="5" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
-    <circle cx="94" cy="130" r="5" fill="#F7F1E4" stroke={ink} strokeWidth="2" />
-    {/* speed lines */}
-    <path d="M16 100 h20 M22 112 h16" stroke={ink} strokeWidth="2" strokeLinecap="round" />
-    <Sparkle x={124} y={26} s={5} />
+    {/* skateboard + 轮 + 板头星 */}
+    <path d="M40 116 q35 10 70 0 q4 6 -4 8 q-31 8 -62 0 q-8 -2 -4 -8 Z" fill={amber} stroke={ink} strokeWidth="2.2" />
+    <path d="M52 121 h10 M90 121 h10" stroke={ink} strokeOpacity=".35" strokeWidth="1.2" strokeLinecap="round" />
+    <circle cx="58" cy="130" r="5" fill={paper} stroke={ink} strokeWidth="2" />
+    <circle cx="94" cy="130" r="5" fill={paper} stroke={ink} strokeWidth="2" />
+    <circle cx="58" cy="130" r="1.4" fill={ink} /><circle cx="94" cy="130" r="1.4" fill={ink} />
   </svg>
 );
 
-/** Handshake line illustration (affiliate banner). */
+/** Handshake line illustration — 精绘:袖口、相扣指节、星点。 */
 export const Handshake: React.FC<{ size?: number }> = ({ size = 52 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size * 0.78} viewBox="0 0 52 40" fill="none">
     <path d="M4 12 l10 -6 10 8 12 -4 12 8" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M24 14 l-8 10 q-2 3 1 5 q3 2 5 -1 l4 -6 M24 14 q4 -2 6 0 l8 6" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
     <path d="M22 26 l3 3 M27 28 l3 3" stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
+    {/* 袖口与扣腕线 */}
+    <path d="M13.4 5.6 l-2.8 4.8 M40 9.4 l3 4.6" stroke={ink} strokeOpacity=".5" strokeWidth="1.4" strokeLinecap="round" />
+    <path d="M20 22 l4 3 M29 20 l4 3" stroke={ink} strokeOpacity=".55" strokeWidth="1.3" strokeLinecap="round" />
+    <Sparkle x={44} y={28} s={2.6} color={amber} /><circle cx="8" cy={24} r={1.2} fill={amber} />
   </svg>
 );
 
-/** Small atlas globe for inline headings. */
+/** Small atlas globe — 精绘:星环、小卫星、经纬光点。 */
 export const PlanetDoodle: React.FC<{ size?: number }> = ({ size = 34 }) => (
   <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 34 34" fill="none" style={{ verticalAlign: '-6px', display: 'inline-block' }}>
     <circle cx="17" cy="17" r="12" fill={paper} stroke={ink} strokeWidth="1.5" />
-    <ellipse cx="17" cy="17" rx="5" ry="12" stroke={ink} /><path d="M5 17 H29 M8 10 Q17 14 26 10 M8 24 Q17 20 26 24" stroke={ink} />
-    <circle cx="26" cy="9" r="3.5" fill={amber} />
+    <ellipse cx="17" cy="17" rx="5" ry="12" stroke={ink} />
+    <path d="M5 17 H29 M8 10 Q17 14 26 10 M8 24 Q17 20 26 24" stroke={ink} />
+    {/* 行星环 + 小卫星 + 轨道点 */}
+    <ellipse cx="17" cy="17" rx="15.5" ry="5.4" stroke={sage} strokeWidth="1.1" transform="rotate(-18 17 17)" />
+    <circle cx="27" cy="9" r="2.6" fill={amber} />
+    <circle cx="27" cy="9" r="4.4" stroke={amber} strokeWidth="0.7" strokeOpacity=".6" fill="none" />
+    <circle cx="6.5" cy="25" r="1.2" fill={ink} fillOpacity=".6" />
+    <path d="M4 8 l1.4 1.4 M29 27 l1.2 1.2" stroke={amber} strokeWidth="1" strokeLinecap="round" />
   </svg>
 );
 
-/** Google "G" mark. */
+/** Google "G" mark (第三方品牌标识,保持官方造型). */
 export const GoogleG: React.FC<{ size?: number }> = ({ size = 18 }) => (
   <svg width={size} height={size} viewBox="0 0 18 18">
     <path d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.58 2.68-3.9 2.68-6.62z" fill="#4285F4" />
@@ -332,7 +473,7 @@ export const GoogleG: React.FC<{ size?: number }> = ({ size = 18 }) => (
   </svg>
 );
 
-/** Two-tone avatar: amber sky, black cat silhouette with ear tufts, cream eyes, orange ring. */
+/** Two-tone avatar: amber sky, black cat with 耳簇/胡须/胸毛/月星. */
 export const AvatarCat: React.FC<{ size?: number; ring?: boolean }> = ({ size = 36, ring = false }) => (
   <div
     style={{
@@ -346,200 +487,409 @@ export const AvatarCat: React.FC<{ size?: number; ring?: boolean }> = ({ size = 
     }}
   >
     <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 36 36">
-      {/* cat head rising from the bottom, ear tufts poking into the amber */}
+      {/* 夜空:月牙 + 星 */}
+      <path d="M27.5 6.5 a4.6 4.6 0 1 0 3.4 7.6 a5.6 5.6 0 1 1 -3.4 -7.6Z" fill="#F5EFE3" fillOpacity=".85" />
+      <path d="M8 6 l0.9 1.9 2.1 0.3 -1.5 1.5 0.35 2.1 -1.85 -1 -1.85 1 0.35 -2.1 -1.5 -1.5 2.1 -0.3Z" fill="#F5EFE3" fillOpacity=".7" />
+      {/* cat head rising from the bottom */}
       <path d="M2 36 V24 L5 11 L11 17 Q18 13 25 17 L31 11 L34 24 V36 Z" fill="#C24A2E" />
-      {/* wide cream eyes */}
+      {/* 耳内簇 + 额纹 + 胸毛 */}
+      <path d="M6 14.5 L8.4 16.8 M29.8 14.2 L27.6 16.6" stroke="#8F3520" strokeWidth="1.1" strokeLinecap="round" />
+      <path d="M14 18.5 q4 -2 8 0" stroke="#8F3520" strokeWidth="1" fill="none" strokeLinecap="round" />
+      <path d="M12 32 l3 -2.6 3 2.6 3 -2.6 3 2.6" stroke="#8F3520" strokeWidth="1" fill="none" strokeLinecap="round" />
+      {/* wide cream eyes + 眼波高光 */}
       <ellipse cx="14" cy="24" rx="3.2" ry="3.9" fill="#F5EFE3" />
       <ellipse cx="22" cy="24" rx="3.2" ry="3.9" fill="#F5EFE3" />
+      <circle cx="13.2" cy="22.8" r="0.8" fill="#C24A2E" /><circle cx="21.2" cy="22.8" r="0.8" fill="#C24A2E" />
+      {/* 鼻尖 + 胡须 */}
+      <path d="M17.1 28.4 h1.8 l-0.9 1.2 z" fill="#F5EFE3" />
+      <path d="M10.6 28.6 h4 M10.8 30.2 h3.4 M25.4 28.6 h-4 M25.2 30.2 h-3.4" stroke="#F5EFE3" strokeOpacity=".75" strokeWidth="0.7" strokeLinecap="round" />
     </svg>
   </div>
 );
 
-/* ---------------- Course cover art ---------------- */
+/* ---------------- Course cover art(封面系统 v2:学科版画 × 种子唯一化) ---------------- */
 
 export type CoverKind =
   | 'sociology' | 'bio' | 'ml' | 'ai' | 'history' | 'prompt' | 'psych' | 'sat' | 'philo' | 'stats';
 
 /* 封面主题:每科专属底色(深浅交替成书架节奏),徽标用 ink/acc/paper 三色绘制。
-   约束:禁止 <defs>/渐变 id(lattice-brand 测试要求同页多实例无 id 冲突),只用纯色。 */
+   约束:禁止 <defs>/渐变 id(lattice-brand 测试要求同页多实例无 id 冲突),只用纯色。
+   accB = 种子交替的第二点缀色(与该底色保持对比)。 */
 interface CoverTheme {
   bg: string; // 封面底色
   ink: string; // 主线稿色
-  acc: string; // 点缀色
+  acc: string; // 点缀色(琥珀)
+  accB: string; // 种子交替点缀色
   paper: string; // 高光/纸色
 }
 const AMBER = '#D9A441';
 const CREAM = '#F7F1E4';
 const INK = ink;
+const PINE = '#47654E'; // 浅底上的深松绿
+const SAND = '#E8D5A8'; // 深底上的浅沙
 
 const coverTheme: Record<CoverKind, CoverTheme> = {
-  sociology: { bg: '#C3CFB4', ink: INK, acc: AMBER, paper: CREAM }, // 灰绿
-  bio: { bg: '#C24A2E', ink: CREAM, acc: AMBER, paper: CREAM }, // 深墨绿
-  ml: { bg: '#EFD9A7', ink: INK, acc: AMBER, paper: CREAM }, // 暖杏
-  ai: { bg: '#22364A', ink: CREAM, acc: AMBER, paper: CREAM }, // 深夜蓝
-  history: { bg: '#C07551', ink: INK, acc: AMBER, paper: CREAM }, // 赤陶
-  prompt: { bg: '#10261F', ink: INK, acc: AMBER, paper: CREAM }, // 墨黑绿
-  psych: { bg: '#CDB8C8', ink: INK, acc: AMBER, paper: CREAM }, // 雾紫
-  sat: { bg: AMBER, ink: INK, acc: CREAM, paper: CREAM }, // 金榜
-  philo: { bg: '#EFE6CE', ink: INK, acc: AMBER, paper: CREAM }, // 羊皮纸
-  stats: { bg: '#B9CCDD', ink: INK, acc: AMBER, paper: CREAM }, // 雾蓝
+  sociology: { bg: '#C3CFB4', ink: INK, acc: AMBER, accB: PINE, paper: CREAM }, // 灰绿
+  bio: { bg: '#25423A', ink: CREAM, acc: AMBER, accB: SAND, paper: CREAM }, // 深墨绿
+  ml: { bg: '#EFD9A7', ink: INK, acc: AMBER, accB: PINE, paper: CREAM }, // 暖杏
+  ai: { bg: '#22364A', ink: CREAM, acc: AMBER, accB: SAND, paper: CREAM }, // 深夜蓝
+  history: { bg: '#C07551', ink: INK, acc: AMBER, accB: CREAM, paper: CREAM }, // 赤陶
+  prompt: { bg: '#10261F', ink: INK, acc: AMBER, accB: SAND, paper: CREAM }, // 墨黑绿
+  psych: { bg: '#CDB8C8', ink: INK, acc: AMBER, accB: PINE, paper: CREAM }, // 雾紫
+  sat: { bg: AMBER, ink: INK, acc: CREAM, accB: PINE, paper: CREAM }, // 金榜
+  philo: { bg: '#EFE6CE', ink: INK, acc: AMBER, accB: PINE, paper: CREAM }, // 羊皮纸
+  stats: { bg: '#B9CCDD', ink: INK, acc: AMBER, accB: PINE, paper: CREAM }, // 雾蓝
 };
 
-const plates: Record<CoverKind, (t: CoverTheme) => React.ReactNode> = {
-  /* 社会学：三环相扣——个体、群体、制度的交叠 */
-  sociology: (t) => (
-    <>
-      <circle cx="72" cy="76" r="27" stroke={t.ink} strokeWidth="2.6" />
-      <circle cx="128" cy="76" r="27" stroke={t.ink} strokeWidth="2.6" />
-      <circle cx="100" cy="56" r="27" fill={t.paper} fillOpacity=".5" stroke={t.ink} strokeWidth="2.6" />
-      <circle cx="100" cy="68" r="7" fill={t.acc} />
-      <path d="M50 116 H150" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
-      <circle cx="42" cy="116" r="3" fill={t.ink} />
-      <circle cx="158" cy="116" r="3" fill={t.ink} />
-    </>
-  ),
-  /* 生物学：直立双螺旋,碱基横档与琥珀节点 */
-  bio: (t) => (
-    <>
-      <path d="M76 118 C76 96, 124 92, 124 70 C124 48, 76 44, 76 22" stroke={t.ink} strokeWidth="3" />
-      <path d="M124 118 C124 96, 76 92, 76 70 C76 48, 124 44, 124 22" stroke={t.ink} strokeWidth="3" />
-      <path d="M86 32 H114 M90 52 H110 M96 70 H104 M90 88 H110 M86 106 H114" stroke={t.ink} strokeWidth="1.8" strokeOpacity=".75" />
-      <circle cx="76" cy="22" r="4.5" fill={t.acc} />
-      <circle cx="124" cy="22" r="4.5" fill={t.acc} />
-      <circle cx="76" cy="118" r="4.5" fill={t.acc} />
-      <circle cx="124" cy="118" r="4.5" fill={t.acc} />
-      <circle cx="100" cy="70" r="6" fill={t.acc} />
-    </>
-  ),
-  /* 机器学习：决策树——根节点菱形分裂,叶节点交替落定 */
-  ml: (t) => (
-    <>
-      <path d="M100 24 L118 42 L100 60 L82 42 Z" fill={t.acc} />
-      <path d="M92 56 L72 80 M108 56 L128 80" stroke={t.ink} strokeWidth="2.6" />
-      <circle cx="66" cy="88" r="10" fill={t.ink} />
-      <circle cx="134" cy="88" r="10" fill={t.paper} stroke={t.ink} strokeWidth="2.4" />
-      <path d="M62 96 L50 114 M70 96 L82 114 M130 96 L118 114 M138 96 L150 114" stroke={t.ink} strokeWidth="2" />
-      <circle cx="48" cy="119" r="4.5" fill={t.acc} />
-      <circle cx="84" cy="119" r="4.5" fill={t.ink} />
-      <circle cx="116" cy="119" r="4.5" fill={t.ink} />
-      <circle cx="152" cy="119" r="4.5" fill={t.acc} />
-    </>
-  ),
-  /* 人工智能：核心芯片,引脚信号与虚线轨道 */
-  ai: (t) => (
-    <>
-      <ellipse cx="100" cy="70" rx="80" ry="46" stroke={t.ink} strokeOpacity=".3" strokeWidth="1.4" strokeDasharray="2 5" />
-      <rect x="76" y="46" width="48" height="48" rx="9" stroke={t.ink} strokeWidth="3" />
-      <rect x="92" y="62" width="16" height="16" rx="3" fill={t.acc} />
-      <path d="M88 46 V30 M100 46 V28 M112 46 V30 M88 94 V110 M100 94 V112 M112 94 V110" stroke={t.ink} strokeWidth="2" />
-      <path d="M76 58 H60 M76 70 H58 M76 82 H60 M124 58 H140 M124 70 H142 M124 82 H140" stroke={t.ink} strokeWidth="2" />
-      <circle cx="100" cy="25" r="3.5" fill={t.acc} />
-      <circle cx="145" cy="70" r="3.5" fill={t.acc} />
-      <circle cx="55" cy="70" r="3.5" fill={t.ink} />
-      <circle cx="100" cy="115" r="3.5" fill={t.ink} />
-    </>
-  ),
-  /* 历史：拱门石柱与烈日——文明遗迹的剪影 */
-  history: (t) => (
-    <>
-      <circle cx="146" cy="40" r="14" fill={t.acc} />
-      <path d="M64 116 V74 A20 20 0 0 1 104 74 V116 Z" fill={t.paper} />
-      <path d="M75 116 V82 A9 9 0 0 1 93 82 V116 Z" fill={t.bg} />
-      <path d="M56 116 H112 M60 123 H108" stroke={t.paper} strokeWidth="3" strokeLinecap="round" />
-      <path d="M58 64 H110" stroke={t.paper} strokeWidth="4" strokeLinecap="round" />
-      <path d="M138 92 L141 98 L138 104 L135 98 Z" fill={t.paper} stroke="none" />
-    </>
-  ),
-  /* 前端与代码工程：高对比终端窗口——琥珀光标静待输入 */
-  prompt: (t) => (
-    <>
-      <circle cx="100" cy="70" r="48" fill={t.acc} fillOpacity=".13" stroke="none" />
-      <rect x="56" y="40" width="88" height="60" rx="8" fill={t.paper} />
-      <path d="M64 40 H136 A8 8 0 0 1 144 48 V54 H56 V48 A8 8 0 0 1 64 40 Z" fill={t.ink} />
-      <circle cx="65" cy="47" r="2.2" fill={t.acc} />
-      <circle cx="73" cy="47" r="2.2" fill={t.paper} />
-      <circle cx="81" cy="47" r="2.2" fill={t.paper} fillOpacity=".55" />
-      <path d="M66 66 L74 72 L66 78" stroke={t.ink} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M82 72 H102" stroke={t.ink} strokeWidth="3" strokeLinecap="round" />
-      <rect x="110" y="66" width="10" height="13" rx="2" fill={t.acc} />
-      <path d="M66 89 H120" stroke={t.ink} strokeWidth="2" strokeDasharray="4 4" strokeOpacity=".45" />
-    </>
-  ),
-  /* 心理学：侧脸剪影,颅内一枚琥珀色的念头 */
-  psych: (t) => (
-    <>
-      <path
-        d="M126 118 V100 C140 92 146 78 142 62 C138 44 122 32 102 32 C82 32 66 46 64 64 C63 71 64 77 66 82 L58 94 L68 96 L70 104 C71 112 78 118 86 118 Z"
-        fill={t.paper}
-        fillOpacity=".45"
-        stroke={t.ink}
-        strokeWidth="3"
-        strokeLinejoin="round"
-      />
-      <circle cx="100" cy="62" r="12" fill={t.acc} />
-      <path d="M100 46 V39 M112 51 L117 45 M88 51 L83 45" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
-      <circle cx="100" cy="62" r="4" fill={t.ink} />
-    </>
-  ),
-  /* 考试与进阶：同心靶心,一箭中的 */
-  sat: (t) => (
-    <>
-      <circle cx="96" cy="68" r="34" stroke={t.ink} strokeWidth="2.6" />
-      <circle cx="96" cy="68" r="23" stroke={t.ink} strokeWidth="2.2" />
-      <circle cx="96" cy="68" r="12" fill={t.ink} />
-      <circle cx="96" cy="68" r="4" fill={t.acc} />
-      <path d="M146 26 L103 61" stroke={t.ink} strokeWidth="3" strokeLinecap="round" />
-      <path d="M116 50 L104 61 L117 63" stroke={t.ink} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M146 26 l9 -3 M146 26 l3 9" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M50 118 H142" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
-    </>
-  ),
-  /* 哲学：一个大问号——一切学问始于发问 */
-  philo: (t) => (
-    <>
-      <path
-        d="M92 46 C92 34 102 28 112 28 C124 28 132 36 132 46 C132 57 122 61 116 68 C112 73 111 78 111 84"
-        stroke={t.ink}
-        strokeWidth="7"
-        strokeLinecap="round"
-      />
-      <circle cx="111" cy="101" r="6.5" fill={t.acc} />
-      <path d="M62 44 V104 M158 44 V104" stroke={t.ink} strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M84 116 H138" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
-    </>
-  ),
-  /* 数学与统计：填满的钟形曲线,置信区间与均值虚线 */
-  stats: (t) => (
-    <>
-      <path d="M44 114 C68 114 74 46 100 46 C126 46 132 114 156 114 Z" fill={t.ink} fillOpacity=".88" stroke="none" />
-      <path d="M92 114 V62 C95 55 105 55 108 62 V114 Z" fill={t.acc} fillOpacity=".92" stroke="none" />
-      <path d="M100 52 V114" stroke={t.paper} strokeWidth="1.6" strokeDasharray="3 4" />
-      <path d="M40 114 H160" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
-      <circle cx="100" cy="46" r="5" fill={t.acc} stroke={t.ink} strokeWidth="1.5" />
-      <circle cx="66" cy="96" r="3" fill={t.paper} />
-      <circle cx="134" cy="96" r="3" fill={t.paper} />
-    </>
-  ),
+type Plate = (t: CoverTheme) => React.ReactNode;
+
+const plates: Record<CoverKind, [Plate, Plate]> = {
+  /* 社会学 v0:三环 Society(个体/群体/制度),交叠透镜影线 */
+  sociology: [
+    (t) => (
+      <>
+        <circle cx="72" cy="76" r="27" stroke={t.ink} strokeWidth="2.6" />
+        <circle cx="128" cy="76" r="27" stroke={t.ink} strokeWidth="2.6" />
+        <circle cx="100" cy="56" r="27" fill={t.paper} fillOpacity=".5" stroke={t.ink} strokeWidth="2.6" />
+        <path d="M100 49 a27 27 0 0 1 24 15 M78 89 a27 27 0 0 0 20 8" stroke={t.ink} strokeOpacity=".3" strokeWidth="1" />
+        <path d="M92 70 a12 12 0 0 1 16 -1 l-2.6 3.4 a8 8 0 0 0 -10.8 .8 Z" fill={t.acc} fillOpacity=".85" />
+        <circle cx="100" cy="68" r="7" fill={t.acc} />
+        <path d="M50 116 H150" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
+        <circle cx="42" cy="116" r="3" fill={t.ink} /><circle cx="158" cy="116" r="3" fill={t.ink} />
+        <path d="M60 122 v-5 M70 122 v-3.4 M80 122 v-4.6 M120 122 v-3.6 M130 122 v-4.8 M140 122 v-3.2" stroke={t.ink} strokeOpacity=".45" strokeWidth="1.2" strokeLinecap="round" />
+        <circle cx="150" cy="34" r="2" fill={t.acc} /><circle cx="52" cy="40" r="1.7" fill={t.ink} fillOpacity=".6" />
+      </>
+    ),
+    /* 社会学 v1:关系网(节点社会) */
+    (t) => (
+      <>
+        <path d="M66 56 L104 44 L140 64 L128 96 L88 100 L58 82 Z M66 56 L88 100 M104 44 L128 96 M58 82 L128 96 M104 44 L88 100" stroke={t.ink} strokeOpacity=".55" strokeWidth="1.4" />
+        <circle cx="104" cy="44" r="9" fill={t.acc} />
+        <circle cx="104" cy="44" r="13" stroke={t.acc} strokeWidth="1.2" fill="none" strokeOpacity=".5" />
+        <circle cx="66" cy="56" r="6" fill={t.ink} /><circle cx="140" cy="64" r="6" fill={t.paper} stroke={t.ink} strokeWidth="2.2" />
+        <circle cx="128" cy="96" r="6.5" fill={t.ink} /><circle cx="88" cy="100" r="6" fill={t.paper} stroke={t.ink} strokeWidth="2.2" />
+        <circle cx="58" cy="82" r="4.5" fill={t.acc} />
+        <path d="M46 116 H154" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
+        <path d="M96 118 q4 -3.6 8 0 q4 -3.6 8 0" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+        <circle cx="150" cy="36" r="1.8" fill={t.acc} /><path d="M46 40 l2.6 2.6 M48.6 40 l-2.6 2.6" stroke={t.ink} strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+  ],
+  /* 生物学 v0:双螺旋(碱基横档 + 端粒节点) */
+  bio: [
+    (t) => (
+      <>
+        <path d="M76 118 C76 96, 124 92, 124 70 C124 48, 76 44, 76 22" stroke={t.ink} strokeWidth="3" />
+        <path d="M124 118 C124 96, 76 92, 76 70 C76 48, 124 44, 124 22" stroke={t.ink} strokeWidth="3" />
+        <path d="M86 32 H114 M90 52 H110 M96 70 H104 M90 88 H110 M86 106 H114" stroke={t.ink} strokeWidth="1.8" strokeOpacity=".75" />
+        <path d="M86 32 H114 M96 70 H104 M86 106 H114" stroke={t.acc} strokeWidth="3" strokeOpacity=".85" strokeLinecap="round" transform="translate(0 -2)" opacity=".35" />
+        <circle cx="76" cy="22" r="4.5" fill={t.acc} /><circle cx="124" cy="22" r="4.5" fill={t.acc} />
+        <circle cx="76" cy="118" r="4.5" fill={t.acc} /><circle cx="124" cy="118" r="4.5" fill={t.acc} />
+        <circle cx="100" cy="70" r="6" fill={t.acc} />
+        <path d="M100 30 q6 -5 10 0 q5 6 -4 9" stroke={t.paper} strokeOpacity=".4" strokeWidth="1.1" fill="none" />
+        <circle cx="146" cy="40" r="2" fill={t.paper} fillOpacity=".7" /><circle cx="54" cy="94" r="2" fill={t.paper} fillOpacity=".5" />
+        <path d="M48 40 v10 M44 45 h8" stroke={t.ink} strokeOpacity=".55" strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+    /* 生物学 v1:细胞(核仁/线粒体/囊泡) */
+    (t) => (
+      <>
+        <circle cx="100" cy="70" r="46" stroke={t.ink} strokeWidth="2.8" />
+        <circle cx="100" cy="70" r="41.5" stroke={t.ink} strokeOpacity=".4" strokeWidth="1.2" strokeDasharray="3 4" />
+        <circle cx="86" cy="62" r="15" fill={t.acc} fillOpacity=".9" />
+        <circle cx="86" cy="62" r="6" fill={t.ink} fillOpacity=".8" />
+        <path d="M82 58 a6 6 0 0 1 8 0" stroke={t.paper} strokeWidth="1.2" fill="none" />
+        {/* 线粒体(内膜嵴) */}
+        <ellipse cx="132" cy="52" rx="13" ry="8" fill={t.paper} fillOpacity=".9" stroke={t.ink} strokeWidth="1.8" transform="rotate(-18 132 52)" />
+        <path d="M124 52 q4 -4 8 0 q4 4 8 0" stroke={t.ink} strokeWidth="1.2" fill="none" transform="rotate(-18 132 52)" />
+        <ellipse cx="122" cy="92" rx="10" ry="6.5" fill={t.paper} fillOpacity=".9" stroke={t.ink} strokeWidth="1.6" transform="rotate(14 122 92)" />
+        <path d="M115 92 q3.5 -3 7 0 q3.5 3 7 0" stroke={t.ink} strokeWidth="1.1" fill="none" transform="rotate(14 122 92)" />
+        {/* 囊泡与分子 */}
+        <circle cx="72" cy="92" r="4" stroke={t.ink} strokeWidth="1.6" fill="none" />
+        <circle cx="104" cy="100" r="2.6" fill={t.acc} />
+        <path d="M60 44 l2.2 2.2 M137 84 l2 2" stroke={t.ink} strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+  ],
+  /* 机器学习 v0:决策树(根菱形 → 叶落定) */
+  ml: [
+    (t) => (
+      <>
+        <path d="M100 24 L118 42 L100 60 L82 42 Z" fill={t.acc} />
+        <path d="M100 30 L110 42 L100 54 L90 42 Z" fill={t.paper} fillOpacity=".4" />
+        <path d="M92 56 L72 80 M108 56 L128 80" stroke={t.ink} strokeWidth="2.6" />
+        <circle cx="66" cy="88" r="10" fill={t.ink} /><circle cx="134" cy="88" r="10" fill={t.paper} stroke={t.ink} strokeWidth="2.4" />
+        <path d="M62 96 L50 114 M70 96 L82 114 M130 96 L118 114 M138 96 L150 114" stroke={t.ink} strokeWidth="2" />
+        <circle cx="48" cy="119" r="4.5" fill={t.acc} /><circle cx="84" cy="119" r="4.5" fill={t.ink} />
+        <circle cx="116" cy="119" r="4.5" fill={t.ink} /><circle cx="152" cy="119" r="4.5" fill={t.acc} />
+        <path d="M74 42 h-14 M74 42 v-12" stroke={t.ink} strokeOpacity=".4" strokeWidth="1.2" strokeDasharray="2.4 3" />
+        <path d="M132 40 l3 3 M135 40 l-3 3" stroke={t.ink} strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M56 34 q4 -3.4 8 0" stroke={t.ink} strokeOpacity=".4" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+      </>
+    ),
+    /* 机器学习 v1:神经网络(3-4-2 全连接) */
+    (t) => (
+      <>
+        <path d="M58 44 L96 34 M58 44 L96 56 M58 44 L96 78 M58 44 L96 100 M58 68 L96 34 M58 68 L96 56 M58 68 L96 78 M58 68 L96 100 M58 92 L96 34 M58 92 L96 56 M58 92 L96 78 M58 92 L96 100" stroke={t.ink} strokeOpacity=".3" strokeWidth="1" />
+        <path d="M58 68 L96 56 M58 68 L96 78" stroke={t.acc} strokeWidth="1.8" />
+        <path d="M96 34 L138 56 M96 56 L138 56 M96 78 L138 56 M96 100 L138 56 M96 34 L138 84 M96 78 L138 84" stroke={t.ink} strokeOpacity=".45" strokeWidth="1.3" />
+        <circle cx="58" cy="44" r="6.5" fill={t.ink} /><circle cx="58" cy="68" r="6.5" fill={t.paper} stroke={t.ink} strokeWidth="2.2" /><circle cx="58" cy="92" r="6.5" fill={t.ink} />
+        <circle cx="96" cy="34" r="6" fill={t.paper} stroke={t.ink} strokeWidth="2" /><circle cx="96" cy="56" r="6" fill={t.acc} /><circle cx="96" cy="78" r="6" fill={t.paper} stroke={t.ink} strokeWidth="2" /><circle cx="96" cy="100" r="6" fill={t.ink} />
+        <circle cx="138" cy="56" r="7" fill={t.acc} /><circle cx="138" cy="84" r="7" fill={t.ink} />
+        <path d="M46 116 H150" stroke={t.ink} strokeOpacity=".55" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M52 40 v56 M46 44 q-3 24 0 48" stroke={t.ink} strokeOpacity=".3" strokeWidth="1" strokeDasharray="2 3.4" />
+        <path d="M146 34 l3.4 2 -3.4 2 z" fill={t.acc} />
+      </>
+    ),
+  ],
+  /* 人工智能 v0:芯片(四边引脚 + 内核栅格 + 轨道) */
+  ai: [
+    (t) => (
+      <>
+        <ellipse cx="100" cy="70" rx="80" ry="46" stroke={t.ink} strokeOpacity=".3" strokeWidth="1.4" strokeDasharray="2 5" />
+        <rect x="76" y="46" width="48" height="48" rx="9" stroke={t.ink} strokeWidth="3" />
+        <path d="M82 52 h36 v36 h-36 z" stroke={t.ink} strokeOpacity=".25" strokeWidth="1" />
+        <rect x="92" y="62" width="16" height="16" rx="3" fill={t.acc} />
+        <path d="M96 66 l8 8 M104 66 l-8 8" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.1" />
+        <path d="M88 46 V30 M100 46 V28 M112 46 V30 M88 94 V110 M100 94 V112 M112 94 V110" stroke={t.ink} strokeWidth="2" />
+        <path d="M76 58 H60 M76 70 H58 M76 82 H60 M124 58 H140 M124 70 H142 M124 82 H140" stroke={t.ink} strokeWidth="2" />
+        <circle cx="100" cy="25" r="3.5" fill={t.acc} /><circle cx="145" cy="70" r="3.5" fill={t.acc} />
+        <circle cx="55" cy="70" r="3.5" fill={t.ink} /><circle cx="100" cy="115" r="3.5" fill={t.ink} />
+        <path d="M60 30 l3 3 M143 34 l-3 3" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+    /* 人工智能 v1:半机械脑(左有机回沟,右电路走线) */
+    (t) => (
+      <>
+        <path d="M100 28 C74 24 58 40 60 58 C54 66 56 80 64 86 C62 100 76 112 92 108 L100 108 Z" fill={t.paper} fillOpacity=".16" stroke={t.ink} strokeWidth="2.8" strokeLinejoin="round" />
+        <path d="M100 108 L106 108 C122 112 138 100 136 86 C144 80 146 66 140 58 C142 40 126 24 100 28 Z" fill={t.acc} fillOpacity=".22" stroke={t.ink} strokeWidth="2.8" strokeLinejoin="round" />
+        <path d="M84 44 q-8 6 -2 12 q-8 4 -4 12 M94 60 q-6 2 -6 10 M76 84 q6 4 12 0" stroke={t.ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        <path d="M112 44 h14 v10 h10 M108 66 h20 M116 66 v12 h12" stroke={t.ink} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="136" cy="54" r="2.6" fill={t.acc} /><circle cx="128" cy="78" r="2.6" fill={t.acc} />
+        <path d="M96 68 h8" stroke={t.ink} strokeWidth="1.6" strokeDasharray="2.4 2.4" />
+        <path d="M64 118 H136" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="146" cy="40" r="1.8" fill={t.ink} fillOpacity=".7" /><circle cx="54" cy="38" r="1.8" fill={t.acc} />
+      </>
+    ),
+  ],
+  /* 历史 v0:拱门遗迹(砖缝石柱 + 烈日) */
+  history: [
+    (t) => (
+      <>
+        <circle cx="146" cy="40" r="14" fill={t.acc} />
+        <path d="M146 20 v-5 M146 60 v5 M126 40 h-5 M166 40 h5 M132 26 l-3.4 -3.4 M160 54 l3.4 3.4 M160 26 l3.4 -3.4 M132 54 l-3.4 3.4" stroke={t.acc} strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M64 116 V74 A20 20 0 0 1 104 74 V116 Z" fill={t.paper} />
+        <path d="M75 116 V82 A9 9 0 0 1 93 82 V116 Z" fill={t.bg} />
+        <path d="M70 66 h4 M78 63 h4 M86 62 h4 M94 63 h4" stroke={t.ink} strokeOpacity=".4" strokeWidth="1.1" strokeLinecap="round" />
+        <path d="M64 96 h40 M64 106 h40" stroke={t.ink} strokeOpacity=".16" strokeWidth="1" />
+        <path d="M56 116 H112 M60 123 H108" stroke={t.paper} strokeWidth="3" strokeLinecap="round" />
+        <path d="M58 64 H110" stroke={t.paper} strokeWidth="4" strokeLinecap="round" />
+        <path d="M120 116 h34 M124 123 h26" stroke={t.paper} strokeOpacity=".75" strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M138 92 L141 98 L138 104 L135 98 Z" fill={t.paper} stroke="none" />
+        <path d="M36 62 q4 -3 8 0 M44 54 q3.4 -2.6 7 0" stroke={t.ink} strokeOpacity=".45" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+      </>
+    ),
+    /* 历史 v1:沙漏(时间文明) */
+    (t) => (
+      <>
+        <path d="M76 30 H124 M76 110 H124" stroke={t.ink} strokeWidth="3.4" strokeLinecap="round" />
+        <path d="M82 34 C82 56 96 62 96 70 C96 78 82 84 82 106 M118 34 C118 56 104 62 104 70 C104 78 118 84 118 106" stroke={t.ink} strokeWidth="2.8" fill="none" strokeLinecap="round" />
+        <path d="M88 44 h24 M90 50 h20" stroke={t.acc} strokeWidth="2" strokeLinecap="round" strokeOpacity=".85" />
+        <path d="M92 100 l8 -12 8 12 Z" fill={t.acc} fillOpacity=".9" />
+        <path d="M100 74 l-3 8 6 0 z" fill={t.acc} fillOpacity=".7" />
+        <path d="M70 46 q-6 12 0 24 M130 46 q6 12 0 24" stroke={t.paper} strokeOpacity=".6" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+        <circle cx="100" cy="70" r="2.6" fill={t.paper} />
+        <path d="M58 34 l2.6 2.6 M60.6 34 l-2.6 2.6 M142 82 l2.4 2.4 M144.4 82 l-2.4 2.4" stroke={t.paper} strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M64 116 H136" stroke={t.paper} strokeWidth="2.4" strokeLinecap="round" />
+      </>
+    ),
+  ],
+  /* 前端与代码 v0:终端窗口(命令行 + 琥珀光标) */
+  prompt: [
+    (t) => (
+      <>
+        <circle cx="100" cy="70" r="48" fill={t.acc} fillOpacity=".13" stroke="none" />
+        <rect x="56" y="40" width="88" height="60" rx="8" fill={t.paper} />
+        <path d="M64 40 H136 A8 8 0 0 1 144 48 V54 H56 V48 A8 8 0 0 1 64 40 Z" fill={t.ink} />
+        <circle cx="65" cy="47" r="2.2" fill={t.acc} /><circle cx="73" cy="47" r="2.2" fill={t.paper} /><circle cx="81" cy="47" r="2.2" fill={t.paper} fillOpacity=".55" />
+        <path d="M66 66 L74 72 L66 78" stroke={t.ink} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M82 72 H102" stroke={t.ink} strokeWidth="3" strokeLinecap="round" />
+        <rect x="110" y="66" width="10" height="13" rx="2" fill={t.acc} />
+        <path d="M66 89 H120" stroke={t.ink} strokeWidth="2" strokeDasharray="4 4" strokeOpacity=".45" />
+        {/* 代码缩进行 */}
+        <path d="M70 84 h6 M80 84 h22" stroke={t.ink} strokeOpacity=".3" strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M48 30 l2.6 2.6 M50.6 30 l-2.6 2.6" stroke={t.ink} strokeOpacity=".6" strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+    /* 前端 v1:组件层级(框中框 + 双向绑定流) */
+    (t) => (
+      <>
+        <circle cx="100" cy="70" r="48" fill={t.acc} fillOpacity=".1" stroke="none" />
+        <rect x="52" y="34" width="96" height="72" rx="7" fill={t.paper} stroke={t.ink} strokeWidth="2.4" />
+        <path d="M52 46 H148" stroke={t.ink} strokeWidth="1.4" />
+        <circle cx="60" cy="40" r="2" fill={t.acc} /><circle cx="68" cy="40" r="2" fill={t.ink} fillOpacity=".5" />
+        <rect x="62" y="54" width="46" height="20" rx="4" fill="none" stroke={t.ink} strokeWidth="2" />
+        <path d="M66 60 h30 M66 66 h20" stroke={t.ink} strokeOpacity=".45" strokeWidth="1.6" strokeLinecap="round" />
+        <rect x="116" y="54" width="24" height="20" rx="4" fill={t.acc} fillOpacity=".9" />
+        <rect x="62" y="82" width="24" height="16" rx="4" fill="none" stroke={t.ink} strokeWidth="1.8" />
+        <rect x="92" y="82" width="48" height="16" rx="4" fill="none" stroke={t.ink} strokeWidth="1.8" />
+        <path d="M74 82 v-8 M128 82 v-8" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.3" />
+        <path d="M108 64 h6 M117 64 h-3.4 l3 0" stroke={t.ink} strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M44 30 l2.6 2.6 M46.6 30 l-2.6 2.6" stroke={t.ink} strokeOpacity=".55" strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+  ],
+  /* 心理学 v0:侧脸与念头 */
+  psych: [
+    (t) => (
+      <>
+        <path
+          d="M126 118 V100 C140 92 146 78 142 62 C138 44 122 32 102 32 C82 32 66 46 64 64 C63 71 64 77 66 82 L58 94 L68 96 L70 104 C71 112 78 118 86 118 Z"
+          fill={t.paper} fillOpacity=".45" stroke={t.ink} strokeWidth="3" strokeLinejoin="round"
+        />
+        {/* 颅内脑回 */}
+        <path d="M88 52 q6 -8 14 -2 q8 -6 12 4 q8 0 6 10 M84 72 q8 -4 12 2 q6 6 14 2" stroke={t.ink} strokeOpacity=".35" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <circle cx="100" cy="62" r="12" fill={t.acc} />
+        <circle cx="96.5" cy="58.5" r="3.4" fill={t.paper} fillOpacity=".55" />
+        <path d="M100 46 V39 M112 51 L117 45 M88 51 L83 45" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
+        <circle cx="100" cy="62" r="4" fill={t.ink} />
+        <path d="M72 30 l2.4 2.4 M74.4 30 l-2.4 2.4" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+    /* 心理学 v1:冰山(意识/潜意识水线) */
+    (t) => (
+      <>
+        <path d="M42 96 h116" stroke={t.ink} strokeWidth="2" strokeOpacity=".7" strokeLinecap="round" />
+        <path d="M46 92 q8 -3 16 0 M58 100 q8 -3 16 0 M96 99 q8 -3 16 0 M118 93 q8 -3 16 0" stroke={t.ink} strokeOpacity=".35" strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        {/* 水上小尖 */}
+        <path d="M78 92 L100 62 L122 92 Z" fill={t.paper} stroke={t.ink} strokeWidth="2.4" strokeLinejoin="round" />
+        <path d="M100 62 L100 92" stroke={t.ink} strokeOpacity=".25" strokeWidth="1.2" />
+        <circle cx="100" cy="52" r="5" fill={t.acc} />
+        {/* 水下巨体 */}
+        <path d="M78 92 L122 92 L138 116 L128 122 L64 122 L58 108 Z" fill={t.ink} fillOpacity=".82" stroke={t.ink} strokeWidth="2.4" strokeLinejoin="round" />
+        <path d="M88 102 l10 6 M104 104 l12 8 M84 112 l8 4" stroke={t.paper} strokeOpacity=".4" strokeWidth="1.3" strokeLinecap="round" />
+        <circle cx="146" cy="106" r="2" fill={t.acc} /><circle cx="52" cy="110" r="1.7" fill={t.acc} fillOpacity=".8" />
+      </>
+    ),
+  ],
+  /* 考试与进阶 v0:同心靶心,一箭中的 */
+  sat: [
+    (t) => (
+      <>
+        <circle cx="96" cy="68" r="34" stroke={t.ink} strokeWidth="2.6" />
+        <circle cx="96" cy="68" r="23" stroke={t.ink} strokeWidth="2.2" />
+        <circle cx="96" cy="68" r="12" fill={t.ink} />
+        <circle cx="96" cy="68" r="4" fill={t.acc} />
+        <path d="M146 26 L103 61" stroke={t.ink} strokeWidth="3" strokeLinecap="round" />
+        <path d="M116 50 L104 61 L117 63" stroke={t.ink} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M146 26 l9 -3 M146 26 l3 9" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M50 118 H142" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M62 74 a34 34 0 0 1 8 -22" stroke={t.paper} strokeWidth="1.4" fill="none" strokeOpacity=".6" />
+        <path d="M48 40 l2.6 2.6 M50.6 40 l-2.6 2.6" stroke={t.ink} strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+    /* 考试 v1:答题卡与铅笔 */
+    (t) => (
+      <>
+        <rect x="56" y="28" width="72" height="88" rx="6" fill={t.paper} stroke={t.ink} strokeWidth="2.4" />
+        <path d="M64 38 h40 M64 44 h26" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.8" strokeLinecap="round" />
+        {[56, 68, 80, 92].map((y, ri) => (
+          <g key={ri}>
+            {[0, 1, 2, 3].map((ci) => (
+              <circle key={ci} cx={68 + ci * 14} cy={y} r="3.6" fill={(ri === 1 && ci === 2) || (ri === 2 && ci === 0) ? t.acc : 'none'} stroke={t.ink} strokeWidth="1.4" />
+            ))}
+          </g>
+        ))}
+        <path d="M96 82 L128 34 l7 5 -32 48 -9 4 Z" fill={t.acc} stroke={t.ink} strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M99 85 l24 -36" stroke={t.paper} strokeWidth="1.4" />
+        <path d="M46 40 l2.6 2.6 M48.6 40 l-2.6 2.6" stroke={t.ink} strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+  ],
+  /* 哲学 v0:大问号 */
+  philo: [
+    (t) => (
+      <>
+        <path d="M92 46 C92 34 102 28 112 28 C124 28 132 36 132 46 C132 57 122 61 116 68 C112 73 111 78 111 84" stroke={t.ink} strokeWidth="7" strokeLinecap="round" />
+        <circle cx="111" cy="101" r="6.5" fill={t.acc} />
+        <path d="M62 44 V104 M158 44 V104" stroke={t.ink} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M58 44 h8 M154 44 h8 M58 104 h8 M154 104 h8" stroke={t.ink} strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M84 116 H138" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M62 52 h-4 M158 52 h4" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.4" strokeLinecap="round" />
+        <circle cx="66" cy="34" r="2" fill={t.acc} /><path d="M146 30 l2.4 2.4 M148.4 30 l-2.4 2.4" stroke={t.ink} strokeWidth="1.2" strokeLinecap="round" />
+      </>
+    ),
+    /* 哲学 v1:天平(理性与情感的权衡) */
+    (t) => (
+      <>
+        <path d="M100 34 V92" stroke={t.ink} strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M64 44 H136" stroke={t.ink} strokeWidth="2.6" strokeLinecap="round" />
+        <circle cx="100" cy="40" r="4.5" fill={t.acc} />
+        <path d="M64 44 L52 66 M64 44 L76 66 M52 66 a12 12 0 0 0 24 0 Z M136 44 L124 66 M136 44 L148 66 M124 66 a12 12 0 0 0 24 0 Z" stroke={t.ink} strokeWidth="1.8" fill="none" strokeLinejoin="round" />
+        <path d="M52 66 a12 12 0 0 0 24 0 Z" fill={t.acc} fillOpacity=".55" />
+        <circle cx="64" cy="62" r="4" fill={t.ink} />
+        <path d="M92 92 h16 M84 98 h32" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M74 56 q4 -3.4 8 0" stroke={t.ink} strokeOpacity=".45" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+        <circle cx="146" cy="34" r="1.8" fill={t.acc} />
+      </>
+    ),
+  ],
+  /* 数学与统计 v0:钟形曲线 */
+  stats: [
+    (t) => (
+      <>
+        <path d="M44 114 C68 114 74 46 100 46 C126 46 132 114 156 114 Z" fill={t.ink} fillOpacity=".88" stroke="none" />
+        <path d="M92 114 V62 C95 55 105 55 108 62 V114 Z" fill={t.acc} fillOpacity=".92" stroke="none" />
+        <path d="M100 52 V114" stroke={t.paper} strokeWidth="1.6" strokeDasharray="3 4" />
+        <path d="M40 114 H160" stroke={t.ink} strokeWidth="2" strokeLinecap="round" />
+        <circle cx="100" cy="46" r="5" fill={t.acc} stroke={t.ink} strokeWidth="1.5" />
+        <circle cx="66" cy="96" r="3" fill={t.paper} /><circle cx="134" cy="96" r="3" fill={t.paper} />
+        <path d="M52 118 v-4 M76 118 v-4 M124 118 v-4 M148 118 v-4" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M60 78 q3.4 -2.6 7 0" stroke={t.paper} strokeWidth="1.2" fill="none" strokeLinecap="round" strokeOpacity=".7" />
+      </>
+    ),
+    /* 统计 v1:散点回归(置信带) */
+    (t) => (
+      <>
+        <path d="M50 104 L146 44 L150 52 L54 112 Z" fill={t.acc} fillOpacity=".28" stroke="none" />
+        <path d="M50 108 L148 48" stroke={t.ink} strokeWidth="2.4" strokeLinecap="round" />
+        <circle cx="62" cy="102" r="4" fill={t.ink} /><circle cx="80" cy="94" r="4" fill={t.paper} stroke={t.ink} strokeWidth="1.8" />
+        <circle cx="94" cy="88" r="4" fill={t.ink} /><circle cx="108" cy="72" r="4" fill={t.acc} />
+        <circle cx="120" cy="70" r="4" fill={t.paper} stroke={t.ink} strokeWidth="1.8" /><circle cx="136" cy="54" r="4" fill={t.ink} />
+        <path d="M44 116 H156 M44 116 V36" stroke={t.ink} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M56 120 v-4 M88 120 v-4 M120 120 v-4 M40 104 h4 M40 76 h4 M40 48 h4" stroke={t.ink} strokeOpacity=".5" strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M148 44 l4 -2.6 M148 44 l2.6 4" stroke={t.ink} strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M60 42 q4 -3.4 8 0" stroke={t.ink} strokeOpacity=".4" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+      </>
+    ),
+  ],
 };
 
-const CoverArt: React.FC<{ kind: CoverKind }> = ({ kind }) => {
+const CoverArt: React.FC<{ kind: CoverKind; seed?: string | number }> = ({ kind, seed }) => {
   if (!Object.prototype.hasOwnProperty.call(plates, kind)) return null;
-  const t = coverTheme[kind];
+  const base = coverTheme[kind];
+  const h = hashSeed(seed === undefined ? kind : `${kind}:${seed}`);
+  const t: CoverTheme = { ...base, acc: (h >>> 2) & 1 ? base.accB : base.acc };
+  const variant = (h >>> 0) & 1;
+  const mirror = (h >>> 1) & 1;
+  const art = plates[kind][variant](t);
   return (
     <svg aria-hidden="true" focusable="false" viewBox="0 0 200 140" width="200" height="140" fill="none">
-      {/* 藏书票签名:细内框 + 左上角琥珀菱标 + 右下短刻线,全套封面统一 */}
+      {/* 藏书票签名:细内框 + 左上角琥珀菱标,全套封面统一 */}
       <rect x="10" y="10" width="180" height="120" rx="8" stroke={t.ink} strokeOpacity=".3" strokeWidth="1.4" />
       <path d="M18 14 L22 18 L18 22 L14 18 Z" fill={t.acc} stroke="none" />
-      <path d="M168 122 H178" stroke={t.ink} strokeWidth="1.6" strokeOpacity=".5" strokeLinecap="round" />
       <g fill="none" strokeLinecap="round" strokeLinejoin="round">
-        {plates[kind](t)}
+        {mirror ? <g transform="translate(200 0) scale(-1 1)">{art}</g> : art}
       </g>
+      {/* 种子唯一化饰层:星座记号 + 框角装帧 */}
+      <Constellation h={h} ink={t.ink} acc={t.acc} />
+      <CornerDress h={h} ink={t.ink} acc={t.acc} />
     </svg>
   );
 };
 
-/** Course cover: hand-drawn art on a tinted (or gradient) ground. `flat` = no radius/shadow chrome of its own. */
-export const CourseCover: React.FC<{ kind: CoverKind; flat?: boolean; style?: React.CSSProperties }> = ({ kind, flat, style }) => (
+/** Course cover: hand-drawn art on a tinted ground. `seed` 绑定课程身份(同一课程处处同图,不同课程必不同图). `flat` = no radius/shadow chrome of its own. */
+export const CourseCover: React.FC<{ kind: CoverKind; seed?: string | number; flat?: boolean; style?: React.CSSProperties }> = ({ kind, seed, flat, style }) => (
   <div
     style={{
       width: '100%',
@@ -553,7 +903,7 @@ export const CourseCover: React.FC<{ kind: CoverKind; flat?: boolean; style?: Re
       ...style,
     }}
   >
-    <CoverArt kind={kind} />
+    <CoverArt kind={kind} seed={seed} />
   </div>
 );
 
@@ -568,6 +918,7 @@ export const HighlightSwash: React.FC<{ children: React.ReactNode }> = ({ childr
       preserveAspectRatio="none"
     >
       <path d="M2 12 Q 25 4 50 9 T 98 8 L 97 17 Q 60 20 30 17 T 2 15 Z" fill="#DCC48F" opacity="0.85" />
+      <path d="M8 14.5 Q 40 11 70 11.5" stroke="#C9A96A" strokeWidth="0.8" fill="none" opacity=".7" />
     </svg>
     <span style={{ position: 'relative', zIndex: 1 }}>{children}</span>
   </span>
@@ -604,6 +955,13 @@ export const BoardHighlight: React.FC<{ w: number; h?: number; animate?: boolean
     <path
       d={`M2 ${h * 0.28} Q ${w * 0.3} ${h * 0.08} ${w * 0.55} ${h * 0.2} T ${w - 2} ${h * 0.3} L ${w - 3} ${h * 0.82} Q ${w * 0.6} ${h * 0.98} ${w * 0.35} ${h * 0.85} T 3 ${h * 0.78} Z`}
       fill={color}
+    />
+    <path
+      d={`M6 ${h * 0.5} Q ${w * 0.35} ${h * 0.4} ${w * 0.6} ${h * 0.48}`}
+      stroke="#E8D98A"
+      strokeWidth="1"
+      fill="none"
+      opacity=".5"
     />
   </svg>
 );
@@ -660,10 +1018,12 @@ export const BoardUnderline: React.FC<{ w: number; animate?: boolean; color?: st
   );
 };
 
-/** Small yellow pencil that rides the handwriting head. */
+/** Small yellow pencil that rides the handwriting head — 精绘:木纹、金属箍。 */
 export const BoardPencil: React.FC<{ size?: number }> = ({ size = 20 }) => (
   <svg width={size} height={size} viewBox="0 0 20 20" style={{ transform: 'rotate(35deg)', filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.15))' }}>
     <rect x="7.6" y="1.5" width="4.8" height="12" rx="1" fill="#F2C94C" stroke="#8A6D1A" strokeWidth="0.9" />
+    <path d="M9 2.5 v10.6 M11 2.5 v10.6" stroke="#D9A93C" strokeWidth="0.7" strokeLinecap="round" />
+    <rect x="7.35" y="12" width="5.3" height="1.7" rx="0.5" fill="#B9BCC4" stroke="#6E7480" strokeWidth="0.6" />
     <path d="M7.6 13.5 L10 18.6 L12.4 13.5 Z" fill="#F5D0A9" stroke="#8A6D1A" strokeWidth="0.9" />
     <path d="M9.3 17 L10 18.6 L10.7 17 Z" fill="#3A3A3A" />
     <rect x="7.6" y="1.5" width="4.8" height="2.6" rx="1" fill="#ED93B1" stroke="#8A6D1A" strokeWidth="0.8" />

@@ -85,17 +85,23 @@ export const WhiteboardConceptSketch: React.FC<{
               <circle cx="48" cy="32" r="3" fill="#A9BCA5" />
               <circle cx="58" cy="32" r="3" fill="#164E46" />
               <text x="75" y="35" fontSize="9" fill="#164E46" fontFamily="sans-serif" fontWeight="600">App.vue [Component Hierarchy]</text>
-              {/* 父子组件嵌套 */}
+              {/* 父子组件嵌套 + 插槽记号 */}
               <rect x="40" y="56" width="90" height="34" rx="5" fill="#E8EBDD" />
               <text x="50" y="76" fontSize="10" fill="#164E46" fontFamily="sans-serif">State / Ref</text>
+              <path d="M44 61 h20 M44 65 h12" stroke="#164E46" strokeOpacity=".25" strokeWidth="1.2" strokeLinecap="round" />
               <rect x="150" y="56" width="90" height="34" rx="5" fill="#EDF0DF" />
               <text x="160" y="76" fontSize="10" fill="#164E46" fontFamily="sans-serif">Virtual DOM</text>
-              {/* 响应式数据流动箭头 */}
+              <path d="M154 61 h16 M154 65 h10" stroke="#164E46" strokeOpacity=".25" strokeWidth="1.2" strokeLinecap="round" />
+              {/* 响应式数据流动箭头(双向) */}
               <path d="M130 68 L150 68" stroke="#D9A441" strokeWidth="2.4" />
               <path d="M144 64 L150 68 L144 72" fill="#D9A441" />
               <path d="M150 82 L130 82" stroke="#164E46" strokeWidth="1.5" strokeDasharray="3 3" />
+              <path d="M136 78 L130 82 L136 86" fill="none" stroke="#164E46" strokeWidth="1.5" />
               <rect x="75" y="102" width="130" height="26" rx="4" fill="#164E46" />
               <text x="96" y="118" fontSize="10" fill="#F7F4EC" fontFamily="sans-serif">Reactive Binding (UI Update)</text>
+              {/* 差量更新小方块 */}
+              <rect x="212" y="106" width="7" height="7" rx="1.5" fill="#D9A441" />
+              <rect x="222" y="106" width="7" height="7" rx="1.5" fill="none" stroke="#F7F4EC" strokeWidth="1" />
             </g>
           )}
 
@@ -109,16 +115,20 @@ export const WhiteboardConceptSketch: React.FC<{
               {/* 刺激输入 */}
               <rect x="30" y="66" width="60" height="28" rx="6" fill="#F7F4EC" />
               <text x="38" y="83" fontSize="9.5" fill="#164E46" fontFamily="sans-serif" fontWeight="600">Stimulus 刺激</text>
-              {/* 认知中枢 */}
+              <circle cx="44" cy="71" r="1.6" fill="#D9A441" />
+              {/* 认知中枢:树突棘 */}
               <circle cx="140" cy="80" r="26" fill="#D9A441" fillOpacity=".25" />
               <circle cx="140" cy="80" r="18" fill="#164E46" />
               <circle cx="140" cy="80" r="6" fill="#D9A441" />
+              <path d="M128 66 l-5 -6 M152 66 l5 -6 M124 80 h-8 M156 80 h8 M128 94 l-5 6 M152 94 l5 6" strokeWidth="1.3" />
               <text x="118" y="122" fontSize="9" fill="#164E46" fontFamily="sans-serif">Appraisal 评估</text>
               {/* 反应行为 */}
               <rect x="190" y="66" width="60" height="28" rx="6" fill="#F7F4EC" />
               <text x="195" y="83" fontSize="9.5" fill="#164E46" fontFamily="sans-serif" fontWeight="600">Response 反应</text>
-              {/* 传导流 */}
+              <circle cx="238" cy="71" r="1.6" fill="#164E46" />
+              {/* 传导流(带端头) */}
               <path d="M90 80 L122 80 M158 80 L190 80" stroke="#D9A441" strokeWidth="2.2" />
+              <path d="M118 76.5 L122 80 L118 83.5 M186 76.5 L190 80 L186 83.5" fill="none" stroke="#D9A441" strokeWidth="1.8" />
               <path d="M220 94 Q140 146, 60 94" stroke="#164E46" strokeDasharray="4 3" />
             </g>
           )}
@@ -133,10 +143,14 @@ export const WhiteboardConceptSketch: React.FC<{
               <circle cx="140" cy="65" r="9" fill="#D9A441" />
               <circle cx="140" cy="95" r="9" fill="#164E46" />
               <circle cx="215" cy="80" r="8" fill="#D9A441" />
+              {/* 注意力权重弧(粗细=权重) */}
               <path d="M72 50 L131 65 M72 50 L131 95" strokeWidth="1.4" strokeOpacity=".5" />
               <path d="M72 80 L131 65 M72 80 L131 95" strokeWidth="1.8" stroke="#D9A441" />
               <path d="M72 110 L131 65 M72 110 L131 95" strokeWidth="1.4" strokeOpacity=".5" />
               <path d="M149 65 L207 80 M149 95 L207 80" strokeWidth="2" />
+              <path d="M203 76 L207 80 L203 84 M203 76.5 L207 80.5 L203 84" fill="none" strokeWidth="1.6" />
+              {/* 隐层分隔虚线 */}
+              <path d="M112 34 V126 M168 34 V126" strokeWidth="1" strokeOpacity=".2" strokeDasharray="3 3.4" />
               <text x="45" y="145" fontSize="9" fill="#164E46" fontFamily="sans-serif">Input Features</text>
               <text x="120" y="145" fontSize="9" fill="#164E46" fontFamily="sans-serif">Latent Layers</text>
               <text x="195" y="145" fontSize="9" fill="#164E46" fontFamily="sans-serif">Output</text>
@@ -148,16 +162,24 @@ export const WhiteboardConceptSketch: React.FC<{
               {/* 通用结构化知识阶梯：概念 -> 机理 -> 实践 */}
               <rect x="30" y="35" width="65" height="42" rx="6" fill="#F7F4EC" />
               <text x="40" y="58" fontSize="10" fill="#164E46" fontFamily="sans-serif" fontWeight="600">背景情境</text>
+              <path d="M36 43 h30 M36 47 h20" stroke="#164E46" strokeOpacity=".2" strokeWidth="1.4" strokeLinecap="round" />
               <rect x="110" y="30" width="65" height="52" rx="6" fill="#E8EBDD" />
               <text x="120" y="58" fontSize="10" fill="#164E46" fontFamily="sans-serif" fontWeight="600">核心机制</text>
               <circle cx="142" cy="70" r="4" fill="#D9A441" />
+              <circle cx="142" cy="70" r="7" fill="none" stroke="#D9A441" strokeWidth="1" strokeOpacity=".55" />
               <rect x="190" y="35" width="65" height="42" rx="6" fill="#F7F4EC" />
               <text x="200" y="58" fontSize="10" fill="#164E46" fontFamily="sans-serif" fontWeight="600">实践落地</text>
+              <path d="M36 69 h24 M204 43 h26 M204 47 h16" stroke="#164E46" strokeOpacity=".2" strokeWidth="1.4" strokeLinecap="round" />
+              {/* 阶梯箭头带端头 */}
               <path d="M95 56 L110 56 M175 56 L190 56" stroke="#D9A441" strokeWidth="2.2" />
+              <path d="M106.5 52.5 L110 56 L106.5 59.5 M186.5 52.5 L190 56 L186.5 59.5" fill="none" stroke="#D9A441" strokeWidth="1.8" />
               <path d="M40 102 H240" strokeWidth="1.5" strokeDasharray="4 3" />
               <circle cx="140" cy="116" r="14" fill="#164E46" />
+              <circle cx="140" cy="116" r="18" fill="none" stroke="#164E46" strokeOpacity=".25" strokeWidth="1.2" strokeDasharray="3 3.4" />
               <path d="M135 116 L139 120 L146 112" stroke="#F7F4EC" strokeWidth="2" fill="none" />
               <text x="100" y="142" fontSize="9.5" fill="#164E46" fontFamily="sans-serif">Syllabus Synthesis Flow</text>
+              <path d="M38 26 l2.4 2.4 M40.4 26 l-2.4 2.4" stroke="#D9A441" strokeWidth="1.3" strokeLinecap="round" />
+              <circle cx="248" cy="26" r="2" fill="#D9A441" fillOpacity=".8" />
             </g>
           )}
         </svg>

@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
-import { AwardPhone, AwardPopper, DeskWriter, TrophyPerson } from '../illustrations';
+import { AwardPhone, AwardPopper, DeskWriter, TrophyPerson, CourseCover, type CoverKind } from '../illustrations';
+import { KnotMark } from '../pages/CourseJourney';
 import { getAwards, getIntroCopy, type PopupKind } from './lessonScript';
 import { audioCheck, openFeedbackMail, tts, type AudioCheckResult } from '../actions';
 import { modelCheck, pingBackend } from '../backend';
@@ -26,32 +27,41 @@ import type { ExportFormat, ExportPage } from '../boardExport';
 
 /* ---------------- Intro (loading) ---------------- */
 
+/* 精绘奔跑学者:束发、扬臂持卷、披风摆动、速度线三层 */
 const Runner: React.FC = () => (
   <>
     <div className="wb-runner-shadow" />
     <svg className="wb-runner-streaks" width="60" height="60" viewBox="0 0 60 60">
       <path d="M4 14 h34 M12 28 h30 M4 42 h26" stroke="#1A1A1A" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.55" />
+      <path d="M8 21 h20 M6 35 h16" stroke="#1A1A1A" strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.3" />
     </svg>
     <svg className="wb-runner" width="150" height="150" viewBox="0 0 150 150">
-      {/* back leg */}
+      {/* back leg: 大小腿两段 + 鞋 */}
       <path d="M78 96 q-14 10 -22 26" stroke="#1A1A1A" strokeWidth="6" fill="none" strokeLinecap="round" />
       <path d="M52 124 l-8 4" stroke="#1A1A1A" strokeWidth="6" strokeLinecap="round" />
       {/* front leg */}
       <path d="M84 96 q14 8 18 20" stroke="#1A1A1A" strokeWidth="6" fill="none" strokeLinecap="round" />
       <path d="M103 117 l9 2" stroke="#1A1A1A" strokeWidth="6" strokeLinecap="round" />
-      {/* torso: white sweater */}
+      {/* torso: white sweater + 下摆摆动线 */}
       <path d="M70 52 q-6 24 8 46 q14 4 22 -2 q6 -26 -6 -44 z" fill="#fff" stroke="#1A1A1A" strokeWidth="2.4" />
+      <path d="M76 88 q10 6 20 2" stroke="#1A1A1A" strokeWidth="1.2" fill="none" strokeOpacity=".4" strokeLinecap="round" />
+      {/* 披风(青绿) */}
+      <path d="M74 54 q-16 4 -18 30 q8 6 14 4 q-2 -20 8 -30 z" fill="#C8CF2D" stroke="#1A1A1A" strokeWidth="1.8" strokeLinejoin="round" />
       {/* arms clutching book */}
       <path d="M72 62 q16 10 26 12 M88 58 q10 8 12 14" stroke="#1A1A1A" strokeWidth="4.5" fill="none" strokeLinecap="round" />
       <rect x="94" y="60" width="24" height="20" rx="3" fill="#C8CF2D" stroke="#1A1A1A" strokeWidth="2" transform="rotate(12 106 70)" />
       <path d="M99 66 l14 3 M99 71 l14 3" stroke="#1A1A1A" strokeWidth="1.2" transform="rotate(12 106 70)" />
       {/* head */}
       <circle cx="86" cy="38" r="14" fill="#fff" stroke="#1A1A1A" strokeWidth="2.4" />
-      {/* curly hair */}
+      {/* curly hair + 发丝 */}
       <path d="M72 34 q-4 -12 8 -14 q-2 -6 7 -7 q4 -6 11 -2 q8 -2 9 6 q7 3 3 11 q3 7 -4 10 q-14 -10 -34 -4 z" fill="#1A1A1A" />
-      {/* face */}
+      <path d="M74 22 q-4 -3 -3 -7 M82 16 q-1 -4 2 -6" stroke="#1A1A1A" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      {/* face: 眼 + 张口呼喊 + 圆镜 */}
       <circle cx="91" cy="38" r="1.6" fill="#1A1A1A" />
+      <circle cx="85.5" cy="39" r="3" fill="#fff" stroke="#1A1A1A" strokeWidth="1.2" />
       <path d="M92 45 q4 2 7 0" stroke="#1A1A1A" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      {/* 前扬书页一页 */}
+      <path d="M120 58 l8 2 -6 6 z" fill="#fff" stroke="#1A1A1A" strokeWidth="1.2" strokeLinejoin="round" />
     </svg>
   </>
 );
@@ -64,7 +74,9 @@ export const IntroOverlay: React.FC<{
   body?: string;
   /** 直播放讲座计划生成中:CTA 变"准备板书"等待态(不可开讲) */
   preparing?: boolean;
-}> = ({ onStart, onClose, title, body, preparing }) => {
+  /** 本课唯一封面(种子=课程 UUID/话题):开始讲课页每课不同图 */
+  cover?: { kind: CoverKind; seed?: string | number } | null;
+}> = ({ onStart, onClose, title, body, preparing, cover }) => {
   const intro = { ...getIntroCopy(), ...(title ? { title } : {}), ...(body ? { body } : {}) };
   return (
     <div className="wb-intro">
@@ -73,7 +85,16 @@ export const IntroOverlay: React.FC<{
       </button>
       <div className="wb-intro-card">
         <div className="wb-intro-art">
-          <Runner />
+          {cover && !preparing ? (
+            <div className="wb-intro-cover">
+              <CourseCover kind={cover.kind} seed={cover.seed} />
+              <span className="wb-intro-cover-cap">
+                <KnotMark size={11} /> {L('Lattice Official', '见界官方')}
+              </span>
+            </div>
+          ) : (
+            <Runner />
+          )}
         </div>
         <div className="wb-intro-body">
           <div className="wb-intro-eyebrow">{intro.eyebrow}</div>
@@ -185,18 +206,26 @@ export const UnitCompletePopup: React.FC<{ onChat: () => void; onHome: () => voi
 
 const ThinkingArt: React.FC = () => (
   <svg width="80" height="90" viewBox="0 0 80 90">
+    {/* 思绪泡泡链(从小到大飘向 ?) */}
+    <circle cx="58" cy="14" r="2.2" fill="none" stroke="#1A1A1A" strokeWidth="1.2" opacity=".55" />
+    <circle cx="64" cy="6" r="1.3" fill="#1A1A1A" opacity=".45" />
     <circle cx="40" cy="26" r="14" fill="#fff" stroke="#1A1A1A" strokeWidth="2.2" />
     <path d="M27 20 q-2 -12 11 -13 q3 -5 10 -3 q9 -2 11 6 q6 3 2 10 q-12 -8 -34 0 z" fill="#1A1A1A" />
+    <path d="M30 22 q8 -4 18 -2" stroke="#fff" strokeOpacity=".4" strokeWidth="1.1" fill="none" strokeLinecap="round" />
     <circle cx="44" cy="26" r="1.5" fill="#1A1A1A" />
     <path d="M42 33 q4 2 7 0" stroke="#1A1A1A" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    {/* 单片眼镜 + 手托下巴 */}
+    <circle cx="45" cy="39" r="4" fill="#fff" stroke="#1A1A1A" strokeWidth="1.8" />
+    <path d="M49 41 l4 6" stroke="#1A1A1A" strokeWidth="1" />
     {/* body */}
     <path d="M26 44 q-6 20 4 40 h20 q10 -22 2 -40 q-12 -6 -26 0 z" fill="#fff" stroke="#1A1A1A" strokeWidth="2.2" />
+    <path d="M32 50 q-2 14 1 28 M46 50 q2 14 0 26" stroke="#1A1A1A" strokeWidth="1" fill="none" strokeOpacity=".25" strokeLinecap="round" />
     {/* hand on chin */}
     <path d="M30 52 q10 -2 14 -12" stroke="#1A1A1A" strokeWidth="4" fill="none" strokeLinecap="round" />
-    <circle cx="45" cy="39" r="4" fill="#fff" stroke="#1A1A1A" strokeWidth="1.8" />
-    {/* ? mark */}
+    {/* ? mark + 底线 */}
     <path d="M62 10 q6 -6 10 0 q3 5 -2 8 q-3 2 -3 5" stroke="#1A1A1A" strokeWidth="2.4" fill="none" strokeLinecap="round" />
     <circle cx="67" cy="29" r="1.8" fill="#1A1A1A" />
+    <path d="M22 88 h36" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" opacity=".35" />
   </svg>
 );
 

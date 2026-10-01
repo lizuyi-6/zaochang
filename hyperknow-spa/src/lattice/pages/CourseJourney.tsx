@@ -51,18 +51,29 @@ export const KandinskyCover: React.FC<{ size?: number; radius?: number }> = ({ s
     {/* 康定斯基式核心黄金太阳与知识同心圆 */}
     <circle cx="152" cy="92" r="54" fill="#D9A441" fillOpacity=".9" />
     <circle cx="152" cy="92" r="70" fill="none" stroke="#C24A2E" strokeWidth="1.8" strokeDasharray="5 4" strokeOpacity=".4" />
+    {/* 太阳光辉刻线 */}
+    <path d="M152 22v-8M152 162v8M92 92h-8M212 92h8M110 50l-6-6M194 134l6 6M194 50l6-6M110 134l-6 6" stroke="#D9A441" strokeWidth="2" strokeLinecap="round" />
+    <path d="M136 62a34 34 0 0 1 30 -2" stroke="#F7F1E4" strokeOpacity=".55" strokeWidth="2.4" fill="none" strokeLinecap="round" />
     {/* 结构多边形与学术张力面 */}
     <polygon points="64,180 108,76 182,144" fill="#C9B896" fillOpacity=".8" stroke="#C24A2E" strokeWidth="2.4" strokeLinejoin="round" />
     <polygon points="92,192 144,116 204,184" fill="#C24A2E" fillOpacity=".85" stroke="#C24A2E" strokeWidth="2.4" strokeLinejoin="round" />
+    {/* 多边形顶点铆点 */}
+    <circle cx="108" cy="76" r="4" fill="#F7F1E4" stroke="#C24A2E" strokeWidth="1.4" />
+    <circle cx="144" cy="116" r="4" fill="#F7F1E4" stroke="#C24A2E" strokeWidth="1.4" />
     {/* 交叉流向切线与几何光点 */}
     <path d="M40 208 L208 40" stroke="#C24A2E" strokeWidth="2.6" strokeLinecap="round" />
     <path d="M36 124 L212 124" stroke="#C24A2E" strokeWidth="1.5" strokeOpacity=".3" />
     <circle cx="72" cy="64" r="14" fill="#C24A2E" />
     <circle cx="72" cy="64" r="6" fill="#F7F1E4" />
+    <circle cx="72" cy="64" r="10" fill="none" stroke="#F7F1E4" strokeOpacity=".5" strokeWidth="1" />
     <circle cx="196" cy="188" r="8" fill="#D9A441" />
+    <path d="M190 186a8 8 0 0 1 10 -2" stroke="#C24A2E" strokeWidth="1.3" fill="none" strokeLinecap="round" />
     <circle cx="48" cy="168" r="5" fill="#C9B896" />
     <circle cx="176" cy="56" r="4" fill="#F7F1E4" stroke="#C24A2E" strokeWidth="2" />
     <path d="M52 44 Q88 32, 124 44" stroke="#D9A441" strokeWidth="3" strokeLinecap="round" fill="none" />
+    {/* 音符点(知识交响) */}
+    <path d="M36 84 h7 M36 90 h5" stroke="#C24A2E" strokeOpacity=".5" strokeWidth="1.6" strokeLinecap="round" />
+    <circle cx="220" cy="150" r="2.4" fill="#C24A2E" fillOpacity=".7" />
   </svg>
 );
 
@@ -104,21 +115,26 @@ const Ring: React.FC<{ size?: number; pct?: number; color?: string; track?: stri
   );
 };
 
-/* Fanned DOC / XLS / PDF file icons for the "Add materials" card. */
+/* Fanned DOC / XLS / PDF file icons for the "Add materials" card — 精绘:折角高光、徽记、回形针。 */
 const FileFan: React.FC = () => (
   <svg width="58" height="38" viewBox="0 0 58 38" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
     <g transform="rotate(-15 18 23)">
       <path d="M7 8h15l5 5v21H7Z" fill="#C9B896" stroke="#C24A2E" />
+      <path d="M22 8v5h5" fill="none" stroke="#C24A2E" strokeOpacity=".6" />
       <path d="M12 17h10M12 21h10M12 25h6" stroke="#C24A2E" />
     </g>
     <g transform="rotate(3 29 20)">
       <path d="M19 4h15l5 5v24H19Z" fill="#F7F1E4" stroke="#C24A2E" />
-      <path d="M34 4v6h5M24 15h10M24 20h10M24 25h7" fill="none" stroke="#C24A2E" />
+      <path d="M34 4v6h5" fill="none" stroke="#C24A2E" />
+      <path d="M24 15h10M24 20h10M24 25h7" fill="none" stroke="#C24A2E" />
+      <path d="M21.5 8.5 h3 M21.5 11 h3" stroke="#D9A441" strokeWidth="1.2" strokeLinecap="round" />
     </g>
     <g transform="rotate(17 42 24)">
       <path d="M32 10h15l5 5v21H32Z" fill="#D9A441" stroke="#C24A2E" />
       <path d="m37 28 4-9 5 9M38 25h7" fill="none" stroke="#C24A2E" strokeWidth="1.4" />
     </g>
+    {/* 回形针别住的便签 */}
+    <path d="M48 30 q0 -3 3 -3 q3 0 3 3 v6 q0 2 -2 2 q-2 0 -2 -2 v-5" fill="none" stroke="#C24A2E" strokeWidth="1.2" strokeLinecap="round" transform="rotate(8 51 32)" />
   </svg>
 );
 
@@ -310,7 +326,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
             <div className="cj-cover">
               {state.generated?.cover ? (
                 <div style={{ width: 248, height: 248 }}>
-                  <CourseCover kind={state.generated.cover} />
+                  <CourseCover kind={state.generated.cover} seed={state.generated.courseUuid ?? state.generated.topic} />
                 </div>
               ) : (
                 <KandinskyCover size={248} />

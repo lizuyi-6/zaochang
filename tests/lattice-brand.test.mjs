@@ -178,3 +178,23 @@ test("lattice-brand: document title and key localized auth branding contain no o
     }
   }
 });
+
+test("lattice-brand: seeded covers are unique per course and stable across renders", () => {
+  // 唯一性:同一学科下,不同课程(种子)必须渲染出不同的封面;无种子的裸 kind 保持默认版画。
+  const slug = markup => markup.replace(/\s+/g, " ");
+  for (const kind of kinds) {
+    const a = slug(render("CourseCover", { kind, seed: "61a8896e-a1a8-8b66-88b5-fb2c1736b9ae" }));
+    const b = slug(render("CourseCover", { kind, seed: "c18a2301-3f42-4bfc-9d3b-c34b76d62ea1" }));
+    const c = slug(render("CourseCover", { kind, seed: "vue-enterprise-fullstack" }));
+    assert.notEqual(a, b, `${kind}: two uuid seeds must differ`);
+    assert.notEqual(a, c, `${kind}: uuid vs slug seed must differ`);
+    // 稳定可重放:同一种子两次渲染逐字节一致(同一课程处处同图)
+    assert.equal(a, slug(render("CourseCover", { kind, seed: "61a8896e-a1a8-8b66-88b5-fb2c1736b9ae" })), `${kind}: seed render is deterministic`);
+  }
+  // 大样本不碰撞:40 个不同种子至少产出 12 种不同渲染(镜像×变体×点缀×星座的组合空间)
+  const seen = new Set();
+  for (let i = 0; i < 40; i++) {
+    seen.add(slug(render("CourseCover", { kind: "prompt", seed: `course-uuid-${i}` })));
+  }
+  assert.ok(seen.size >= 12, `expected >=12 distinct covers, got ${seen.size}`);
+});

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, ArrowUpRight, Star } from 'lucide-react';
 import type { PageProps } from '../types';
-import { CourseCover } from '../illustrations';
+import { CourseCover, Sparkle } from '../illustrations';
 import { coverForTitle } from '../data';
 import { KandinskyCover, KnotMark } from './CourseJourney';
 import { useI18n } from '../i18n';
@@ -18,17 +18,26 @@ const EmptyShelf: React.FC<{ size?: number }> = ({ size = 200 }) => (
   <svg width={size} height={size * 0.8} viewBox="0 0 200 160" fill="none" aria-hidden="true">
     <circle cx="105" cy="77" r="66" fill="#F0E6D2" />
     <path d="M23 146h162M155 23v-9M151 18h8" stroke="#C24A2E" strokeWidth="1.5" strokeLinecap="round" />
+    <Sparkle x={30} y={30} s={4} color="#D9A441" /><Sparkle x={172} y={56} s={3.2} color="#C24A2E" />
+    {/* 书柜:外框 + 三格空腔 + 层板阴影线 */}
     <path d="M78 35h77v107H78Z" fill="#F7F1E4" stroke="#C24A2E" strokeWidth="2" />
     <path d="M85 43h63v29H85zM85 80h63v27H85zM85 115h63v19H85z" fill="#F0E6D2" />
+    <path d="M88 68h57M88 103h57" stroke="#C24A2E" strokeOpacity=".12" strokeWidth="3" />
     <path d="M78 75h77M78 110h77M84 142v4M149 142v4" stroke="#C24A2E" strokeWidth="2" />
     <path d="M101 61h18M110 52v18" stroke="#C24A2E" strokeOpacity=".35" strokeWidth="1.5" />
+    {/* 人物:头部 + 举手托书 */}
     <circle cx="47" cy="64" r="10" fill="#D9A441" stroke="#C24A2E" strokeWidth="1.5" />
+    <circle cx="44" cy="63" r="0.9" fill="#C24A2E" /><circle cx="50" cy="63" r="0.9" fill="#C24A2E" />
+    <path d="M44.5 68 q2.5 1.8 5 0" stroke="#C24A2E" strokeWidth="1" fill="none" strokeLinecap="round" />
     <path d="M37 63c-3-19 22-18 23-4l-11-4-12 8Z" fill="#C24A2E" />
     <path d="M36 80q11-9 22 0l9 31H31Z" fill="#C9B896" stroke="#C24A2E" strokeWidth="1.8" />
     <path d="m39 111-4 30h9l8-29 6 29h9l-5-30" fill="#C24A2E" />
     <path d="m51 83 14 15 18-5" stroke="#C24A2E" strokeWidth="2" strokeLinecap="round" />
+    {/* 手中摊开的书 */}
     <path d="m70 86 15-4 6 20-15 4Z" fill="#D9A441" stroke="#C24A2E" strokeWidth="1.5" />
-    <path d="m74 88 10-3M77 98l9-3M32 143h13M57 143h12" stroke="#C24A2E" strokeWidth="2" strokeLinecap="round" />
+    <path d="m74 88 10-3M77 98l9-3" stroke="#C24A2E" strokeWidth="1" strokeLinecap="round" />
+    <path d="M32 143h13M57 143h12" stroke="#C24A2E" strokeWidth="2" strokeLinecap="round" />
+    {/* 地上小书堆 + 标签牌 */}
     <path d="M166 128h17l-3 16h-11Z" fill="#D9A441" stroke="#C24A2E" strokeWidth="1.5" />
     <path d="M175 128v-21m0 12c-11 0-14-8-13-13 9 0 13 6 13 13Zm0-5c0-10 5-15 12-15 0 8-4 14-12 15Z" fill="#C9B896" stroke="#C24A2E" strokeWidth="1.5" />
     <path d="M100 30h28M100 25h18" stroke="#C24A2E" strokeWidth="1.5" />
@@ -254,7 +263,7 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
                     }}
                   >
                     <div className="cs-course-cover">
-                      {joinedCover ? <CourseCover kind={joinedCover} /> : <KandinskyCover size={268} radius={12} />}
+                      {joinedCover ? <CourseCover kind={joinedCover} seed={state.generated?.courseUuid ?? joinedTitle} /> : <KandinskyCover size={268} radius={12} />}
                     </div>
                     <div className="cs-course-body">
                       <div className="cs-course-titlerow">
@@ -296,7 +305,7 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
                     }}
                   >
                     <div className="cs-course-cover">
-                      <CourseCover kind={coverForTitle(m.title)} />
+                      <CourseCover kind={coverForTitle(m.title)} seed={m.uuid ?? m.title} />
                     </div>
                     <div className="cs-course-body">
                       <div className="cs-course-titlerow">
@@ -433,7 +442,7 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
                       {row.cover === 'kandinsky' ? (
                         <KandinskyCover size={56} radius={10} />
                       ) : (
-                        <CourseCover kind={row.cover} />
+                        <CourseCover kind={row.cover} seed={row.uuid ?? row.title} />
                       )}
                     </div>
                     <div className="cs-mkt-info">

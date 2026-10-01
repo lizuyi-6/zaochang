@@ -519,7 +519,7 @@ export const Home = ({ state, set }: PageProps) => {
                 {homeCourses().map((c) => (
                   <div className="hm-course" key={c.id} onClick={() => set({ screen: 'marketplace' })}>
                     <div className="hm-course-cover">
-                      <CourseCover kind={c.cover} />
+                      <CourseCover kind={c.cover} seed={c.id} />
                     </div>
                     <div className="hm-course-body">
                       <div className="hm-provider">

@@ -1343,6 +1343,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           title={genLectureTitle}
           body={genIntroBody}
           preparing={planPending}
+          cover={GEN?.cover ? { kind: GEN.cover, seed: GEN.courseUuid ?? GEN.topic } : null}
         />
       )}
       {stage === 'talk' && <TalkModeOverlay onStart={() => setStage('play')} />}
