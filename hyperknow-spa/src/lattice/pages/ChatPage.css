@@ -397,8 +397,10 @@
   word-break: break-word;
 }
 
-.cp-menu { position: fixed; }
-.cp-menu-veil { position: fixed; inset: 0; z-index: 88; }
+/* 菜单与遮罩渲染在 pointer-events:none 的 .cp-composer-wrap 内,必须在此恢复:
+   否则全部菜单条目点击穿透——模型选择/翻译/工具/状态全灭,点外部也无法关闭 */
+.cp-menu { position: fixed; pointer-events: auto; }
+.cp-menu-veil { position: fixed; inset: 0; z-index: 88; pointer-events: auto; }
 .cp-menu .hk-menu-item { font-size: 12.5px; }
 .hk-menu-hint.on { color: var(--coral-700); }
 .cp-icon.on { color: var(--coral-700); }
