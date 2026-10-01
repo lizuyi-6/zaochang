@@ -11,6 +11,7 @@ import {
   ttsCacheKey,
   asciiSafeJson,
   resolveStepfunChatCompletionsUrl,
+  resolveStepfunSearchUrl,
   extractStepfunHits,
   resolveStepfunImagesUrl,
   inspectBase64Image,
@@ -181,6 +182,14 @@ test("resolveStepfunChatCompletionsUrl: 正确规整各种 baseUrl 且不擅自�
   assert.equal(resolveStepfunChatCompletionsUrl("http://127.0.0.1:8787"), "http://127.0.0.1:8787/chat/completions");
   assert.equal(resolveStepfunChatCompletionsUrl("https://my-proxy.internal/ai/custom"), "https://my-proxy.internal/ai/custom/chat/completions");
   assert.equal(resolveStepfunChatCompletionsUrl("https://my-proxy.internal/ai/custom/messages"), "https://my-proxy.internal/ai/custom/chat/completions");
+});
+
+test("resolveStepfunSearchUrl: 从 AI base origin 派生独立搜索终端,忽略套餐路径前缀", () => {
+  assert.equal(resolveStepfunSearchUrl("https://api.stepfun.com/step_plan/v1"), "https://api.stepfun.com/v1/search");
+  assert.equal(resolveStepfunSearchUrl("https://api.stepfun.com/v1/"), "https://api.stepfun.com/v1/search");
+  assert.equal(resolveStepfunSearchUrl("https://api.stepfun.ai/v1"), "https://api.stepfun.ai/v1/search");
+  assert.equal(resolveStepfunSearchUrl("http://127.0.0.1:8787"), "http://127.0.0.1:8787/v1/search");
+  assert.equal(resolveStepfunSearchUrl("https://my-proxy.internal/ai/custom"), "https://my-proxy.internal/v1/search");
 });
 
 test("extractStepfunHits: 仅解析真实 tool_calls 的 results，映射 summary 为 snippet，校验 HTTP(S) 与去重截断", () => {

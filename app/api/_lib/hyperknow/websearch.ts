@@ -3,9 +3,10 @@
 // 大纲提示词。纪律与站内其余双轨一致:
 // - 供应商可插拔(stepfun/tavily/brave/cloudflare),按 env 现有配置与密钥自动选择;
 //   HK_WEB_SEARCH_PROVIDER 可显式指定或 "off" 关闭。默认优先现有 AI 渠道 (stepfun)。
-// - stepfun 供应商复用 resolveHyperknowAiConfig 的 URL 与 API Key,绝不硬编码官方
-//   地址或回退;使用独立的 HK_WEB_SEARCH_MODEL (默认 step-3.7-flash),不改变其他 LLM;
-//   stepfun 忽略独立搜索 base override。
+// - stepfun 供应商复用 resolveHyperknowAiConfig 的 API Key,绝不硬编码官方
+//   地址或回退;搜索走官方推荐的独立网页搜索 API(origin 派生 /v1/search,
+//   与模型解耦)——chat 内置 web_search 工具在套餐通道恒不触发(2026-10-01 实测),
+//   不改变其他 LLM;stepfun 忽略独立搜索 base override。
 // - 未配置/上游失败/超时一律降级为"无研学上下文",课程照常生成——搜索是增强,
 //   不是门槛,绝不因搜索不可用把建课打死,也绝不虚报搜到了东西。
 // - HK_WEB_SEARCH_BASE_URL 覆盖外部搜索(tavily/brave/cloudflare)基地址,供测试注入假上游。
@@ -15,10 +16,11 @@ import { resolveHyperknowAiConfig } from "./config";
 import {
   extractStepfunHits,
   resolveStepfunChatCompletionsUrl,
+  resolveStepfunSearchUrl,
   type WebSearchHit,
 } from "./protocol";
 
-export { extractStepfunHits, resolveStepfunChatCompletionsUrl, type WebSearchHit };
+export { extractStepfunHits, resolveStepfunChatCompletionsUrl, resolveStepfunSearchUrl, type WebSearchHit };
 
 export type ProviderId = "stepfun" | "tavily" | "brave" | "cloudflare";
 
@@ -74,7 +76,8 @@ export function extractHits(payload: unknown): WebSearchHit[] {
     const rawSnippet = [rec.content, rec.description, rec.snippet, rec.text].find(
       (value) => typeof value === "string" && value.length > 0,
     ) as string | undefined;
-    hits.push({ title, url, snippet: (rawSnippet ?? "").trim().slice(0, 320) });
+    const time = typeof rec.time === "string" ? rec.time.trim() : "";
+    hits.push({ title, url, snippet: (rawSnippet ?? "").trim().slice(0, 320), ...(time ? { time } : {}) });
   }
   return hits;
 }
@@ -131,11 +134,12 @@ export function resolveSearchConfig(overrideProvider?: string): SearchConfig | n
   if (!provider) return null;
 
   if (provider === "stepfun") {
-    // stepfun 忽略独立搜索 base override，绝不硬编码官方地址或回退
+    // stepfun 忽略独立搜索 base override，绝不硬编码官方地址或回退:
+    // 独立搜索 API 与 chat 套餐同 key 同源,从 AI base 的 origin 派生 /v1/search。
     return {
       provider: "stepfun",
       apiKey: aiConfig!.apiKey,
-      baseUrl: resolveStepfunChatCompletionsUrl(aiConfig!.baseUrl),
+      baseUrl: resolveStepfunSearchUrl(aiConfig!.baseUrl),
       model: values.HK_WEB_SEARCH_MODEL?.trim() || "step-3.7-flash",
     };
   }
@@ -176,27 +180,16 @@ export async function searchWithOutcome(query: string, signal?: AbortSignal, ove
   try {
     let response: Response;
     if (config.provider === "stepfun") {
-      // StepFun 使用 fetch 非流式 Chat Completions，tools 工具声明 web_search，tool_choice 为 auto
+      // StepFun 独立网页搜索 API(官方推荐,与模型解耦):POST /v1/search。
+      // 弃用 chat 内置 web_search 工具——套餐通道实测恒不触发(模型自述未开放检索,
+      // 官方 v1 也只编造旧闻),独立端点同 key 即用,结果自带 url/title/snippet/time。
       response = await fetch(config.baseUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${config.apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: config.model || "step-3.7-flash",
-          messages: [{ role: "user", content: query }],
-          tools: [
-            {
-              type: "web_search",
-              function: {
-                description: "检索课程主题相关的官方文档、权威教程与最新资料",
-              },
-            },
-          ],
-          tool_choice: "auto",
-          stream: false,
-        }),
+        body: JSON.stringify({ query }),
         signal: perCallSignal,
       });
     } else if (config.provider === "brave") {
@@ -238,10 +231,8 @@ export async function searchWithOutcome(query: string, signal?: AbortSignal, ove
     }
 
     if (config.provider === "stepfun") {
-      const { hits, triggered } = extractStepfunHits(payload);
-      if (!triggered) {
-        return { status: "not_triggered", hits: [], provider: "stepfun", reason: "Model did not trigger web search" };
-      }
+      // 独立搜索 API 的 {query, category, results} 正好落在 extractHits 的通配解析里
+      const hits = extractHits(payload);
       if (hits.length === 0) {
         return { status: "no_results", hits: [], provider: "stepfun", reason: "No relevant search results found" };
       }

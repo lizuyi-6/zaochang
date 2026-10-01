@@ -51,24 +51,42 @@ function hostOf(url: string): string {
   }
 }
 
-/** 合并多路检索结果:仅留 http(s),按去协议 URL 去重,截断到 12 条并映射域名。 */
+/** 解析检索结果的 time 字段("2026-02-03T12:36:00" 或 "2022-01-30 00:00:00"),不可解析为 NaN。 */
+function hitTimeMs(time: unknown): number {
+  if (typeof time !== "string") return Number.NaN;
+  const ms = Date.parse(time.trim().replace(" ", "T"));
+  return Number.isFinite(ms) ? ms : Number.NaN;
+}
+
+/**
+ * 合并多路检索结果:仅留 http(s),按去协议 URL 去重,剔除标题带 Markdown 图链的
+ * 脏行,新鲜优先排序(带可解析时间的按时间倒序,无时间按原序垫后),截断到 12 条。
+ */
 export function mergeFeedItems(groups: WebSearchHit[][], cap = 12): FeedItem[] {
   const seen = new Set<string>();
-  const items: FeedItem[] = [];
+  const pool: Array<{ item: FeedItem; timeMs: number; order: number }> = [];
   for (const group of groups) {
     if (!Array.isArray(group)) continue;
     for (const hit of group) {
       if (!hit || typeof hit.url !== "string" || !/^https?:\/\//i.test(hit.url)) continue;
+      const title = String(hit.title ?? "").trim();
+      if (title.includes("![")) continue;
       const key = hit.url.replace(/[#?].*$/, "");
       if (seen.has(key)) continue;
       seen.add(key);
-      items.push({
-        title: String(hit.title ?? "").trim() || hit.url,
-        url: hit.url,
-        source: hostOf(hit.url),
+      pool.push({
+        item: { title: title || hit.url, url: hit.url, source: hostOf(hit.url) },
+        timeMs: hitTimeMs(hit.time),
+        order: pool.length,
       });
-      if (items.length >= cap) return items;
     }
   }
-  return items;
+  pool.sort((a, b) => {
+    const aDated = !Number.isNaN(a.timeMs);
+    const bDated = !Number.isNaN(b.timeMs);
+    if (aDated && bDated) return b.timeMs - a.timeMs;
+    if (aDated !== bDated) return aDated ? -1 : 1;
+    return a.order - b.order;
+  });
+  return pool.slice(0, cap).map((row) => row.item);
 }

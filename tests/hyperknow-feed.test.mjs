@@ -18,6 +18,7 @@ test('feedQueries:同日同轮恒定,换轮/换日出新,恒 3 词且不重复',
   const c = feedQueries('2026-10-02', 0);
   assert.deepEqual(a, a2, '同日同轮必须确定性一致');
   assert.notDeepEqual(a, b, '换一批(轮次+1)必须换词');
+  assert.notDeepEqual(a, c, '换日必须换词');
   assert.equal(a.length, 3);
   assert.equal(new Set(a).size, 3, '同批检索词不得重复');
   // 连续轮次覆盖不重复词(池 12 词,4 轮恰好铺满一轮)
@@ -49,4 +50,17 @@ test('mergeFeedItems:去重/仅 http(s)/截断 12/域名提取', () => {
   ]);
   assert.equal(big.length, 12);
   assert.equal(big.every((it) => it.source.includes('.')), true);
+});
+
+test('mergeFeedItems:新鲜优先(带时间倒序,无时间按原序垫后)+脏标题剔除', () => {
+  const items = mergeFeedItems([
+    [
+      { title: '旧闻', url: 'https://old.com/a', time: '2022-01-30 00:00:00' },
+      { title: '无时间', url: 'https://bare.io/d' },
+      { title: '新文', url: 'https://fresh.com/b', time: '2026-09-30T08:00:00' },
+      { title: '坏时间', url: 'https://weird.com/e', time: 'not-a-date' },
+      { title: 'FEATURE ![](images/x.jpg)', url: 'https://junk.com/f' }, // 图链脏数据剔除
+    ],
+  ]);
+  assert.deepEqual(items.map((it) => it.title), ['新文', '旧闻', '无时间', '坏时间']);
 });

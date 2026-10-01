@@ -917,26 +917,21 @@ test('Regression 16: Interaction gating skip and pause-resume race safety', asyn
   // 1. 模拟在交互测试步被 skip 时，引擎不会卡死在 continueResolver 上
   const ctl = { cancelled: false, paused: false, skipped: false };
   let choiceResolver = null;
-  let continueResolver = null;
   let choiceSettled = false;
   let continueSettled = false;
 
   const simulateStep = async () => {
     // 等待学员答题
-    let idx;
-    if (ctl.skipped) {
-      idx = 0;
-    } else {
-      idx = await new Promise((res) => { choiceResolver = res; });
-    }
+    const idx = ctl.skipped ? 0 : await new Promise((res) => { choiceResolver = res; });
     choiceSettled = true;
+    void idx;
 
     // 展现反馈并等待点击继续或跳过
     if (ctl.skipped) {
-      // 若已跳过，必须直接放行，不得挂起等待 continueResolver
+      // 若已跳过，必须直接放行，不得挂起等待继续信号
       continueSettled = true;
     } else {
-      await new Promise((res) => { continueResolver = res; });
+      await new Promise((res) => { void res; });
       continueSettled = true;
     }
   };
