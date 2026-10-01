@@ -62,18 +62,69 @@ export async function directorAnalyzeIntent(
 }
 
 // ── Content Generator(内容流)─────────────────────────────────────────────
+
+/** 见界双模型:Flash=step-3.7-flash(快),Pro=step-5-preview(质量优先;step-5 这个 id 上游不存在,2026-10-01 实测 404)。 */
+export type ChatModelId = "flash" | "pro";
+const CHAT_MODEL_MAP: Record<ChatModelId, string> = { flash: "step-3.7-flash", pro: "step-5-preview" };
+
+export function resolveChatModel(raw: unknown): ChatModelId {
+  return raw === "pro" ? "pro" : "flash";
+}
+
+// 断流接续指令:assistant 预填已出正文,让模型从中断处无缝接着说。
+const CONTINUE_INSTRUCTION =
+  "Continue exactly where you left off above. Do NOT repeat any content you have already written; resume mid-sentence if needed.";
+
+/**
+ * 内容流(带断流自愈)。step_plan 上游对长生成会在 60-90 秒量级掐断流
+ * (2026-10-01 实测,thinking 期静默触发超时),策略:
+ * - 一字未出(含只在 thinking 期断):整体静默重试,至多 2 次;
+ * - 正文已出:assistant 预填 partial + 接续指令接着流,至多 2 次;
+ * - 客户端断开(signal aborted)永不重试,原样抛出。
+ * 重试不重复扣费:积分按用户消息扣一次,与流内重试无关。
+ */
 export async function* contentGenerateStream(
   userQuery: string,
   guidelines: string,
   history: ConversationHistory = [],
   signal?: AbortSignal,
+  model: ChatModelId = "flash",
 ): AsyncGenerator<StreamChunk> {
-  const messages: LlmMessage[] = [
+  const baseMessages: LlmMessage[] = [
     { role: "system", content: CONTENT_GENERATOR_SYSTEM_PROMPT },
     ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
     { role: "user", content: `Guidelines: "${guidelines}"\nStudent Query: "${userQuery}"` },
   ];
-  yield* streamChat(messages, { signal, maxTokens: 4096 });
+  let partial = "";
+  let freshRetries = 0;
+  let continuations = 0;
+  for (;;) {
+    const messages: LlmMessage[] = partial
+      ? [...baseMessages, { role: "assistant", content: partial }, { role: "user", content: CONTINUE_INSTRUCTION }]
+      : baseMessages;
+    let sawText = false;
+    try {
+      for await (const chunk of streamChat(messages, { signal, maxTokens: 4096, model: CHAT_MODEL_MAP[model] })) {
+        if (chunk.type === "text") {
+          partial += chunk.text;
+          sawText = true;
+        }
+        yield chunk;
+      }
+      return;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      if (!sawText && freshRetries < 2) {
+        freshRetries += 1;
+        continue;
+      }
+      if (sawText && continuations < 2) {
+        continuations += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 // 主动回想:生成 3 个 next steps(JSON,解析失败走确定性 fallback)。

@@ -81,6 +81,8 @@ export interface AppState {
   speed: number;
   /** 回复模式(standard/fast):随聊天请求透传后端,与首页速度菜单共用 */
   replyMode: 'standard' | 'fast';
+  /** 对话模型:见界 Flash=step-3.7-flash(快),见界 Pro=step-5-preview(质量优先) */
+  chatModel: 'flash' | 'pro';
   /** 新回复自动朗读 */
   autoSpeak: boolean;
   /** 白板进入方式:lecture = 从头讲;practice = 直接跳到随堂练习(课程页"练习"按钮) */
@@ -138,6 +140,7 @@ export const initialAppState: AppState = {
   voice: 'warm',
   speed: 0.85,
   replyMode: 'standard',
+  chatModel: 'flash',
   autoSpeak: false,
   whiteboardMode: 'lecture',
 };

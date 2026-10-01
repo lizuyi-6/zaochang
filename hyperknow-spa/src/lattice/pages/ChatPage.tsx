@@ -150,7 +150,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
             });
           },
         },
-        { signal: ctrl.signal, conversationId: convIdRef.current ?? undefined, mode: state.replyMode },
+        { signal: ctrl.signal, conversationId: convIdRef.current ?? undefined, mode: state.replyMode, model: state.chatModel },
       );
       if (!stillMine()) return;
       /* 工程未开 strict:真值检查不收窄判别联合,必须用字面量判别 */
@@ -608,7 +608,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         />
         <button className="cp-mode" type="button" onClick={() => setMenu(menu === 'mode' ? 'none' : 'mode')}>
           <Gauge size={12} />
-          <span>{state.replyMode === 'fast' ? t('home.speedModeFast') : t('home.speedModeNormal')}</span>
+          <span>{state.chatModel === 'pro' ? L('Lattice Pro', '见界 Pro') : L('Lattice Flash', '见界 Flash')}</span>
           <ChevronDown size={12} />
         </button>
         <button className="cp-status" type="button" title={L('Connection status', '连接状态')} onClick={openStatus}>
@@ -664,22 +664,25 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         <>
           <div className="cp-menu-veil" onClick={() => setMenu('none')} />
           <div className="hk-menu cp-menu" style={{ bottom: 78, right: 170 }}>
-            {(['standard', 'fast'] as const).map((m) => (
+            {(['flash', 'pro'] as const).map((m) => (
               <button
                 key={m}
-                className={`hk-menu-item${state.replyMode === m ? ' active' : ''}`}
+                className={`hk-menu-item${state.chatModel === m ? ' active' : ''}`}
                 onClick={() => {
-                  set({ replyMode: m });
+                  set({ chatModel: m });
                   setMenu('none');
                   toast(
-                    m === 'fast'
-                      ? L('Fast mode on — new replies use it', '快速模式已开启——下一条回复生效')
-                      : L('Standard mode on', '已切换为标准模式'),
+                    m === 'pro'
+                      ? L('Lattice Pro on — applies to new replies', '见界 Pro 已启用——下一条回复生效')
+                      : L('Lattice Flash on — applies to new replies', '见界 Flash 已启用——下一条回复生效'),
                   );
                 }}
               >
                 <Gauge size={14} />
-                {m === 'fast' ? L('Fast', '快速') : t('home.speedModeNormal')}
+                {m === 'pro' ? L('Lattice Pro', '见界 Pro') : L('Lattice Flash', '见界 Flash')}
+                <span className="hk-menu-hint">
+                  {m === 'pro' ? L('Deeper reasoning · step-5', '更深推理 · step-5') : L('Fast replies · step-3.7', '更快回复 · step-3.7')}
+                </span>
               </button>
             ))}
           </div>

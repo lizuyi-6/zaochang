@@ -2,7 +2,7 @@ import { requireMember } from "../../_lib/access-control";
 import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
-import { contentGenerateStream, generateNextSteps } from "../../_lib/hyperknow/agents";
+import { contentGenerateStream, generateNextSteps, resolveChatModel } from "../../_lib/hyperknow/agents";
 import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/hyperknow/llm";
 import { FALLBACK_GUIDELINE } from "../../_lib/hyperknow/prompts";
 import { saveConversation, getConversation } from "../../_lib/hyperknow/store";
@@ -27,6 +27,7 @@ export const dynamic = "force-dynamic";
 type ChatRequestInput = {
   message?: unknown;
   mode?: unknown;
+  model?: unknown;
   ui_language?: unknown;
   conversation_id?: unknown;
 };
@@ -66,12 +67,14 @@ export async function POST(request: Request) {
     const signal =
       typeof AbortSignal.any === "function"
         ? AbortSignal.any([request.signal, AbortSignal.timeout(120_000)])
-        : AbortSignal.timeout(120_000);
+        : AbortSignal.timeout(240_000);
 
     // 预取首个 LLM 增量(推理模型路径:guideline 用静态兜底,与原 chatWs.js 的
     // isReasoningModel 分支一致——Director Agent 不单独调用,其思考过程由
-    // thinking_delta 增量实时映射)。
-    const generator = contentGenerateStream(message, FALLBACK_GUIDELINE, history, signal);
+    // thinking_delta 增量实时映射)。模型二选一:见界 Flash=step-3.7-flash /
+    // 见界 Pro=step-5-preview,白名单外的值一律回落 Flash。
+    const model = resolveChatModel(input.model);
+    const generator = contentGenerateStream(message, FALLBACK_GUIDELINE, history, signal, model);
     let firstChunk: StreamChunk | null = null;
     let generatorDone = false;
     try {
