@@ -758,9 +758,18 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         } else if (ctl.current.skipped) {
           if (spokenFb) tts.stopTutor();
         } else {
-          await new Promise<void>((res) => {
-            continueResolver.current = res;
-          });
+          /* 反馈即讲解:导师把对错与解析念完(静音/合成失败给 2.6s 阅读兜底)后
+           * 自动续课,不再无限等用户点「继续」——答错后卡住不讲的观感正来自
+           * 那个无限等待。「继续」按钮保留,点击即跳过剩余反馈等待。 */
+          await Promise.race([
+            new Promise<void>((res) => {
+              continueResolver.current = res;
+            }),
+            (async () => {
+              if (spokenFb) await Promise.race([spokenFb.ended, wait(8000)]);
+              await wait(silent || !spokenFb ? 2600 : 700);
+            })(),
+          ]);
           continueResolver.current = null;
           if (spokenFb) tts.stopTutor();
         }
