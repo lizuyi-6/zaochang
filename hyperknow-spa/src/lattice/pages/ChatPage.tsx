@@ -17,6 +17,7 @@ import {
   Square,
   X,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
 import type { PageProps } from '../types';
 import { chatUserMessage } from '../data';
@@ -102,10 +103,10 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     return -1;
   })();
 
-  const send = (raw: string) => {
+  const send = (raw: string, forcedAttachments?: Array<{ name: string; url: string }>) => {
     const text = raw.trim();
     if ((!text && attachments.length === 0) || streaming) return;
-    const attached = attachments;
+    const attached = forcedAttachments ?? attachments;
     setInput('');
     setAttachments([]);
     setMsgs((m) => [...m, { role: 'user', text, attachments: attached.length ? attached : undefined }]);
@@ -167,7 +168,14 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
               : L('The tutor hit an error. Please try again in a moment.', '导师服务出了点问题，请稍后再试。');
         setMsgs((m) => {
           const next = [...m];
-          next[next.length - 1] = { role: 'assistant', text: fallback };
+          /* 流中断但已有半截正文:保留正文并标注中断点;整段替换会把用户正读到的内容吞掉 */
+          const partial = next[next.length - 1]?.text ?? '';
+          next[next.length - 1] = {
+            role: 'assistant',
+            text: partial.trim()
+              ? `${partial}\n\n${L('— The reply was cut off here. Use ⟳ below to regenerate.', '——回复在此中断，可用下方 ⟳ 重新生成。')}`
+              : fallback,
+          };
           return next;
         });
       } else if (state.autoSpeak && acc.trim()) {
@@ -189,11 +197,39 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   }, []);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+  /* 自动跟随门控:用户往上翻阅时不得被每个流式 chunk 拽回底部;
+   * 只有本就停在底部附近(含被固定 composer 遮住的一段)才自动跟随。 */
+  const followRef = useRef(true);
   useEffect(() => {
-    colEndRef.current?.scrollIntoView({ block: 'end' });
-  }, [msgs]);
+    const onScroll = () => {
+      const doc = document.documentElement;
+      followRef.current = doc.scrollHeight - scrollY - window.innerHeight < 160;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  useEffect(() => {
+    if (followRef.current) colEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [msgs, streaming]);
 
   /* ---------------- 真实动作:复制 / 翻译 / 朗读 / 语音 / 附件 / 状态 ---------------- */
+
+  /** 重新生成某条导师回复:回退到它前面的用户消息,原样重发(附件一并带回到发送路径)。 */
+  const regenerateFrom = (assistantIdx: number) => {
+    if (streaming) return;
+    let userIdx = -1;
+    for (let i = Math.min(assistantIdx, msgs.length - 1); i >= 0; i--) {
+      if (msgs[i].role === 'user') {
+        userIdx = i;
+        break;
+      }
+    }
+    if (userIdx < 0) return;
+    const source = msgs[userIdx];
+    setMsgs((m) => m.slice(0, userIdx));
+    followRef.current = true;
+    send(source.text, source.attachments);
+  };
 
   const copyMessage = async (idx: number) => {
     const text = markupToPlain(msgs[idx]?.text ?? '');
@@ -430,6 +466,13 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
             </button>
             <button
               type="button"
+              title={L('Regenerate this reply', '重新生成这条回复')}
+              onClick={() => regenerateFrom(i)}
+            >
+              <RefreshCw size={14} />
+            </button>
+            <button
+              type="button"
               title={L('Translate', '翻译')}
               className={translations[i] ? 'on' : ''}
               onClick={() => setMenu(menu === 'translate' ? 'none' : 'translate')}
@@ -494,7 +537,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           </div>
         );
       })}
-      <div ref={colEndRef} />
+      <div ref={colEndRef} className="cp-col-end" />
     </div>
 
     {/* bottom composer */}

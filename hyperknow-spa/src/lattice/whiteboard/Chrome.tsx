@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   AudioLines,
   ChevronLeft,
@@ -57,7 +57,21 @@ export const WhiteboardChrome: React.FC<{
   status?: PlayStatus;
 }> = (p) => {
   const [exportOpen, setExportOpen] = useState(false);
+  /* 导出菜单用 fixed 定位按按钮矩形现算:工具条簇是 overflow:auto 的窄条,
+   * 绝对定位的菜单会被裁剪成一条缝(线上实测)。 */
+  const [exportPos, setExportPos] = useState<{ top: number; right: number }>({ top: 52, right: 12 });
+  const exportAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [zoomTip, setZoomTip] = useState<'in' | 'out' | null>(null);
+
+  const toggleExport = () => {
+    if (exportOpen) {
+      setExportOpen(false);
+      return;
+    }
+    const rect = exportAnchorRef.current?.getBoundingClientRect();
+    if (rect) setExportPos({ top: rect.bottom + 8, right: Math.max(12, window.innerWidth - rect.right) });
+    setExportOpen(true);
+  };
 
   const zoomIdx = CAMERA_ZOOM_STEPS.reduce(
     (best, z, i) => (Math.abs(z - p.zoom) < Math.abs(CAMERA_ZOOM_STEPS[best] - p.zoom) ? i : best),
@@ -139,9 +153,11 @@ export const WhiteboardChrome: React.FC<{
 
           <div className="wb-btn-anchor">
             <button
+              ref={exportAnchorRef}
               className="wb-chrome-btn"
-              onClick={() => setExportOpen(!exportOpen)}
+              onClick={toggleExport}
               aria-label="Export"
+              aria-expanded={exportOpen}
             >
               <Download size={17} />
               {p.showDownloadDot && (
@@ -150,7 +166,7 @@ export const WhiteboardChrome: React.FC<{
             </button>
             {exportOpen && (
               <ExportMenu
-                style={{ position: 'absolute', right: 0, top: 52 }}
+                style={{ position: 'fixed', top: exportPos.top, right: exportPos.right }}
                 onClose={() => setExportOpen(false)}
                 onExport={p.onExport}
               />

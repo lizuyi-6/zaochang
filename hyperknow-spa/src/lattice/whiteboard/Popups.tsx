@@ -457,14 +457,18 @@ export const ExportMenu: React.FC<{
     onExport(format, page);
   };
   return (
-  <div className="wb-export-menu" style={style} onMouseLeave={onClose}>
-    <div className="grp">{t('courseSession.exportCurrentPage')}</div>
-    <div className="it" onClick={item('jpg', 'current')}>JPG</div>
-    <div className="it" onClick={item('pdf', 'current')}>PDF</div>
-    <div className="grp" style={{ marginTop: 8 }}>{t('courseSession.exportAllPages')}</div>
-    <div className="it" onClick={item('jpg', 'all')}>JPG</div>
-    <div className="it" onClick={item('pdf', 'all')}>PDF</div>
-  </div>
+  <>
+    {/* 点击任意处关闭:fixed 透明垫在菜单之下,替代易误关的 onMouseLeave */}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 54 }} onClick={onClose} />
+    <div className="wb-export-menu" style={{ ...style, zIndex: 55 }}>
+      <div className="grp">{t('courseSession.exportCurrentPage')}</div>
+      <div className="it" onClick={item('jpg', 'current')}>JPG</div>
+      <div className="it" onClick={item('pdf', 'current')}>PDF</div>
+      <div className="grp" style={{ marginTop: 8 }}>{t('courseSession.exportAllPages')}</div>
+      <div className="it" onClick={item('jpg', 'all')}>JPG</div>
+      <div className="it" onClick={item('pdf', 'all')}>PDF</div>
+    </div>
+  </>
   );
 };
 
