@@ -60,6 +60,9 @@
   "vars": {
     // 「问 AI」多模态开关:=1 才允许提问附图(内联 base64 直发上游)。上游模型
     // 不支持图像输入时必须保持关闭——路由对带图请求 fail-closed 400。
-    "AI_CHAT_VISION": "1"
+    "AI_CHAT_VISION": "1",
+    // 会员套餐显式映射(见 credits.ts resolveUserTier):验收号给 MAX,保证
+    // 线上验收(建课 10 分/对话 2 分/白板不记费)不会被 20 分日额卡死。
+    "HK_USER_TIERS": "agent@zaochang:MAX"
   }
 }
