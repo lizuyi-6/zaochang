@@ -16,22 +16,22 @@ import './CoursesPage.css';
 /* ------------------------------------------------------------------ */
 const EmptyShelf: React.FC<{ size?: number }> = ({ size = 200 }) => (
   <svg width={size} height={size * 0.8} viewBox="0 0 200 160" fill="none" aria-hidden="true">
-    <circle cx="105" cy="77" r="66" fill="#E6EBDD" />
-    <path d="M23 146h162M155 23v-9M151 18h8" stroke="#164E46" strokeWidth="1.5" strokeLinecap="round" />
-    <path d="M78 35h77v107H78Z" fill="#F7F4EC" stroke="#164E46" strokeWidth="2" />
-    <path d="M85 43h63v29H85zM85 80h63v27H85zM85 115h63v19H85z" fill="#E6EBDD" />
-    <path d="M78 75h77M78 110h77M84 142v4M149 142v4" stroke="#164E46" strokeWidth="2" />
-    <path d="M101 61h18M110 52v18" stroke="#164E46" strokeOpacity=".35" strokeWidth="1.5" />
-    <circle cx="47" cy="64" r="10" fill="#D9A441" stroke="#164E46" strokeWidth="1.5" />
-    <path d="M37 63c-3-19 22-18 23-4l-11-4-12 8Z" fill="#164E46" />
-    <path d="M36 80q11-9 22 0l9 31H31Z" fill="#B7C9B6" stroke="#164E46" strokeWidth="1.8" />
-    <path d="m39 111-4 30h9l8-29 6 29h9l-5-30" fill="#164E46" />
-    <path d="m51 83 14 15 18-5" stroke="#164E46" strokeWidth="2" strokeLinecap="round" />
-    <path d="m70 86 15-4 6 20-15 4Z" fill="#D9A441" stroke="#164E46" strokeWidth="1.5" />
-    <path d="m74 88 10-3M77 98l9-3M32 143h13M57 143h12" stroke="#164E46" strokeWidth="2" strokeLinecap="round" />
-    <path d="M166 128h17l-3 16h-11Z" fill="#D9A441" stroke="#164E46" strokeWidth="1.5" />
-    <path d="M175 128v-21m0 12c-11 0-14-8-13-13 9 0 13 6 13 13Zm0-5c0-10 5-15 12-15 0 8-4 14-12 15Z" fill="#B7C9B6" stroke="#164E46" strokeWidth="1.5" />
-    <path d="M100 30h28M100 25h18" stroke="#164E46" strokeWidth="1.5" />
+    <circle cx="105" cy="77" r="66" fill="#F0E6D2" />
+    <path d="M23 146h162M155 23v-9M151 18h8" stroke="#C24A2E" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M78 35h77v107H78Z" fill="#F7F1E4" stroke="#C24A2E" strokeWidth="2" />
+    <path d="M85 43h63v29H85zM85 80h63v27H85zM85 115h63v19H85z" fill="#F0E6D2" />
+    <path d="M78 75h77M78 110h77M84 142v4M149 142v4" stroke="#C24A2E" strokeWidth="2" />
+    <path d="M101 61h18M110 52v18" stroke="#C24A2E" strokeOpacity=".35" strokeWidth="1.5" />
+    <circle cx="47" cy="64" r="10" fill="#D9A441" stroke="#C24A2E" strokeWidth="1.5" />
+    <path d="M37 63c-3-19 22-18 23-4l-11-4-12 8Z" fill="#C24A2E" />
+    <path d="M36 80q11-9 22 0l9 31H31Z" fill="#C9B896" stroke="#C24A2E" strokeWidth="1.8" />
+    <path d="m39 111-4 30h9l8-29 6 29h9l-5-30" fill="#C24A2E" />
+    <path d="m51 83 14 15 18-5" stroke="#C24A2E" strokeWidth="2" strokeLinecap="round" />
+    <path d="m70 86 15-4 6 20-15 4Z" fill="#D9A441" stroke="#C24A2E" strokeWidth="1.5" />
+    <path d="m74 88 10-3M77 98l9-3M32 143h13M57 143h12" stroke="#C24A2E" strokeWidth="2" strokeLinecap="round" />
+    <path d="M166 128h17l-3 16h-11Z" fill="#D9A441" stroke="#C24A2E" strokeWidth="1.5" />
+    <path d="M175 128v-21m0 12c-11 0-14-8-13-13 9 0 13 6 13 13Zm0-5c0-10 5-15 12-15 0 8-4 14-12 15Z" fill="#C9B896" stroke="#C24A2E" strokeWidth="1.5" />
+    <path d="M100 30h28M100 25h18" stroke="#C24A2E" strokeWidth="1.5" />
   </svg>
 );
 
@@ -173,11 +173,11 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
                   gap: 10,
                   marginBottom: 14,
                   padding: '10px 14px',
-                  background: '#F4F7F3',
-                  border: '1px solid #DCE6D9',
+                  background: '#F6EEDD',
+                  border: '1px solid #EBDFC8',
                   borderRadius: 10,
                   fontSize: 13,
-                  color: '#164E46',
+                  color: '#C24A2E',
                 }}
               >
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -21,8 +21,8 @@ import './Onboarding.css';
 /** Compact open-book/node mark beside course providers. */
 const MiniCube: React.FC = () => (
   <svg width="10" height="10" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-    <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke="#164E46" strokeWidth="2" strokeLinejoin="round" />
-    <path d="M16 10v18M16 6v4" stroke="#164E46" strokeWidth="2" />
+    <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke="#C24A2E" strokeWidth="2" strokeLinejoin="round" />
+    <path d="M16 10v18M16 6v4" stroke="#C24A2E" strokeWidth="2" />
     <circle cx="16" cy="4" r="2" fill="#D9A441" />
   </svg>
 );
@@ -561,16 +561,16 @@ const StepCourse: React.FC = () => {
               <i className="ob-dot" style={{ background: '#A78BFA' }} /> {t('courseJourney.progressLegend.familiar')}
             </span>
             <span>
-              <i className="ob-dot" style={{ background: '#9CA3AF' }} /> {t('courseJourney.progressLegend.attempted')}
+              <i className="ob-dot" style={{ background: '#A69A85' }} /> {t('courseJourney.progressLegend.attempted')}
             </span>
             <span>
               <i className="ob-dot ring" /> {t('courseJourney.progressLegend.notStarted')}
             </span>
             <span>
-              <ClipboardList size={11} style={{ color: '#9CA3AF' }} /> {t('courseJourney.kindLabel.project')}
+              <ClipboardList size={11} style={{ color: '#A69A85' }} /> {t('courseJourney.kindLabel.project')}
             </span>
             <span>
-              <Award size={11} style={{ color: '#9CA3AF' }} /> {t('courseJourney.kindLabel.exam')}
+              <Award size={11} style={{ color: '#A69A85' }} /> {t('courseJourney.kindLabel.exam')}
             </span>
           </div>
 
@@ -578,8 +578,8 @@ const StepCourse: React.FC = () => {
             {Array.from({ length: 13 }).map((_, i) => (
               <i key={i} className="ob-node" />
             ))}
-            <ClipboardList size={10} style={{ color: '#C3C7CD' }} />
-            <Award size={10} style={{ color: '#C3C7CD' }} />
+            <ClipboardList size={10} style={{ color: '#C4B191' }} />
+            <Award size={10} style={{ color: '#C4B191' }} />
             <span className="ob-strip-ghost">
               <Play size={8} /> {L('It’s the new course, please start… ›', '这是新课程，请从这里开始… ›')}
             </span>
@@ -622,13 +622,13 @@ const Parabola: React.FC = () => (
     <path d="M36 21 Q112 388 188 21" fill="none" stroke="#8FA3B8" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
     <path d="M32 19 Q108 392 184 19" fill="none" stroke="#B9B0A4" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
     {/* axes */}
-    <path d="M10 205 H206" stroke="#8A9199" strokeWidth="1.6" />
-    <path d="M206 205 l-8 -3.2 v6.4 z" fill="#8A9199" />
-    <path d="M110 238 V18" stroke="#8A9199" strokeWidth="1.6" />
-    <path d="M110 18 l-3.2 8 h6.4 z" fill="#8A9199" />
+    <path d="M10 205 H206" stroke="#A69A85" strokeWidth="1.6" />
+    <path d="M206 205 l-8 -3.2 v6.4 z" fill="#A69A85" />
+    <path d="M110 238 V18" stroke="#A69A85" strokeWidth="1.6" />
+    <path d="M110 18 l-3.2 8 h6.4 z" fill="#A69A85" />
     {/* x ticks */}
     {[38, 74, 110, 146, 182].map((x) => (
-      <path key={x} d={`M${x} 202 v5`} stroke="#8A9199" strokeWidth="1.2" />
+      <path key={x} d={`M${x} 202 v5`} stroke="#A69A85" strokeWidth="1.2" />
     ))}
     {[-2, -1, 0, 1, 2].map((t, i) => (
       <text key={t} x={[38, 74, 110, 146, 182][i]} y="219" textAnchor="middle" className="ob-p-tick">
@@ -637,7 +637,7 @@ const Parabola: React.FC = () => (
     ))}
     {/* y ticks */}
     {[163, 121, 79, 37].map((y) => (
-      <path key={y} d={`M106 ${y} h5`} stroke="#8A9199" strokeWidth="1.2" />
+      <path key={y} d={`M106 ${y} h5`} stroke="#A69A85" strokeWidth="1.2" />
     ))}
     {[1, 2, 3, 4].map((t, i) => (
       <text key={t} x="100" y={[166, 124, 82, 40][i]} textAnchor="end" className="ob-p-tick">
@@ -650,17 +650,17 @@ const Parabola: React.FC = () => (
     <path d="M110 30 V205" stroke="#9AA3AD" strokeWidth="1.2" strokeDasharray="4 4" />
     <text x="136" y="30" className="ob-p-axis">{L('AXIS OF', '对称')}</text>
     <text x="136" y="42" className="ob-p-axis">{L('SYMMETRY', '轴')}</text>
-    <path d="M134 44 L115 56" stroke="#8A9199" strokeWidth="1" />
-    <path d="M115 56 l6 -1.4 -2.4 5.4 z" fill="#8A9199" />
+    <path d="M134 44 L115 56" stroke="#A69A85" strokeWidth="1" />
+    <path d="M115 56 l6 -1.4 -2.4 5.4 z" fill="#A69A85" />
     {/* dotted width segment */}
-    <path d="M44 58 H176" stroke="#8A9199" strokeWidth="1.6" strokeDasharray="0.5 5" strokeLinecap="round" />
-    <circle cx="44" cy="58" r="2.6" fill="#fff" stroke="#6B7280" strokeWidth="1.2" />
-    <circle cx="176" cy="58" r="2.6" fill="#fff" stroke="#6B7280" strokeWidth="1.2" />
+    <path d="M44 58 H176" stroke="#A69A85" strokeWidth="1.6" strokeDasharray="0.5 5" strokeLinecap="round" />
+    <circle cx="44" cy="58" r="2.6" fill="#fff" stroke="#6E6152" strokeWidth="1.2" />
+    <circle cx="176" cy="58" r="2.6" fill="#fff" stroke="#6E6152" strokeWidth="1.2" />
     {/* vertex */}
-    <circle cx="110" cy="205" r="3" fill="#F7F0DC" stroke="#6B7280" strokeWidth="1.4" />
+    <circle cx="110" cy="205" r="3" fill="#F7F0DC" stroke="#6E6152" strokeWidth="1.4" />
     <text x="130" y="234" className="ob-p-axis">{L('VERTEX', '顶点')}</text>
-    <path d="M126 227 L114 210" stroke="#8A9199" strokeWidth="1" />
-    <path d="M114 210 l1.4 6 3.6 -4.4 z" fill="#8A9199" />
+    <path d="M126 227 L114 210" stroke="#A69A85" strokeWidth="1" />
+    <path d="M114 210 l1.4 6 3.6 -4.4 z" fill="#A69A85" />
   </svg>
 );
 

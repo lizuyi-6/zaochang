@@ -34,16 +34,16 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid #E5E7EB;
+  border: 1px solid #EADCC3;
   background: #FFFFFF;
-  color: #374151;
+  color: #453722;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background 0.12s;
 }
-.si-lang:hover { background: #F9FAFB; }
+.si-lang:hover { background: #FAF4E8; }
 
 .si-form {
   width: 360px;
@@ -59,7 +59,7 @@
 .si-sub {
   margin-top: 10px;
   font-size: 15px;
-  color: #6B7280;
+  color: #6E6152;
 }
 
 .si-google {
@@ -71,16 +71,16 @@
   justify-content: center;
   gap: 10px;
   background: #FFFFFF;
-  border: 1px solid #E5E7EB;
+  border: 1px solid #EADCC3;
   border-radius: 10px;
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: #241B10;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(61, 44, 30, 0.04);
   transition: background 0.12s;
 }
-.si-google:hover { background: #FAFAFA; }
+.si-google:hover { background: #FAF4E8; }
 
 .si-divider {
   margin: 24px 0 22px;
@@ -88,27 +88,27 @@
   align-items: center;
   gap: 14px;
 }
-.si-divider-line { flex: 1; height: 1px; background: #E5E7EB; }
-.si-divider-or { font-size: 12px; color: #9CA3AF; }
+.si-divider-line { flex: 1; height: 1px; background: #EADCC3; }
+.si-divider-or { font-size: 12px; color: #A69A85; }
 
 .si-label {
   font-size: 12px;
-  color: #6B7280;
+  color: #6E6152;
   margin-bottom: 8px;
 }
 .si-input {
   width: 100%;
   height: 38px;
   border-radius: 10px;
-  background: #FAFAFA;
+  background: #FAF4E8;
   border: 1px solid #ECECEF;
   padding: 0 12px;
   font-size: 14px;
-  color: #111827;
+  color: #241B10;
   outline: none;
   transition: border-color 0.12s;
 }
-.si-input:focus { border-color: #D4D4D8; }
+.si-input:focus { border-color: #D8C7A9; }
 
 .si-pw-row {
   margin: 18px 0 8px;
@@ -118,10 +118,10 @@
 }
 .si-forgot {
   font-size: 12.5px;
-  color: #6B7280;
+  color: #6E6152;
   cursor: pointer;
 }
-.si-forgot:hover { color: #374151; }
+.si-forgot:hover { color: #453722; }
 .si-pw-wrap { position: relative; }
 .si-pw-wrap .si-input { padding-right: 38px; }
 .si-pw-eye {
@@ -129,7 +129,7 @@
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #9CA3AF;
+  color: #A69A85;
   pointer-events: none;
 }
 
@@ -151,10 +151,10 @@
   margin-top: 20px;
   text-align: center;
   font-size: 13px;
-  color: #6B7280;
+  color: #6E6152;
 }
 .si-signup-link {
-  color: #111827;
+  color: #241B10;
   font-weight: 500;
   text-decoration: underline;
   cursor: pointer;
@@ -165,7 +165,7 @@
   text-align: center;
   font-size: 11.5px;
   line-height: 16px;
-  color: #9CA3AF;
+  color: #A69A85;
 }
 .si-fine-link {
   color: #52525B;
@@ -194,25 +194,25 @@
   right: 9px;
   top: -10px;
   height: 100%;
-  background: #FAFAFA;
+  background: #FAF4E8;
   border-radius: 20px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 28px rgba(61, 44, 30, 0.05);
 }
 .si-card {
   position: relative;
   background: #FFFFFF;
   border-radius: 20px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.10);
+  box-shadow: 0 20px 50px rgba(61, 44, 30, 0.10);
   padding: 32px;
 }
 .si-quote {
   font-size: 15.5px;
   line-height: 1.55;
-  color: #1F2937;
+  color: #241B10;
 }
 .si-attrib { margin-top: 24px; }
-.si-name { font-size: 14px; font-weight: 500; color: #374151; }
-.si-role { margin-top: 2px; font-size: 13px; color: #9CA3AF; }
+.si-name { font-size: 14px; font-weight: 500; color: #453722; }
+.si-role { margin-top: 2px; font-size: 13px; color: #A69A85; }
 
 .si-status {
   position: absolute;
@@ -224,11 +224,11 @@
   gap: 8px;
   padding: 0 14px;
   background: #FFFFFF;
-  border: 1px solid #E5E7EB;
+  border: 1px solid #EADCC3;
   border-radius: 999px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 12px rgba(61, 44, 30, 0.06);
   font-size: 13px;
-  color: #374151;
+  color: #453722;
 }
 .si-status-icon { color: #10B981; }
 
@@ -236,16 +236,16 @@
 a.si-google { text-decoration: none; }
 .si-google .lucide, a.si-google svg { flex: none; }
 .si-zc {
-  background: #111827;
-  border-color: #111827;
+  background: #241B10;
+  border-color: #241B10;
   color: #FFFFFF;
 }
-.si-zc:hover { background: #1F2937; }
+.si-zc:hover { background: #241B10; }
 .si-hint {
   margin: 18px 0 0;
   font-size: 12px;
   line-height: 1.7;
-  color: #6B7280;
+  color: #6E6152;
   text-align: center;
 }
 .si-form .si-fine { margin-top: 22px; }

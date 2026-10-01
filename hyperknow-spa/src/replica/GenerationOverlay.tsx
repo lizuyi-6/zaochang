@@ -355,7 +355,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
             <div style={{ fontWeight: 700 }}>
               {insufficient ? L('Out of credits', '积分不足') : L('Generation interrupted', '生成中断')}
             </div>
-            <div style={{ maxWidth: 340, whiteSpace: 'normal', lineHeight: 1.6, color: '#6B7280', fontSize: 13 }}>
+            <div style={{ maxWidth: 340, whiteSpace: 'normal', lineHeight: 1.6, color: '#6E6152', fontSize: 13 }}>
               {insufficient
                 ? L(
                     'A course costs 10 credits. You get 20 free credits every day (2 per chat), resetting at midnight Beijing time.',
@@ -379,13 +379,13 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
         ) : waitingConfirmation && blueprint ? (
           /* 真实蓝图阶段：审查大纲、挑选单元、确认开始细化（复用品牌深绿与SVG，兼容计划数量与节数时长） */
           <div className="gen-blueprint-review" style={{ textAlign: 'left', width: '100%', marginTop: 8 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#164E46', marginBottom: 4, textAlign: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#C24A2E', marginBottom: 4, textAlign: 'center' }}>
               {L('Review Course Blueprint', '审查并确认课程蓝图')}
             </div>
             <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 10, textAlign: 'center', lineHeight: 1.4 }}>
               <strong>{blueprint.courseTitle}</strong>
               {blueprint.courseDescription && (
-                <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                <div style={{ fontSize: 12, color: '#6E6152', marginTop: 4 }}>
                   {blueprint.courseDescription}
                 </div>
               )}
@@ -399,11 +399,11 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
                 gap: 14,
                 marginBottom: 10,
                 fontSize: 11.5,
-                color: '#164E46',
-                background: '#F4F7F3',
+                color: '#C24A2E',
+                background: '#F6EEDD',
                 padding: '6px 12px',
                 borderRadius: 8,
-                border: '1px solid #DCE6D9',
+                border: '1px solid #EBDFC8',
               }}
             >
               <span>{L(`Units: ${blueprint.units?.length || blueprint.totalUnits || 0}`, `单元：${blueprint.units?.length || blueprint.totalUnits || 0}`)}</span>
@@ -437,7 +437,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
               </span>
             </div>
 
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#453722', marginBottom: 6 }}>
               {L('Select Units to Generate:', '选择要生成的单元：')}
             </div>
 
@@ -445,10 +445,10 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
               style={{
                 maxHeight: 200,
                 overflowY: 'auto',
-                border: '1px solid #E5E7EB',
+                border: '1px solid #EADCC3',
                 borderRadius: 8,
                 padding: '8px 10px',
-                background: '#F9FAFB',
+                background: '#FAF4E8',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 8,
@@ -466,21 +466,21 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
                       gap: 8,
                       fontSize: 12,
                       cursor: 'pointer',
-                      color: checked ? '#111827' : '#9CA3AF',
+                      color: checked ? '#241B10' : '#A69A85',
                     }}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleUnit(uId)}
-                      style={{ marginTop: 2, accentColor: '#164E46' }}
+                      style={{ marginTop: 2, accentColor: '#C24A2E' }}
                     />
                     <div>
                       <div style={{ fontWeight: 600 }}>{u.title}</div>
                       {u.objectives && u.objectives.length > 0 && (
                         <div style={{ fontSize: 11, color: '#52796F', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
                           <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                            <circle cx="8" cy="8" r="7" stroke="#164E46" strokeWidth="2" />
+                            <circle cx="8" cy="8" r="7" stroke="#C24A2E" strokeWidth="2" />
                             <circle cx="8" cy="8" r="3" fill="#D9A441" />
                           </svg>
                           <span>{u.objectives[0]}</span>
@@ -501,7 +501,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
                   fontSize: 13,
                   fontWeight: 600,
                   borderRadius: 8,
-                  background: '#164E46',
+                  background: '#C24A2E',
                   color: '#fff',
                   border: 'none',
                   cursor: 'pointer',
@@ -535,7 +535,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
             className="gen-search-status"
             style={{
               fontSize: 12,
-              color: (searchProgress.sources ?? 0) > 0 ? '#059669' : '#6B7280',
+              color: (searchProgress.sources ?? 0) > 0 ? '#059669' : '#6E6152',
               marginTop: 6,
               textAlign: 'center',
               maxWidth: 360,
@@ -550,7 +550,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
                     style={{
                       display: 'block',
                       fontSize: 11,
-                      color: '#9CA3AF',
+                      color: '#A69A85',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -562,7 +562,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
                 )}
               </span>
             ) : searchProgress.status && searchProgress.status !== 'success' ? (
-              <span style={{ color: '#9CA3AF' }}>
+              <span style={{ color: '#A69A85' }}>
                 {searchProgress.status === 'not_triggered'
                   ? L('Bypassed web search, using structured model knowledge', '无需外部检索，已基于大模型知识库直接构建')
                   : (searchProgress.reason || L('Web search unavailable, continuing with model knowledge', '未获取到外部研学资料，已结合知识库继续生成'))}

@@ -212,7 +212,7 @@ export const ReplicaSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
             <span>{t('sidebar.recentActivities')}</span>
             <ChevronDown
               size={14}
-              style={{ transform: activitiesOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s', color: '#9CA3AF' }}
+              style={{ transform: activitiesOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s', color: '#A69A85' }}
             />
           </button>
           {activitiesOpen && (
@@ -250,7 +250,7 @@ export const ReplicaSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
                     </button>
                   ))}
               {state.conversations !== null && state.conversations.length === 0 && (
-                <div className="hk-activity-row" style={{ color: '#9CA3AF' }}>
+                <div className="hk-activity-row" style={{ color: '#A69A85' }}>
                   <span>{L('No conversations yet', '暂无会话')}</span>
                 </div>
               )}

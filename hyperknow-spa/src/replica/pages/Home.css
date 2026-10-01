@@ -19,14 +19,14 @@
   margin: 42px 24px 0;
   font-size: 29px;
   font-weight: 600;
-  color: #111827;
+  color: #241B10;
   text-align: center;
   letter-spacing: -0.01em;
 }
 .hm-sub {
   margin-top: 14px;
   font-size: 15px;
-  color: #6b7280;
+  color: #6E6152;
   text-align: center;
 }
 
@@ -58,7 +58,7 @@
   outline: none;
   background: transparent;
   font-size: 15px;
-  color: #111827;
+  color: #241B10;
   padding: 4px 0;
 }
 .hm-input:focus,
@@ -75,7 +75,7 @@
   align-items: center;
   gap: 8px;
   font-size: 15px;
-  color: #9ca3af;
+  color: #A69A85;
   pointer-events: none;
   white-space: nowrap;
   overflow: hidden;
@@ -86,11 +86,11 @@
   text-overflow: ellipsis;
 }
 .hm-kbd {
-  background: #f3f4f6;
+  background: #F3EADA;
   border-radius: 4px;
   font-size: 11px;
   line-height: 1;
-  color: #9ca3af;
+  color: #A69A85;
   padding: 3px 8px 4px;
   flex-shrink: 0;
 }
@@ -121,41 +121,41 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #EADCC3;
   background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #111827;
+  color: #241B10;
   flex-shrink: 0;
   transition: background 0.12s;
 }
 .hm-circle-btn:hover {
-  background: #f9fafb;
+  background: #FAF4E8;
 }
 .hm-chip {
   height: 36px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #EADCC3;
   background: #fff;
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: #241B10;
   flex-shrink: 0;
   transition: background 0.12s;
 }
 .hm-chip:hover {
-  background: #f9fafb;
+  background: #FAF4E8;
 }
 .hm-chip.icon-only {
   width: 40px;
   padding: 0;
   justify-content: center;
-  color: #374151;
+  color: #453722;
 }
 .hm-ghost-icon {
   width: 32px;
@@ -164,24 +164,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #374151;
+  color: #453722;
   flex-shrink: 0;
   transition: background 0.12s;
 }
 .hm-ghost-icon:hover {
-  background: #f3f4f6;
+  background: #F3EADA;
 }
 .hm-cost {
   height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  background: #f3f4f6;
+  background: #F3EADA;
   display: flex;
   align-items: center;
   gap: 5px;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: #241B10;
 }
 .hm-send {
   width: 36px;
@@ -199,8 +199,8 @@
   background: #2a2a2e;
 }
 .hm-send:disabled {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: #F3EADA;
+  color: #A69A85;
   cursor: default;
 }
 .hm-speed {
@@ -212,11 +212,11 @@
   gap: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: #453722;
   transition: background 0.12s;
 }
 .hm-speed:hover {
-  background: #f3f4f6;
+  background: #F3EADA;
 }
 
 /* ---------------- Below-card helpers (Craft) ---------------- */
@@ -224,10 +224,10 @@
   margin-top: 22px;
   text-align: center;
   font-size: 14px;
-  color: #9ca3af;
+  color: #A69A85;
 }
 .hm-lms-link {
-  color: #111827;
+  color: #241B10;
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -241,11 +241,11 @@
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: #453722;
   cursor: pointer;
 }
 .hm-help svg {
-  color: #9ca3af;
+  color: #A69A85;
 }
 
 /* ---------------- Marketplace ---------------- */
@@ -264,7 +264,7 @@
   gap: 10px;
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: #241B10;
 }
 .hm-viewall {
   margin-left: auto;
@@ -273,11 +273,11 @@
   gap: 4px;
   font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
+  color: #6E6152;
   cursor: pointer;
 }
 .hm-viewall:hover {
-  color: #111827;
+  color: #241B10;
 }
 .hm-market-grid {
   margin-top: 18px;
@@ -294,10 +294,10 @@
 
 .hm-course {
   background: #fff;
-  border: 1px solid #f0f0f0;
+  border: 1px solid #F3EADA;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 4px rgba(61, 44, 30, 0.03);
 }
 .hm-course-cover {
   height: 145px;
@@ -324,18 +324,18 @@
 .hm-provider-name {
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: #241B10;
 }
 .hm-course-title {
   margin-top: 8px;
   font-size: 17px;
   font-weight: 700;
-  color: #111827;
+  color: #241B10;
 }
 .hm-course-desc {
   margin-top: 6px;
   font-size: 13px;
-  color: #6b7280;
+  color: #6E6152;
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -349,8 +349,8 @@
   gap: 10px;
 }
 .hm-diff {
-  background: #f3f4f6;
-  color: #374151;
+  background: #F3EADA;
+  color: #453722;
   font-size: 12px;
   font-weight: 500;
   border-radius: 999px;
@@ -358,7 +358,7 @@
 }
 .hm-lessons {
   font-size: 12px;
-  color: #6b7280;
+  color: #6E6152;
 }
 .hm-course-foot {
   margin-top: 12px;
@@ -366,7 +366,7 @@
   align-items: center;
   justify-content: space-between;
   font-size: 12px;
-  color: #6b7280;
+  color: #6E6152;
 }
 .hm-onboard {
   display: flex;
@@ -374,7 +374,7 @@
   gap: 5px;
 }
 .hm-onboard b {
-  color: #111827;
+  color: #241B10;
   font-weight: 700;
 }
 .hm-rating {
@@ -383,7 +383,7 @@
   gap: 4px;
 }
 .hm-rating b {
-  color: #111827;
+  color: #241B10;
   font-weight: 700;
   font-size: 13px;
 }
@@ -399,7 +399,7 @@
 .hm-instant-title {
   font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: #241B10;
 }
 .hm-instant-card {
   margin-top: 28px;
@@ -422,21 +422,21 @@
   height: 38px;
   padding: 0 16px;
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #EADCC3;
   border-radius: 999px;
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: #241B10;
   transition: background 0.12s;
 }
 .hm-cap:hover {
-  background: #f9fafb;
+  background: #FAF4E8;
 }
 .hm-cap > svg {
-  color: #374151;
+  color: #453722;
 }
 .hm-badge {
   font-size: 11px;
@@ -473,12 +473,12 @@
   border-radius: 999px;
   font-size: 13px;
   font-weight: 500;
-  color: #9ca3af;
+  color: #A69A85;
   cursor: pointer;
 }
 .hm-news-pill.active {
-  background: #f3f4f6;
-  color: #111827;
+  background: #F3EADA;
+  color: #241B10;
   font-weight: 600;
 }
 .hm-news-next {
@@ -487,11 +487,11 @@
   align-items: center;
   gap: 5px;
   font-size: 13px;
-  color: #6b7280;
+  color: #6E6152;
   cursor: pointer;
 }
 .hm-news-next svg {
-  color: #9ca3af;
+  color: #A69A85;
 }
 .hm-news-list {
   margin-top: 12px;
@@ -501,13 +501,13 @@
   align-items: center;
   gap: 12px;
   height: 47px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #F3EADA;
   font-size: 15px;
-  color: #374151;
+  color: #453722;
   cursor: pointer;
 }
 .hm-news-row svg {
-  color: #9ca3af;
+  color: #A69A85;
   flex-shrink: 0;
 }
 
@@ -518,9 +518,9 @@
   max-width: calc(100% - 48px);
   margin: 36px auto 0;
   background: #fff;
-  border: 1px solid #f0f0f0;
+  border: 1px solid #F3EADA;
   border-radius: 14px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 10px rgba(61, 44, 30, 0.04);
   padding: 12px 16px;
   display: flex;
   align-items: center;
@@ -536,7 +536,7 @@
 .hm-affiliate-text {
   font-size: 13.5px;
   font-weight: 500;
-  color: #111827;
+  color: #241B10;
   line-height: 1.4;
 }
 .hm-affiliate-join {
@@ -547,7 +547,7 @@
   gap: 4px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary, #164E46);
+  color: var(--color-primary, #C24A2E);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -582,13 +582,13 @@
 .hm-welcome-oh {
   font-size: 28px;
   font-weight: 700;
-  color: #111827;
+  color: #241B10;
 }
 .hm-welcome-back {
   margin-top: 4px;
   font-size: 28px;
   font-weight: 400;
-  color: #111827;
+  color: #241B10;
 }
 .hm-welcome .hk-btn-dark {
   margin-top: 56px;
@@ -602,19 +602,19 @@
 .hm-notes-text {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #E5E7EB;
+  border: 1px solid #EADCC3;
   border-radius: 8px;
   padding: 8px 9px;
   font: inherit;
   font-size: 12.5px;
-  color: #1F2937;
+  color: #241B10;
   resize: vertical;
   outline: none;
   margin: 4px 0 8px;
 }
-.hm-notes-text:focus { border-color: #B9C6D8; }
+.hm-notes-text:focus { border-color: #D9C0A4; }
 .hm-menu .hk-menu-item:disabled { color: #C4C9D1; cursor: default; }
-.hm-ghost-icon.on { color: #4C6696; }
+.hm-ghost-icon.on { color: #B4472B; }
 
 /* 见界 LATTICE — scoped editorial theme; layout and semantic ink preserved. */
 .hm-prompt-card,.hm-circle-btn,.hm-chip,.hm-course,.hm-cap,.hm-affiliate { background: var(--panel-bg); border-color: var(--border-color); }
@@ -624,7 +624,7 @@
 .hm-send:disabled { background: var(--surface-soft); color: var(--text-muted); }
 .hm-prompt-card:focus-within {
   border-color: var(--focus-ring);
-  box-shadow: 0 0 0 1px var(--focus-ring), 0 8px 24px rgba(22, 78, 70, 0.08);
+  box-shadow: 0 0 0 1px var(--focus-ring), 0 8px 24px rgba(194, 74, 46, 0.08);
 }
 .hm-welcome { background: var(--app-bg); }
 .hm-placeholder, .hm-lms, .hm-easter-sub { color: var(--text-muted); }
@@ -713,7 +713,7 @@
   align-items: flex-start;
   justify-content: space-between;
   padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--border-color, #E5E7EB);
+  border-bottom: 1px solid var(--border-color, #EADCC3);
 }
 
 .hm-inquiry-title {
@@ -722,7 +722,7 @@
   gap: 8px;
   font-size: 17px;
   font-weight: 700;
-  color: var(--color-primary, #164E46);
+  color: var(--color-primary, #C24A2E);
 }
 
 .hm-inquiry-round-tag {
@@ -730,15 +730,15 @@
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 12px;
-  background: var(--surface-soft, #EFF4F2);
-  color: var(--color-primary, #164E46);
+  background: var(--surface-soft, #F2ECDC);
+  color: var(--color-primary, #C24A2E);
   border: 1px solid var(--border-color, #D2DFD8);
 }
 
 .hm-inquiry-sub {
   margin-top: 6px;
   font-size: 12.5px;
-  color: var(--text-muted, #6B7280);
+  color: var(--text-muted, #6E6152);
   line-height: 1.4;
 }
 
@@ -746,14 +746,14 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: var(--text-muted, #6B7280);
+  color: var(--text-muted, #6E6152);
   padding: 4px;
   border-radius: 6px;
   transition: all 0.15s ease;
 }
 .hm-inquiry-close:hover {
-  background: var(--surface-hover, #F3F4F6);
-  color: var(--color-primary, #111827);
+  background: var(--surface-hover, #F3EADA);
+  color: var(--color-primary, #241B10);
   transform: scale(1.05);
 }
 .hm-inquiry-close:active {
@@ -767,7 +767,7 @@
   justify-content: center;
   gap: 12px;
   padding: 48px 24px;
-  color: var(--text-muted, #6B7280);
+  color: var(--text-muted, #6E6152);
   font-size: 13.5px;
   animation: hm-inquiry-in 0.25s ease-out both;
 }
@@ -814,7 +814,7 @@
   gap: 8px;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--text-heading, #1F2937);
+  color: var(--text-heading, #241B10);
 }
 
 .hm-inquiry-q-num {
@@ -823,7 +823,7 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--color-primary, #164E46);
+  background: var(--color-primary, #C24A2E);
   color: #fff;
   display: inline-flex;
   align-items: center;
@@ -839,19 +839,19 @@
 
 .hm-inquiry-opt-chip {
   background: var(--panel-bg, #fff);
-  border: 1px solid var(--border-color, #E5E7EB);
+  border: 1px solid var(--border-color, #EADCC3);
   border-radius: 8px;
   padding: 6px 12px;
   font-size: 12.5px;
-  color: var(--text-normal, #374151);
+  color: var(--text-normal, #453722);
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: left;
 }
 
 .hm-inquiry-opt-chip:hover {
-  background: var(--surface-hover, #F9FAFB);
-  border-color: #D1D5DB;
+  background: var(--surface-hover, #FAF4E8);
+  border-color: #D8C7A9;
   transform: translateY(-1px);
 }
 
@@ -861,10 +861,10 @@
 
 .hm-inquiry-opt-chip.selected {
   background: var(--selected-bg, #E9F3EE);
-  color: var(--color-primary, #164E46);
-  border-color: var(--color-primary, #164E46);
+  color: var(--color-primary, #C24A2E);
+  border-color: var(--color-primary, #C24A2E);
   font-weight: 600;
-  box-shadow: 0 0 0 2.5px rgba(22, 78, 70, 0.12), 0 2px 6px rgba(22, 78, 70, 0.08);
+  box-shadow: 0 0 0 2.5px rgba(194, 74, 46, 0.12), 0 2px 6px rgba(194, 74, 46, 0.08);
   transform: translateY(-1px);
 }
 
@@ -873,18 +873,18 @@
   width: 100%;
   padding: 8px 12px;
   font-size: 12.5px;
-  border: 1px solid var(--border-color, #E5E7EB);
+  border: 1px solid var(--border-color, #EADCC3);
   border-radius: 7px;
-  background: var(--surface-soft, #FAFAFA);
-  color: var(--text-normal, #1F2937);
+  background: var(--surface-soft, #FAF4E8);
+  color: var(--text-normal, #241B10);
   transition: all 0.15s ease;
 }
 
 .hm-inquiry-input:focus {
   outline: none;
-  border-color: var(--color-primary, #164E46);
+  border-color: var(--color-primary, #C24A2E);
   background: #fff;
-  box-shadow: 0 0 0 2.5px rgba(22, 78, 70, 0.1);
+  box-shadow: 0 0 0 2.5px rgba(194, 74, 46, 0.1);
 }
 
 .hm-inquiry-footer {
@@ -892,8 +892,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 24px;
-  border-top: 1px solid var(--border-color, #E5E7EB);
-  background: var(--surface-soft, #FAFAFA);
+  border-top: 1px solid var(--border-color, #EADCC3);
+  background: var(--surface-soft, #FAF4E8);
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 16px;
   gap: 12px;
@@ -909,15 +909,15 @@
   background: transparent;
   border: none;
   font-size: 12.5px;
-  color: var(--text-muted, #6B7280);
+  color: var(--text-muted, #6E6152);
   cursor: pointer;
   padding: 6px 10px;
   border-radius: 6px;
   transition: all 0.15s ease;
 }
 .hm-inquiry-ghost-btn:hover {
-  color: #111827;
-  background: var(--surface-hover, #F3F4F6);
+  color: #241B10;
+  background: var(--surface-hover, #F3EADA);
 }
 .hm-inquiry-ghost-btn:active {
   transform: scale(0.97);
@@ -928,18 +928,18 @@
   align-items: center;
   gap: 5px;
   background: #fff;
-  border: 1px solid var(--border-color, #D1D5DB);
+  border: 1px solid var(--border-color, #D8C7A9);
   border-radius: 7px;
   padding: 6px 12px;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--color-primary, #164E46);
+  color: var(--color-primary, #C24A2E);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .hm-inquiry-followup-btn:hover:not(:disabled) {
-  background: var(--surface-soft, #EFF4F2);
-  border-color: var(--color-primary, #164E46);
+  background: var(--surface-soft, #F2ECDC);
+  border-color: var(--color-primary, #C24A2E);
   transform: translateY(-1px);
 }
 .hm-inquiry-followup-btn:active:not(:disabled) {
