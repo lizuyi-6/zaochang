@@ -1,0 +1,48 @@
+.lc-ripple-button-root {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--lc-ink);
+  font-family: inherit;
+  min-height: 44px;
+  cursor: pointer;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--lc-accent);
+  border-right-width: 1px;
+  border-right-style: solid;
+  border-right-color: var(--lc-accent);
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: var(--lc-accent);
+  border-left-width: 1px;
+  border-left-style: solid;
+  border-left-color: var(--lc-accent);
+  border-radius: 18px;
+  background: var(--lc-surface);
+  padding: 16px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--lc-accent) 35%, transparent);
+}
+.lc-ripple-button-root:focus-visible {
+  outline: 2px solid var(--lc-accent);
+  outline-offset: 4px;
+}
+.lc-ripple-button-root:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.lc-ripple-button-ripple {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 50%;
+  background: var(--lc-accent);
+}
+.lc-ripple-button-content {
+  position: relative;
+}

@@ -1,0 +1,66 @@
+.lc-elastic-tabs-root {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--lc-ink);
+  font-family: inherit;
+  width: min(100%, 420px);
+  padding: 24px;
+  background: var(--lc-surface);
+  border-radius: 24px;
+}
+.lc-elastic-tabs-track {
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: #d8cec7;
+  border-right-width: 1px;
+  border-right-style: solid;
+  border-right-color: #d8cec7;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: #d8cec7;
+  border-left-width: 1px;
+  border-left-style: solid;
+  border-left-color: #d8cec7;
+  border-radius: 16px;
+}
+.lc-elastic-tabs-tab {
+  box-sizing: border-box;
+  min-height: 44px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--lc-ink);
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 10px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+.lc-elastic-tabs-tab:focus-visible {
+  outline: 2px solid var(--lc-accent);
+  outline-offset: 4px;
+}
+.lc-elastic-tabs-indicator {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lc-accent) 18%, transparent);
+}
+.lc-elastic-tabs-label {
+  position: relative;
+}
+.lc-elastic-tabs-panel {
+  margin-top: 22px;
+  line-height: 1.7;
+  font-size: 15px;
+}
+.lc-elastic-tabs-panel:focus-visible {
+  outline: 2px solid var(--lc-accent);
+  outline-offset: 4px;
+}
