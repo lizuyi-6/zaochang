@@ -8,6 +8,7 @@ import Magnet from "./components/motion/magnet";
 import { ProductCard } from "./components/product-card";
 import { Reveal } from "./components/reveal";
 import { StageParallax } from "./components/stage-parallax";
+import { TickerBand } from "./components/ticker-band";
 import { depthStyle } from "./components/depth-style";
 import { challenges, circles, products } from "./lib/community-data";
 import { formatZhDateTime } from "./lib/format";
@@ -86,9 +87,9 @@ export default async function HomePage() {
             <span>JIANJIE / AGENT</span><strong>AI<br />研学</strong><small>白板授课 · 举手插话 ↗</small>
           </a>
           <div className="floating-work work-loop" aria-hidden="true" data-depth="" style={depthStyle(21)}><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>
-          <div className="stage-orbit orbit-one" aria-hidden="true" data-depth="" style={depthStyle(6)} /><div className="stage-orbit orbit-two" aria-hidden="true" data-depth="" style={depthStyle(8)} />
-          <span className="stage-coordinate coordinate-one" aria-hidden="true" data-depth="" style={depthStyle(3)}>X 31.42 / Y 18.07</span>
-          <span className="stage-coordinate coordinate-two" aria-hidden="true" data-depth="" style={depthStyle(3)}>SIGNAL / OPEN</span>
+          {/* 舞台只保留一处持续动效(星芒呼吸),其余几何为静态 —— Apple HIG:动效应传达信息,
+              多个同时运动的装饰源会分散注意力(ADHD/认知无障碍)。 */}
+          <div className="stage-orbit orbit-one" aria-hidden="true" data-depth="" style={depthStyle(6)} />
           <Link className="galaxy-gateway" href="/galaxy" aria-label="进入造场产品银河">
             <span className="galaxy-gateway-sky" aria-hidden="true"><i /><i /><b /></span>
             <span className="galaxy-gateway-copy">
@@ -106,10 +107,8 @@ export default async function HomePage() {
           <div><span>今日果子分录量</span><strong><Metric value={stats?.todayFruitMovement ?? null} /></strong><small><Sparkles size={12} /> 绝对值合计</small></div>
         </section>
 
-        <Reveal className="ticker-band">
-          <div className="ticker-track">
-            {[...products, ...products].map((product, index) => <span key={`${product.id}-${index}`}><i style={{ background: product.accent }} />{product.title}<small>{product.release}</small></span>)}
-          </div>
+        <Reveal>
+          <TickerBand items={products} />
         </Reveal>
 
         <section className="home-section">
