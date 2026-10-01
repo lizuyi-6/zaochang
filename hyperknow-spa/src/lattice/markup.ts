@@ -24,6 +24,8 @@ export type MarkupBlock =
   | { kind: 'code'; lang: string; text: string }
   | { kind: 'quote'; inlines: MarkupInline[] }
   | { kind: 'math'; text: string }
+  /** HTML 表格(模型在区块内实际会输出,虽未列入 prompt 白名单) */
+  | { kind: 'table'; head: MarkupInline[][] | null; rows: MarkupInline[][][] }
   /** <div content-section="…"> 教学区块 */
   | { kind: 'section'; section: string; blocks: MarkupBlock[] }
   /** <diagram> 视觉命令标签:只保留元数据,正文(mermaid 源码等)不上屏 */
@@ -206,30 +208,41 @@ function pushMarkdownBlocks(text: string, out: MarkupBlock[]): void {
   flushPara();
 }
 
-/** 容器内部 HTML 子集解析:p/ul/ol/li/strong/b/em/i/code/br/h1-h4;未知标签丢弃。 */
+/** 容器内部 HTML 子集解析:p/ul/ol/li/strong/b/em/i/code/br/h1-h4/table;未知标签丢弃。 */
 function parseHtmlContainer(src: string): MarkupBlock[] {
   const out: MarkupBlock[] = [];
   /** 当前区块已累积的行内片段(样式随标签开合即时生效) */
   let runs: MarkupInline[] = [];
   let list: { ordered: boolean; items: MarkupInline[][] } | null = null;
+  let table: { head: MarkupInline[][] | null; rows: MarkupInline[][][]; th: boolean; row: MarkupInline[][] } | null = null;
   let bold = false;
   let italic = false;
   let code = false;
   let heading: 2 | 3 | 4 | null = null;
   const base = (): InlineBase => ({ bold: bold || undefined, italic: italic || undefined, code: code || undefined });
   const emit = (): void => {
-    if (!runs.length) {
-      heading = null;
-      return;
+    if (runs.length === 1 && runs[0].math && !heading) {
+      // 整段只有一个公式的 <p> 升格为独立数学块
+      out.push({ kind: 'math', text: runs[0].text });
+    } else if (runs.length) {
+      if (heading) out.push({ kind: 'heading', level: heading, inlines: runs });
+      else out.push({ kind: 'p', inlines: runs });
     }
-    if (heading) out.push({ kind: 'heading', level: heading, inlines: runs });
-    else out.push({ kind: 'p', inlines: runs });
     runs = [];
     heading = null;
   };
   const flushList = (): void => {
-    if (list && list.items.length) out.push({ kind: 'list', ordered: list.ordered, items: list.items });
+    if (list && list.items.length) {
+      const items = list.items.filter((item) => item.some((inl) => inl.text.trim()));
+      if (items.length) out.push({ kind: 'list', ordered: list.ordered, items });
+    }
     list = null;
+  };
+  const flushTable = (): void => {
+    if (table && (table.head || table.rows.length)) {
+      out.push({ kind: 'table', head: table.head, rows: table.rows });
+    }
+    table = null;
   };
   let i = 0;
   while (i < src.length) {
@@ -255,17 +268,41 @@ function parseHtmlContainer(src: string): MarkupBlock[] {
           case 'ul':
             emit();
             flushList();
+            flushTable();
             list = { ordered: false, items: [] };
             break;
           case 'ol':
             emit();
             flushList();
+            flushTable();
             list = { ordered: true, items: [] };
             break;
           case 'li':
             emit();
             if (!list) list = { ordered: false, items: [] };
             list.items.push([]);
+            break;
+          case 'table':
+            emit();
+            flushList();
+            table = { head: null, rows: [], th: false, row: [] };
+            break;
+          case 'tr':
+            emit();
+            if (!table) table = { head: null, rows: [], th: false, row: [] };
+            table.row = [];
+            table.th = false;
+            break;
+          case 'th':
+          case 'td':
+            if (name === 'th' && table) table.th = true;
+            if (!table) table = { head: null, rows: [], th: false, row: [] };
+            table.row.push([]);
+            break;
+          case 'thead':
+          case 'tbody':
+          case 'tfoot':
+            if (!table) table = { head: null, rows: [], th: false, row: [] };
             break;
           case 'strong':
           case 'b':
@@ -315,6 +352,24 @@ function parseHtmlContainer(src: string): MarkupBlock[] {
             } else emit();
             break;
           }
+          case 'th':
+          case 'td':
+            break; // 单元格边界即闭合,文本路由已按单元格分段
+          case 'tr': {
+            if (table && table.row.length) {
+              if (table.th && !table.head) table.head = table.row;
+              else table.rows.push(table.row);
+            }
+            if (table) table.row = [];
+            break;
+          }
+          case 'table':
+            if (table && table.row.length) {
+              if (table.th && !table.head) table.head = table.row;
+              else table.rows.push(table.row);
+            }
+            flushTable();
+            break;
           case 'ul':
           case 'ol':
             emit();
@@ -333,10 +388,18 @@ function parseHtmlContainer(src: string): MarkupBlock[] {
     }
     const next = src.indexOf('<', i);
     const chunk = next === -1 ? src.slice(i) : src.slice(i, next);
-    if (list && !heading) {
-      // 列表开合之间的自由文本归属当前 li
-      if (!list.items.length) list.items.push([]);
-      list.items[list.items.length - 1].push(...parseInline(chunk, base()));
+    if (table) {
+      // 表格上下文:标签间纯空白(<tr>\n<td> 的换行等)丢弃,其余归属当前单元格
+      if (chunk.trim()) {
+        if (!table.row.length) table.row.push([]);
+        table.row[table.row.length - 1].push(...parseInline(chunk, base()));
+      }
+    } else if (list && !heading) {
+      // 列表上下文:标签间纯空白(<ul>\n<li> 的换行等)丢弃,其余归属当前 li
+      if (chunk.trim()) {
+        if (!list.items.length) list.items.push([]);
+        list.items[list.items.length - 1].push(...parseInline(chunk, base()));
+      }
     } else {
       runs.push(...parseInline(chunk, base()));
     }
@@ -344,6 +407,11 @@ function parseHtmlContainer(src: string): MarkupBlock[] {
   }
   emit();
   flushList();
+  if (table && table.row.length) {
+    if (table.th && !table.head) table.head = table.row;
+    else table.rows.push(table.row);
+  }
+  flushTable();
   return out;
 }
 
@@ -385,6 +453,17 @@ function strayTagToMarkdown(_full: string, name: string, closing: boolean): stri
     case 'ul':
     case 'ol':
       return '\n';
+    case 'table':
+      return closing ? '\n\n' : '\n\n';
+    case 'tr':
+      return closing ? '' : '\n';
+    case 'td':
+    case 'th':
+      return ' | ';
+    case 'thead':
+    case 'tbody':
+    case 'tfoot':
+      return '';
     case 'h1':
     case 'h2':
     case 'h3':
@@ -425,12 +504,16 @@ export function parseMarkup(src: string): MarkupBlock[] {
       i += close === -1 ? rest.length : close + '</diagram>'.length;
       continue;
     }
-    const divOpen = /^<div\b[^>]*\bcontent-section=["']([a-z_-]+)["'][^>]*>/i.exec(rest);
+    const divOpen = /^<div\b[^>]*>/i.exec(rest);
     if (divOpen) {
       flushMd();
+      const attrs = parseAttrs(divOpen[0]);
       const close = findClosingDiv(rest, divOpen[0].length);
       const inner = close === -1 ? rest.slice(divOpen[0].length) : rest.slice(divOpen[0].length, close);
-      out.push({ kind: 'section', section: divOpen[1].toLowerCase(), blocks: parseHtmlContainer(inner) });
+      const innerBlocks = parseHtmlContainer(inner);
+      const section = (attrs['content-section'] ?? '').toLowerCase();
+      if (/^[a-z_-]+$/.test(section)) out.push({ kind: 'section', section, blocks: innerBlocks });
+      else out.push(...innerBlocks);
       i += close === -1 ? rest.length : close + '</div>'.length;
       continue;
     }
@@ -465,10 +548,18 @@ export function markupToPlain(src: string): string {
         return b.inlines.map((inl) => inl.text).join('');
       case 'list':
         return b.items.map((it, idx) => `${b.ordered ? `${idx + 1}.` : '-'} ${it.map((inl) => inl.text).join('')}`).join('\n');
-      case 'code':
-        return b.text;
-      case 'math':
-        return b.text;
+    case 'code':
+      return b.text;
+    case 'math':
+      return b.text;
+    case 'table': {
+      const rowText = (row: MarkupInline[][]): string =>
+        row.map((cell) => cell.map((inl) => inl.text).join('').trim()).join(' | ');
+      const lines: string[] = [];
+      if (b.head) lines.push(rowText(b.head));
+      for (const row of b.rows) lines.push(rowText(row));
+      return lines.join('\n');
+    }
       case 'diagram':
         return b.caption ? `[${b.caption}]` : '';
       case 'section':

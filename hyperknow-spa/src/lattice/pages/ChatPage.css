@@ -424,3 +424,9 @@ h5.cp-markup-heading { font-size: 13.5px; }
 .cp-markup-diagram { align-items: center; border: 1px dashed var(--sand-400); border-radius: 8px; color: var(--ink-600); display: flex; flex-wrap: wrap; font-size: 12px; gap: 7px; padding: 10px 13px; }
 .cp-markup-diagram svg { color: var(--coral-500); flex: none; }
 .cp-markup-diagram span { color: var(--ink-400); }
+/* HTML 表格(模型在区块内实际会输出):细沙线网格 + 珊瑚底表头 */
+.cp-markup-table-wrap { overflow-x: auto; }
+.cp-markup-table { border-collapse: collapse; font-size: 12px; line-height: 1.55; min-width: 100%; }
+.cp-markup-table th, .cp-markup-table td { border: 1px solid var(--sand-300); padding: 7px 10px; text-align: left; vertical-align: top; }
+.cp-markup-table th { background: color-mix(in srgb, var(--coral-500) 10%, var(--panel-bg)); color: var(--ink-900); font-weight: 700; white-space: nowrap; }
+.cp-markup-table td { color: var(--ink-700); }

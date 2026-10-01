@@ -84,6 +84,35 @@ const BlockView: React.FC<{ block: MarkupBlock }> = ({ block }) => {
       );
     case 'math':
       return <div className="cp-markup-math-block">{block.text}</div>;
+    case 'table':
+      return (
+        <div className="cp-markup-table-wrap">
+          <table className="cp-markup-table">
+            {block.head && (
+              <thead>
+                <tr>
+                  {block.head.map((cell, ci) => (
+                    <th key={ci}>
+                      <Inlines inlines={cell} />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            )}
+            <tbody>
+              {block.rows.map((row, ri) => (
+                <tr key={ri}>
+                  {row.map((cell, ci) => (
+                    <td key={ci}>
+                      <Inlines inlines={cell} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     case 'section': {
       const label = SECTION_LABELS[block.section];
       return (
