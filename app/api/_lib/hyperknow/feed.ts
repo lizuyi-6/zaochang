@@ -65,12 +65,21 @@ function hitTimeMs(time: unknown): number {
   return Number.isFinite(ms) ? ms : Number.NaN;
 }
 
+/** 标题归一:去空白与常见标点,同文异域转载(81.cn 转新华社/中国新闻网)归一后可判重。 */
+function normalizeTitle(title: string): string {
+  return title
+    .replace(/[\s【】\[\]（）()""''「」：:，,。.·\-—|!！?？]/g, "")
+    .toLowerCase();
+}
+
 /**
- * 合并多路检索结果:仅留 http(s),按去协议 URL 去重,剔除标题带 Markdown 图链的
- * 脏行,新鲜优先排序(带可解析时间的按时间倒序,无时间按原序垫后),截断到 12 条。
+ * 合并多路检索结果:仅留 http(s),按去协议 URL 去重,再按归一标题去重
+ * (同文多家转载只留一条),剔除标题带 Markdown 图链的脏行,新鲜优先排序
+ * (带可解析时间的按时间倒序,无时间按原序垫后),截断到 12 条。
  */
 export function mergeFeedItems(groups: WebSearchHit[][], cap = 12): FeedItem[] {
-  const seen = new Set<string>();
+  const seenUrls = new Set<string>();
+  const seenTitles = new Set<string>();
   const pool: Array<{ item: FeedItem; timeMs: number; order: number }> = [];
   for (const group of groups) {
     if (!Array.isArray(group)) continue;
@@ -78,9 +87,12 @@ export function mergeFeedItems(groups: WebSearchHit[][], cap = 12): FeedItem[] {
       if (!hit || typeof hit.url !== "string" || !/^https?:\/\//i.test(hit.url)) continue;
       const title = String(hit.title ?? "").trim();
       if (title.includes("![") || (title !== "" && titleWeight(title) < MIN_TITLE_CHARS)) continue;
-      const key = hit.url.replace(/[#?].*$/, "");
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const urlKey = hit.url.replace(/[#?].*$/, "");
+      if (seenUrls.has(urlKey)) continue;
+      const titleKey = title ? normalizeTitle(title) : "";
+      if (titleKey && seenTitles.has(titleKey)) continue;
+      seenUrls.add(urlKey);
+      if (titleKey) seenTitles.add(titleKey);
       pool.push({
         item: { title: title || hit.url, url: hit.url, source: hostOf(hit.url) },
         timeMs: hitTimeMs(hit.time),
