@@ -228,6 +228,18 @@ export const Home = ({ state, set }: PageProps) => {
     return () => clearInterval(t);
   }, []);
 
+  // 「欢迎回来」接管层每会话只弹一次:刷新/切页返回不再重弹(welcomeBack 默认 true 常驻
+  // 会让用户每次刷新都被全屏层拦住,误以为按钮失灵)
+  useEffect(() => {
+    if (!state.welcomeBack) return;
+    if (sessionStorage.getItem('hk-welcome-shown')) {
+      set({ welcomeBack: false });
+    } else {
+      sessionStorage.setItem('hk-welcome-shown', '1');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const attachLine = () => attachments.map((a) => `[Attachment: ${a.name} — ${a.url}]`).join('\n');
 
   const submitTopic = () => {
@@ -787,9 +799,9 @@ export const Home = ({ state, set }: PageProps) => {
 	        </div>
 	      </div>
 
-      {/* welcome-back takeover */}
+      {/* welcome-back takeover:点层任意处即进入;每会话只出现一次(刷新不再重弹) */}
       {state.welcomeBack && (
-        <div className="hm-welcome">
+        <div className="hm-welcome" onClick={() => set({ welcomeBack: false })}>
           <WelcomeReader size={300} />
           <div className="hm-welcome-text">
             <div className="hm-welcome-oh">{t('home.welcomeBack.greeting')}</div>
