@@ -258,7 +258,7 @@ const MktCard: React.FC<{
   return (
     <div className="ob-mcard">
       <div className="ob-mcover">
-        <CourseCover kind={cover} flat />
+        <CourseCover kind={cover} seed={title} flat />
         {enrolled && <span className="ob-enrolled">{t('home.courseTicket.status.enrolled')}</span>}
       </div>
       <div className="ob-mcard-lab">
@@ -488,7 +488,7 @@ const StepCourse: React.FC = () => {
         {/* left cover column */}
         <div className="ob-course-left">
           <div className="ob-l7-cover">
-            <CourseCover kind="stats" flat />
+            <CourseCover kind="stats" seed="onboarding-l7" flat />
             <span className="ob-l7-coverbtn" style={{ right: 34 }}>
               <Share2 size={10} />
             </span>

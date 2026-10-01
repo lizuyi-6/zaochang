@@ -48,7 +48,7 @@ function FeaturedCard({
   return (
     <div className={`mp-feat-card ${size}`} onClick={onClick}>
       <div className="mp-cover-fill">
-        <CourseCover kind={course.cover} />
+        <CourseCover kind={course.cover} seed={course.id} />
       </div>
       <div className="mp-feat-scrim" />
       <div className="mp-feat-overlay">
@@ -68,7 +68,7 @@ function ListCard({ course, onClick }: { course: CourseCard; onClick: () => void
   return (
     <div className="mp-card" onClick={onClick}>
       <div className="mp-card-cover">
-        <CourseCover kind={course.cover} flat />
+        <CourseCover kind={course.cover} seed={course.id} flat />
       </div>
       <div className="mp-card-body">
         <div className="mp-provider">

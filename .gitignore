@@ -65,4 +65,4 @@ next-env.d.ts
 
 # 临时验收产物(cookie/流抓包等)一律不入库
 .tmp-*
-hyperknow-spa/.ssr-harness.mjs
+hyperknow-spa/.ssr-*.mjs
