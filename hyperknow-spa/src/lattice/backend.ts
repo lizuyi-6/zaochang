@@ -313,6 +313,8 @@ export interface ChatSendOptions {
   conversationId?: string;
   /** 回复模式(standard/fast):原 WS 协议字段,透传后端 */
   mode?: string;
+  /** 对话模型:flash=step-3.7-flash(默认),pro=step-5-preview;后端白名单回落 flash */
+  model?: 'flash' | 'pro';
 }
 
 /** 真实主对话。传 conversationId 则续聊同一会话;失败按 reason 二分(见 LiveFailureReason)。 */
@@ -326,6 +328,7 @@ export async function chatLive(message: string, handlers: ChatHandlers, options:
         message,
         ...(options.conversationId ? { conversation_id: options.conversationId } : {}),
         ...(options.mode ? { mode: options.mode } : {}),
+        ...(options.model ? { model: options.model } : {}),
       }),
       signal: options.signal,
     });
