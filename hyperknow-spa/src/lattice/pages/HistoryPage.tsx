@@ -88,9 +88,15 @@ export const HistoryPage: React.FC<PageProps> = ({ state, set }) => {
           >
             {t('studyHistory.tabSessions')}
           </button>
-          <span className="hs-filter" title={L('Sort', '排序')} onClick={() => setFilterOpen(!filterOpen)}>
+          <button
+            type="button"
+            className="hs-filter"
+            aria-label={L('Sort', '排序')}
+            aria-expanded={filterOpen}
+            onClick={() => setFilterOpen(!filterOpen)}
+          >
             <ListFilter size={16} />
-          </span>
+          </button>
           {filterOpen && (
             <>
               <div className="hs-filter-veil" onClick={() => setFilterOpen(false)} />

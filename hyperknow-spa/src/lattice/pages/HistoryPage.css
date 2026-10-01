@@ -90,10 +90,14 @@
 .hs-filter {
   margin-left: auto;
   display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px;
   color: var(--ink-600);
   cursor: pointer;
   border-radius: 6px;
+  border: none;
+  background: none;
 }
 .hs-filter:hover {
   background: rgba(255, 255, 255, 0.7);
