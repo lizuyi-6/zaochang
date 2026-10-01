@@ -7,24 +7,6 @@
   background: var(--sand-100);
   overflow-y: auto;
   height: 100%;
-}/* "Have an issue?" pill (joined mode) {
-  position: absolute;
-  top: 20px;
-  right: 24px;
-  z-index: 26;
-  height: 36px;
-  padding: 0 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--white);
-  border: 1px solid var(--sand-300);
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-900);
-  cursor: pointer;
-  transition: background 0.12s;
 }
 
 .cj-layout {
