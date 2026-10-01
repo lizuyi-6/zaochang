@@ -7,7 +7,10 @@ import { readFileSync } from "node:fs";
 import {
   AGENT_ADMIN_CAPABILITIES,
   AGENT_WRITE_CAPABILITIES,
+  VISUAL_TICKET_TTL_SECONDS,
   isAgentWriteAllowed,
+  signVisualTicket,
+  verifyVisualTicket,
 } from "../app/api/_lib/agent-auth.ts";
 
 const cap = (method, pathname) => ({ method, pathname });
@@ -93,4 +96,41 @@ test("capabilities 自描述端点:读面/写面如实上报两张能力表", ()
   const src = readFileSync(new URL("../app/api/admin/capabilities/route.ts", import.meta.url), "utf8");
   assert.ok(src.includes("requireAdminOrAgent"));
   assert.ok(src.includes("[...AGENT_WRITE_CAPABILITIES, ...AGENT_ADMIN_CAPABILITIES]"));
+});
+
+
+// ———— 视觉验收入场票(HMAC,无状态,10 分钟 TTL)————
+
+test("入场票:签发即可验,过期/篡改/错钥/空票一律拒", async () => {
+  const secret = "test-secret-key";
+  const ticket = await signVisualTicket(secret, 1_700_000_000_000);
+  assert.match(ticket, /^v1\.\d+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+  assert.equal((await verifyVisualTicket(secret, ticket, 1_700_000_000_000)).ok, true, "签发瞬间应验真");
+  const expiredAt = 1_700_000_000_000 + (VISUAL_TICKET_TTL_SECONDS + 1) * 1000;
+  assert.deepEqual(await verifyVisualTicket(secret, ticket, expiredAt), { ok: false, reason: "expired" });
+  assert.equal((await verifyVisualTicket(secret, ticket + "x", 1_700_000_000_000)).ok, false, "签名篡改应拒");
+  const other = await signVisualTicket("other-secret", 1_700_000_000_000);
+  assert.deepEqual(await verifyVisualTicket(secret, other, 1_700_000_000_000), { ok: false, reason: "bad_signature" });
+  for (const bad of [null, "", "v1", "v1.abc.def.ghi", "v2.9999999999.abc.def"]) {
+    assert.notDeepEqual(await verifyVisualTicket(secret, bad, 1_700_000_000_000), { ok: true }, String(bad));
+  }
+  const fresh = await signVisualTicket(secret);
+  assert.equal((await verifyVisualTicket(secret, fresh)).ok, true, "默认 now 签发应可验");
+});
+
+test("入场票:TTL 常量 = 600 秒", () => {
+  assert.equal(VISUAL_TICKET_TTL_SECONDS, 600);
+});
+
+test("视觉会话两端点:铸票需鉴权+token 缺失 fail-closed;入场端发 HttpOnly 会话并 302 /lattice/", () => {
+  const mint = readFileSync(new URL("../app/api/admin/visual-session/route.ts", import.meta.url), "utf8");
+  assert.ok(mint.includes("requireAdminOrAgent"), "铸票必须过 adminOrAgent");
+  assert.match(mint, /visual_session_disabled/, "token 未配置必须 503 fail-closed");
+  assert.ok(mint.includes("signVisualTicket"));
+
+  const enter = readFileSync(new URL("../app/api/admin/visual-session/enter/route.ts", import.meta.url), "utf8");
+  assert.ok(enter.includes("verifyVisualTicket"), "入场必须验票");
+  assert.ok(enter.includes("createOAuthSession"), "会话必须复用人类登录的会话实现");
+  assert.ok(enter.includes("HttpOnly"), "会话 cookie 必须 HttpOnly");
+  assert.match(enter, /Location: "\/lattice\/"|Location: .{0,4}\/lattice\//, "入场后固定去 /lattice/");
 });

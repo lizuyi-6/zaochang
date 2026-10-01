@@ -65,7 +65,8 @@ export async function ensureMember(user: MemberIdentity) {
 
 // 惰性创建 agent 的系统 member 行(作 docs/products 的 author/owner FK 锚点)。
 // member_number 显式给 0:赋号 trigger 仅在 IS NULL 时触发 → 跳过,不占会员号序列。
-async function ensureAgentMember() {
+// 导出供视觉验收入场票消费端复用(agent 会话首次落地时确保行存在)。
+export async function ensureAgentMember() {
   await database().prepare(
     `INSERT INTO members (email, display_name, member_number)
      VALUES (?, ?, 0)
