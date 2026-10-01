@@ -402,6 +402,12 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const BOARD_ITEMS = lesson.items;
   const BOARD_TABLE = lesson.table;
   const BOARD_ANNOTS = lesson.annots;
+  /* 引擎回调(writeItem/runStep 等)是稳定 useCallback,闭包绑定首渲染的 lesson;
+   * 直播课计划异步到达后 lesson 换新,陈旧闭包会拿演示课板书按 id 找条目
+   * (id 方案互不重叠 → 全部 miss)——整步空板、图永不书写。所有引擎回调
+   * 一律经 lessonRef 取当前课程,绝不经闭包。 */
+  const lessonRef = useRef(lesson);
+  lessonRef.current = lesson;
   const USER_ANSWERS = lesson.userAnswers;
   const FIRST_CHOICE_STEP = LESSON_STEPS.find((s) => s.awaitChoice) ?? null;
 
@@ -536,6 +542,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   /* ---------------- fast-forward preset (screenshot verification) ---------------- */
   const applyFastForward = useCallback((upto: number) => {
+    const steps = lessonRef.current.steps;
+    const items = lessonRef.current.items;
+    const annots = lessonRef.current.annots;
+    const table = lessonRef.current.table;
     const es: PanelEntry[] = [];
     const prog: Record<string, number> = {};
     const done = new Set<string>();
@@ -543,7 +553,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     let rows = 0;
     let sysEnd = false;
     let lastCap: Rich | null = null;
-    for (const s of LESSON_STEPS) {
+    for (const s of steps) {
       if (s.id >= upto) break;
       if (s.pan) pan = PAN_X;
       if (s.panel) es.push(...s.panel);
@@ -552,9 +562,9 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       if (s.awaitChoice) es.push(userBubble(`u${s.id}`, s.awaitChoice.options[s.awaitChoice.answer]));
       if (s.systemEnd) sysEnd = true;
     }
-    for (const it of BOARD_ITEMS) if (it.step < upto) prog[it.id] = itemCharCount(it);
-    for (const an of BOARD_ANNOTS) if (an.step < upto) done.add(an.id);
-    if (BOARD_TABLE && BOARD_TABLE.step < upto) rows = 4;
+    for (const it of items) if (it.step < upto) prog[it.id] = itemCharCount(it);
+    for (const an of annots) if (an.step < upto) done.add(an.id);
+    if (table && table.step < upto) rows = 4;
     setEntries(es);
     setProgress(prog);
     setAnnotsDone(done);
@@ -615,7 +625,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const writeItem = useCallback(
     async (id: string) => {
-      const item = BOARD_ITEMS.find((b) => b.id === id);
+      const item = lessonRef.current.items.find((b) => b.id === id);
       if (!item) return;
       const total = itemCharCount(item);
       setWritingId(id);
@@ -634,6 +644,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   );
 
   const revealTable = useCallback(async () => {
+    if (lessonRef.current.table === null) return;
     if (ctl.current.skipped) {
       setTableRows(4);
       return;
@@ -646,6 +657,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const drawAnnot = useCallback(
     async (id: string) => {
+      if (!lessonRef.current.annots.some((a) => a.id === id)) return;
       if (ctl.current.skipped) {
         setAnnotsDone((d) => new Set(d).add(id));
         return;
@@ -672,7 +684,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         }
       }
 
-      const items = BOARD_ITEMS.filter((b) => b.step === s.id);
+      const items = lessonRef.current.items.filter((b) => b.step === s.id);
       // 有界等待生图就绪或失败 (最多等待 3500ms，防无界阻塞音频时钟)
       const hasPendingImage = items.some((it) => it.image?.status === 'pending');
       if (hasPendingImage) {
@@ -687,12 +699,12 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       const capTask: Promise<SpeakHandle | null> = s.caption ? typeCaption(s.caption) : Promise.resolve(null);
       // 若后续步骤先被取消/失败,capTask 的迟到拒绝不得成为未处理拒绝
       void capTask.catch(() => {});
-      if (BOARD_TABLE?.step === s.id) await revealTable();
+      if (lessonRef.current.table?.step === s.id) await revealTable();
       for (const it of items) {
         await writeItem(it.id);
         if (!ctl.current.skipped) await wait(240);
       }
-      for (const an of BOARD_ANNOTS.filter((a) => a.step === s.id)) await drawAnnot(an.id);
+      for (const an of lessonRef.current.annots.filter((a) => a.step === s.id)) await drawAnnot(an.id);
       const narration = await capTask;
       // 旁白播完才进下一步(60s 安全上限防上游挂起)——否则下一步一开讲就把
       // 还在播的音频截断,这正是上一版"字幕跑完、声音被掐"的根源。
@@ -841,17 +853,17 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     const startFrom = ff ?? 1;
     if (ff !== null) applyFastForward(ff);
     // 起讲前先预热开头两条旁白(演示课/练习直入不走 plan 就绪预热)
-    LESSON_STEPS.filter((s) => s.caption && s.id >= startFrom)
+    lessonRef.current.steps.filter((s) => s.caption && s.id >= startFrom)
       .slice(0, 2)
       .forEach((s) => prefetchNarration(s.caption));
     (async () => {
       try {
         await wait(600);
         setStatus('explaining');
-        for (const s of LESSON_STEPS) {
+        for (const s of lessonRef.current.steps) {
           if (s.id < startFrom) continue;
           // 滚动预热:当前步开讲时,把后面两条旁白送进合成管线
-          LESSON_STEPS.filter((x) => x.caption && x.id > s.id)
+          lessonRef.current.steps.filter((x) => x.caption && x.id > s.id)
             .slice(0, 2)
             .forEach((x) => prefetchNarration(x.caption));
           await runStep(s);
