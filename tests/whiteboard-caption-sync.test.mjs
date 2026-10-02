@@ -889,6 +889,22 @@ test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures 
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Common Mistakes/i, '必须包含常见误区步');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /4-6 substantive bullet points/i, '卡片必须要求 4-6 条实质要点');
 
+  // 循证教学法契约(教学水平升级):具体→视觉→抽象、例题渐撤、提取式快测、
+  // 误区三步反驳、类比映射+失效边界、符号先定义、好奇环闭合、间隔回声、旁白纯口语
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /concrete → visual → abstract/i, '必须要求具体→视觉→抽象的具体化消退顺序');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /self-explanation question/i, '例题旁白必须嵌入自我解释提问');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /faded completion problem/i, '第二例题必须为渐撤补全题');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /RECALL or INFER/i, '快测必须考回忆/推断而非再认');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3-beat refutation/i, '误区必须用三步反驳结构');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /states its mapping/i, '类比必须给出映射关系');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /define every term, abbreviation, and symbol at first use/i, '术语符号必须首次使用即定义');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Curiosity loop/i, '开场谜题必须在收尾闭环');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Spaced echo/i, '后段快测必须回捞开头内容(间隔回声)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /NO markdown, bullet characters, or LaTeX in spoken_text/i, '旁白必须纯口语(逐字进 TTS)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /silently verify/i, '必须要求输出前静默自检');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Faded Worked Example/i, '进度结构必须含渐撤例题步');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Synthesis & Closure/i, '进度结构必须含综合收束步');
+
   // fallbackLecturePlan 保持紧凑(仅上游故障应急路径):5 步 + 阶段快测
   const zhPlan = fallbackLecturePlan('认知心理学');
   assert.equal(zhPlan.steps.length, 5);
