@@ -686,7 +686,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
             {(['flash', 'pro'] as const).map((m) => (
               <button
                 key={m}
-                className={`hk-menu-item${state.chatModel === m ? ' active' : ''}`}
+                className={`hk-menu-item cp-model-item${state.chatModel === m ? ' active' : ''}`}
                 onClick={() => {
                   set({ chatModel: m });
                   setMenu('none');

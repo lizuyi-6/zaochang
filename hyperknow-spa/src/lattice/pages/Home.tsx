@@ -547,7 +547,7 @@ export const Home = ({ state, set }: PageProps) => {
                       {(['flash', 'pro'] as const).map((m) => (
                         <button
                           key={m}
-                          className={`hk-menu-item${state.chatModel === m ? ' active' : ''}`}
+                          className={`hk-menu-item cp-model-item${state.chatModel === m ? ' active' : ''}`}
                           onClick={() => {
                             set({ chatModel: m });
                             setMenu('none');
@@ -797,7 +797,7 @@ export const Home = ({ state, set }: PageProps) => {
                         {(['flash', 'pro'] as const).map((m) => (
                           <button
                             key={m}
-                            className={`hk-menu-item${state.chatModel === m ? ' active' : ''}`}
+                            className={`hk-menu-item cp-model-item${state.chatModel === m ? ' active' : ''}`}
                             onClick={() => {
                               set({ chatModel: m });
                               setMenu('none');
@@ -906,18 +906,26 @@ export const Home = ({ state, set }: PageProps) => {
               </div>
               <div className="hm-news-list">
                 {visibleNews.map((n) => (
-                  <a
+                  <button
+                    type="button"
                     className="hm-news-row"
                     key={n.key}
-                    href={n.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     title={n.title}
+                    onClick={() => {
+                      // 产品语义:点热点=把这条变成即时协助里的一段学习提问,不跳外链
+                      const prompt = L(
+                        `I want to truly understand the story behind this news: “${n.title}”. Walk me through it as an interactive lesson — background, key concepts, why it matters, and questions worth asking next.`,
+                        `我想真正读懂这条新闻背后的门道：「${n.title}」。请用互动课的方式带我梳理——来龙去脉、关键概念、为什么重要、以及接下来值得追问的问题。`,
+                      );
+                      set({ homeTab: 'instant' });
+                      setNote(prompt);
+                      window.setTimeout(() => document.querySelector<HTMLInputElement>('.hm-input')?.focus(), 120);
+                    }}
                   >
                     <Spline size={14} />
                     <span className="hm-news-title">{n.title}</span>
                     {n.source && <span className="hm-news-src">{n.source}</span>}
-                  </a>
+                  </button>
                 ))}
               </div>
 	            </div>

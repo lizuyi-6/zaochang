@@ -980,3 +980,14 @@ a.hm-news-row:hover { background: var(--panel-bg); }
 .hm-news-next.loading { opacity: 0.45; pointer-events: none; }
 .hm-news-next.loading svg { animation: hm-spin 0.9s linear infinite; }
 @keyframes hm-spin { to { transform: rotate(360deg); } }
+
+/* 热点行 a→button 语义化后的复位(外观不变,点击填入即时协助) */
+button.hm-news-row {
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+}
+button.hm-news-row:hover { background: var(--panel-bg); }
