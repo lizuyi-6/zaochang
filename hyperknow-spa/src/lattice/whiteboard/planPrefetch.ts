@@ -115,6 +115,12 @@ export function prefetchLecturePlan(
   }
   const entry: Entry = { at: Date.now(), plan: Promise.resolve(null), image: Promise.resolve(null) };
   entry.plan = planLectureLive(params).then((plan) => {
+    // 降级计划(上游故障落的 5 步模板课)不进缓存:开课时取不到预热就走正常 POST,
+    // 给后端一次重做完整个计划的机会;旁白/配图也不为模板课烧 TTS/生图配额。
+    if (plan?.degraded) {
+      cache.delete(key);
+      return plan;
+    }
     if (plan) warmNarrations(plan, narration.voice, narration.speed);
     return plan;
   });
