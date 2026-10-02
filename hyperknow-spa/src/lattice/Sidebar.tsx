@@ -4,7 +4,6 @@ import {
   ChevronDown, Sparkles, Library,
 } from 'lucide-react';
 import { Logo } from './illustrations';
-import { recentActivities } from './data';
 import { useI18n } from './i18n';
 import { L } from './i18n/content';
 import { WhatsNewModal } from './WhatsNewModal';
@@ -228,17 +227,7 @@ export const LatticeSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
                         <span className="hk-skel-bar" style={{ width: `${52 + (i % 3) * 12}%` }} />
                       </div>
                     ))
-                  : recentActivities().map((a, i) => (
-                      <button
-                        type="button"
-                        key={i}
-                        className={`hk-activity-row ${state.screen === 'chat' && i === 1 ? 'active' : ''}`}
-                        onClick={() => navigate({ screen: 'chat' })}
-                        title={a.replace('…', '')}
-                      >
-                        <span>{a}</span>
-                      </button>
-                    ))
+                  : null
                 : state.conversations.map((a) => (
                     <button
                       type="button"

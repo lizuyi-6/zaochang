@@ -8,7 +8,7 @@ import {
   type CourseGenProgressData,
   type GenStepId,
 } from './backend';
-import { buildGeneratedCourse, courseFromBackend } from './generate';
+import { courseFromBackend, type GeneratedCourse } from './generate';
 import { courseJoinKey, markCourseJoined } from './courseJoinMemory';
 import type { PageProps } from './types';
 import './shell.css';
@@ -22,16 +22,7 @@ import './shell.css';
  * 积分回写;后端不可达无缝回退伪生成计时序列。
  */
 
-interface Phase {
-  key: 'initial' | 'crafting' | 'refining';
-  ms: number;
-}
 
-const PHASES: Phase[] = [
-  { key: 'initial', ms: 1600 },
-  { key: 'crafting', ms: 4200 },
-  { key: 'refining', ms: 2000 },
-];
 
 const LIVE_STEPS: { id: GenStepId; phase: 'initial' | 'research' | 'crafting' }[] = [
   { id: 'boot', phase: 'initial' },
@@ -39,11 +30,6 @@ const LIVE_STEPS: { id: GenStepId; phase: 'initial' | 'research' | 'crafting' }[
   { id: 'generating_initial_syllabus', phase: 'crafting' },
 ];
 
-const PSEUDO_PHASE_PCT: Record<'initial' | 'crafting' | 'refining', number> = {
-  initial: 16,
-  crafting: 58,
-  refining: 92,
-};
 
 const parseLines = (raw: string, fallback: string): string[] => {
   try {
@@ -63,7 +49,7 @@ const fmtElapsed = (ms: number) => {
 export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const { t } = useI18n();
   const query = state.genQuery;
-  const [mode, setMode] = useState<'connecting' | 'live' | 'pseudo'>('connecting');
+  const [mode, setMode] = useState<'connecting' | 'live'>('connecting');
   const [insufficient, setInsufficient] = useState(false);
   const [failed, setFailed] = useState(false);
   const [stepStatus, setStepStatus] = useState<Partial<Record<GenStepId, 'loading' | 'completed'>>>({});
@@ -78,7 +64,6 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const [liveUnitTitle, setLiveUnitTitle] = useState('');
   const [activePhase, setActivePhase] = useState<'initial' | 'research' | 'crafting'>('initial');
   const [ready, setReady] = useState(false);
-  const [phaseIdx, setPhaseIdx] = useState(0);
   const [lineIdx, setLineIdx] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const startedAtRef = useRef<number>(Date.now());
@@ -97,7 +82,6 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   };
 
   const cg = 'chatResponse.courseGeneration';
-  const phase = PHASES[phaseIdx];
 
   /* 已耗时计时:挂起即走,完成/失败/确认门暂停在原地(用户回看耗时) */
   const clockRunning = !ready && !failed && !insufficient;
@@ -107,7 +91,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     return () => window.clearInterval(iv);
   }, [query, clockRunning]);
 
-  const finish = (gen: ReturnType<typeof buildGeneratedCourse>, persisted = false) => {
+  const finish = (gen: GeneratedCourse, persisted = false) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     const latestCredits = remainingRef.current;
@@ -250,7 +234,6 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
     }
     updateBlueprintUuid('');
     const ctrl = new AbortController();
-    const pseudoTimers: number[] = [];
 
     (async () => {
       const result = await generateCourseLive(
@@ -312,17 +295,9 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
         }
       } else if (result.reason === 'insufficient') {
         setInsufficient(true);
-      } else if (result.reason === 'offline') {
-        /* 兜底:伪生成计时序列(仅静态托管/断网) */
-        setMode('pseudo');
-        PHASES.forEach((_, i) => {
-          if (i > 0) pseudoTimers.push(window.setTimeout(() => setPhaseIdx(i), PHASES.slice(0, i).reduce((a, q) => a + q.ms, 0)));
-        });
-        const total = PHASES.reduce((a, p) => a + p.ms, 0) + 900;
-        pseudoTimers.push(window.setTimeout(() => finish(buildGeneratedCourse(query)), total));
       } else {
+        // 离线/断网:与上游故障同路径,进入失败态(不再有伪生成演示)
         setInsufficient(false);
-        registerCheckpoint();
         setFailed(true);
       }
     })();
@@ -334,7 +309,6 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
         window.clearTimeout(finishTimerRef.current);
         finishTimerRef.current = null;
       }
-      pseudoTimers.forEach((x) => window.clearTimeout(x));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, set]);
@@ -348,7 +322,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
 
   if (!query) return null;
 
-  const linePhase = mode === 'pseudo' ? phase.key : activePhase;
+  const linePhase = activePhase;
   const lines = parseLines(t(`${cg}.loadingLines.${linePhase}`), t(`${cg}.phase.${linePhase}`));
   const line = lines[lineIdx % lines.length];
 
@@ -367,14 +341,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const confirmGate = waitingConfirmation && !!blueprint;
 
   const stages: { num: string; label: string; state: StageState; aux?: React.ReactNode }[] =
-    mode === 'pseudo'
-      ? PHASES.map((p, i) => ({
-          num: `0${i + 1}`,
-          label: t(`${cg}.phase.${p.key}`),
-          state: (i < phaseIdx ? 'done' : i === phaseIdx ? 'active' : 'pending') as StageState,
-          aux: i === phaseIdx ? line : undefined,
-        }))
-      : [
+[
           {
             num: '01',
             label: L('Parsing your request', '解析学习需求'),
@@ -414,7 +381,6 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
   const stagePct = (st: StageState) => (st === 'done' ? 1 : 0);
   let pct: number;
   if (ready) pct = 100;
-  else if (mode === 'pseudo') pct = PSEUDO_PHASE_PCT[phase.key];
   else if (confirmGate) pct = 50;
   else if (stage2Active && liveTotalUnits > 0) pct = 50 + Math.round((48 * liveCurrentUnit) / liveTotalUnits);
   else pct = 6 * stagePct(boot) + 18 * stagePct(research) + 26 * stagePct(syllabus);

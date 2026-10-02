@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Check,
   Copy,
   ThumbsUp,
   ThumbsDown,
@@ -21,7 +20,6 @@ import {
   SquarePen,
 } from 'lucide-react';
 import type { PageProps } from '../types';
-import { chatUserMessage } from '../data';
 import { chatLive, pingBackend, translateLive } from '../backend';
 import { markupToPlain } from '../markup';
 import { AssistantMarkup } from '../AssistantMarkup';
@@ -34,8 +32,6 @@ import { uploadMaterial } from '../materials';
 import { toast } from '../toast';
 import './ChatPage.css';
 
-/** staggered fade-in delay for pipeline rows */
-const stagger = (i: number): React.CSSProperties => ({ animationDelay: `${i * 120}ms` });
 
 /** 追加的对话消息(参考流水线之后)。 */
 interface ChatMsg {
@@ -115,9 +111,6 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   useEffect(() => tts.subscribe((on) => !on && setSpeakingIdx(null)), []);
 
   /* 演示交换(参考截图的 ping 问答+流水线)只在纯演示态展示;一旦有真实会话内容即隐藏 */
-  /* 演示交换仅限纯离线演示态(静态托管/身份拉取失败):真实账户进入聊天页
-   * 就是干净的新对话——用户把写死的演示气泡误读成"旧对话"(用户报告)。 */
-  const showDemoExchange = msgs.length === 0 && !state.activeConversationId && (!state.bootReady || !state.identity);
 
   const lastAssistantIdx = (() => {
     for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].role === 'assistant' && msgs[i].text.trim()) return i;
@@ -183,11 +176,6 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
                 'Out of credits — every day brings 20 free credits (2 per chat, 10 per course), resetting at midnight Beijing time.',
                 '积分不足——每天免费获得 20 积分（对话 2/次、课程 10/次），北京时间零点自动重置。',
               )
-            : result.reason === 'offline'
-              ? L(
-                  'Offline demo mode — the live tutor is not reachable from here. Course generation still works from its prebuilt library.',
-                  '离线演示模式——此处未连接线上导师。课程生成仍可通过预生成库使用。',
-                )
               : L('The tutor hit an error. Please try again in a moment.', '导师服务出了点问题，请稍后再试。');
         setMsgs((m) => {
           const next = [...m];
@@ -413,8 +401,8 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     {/* conversation column */}
     <div className="cp-column" ref={columnRef}>
       {/* 新对话开场欢迎屏:登录用户空态显示——问候 + 可点建议(填入输入框),
-       * 替代此前"一片空白难判是否新对话"的观感;离线演示态仍走下方演示交换。 */}
-      {msgs.length === 0 && !streaming && !showDemoExchange && (
+       * 替代此前"一片空白难判是否新对话"的观感;欢迎屏在任何空态显示。 */}
+      {msgs.length === 0 && !streaming && (
         <div className="cp-welcome">
           <AvatarCat size={64} ring />
           <h2 className="cp-welcome-title">
@@ -464,72 +452,8 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           </div>
         </div>
       )}
-      {showDemoExchange && (
-        <>
-          <div className="cp-bubble-row">
-            {/* 参考截图的演示交换;真实输入走下方追加对话 */}
-            <div className="cp-bubble">{chatUserMessage()}</div>
-          </div>
 
-          <div className="cp-pipeline">
-            <div className="cp-stage" style={stagger(0)}>
-              <span>{t('chatResponse.stepTitles.get_skills_step')}</span>
-              <Check size={12} />
-            </div>
-
-            <div className="cp-chips" style={stagger(1)}>
-              <span className="cp-chip">conceptExplanation</span>
-              <span className="cp-chip">systematicLearning</span>
-            </div>
-
-            <div className="cp-stage dark" style={stagger(2)}>
-              <span>{t('chatResponse.stepTitles.action_plan_step')}</span>
-              <Check size={12} />
-            </div>
-
-            <div className="cp-stage" style={stagger(3)}>
-              <span>{t('chatResponse.stepTitles.memory_recall_step')}</span>
-              <Check size={12} />
-            </div>
-
-            <div className="cp-memory" style={stagger(4)}>
-              <span className="cp-chip">{t('chatResponse.statusMessages.memoryRetrievedLabel')}</span>
-              <span className="cp-memory-note">{L('(no relevant memory)', '（无相关记忆）')}</span>
-            </div>
-
-            <div className="cp-fork" style={stagger(5)}>
-              <div className="cp-stage">
-                <span>{t('chatResponse.stepTitles.search_web_step')}</span>
-                <Check size={12} />
-              </div>
-              <div className="cp-stage">
-                <span>{L('Searching Papers', '检索论文')}</span>
-                <Check size={12} />
-              </div>
-            </div>
-
-            <div className="cp-dot" style={stagger(6)} />
-
-            <div className="cp-actions" style={stagger(7)}>
-              <button
-                type="button"
-                title={t('chatResponse.copy')}
-                onClick={() => void copyText(chatUserMessage()).then((ok) => toast(ok ? t('chatResponse.copied') : L('Could not copy', '复制失败')))}
-              >
-                <Copy size={16} />
-              </button>
-              <button type="button" title={L('Good response', '回答有帮助')} onClick={() => toast(L('Thanks for the feedback', '感谢反馈'))}>
-                <ThumbsUp size={16} />
-              </button>
-              <button type="button" title={L('Bad response', '回答没帮助')} onClick={() => toast(L('Thanks — we will use this to improve', '感谢反馈，我们会据此改进'))}>
-                <ThumbsDown size={16} />
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* 追加对话:用户发送的真实消息 + 导师回复(在线流式/离线演示)。
+      {/* 追加对话:用户发送的真实消息 + 导师回复(在线流式)。
           导师回复走富文本渲染(Markdown + content-section 容器),用户消息保持纯文本。 */}
       {msgs.map((m, i) => (
         <div key={i} className={`cp-bubble-row ${m.role === 'user' ? ' user' : ''}`}>
@@ -827,7 +751,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
                     ? L('Checking…', '检测中…')
                     : ping.state === 'ok'
                       ? L(`Tutor online · ${ping.ms} ms`, `导师在线 · ${ping.ms} 毫秒`)
-                      : L('Offline — demo mode', '离线——演示模式')}
+                      : L('Tutor offline', '导师离线')}
                 </div>
                 <div className="hk-menu-item" style={{ cursor: 'default' }}>
                   <span className="cp-status-dot" style={{ background: '#E5A23C' }} />
