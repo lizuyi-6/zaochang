@@ -2,9 +2,9 @@ import { requireMember } from "../../../_lib/access-control";
 import { jsonError } from "../../../_lib/errors";
 import { assertSameOrigin } from "../../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../../_lib/rate-limit";
-import { planLecture } from "../../../_lib/hyperknow/agents";
+import { planLecture, type LectureCourseContext } from "../../../_lib/hyperknow/agents";
 import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../../_lib/hyperknow/llm";
-import { getCourse, saveWhiteboardSession } from "../../../_lib/hyperknow/store";
+import { getCourse, getCourseTask, saveWhiteboardSession } from "../../../_lib/hyperknow/store";
 import { getSampleCourse } from "../../../_lib/hyperknow/samples";
 import { resolveEffectiveLanguage } from "../../../_lib/hyperknow/protocol";
 
@@ -37,6 +37,9 @@ export async function POST(request: Request) {
 
     let resolvedTopic = rawTopic || DEFAULT_TOPIC;
     let courseSavedLanguage: string | null = null;
+    // 讲课上下文:课程 meta + intake brief + 单元目标 + 讲次在课程中的位置。
+    // 讲师不再"看题讲课"——深度按学员档位校准、例子贴背景、开场承接上一讲。
+    let lectureContext: LectureCourseContext | undefined;
 
     // 服务端权限解析与目标小节锁定
     if (courseUuid) {
@@ -48,45 +51,88 @@ export async function POST(request: Request) {
 
       const courseData = (stored ? stored.course : sample) as Record<string, unknown>;
       // 从已保存课程中读取 language 或 brief.language
-      const courseBrief = (courseData.brief ?? (courseData as { courseBrief?: unknown }).courseBrief) as { language?: string } | undefined;
+      let courseBrief = (courseData.brief ?? (courseData as { courseBrief?: unknown }).courseBrief) as
+        | Record<string, unknown>
+        | undefined;
       courseSavedLanguage = (typeof courseData.language === "string" ? courseData.language : null) ||
         (courseBrief && typeof courseBrief.language === "string" ? courseBrief.language : null);
 
       if (Array.isArray(courseData.units)) {
-        let foundTopic = "";
-        for (const u of courseData.units as Array<{
-          unitId?: string;
-          id?: string | number;
-          lectures?: Array<{
-            lectureId?: string;
-            id?: string;
-            title?: string;
-            sessions?: Array<{ sessionId?: string; id?: string; title?: string }>;
-          }>;
-        }>) {
-          if (unitId && String(u.unitId ?? u.id) !== unitId) continue;
-          if (Array.isArray(u.lectures)) {
-            for (const lec of u.lectures) {
-              const matchesLec = !lectureId || lec.lectureId === lectureId || lec.id === lectureId;
-              if (matchesLec) {
-                if (sessionRefId && Array.isArray(lec.sessions)) {
-                  const s = lec.sessions.find((sess) => sess.sessionId === sessionRefId || sess.id === sessionRefId);
-                  if (s && s.title) {
-                    foundTopic = s.title;
-                    break;
-                  }
-                }
-                if (!foundTopic && lec.title) {
-                  foundTopic = lec.title;
-                }
-                if (foundTopic && lectureId) break;
-              }
+        interface FlatLecture {
+          unitTitle: string;
+          unitObjectives: string[];
+          lectureId?: string;
+          lectureTitle: string;
+          sessions: Array<{ id?: string; title: string }>;
+        }
+        const flat: FlatLecture[] = [];
+        for (const u of courseData.units as Array<Record<string, unknown>>) {
+          const unitTitle = typeof u.title === "string" ? u.title : "";
+          const unitObjectives = Array.isArray(u.objectives)
+            ? u.objectives.filter((o): o is string => typeof o === "string")
+            : [];
+          for (const lec of (Array.isArray(u.lectures) ? u.lectures : []) as Array<Record<string, unknown>>) {
+            flat.push({
+              unitTitle,
+              unitObjectives,
+              lectureId: typeof lec.lectureId === "string" ? lec.lectureId : typeof lec.id === "string" ? lec.id : undefined,
+              lectureTitle: typeof lec.title === "string" ? lec.title : "",
+              sessions: (Array.isArray(lec.sessions) ? lec.sessions : []).flatMap((s) => {
+                const sess = (s ?? {}) as Record<string, unknown>;
+                return typeof sess.title === "string"
+                  ? [{
+                      id: typeof sess.sessionId === "string" ? sess.sessionId : typeof sess.id === "string" ? sess.id : undefined,
+                      title: sess.title,
+                    }]
+                  : [];
+              }),
+            });
+          }
+        }
+
+        // 目标讲次定位:session 精确 > lecture;定位到才注入上下文(自由命题课保持原语义)
+        let matched = -1;
+        let matchedSession: { id?: string; title: string } | undefined;
+        if (sessionRefId) {
+          for (let i = 0; i < flat.length; i++) {
+            const s = flat[i].sessions.find((sess) => sess.id === sessionRefId);
+            if (s) {
+              matched = i;
+              matchedSession = s;
+              break;
             }
           }
-          if (foundTopic && unitId) break;
         }
-        if (foundTopic) {
-          resolvedTopic = foundTopic;
+        if (matched < 0 && lectureId) {
+          matched = flat.findIndex((l) => l.lectureId === lectureId);
+        }
+        if (matched >= 0) {
+          const cur = flat[matched];
+          resolvedTopic = matchedSession?.title || cur.lectureTitle || resolvedTopic;
+          // 老课的 brief 不在课程 JSON 里:从生成任务的 brief_json 兜底
+          if (!courseBrief) {
+            const task = await getCourseTask(courseUuid, member.email).catch(() => null);
+            if (task?.briefJson) {
+              try {
+                courseBrief = JSON.parse(task.briefJson) as Record<string, unknown>;
+              } catch {}
+            }
+          }
+          lectureContext = {
+            courseTitle: typeof courseData.courseTitle === "string" ? courseData.courseTitle : undefined,
+            courseDescription: typeof courseData.courseDescription === "string" ? courseData.courseDescription : undefined,
+            targetLearner: typeof courseData.targetLearner === "string" ? courseData.targetLearner : undefined,
+            brief: courseBrief && typeof courseBrief === "object" ? (courseBrief as LectureCourseContext["brief"]) : undefined,
+            unitTitle: cur.unitTitle || undefined,
+            unitObjectives: cur.unitObjectives.length ? cur.unitObjectives : undefined,
+            lectureTitle: cur.lectureTitle || undefined,
+            sessionTitles: cur.sessions.map((sess) => sess.title).filter(Boolean),
+            prevLectureTitle: matched > 0 ? flat[matched - 1].lectureTitle || undefined : undefined,
+            nextLectureTitle: matched < flat.length - 1 ? flat[matched + 1].lectureTitle || undefined : undefined,
+            lecturePosition: `${matched + 1}/${flat.length}`,
+          };
+        } else if (rawTopic) {
+          resolvedTopic = rawTopic;
         }
       }
     }
@@ -99,7 +145,7 @@ export async function POST(request: Request) {
     const signal = AbortSignal.timeout(60_000);
     let plan;
     try {
-      plan = await planLecture(resolvedTopic, signal, member.displayName, effectiveLanguage);
+      plan = await planLecture(resolvedTopic, signal, member.displayName, effectiveLanguage, lectureContext);
     } catch (error) {
       if (error instanceof HyperknowNotConfiguredError) {
         return Response.json({ error: error.code }, { status: error.status });
