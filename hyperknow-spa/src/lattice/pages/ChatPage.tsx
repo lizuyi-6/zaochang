@@ -219,15 +219,17 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
 
   useEffect(() => () => abortRef.current?.abort(), []);
   /* 自动跟随门控:用户往上翻阅时不得被每个流式 chunk 拽回底部;
-   * 只有本就停在底部附近(含被固定 composer 遮住的一段)才自动跟随。 */
+   * 只有本就停在列底部附近才自动跟随。滚动容器是会话列本身(页内滚动布局)。 */
   const followRef = useRef(true);
+  const columnRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
+    const el = columnRef.current;
+    if (!el) return;
     const onScroll = () => {
-      const doc = document.documentElement;
-      followRef.current = doc.scrollHeight - scrollY - window.innerHeight < 160;
+      followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
   }, []);
   useEffect(() => {
     if (followRef.current) colEndRef.current?.scrollIntoView({ block: 'end' });
@@ -392,7 +394,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     )}
 
     {/* conversation column */}
-    <div className="cp-column">
+    <div className="cp-column" ref={columnRef}>
       {showDemoExchange && (
         <>
           <div className="cp-bubble-row">
@@ -463,7 +465,19 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
       {msgs.map((m, i) => (
         <div key={i} className={`cp-bubble-row ${m.role === 'user' ? ' user' : ''}`}>
           <div className={`cp-bubble ${m.role === 'user' ? ' user' : ''}`}>
-            {m.role === 'assistant' ? <AssistantMarkup text={m.text} /> : m.text}
+            {m.role === 'assistant' && !m.text && streaming && i === msgs.length - 1 ? (
+              /* 首个 chunk 到达前的思考气泡:左侧不再是空白,卡没卡一眼可见 */
+              <span className="cp-typing" role="status" aria-label={L('The tutor is thinking…', '导师正在思考…')}>
+                <span className="cp-typing-dot" />
+                <span className="cp-typing-dot" />
+                <span className="cp-typing-dot" />
+                <span className="cp-typing-label">{L('Thinking…', '正在思考…')}</span>
+              </span>
+            ) : m.role === 'assistant' ? (
+              <AssistantMarkup text={m.text} />
+            ) : (
+              m.text
+            )}
             {m.attachments && m.attachments.length > 0 && (
               <div className="cp-bubble-files">
                 {m.attachments.map((a) => (

@@ -3,6 +3,11 @@
 /* full-width page; content sits right of the globally-rendered sidebar */
 .cp-page {
   padding-left: 262px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* veil covering the shell header (hidden on this screen in the real product) */
@@ -61,14 +66,18 @@
 /* conversation column — centered in the region right of the sidebar */
 .cp-column {
   max-width: 898px; /* 850px content + 24px side padding */
+  width: 100%;
   margin: 0 auto;
-  padding: 58px 24px 150px;
+  padding: 58px 24px 28px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* 滚动锚:scrollIntoView 对齐时避开固定的底部 composer(composer 高 44 + bottom 20 + 余量) */
 .cp-col-end {
   height: 1px;
-  scroll-margin-bottom: 110px;
+  scroll-margin-bottom: 16px;
 }
 
 /* user message bubble */
@@ -207,16 +216,13 @@
 
 /* ---------------- composer ---------------- */
 .cp-composer-wrap {
-  position: fixed;
-  left: 262px;
-  right: 0;
-  bottom: 20px;
+  position: relative;
   display: flex;
   justify-content: center;
-  /* 必须高于侧栏(z-30):菜单在 wrap 内,fixed wrap 自成层叠上下文,
-   * 菜单的 z-90 只在 wrap 内部生效——wrap 低于侧栏时工具/模型菜单整体滑进侧栏底下 */
+  padding: 10px 24px 20px;
+  /* 高于会话列:锚定菜单向上弹出时压在列内容上 */
   z-index: 35;
-  pointer-events: none;
+  pointer-events: auto;
 }
 .cp-composer {
   pointer-events: auto;
@@ -448,3 +454,12 @@ h5.cp-markup-heading { font-size: 13.5px; }
 .cp-markup-table th, .cp-markup-table td { border: 1px solid var(--sand-300); padding: 7px 10px; text-align: left; vertical-align: top; }
 .cp-markup-table th { background: color-mix(in srgb, var(--coral-500) 10%, var(--panel-bg)); color: var(--ink-900); font-weight: 700; white-space: nowrap; }
 .cp-markup-table td { color: var(--ink-700); }
+
+/* 思考气泡:首个 chunk 到达前的等待指示 */
+.cp-typing { display: inline-flex; align-items: center; gap: 7px; }
+.cp-typing-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--coral-500, #C24A2E); animation: cp-typing-bounce 1.2s ease-in-out infinite; }
+.cp-typing-dot:nth-child(2) { animation-delay: 0.16s; }
+.cp-typing-dot:nth-child(3) { animation-delay: 0.32s; }
+@keyframes cp-typing-bounce { 0%, 100% { transform: none; opacity: 0.35; } 45% { transform: translateY(-4px); opacity: 1; } }
+.cp-typing-label { font-size: 12px; color: var(--ink-600, #8A7B66); margin-left: 4px; }
+@media (prefers-reduced-motion: reduce) { .cp-typing-dot { animation: none; opacity: 0.6; } }
