@@ -125,6 +125,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   const send = (raw: string, forcedAttachments?: Array<{ name: string; url: string }>) => {
     const text = raw.trim();
     if ((!text && attachments.length === 0) || streaming) return;
+    setMenu('none'); // 发送即收起所有菜单,不留孤儿浮层
     const attached = forcedAttachments ?? attachments;
     setInput('');
     setAttachments([]);
@@ -603,10 +604,45 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         >
           <BookOpen size={16} />
         </button>
-        <button className="cp-tools" type="button" onClick={() => setMenu(menu === 'tools' ? 'none' : 'tools')}>
-          <SlidersHorizontal size={14} />
-          <span>{t('home.tools')}</span>
-        </button>
+        <div className="cp-anchor">
+          <button className="cp-tools" type="button" onClick={() => setMenu(menu === 'tools' ? 'none' : 'tools')}>
+            <SlidersHorizontal size={14} />
+            <span>{t('home.tools')}</span>
+          </button>
+          {/* 工具菜单:朗读开关 / 语音输入 / 语速 —— 锚定按钮正上方,不再写死坐标 */}
+          {menu === 'tools' && (
+            <>
+              <div className="cp-menu-veil" onClick={() => setMenu('none')} />
+              <div className="hk-menu cp-menu cp-menu-anchored">
+                <button className="hk-menu-item" onClick={() => set({ autoSpeak: !state.autoSpeak })}>
+                  <Volume2 size={14} />
+                  {L('Read replies aloud', '自动朗读回复')}
+                  <span className={`hk-menu-hint${state.autoSpeak ? ' on' : ''}`}>
+                    {state.autoSpeak ? L('On', '开') : L('Off', '关')}
+                  </span>
+                </button>
+                <button className="hk-menu-item" onClick={startVoice}>
+                  <AudioWaveform size={14} />
+                  {L('Voice input', '语音输入')}
+                </button>
+                <div className="hk-menu-label">{L('Speech speed', '朗读语速')}</div>
+                {SPEEDS.map((sp) => (
+                  <button
+                    key={sp}
+                    className={`hk-menu-item${state.speed === sp ? ' active' : ''}`}
+                    onClick={() => {
+                      set({ speed: sp });
+                      tts.setPlaybackRate(sp);
+                      setMenu('none');
+                    }}
+                  >
+                    {sp}×
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <button
           className={`cp-icon${listening ? ' on' : ''}`}
           type="button"
@@ -625,14 +661,100 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           }}
           placeholder={listening ? L('Listening…', '正在听…') : t('home.inputPlaceholder')}
         />
-        <button className="cp-mode" type="button" onClick={() => setMenu(menu === 'mode' ? 'none' : 'mode')}>
-          <Gauge size={12} />
-          <span>{state.chatModel === 'pro' ? L('Lattice Pro', '见界 Pro') : L('Lattice Flash', '见界 Flash')}</span>
-          <ChevronDown size={12} />
-        </button>
-        <button className="cp-status" type="button" title={L('Connection status', '连接状态')} onClick={openStatus}>
-          <span className={`cp-status-dot${ping.state === 'offline' ? ' off' : ''}`} />
-        </button>
+        <div className="cp-anchor">
+          <button className="cp-mode" type="button" onClick={() => setMenu(menu === 'mode' ? 'none' : 'mode')}>
+            <Gauge size={12} />
+            <span>{state.chatModel === 'pro' ? L('Lattice Pro', '见界 Pro') : L('Lattice Flash', '见界 Flash')}</span>
+            <ChevronDown size={12} />
+          </button>
+          {/* 回复模式菜单:锚定到模式按钮正上方 */}
+          {menu === 'mode' && (
+            <>
+              <div className="cp-menu-veil" onClick={() => setMenu('none')} />
+              <div className="hk-menu cp-menu cp-menu-anchored">
+                {(['flash', 'pro'] as const).map((m) => (
+                  <button
+                    key={m}
+                    className={`hk-menu-item cp-model-item${state.chatModel === m ? ' active' : ''}`}
+                    onClick={() => {
+                      set({ chatModel: m });
+                      setMenu('none');
+                      toast(
+                        m === 'pro'
+                          ? L('Lattice Pro on — applies to new replies', '见界 Pro 已启用——下一条回复生效')
+                          : L('Lattice Flash on — applies to new replies', '见界 Flash 已启用——下一条回复生效'),
+                      );
+                    }}
+                  >
+                    {m === 'pro' ? (
+                      <>
+                        <span className="cp-model-line">
+                          <span className="cp-model-name">{L('Lattice Pro', '见界 Pro')}</span>
+                          <span className="cp-model-badge">{L('Launch offer', '限时')}</span>
+                          <span className="cp-model-price">
+                            <del>5</del> {L('2 cr', '2 积分')}
+                          </span>
+                        </span>
+                        <span className="cp-model-desc">
+                          {L(
+                            'Deeper reasoning. Thinking takes longer — replies may feel slower. Launch period: same cost as Flash.',
+                            '更深推理。思考时间会变长，回答时可能感觉卡顿。新上线期间消耗对齐 Flash。',
+                          )}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="cp-model-line">
+                          <span className="cp-model-name">{L('Lattice Flash', '见界 Flash')}</span>
+                          <span className="cp-model-price">{L('2 cr', '2 积分')}</span>
+                        </span>
+                        <span className="cp-model-desc">
+                          {L('Fast replies. Great for everyday questions and course tutoring.', '速度快。适合日常问答与课程辅导。')}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="cp-anchor">
+          <button className="cp-status" type="button" title={L('Connection status', '连接状态')} onClick={openStatus}>
+            <span className={`cp-status-dot${ping.state === 'offline' ? ' off' : ''}`} />
+          </button>
+          {/* 状态面板:真实探测后端往返延迟 + 余额,锚定到状态点正上方 */}
+          {menu === 'status' && (
+            <>
+              <div className="cp-menu-veil" onClick={() => setMenu('none')} />
+              <div className="hk-menu cp-menu cp-menu-anchored cp-menu-status">
+                <div className="hk-menu-label">{L('Connection', '连接状态')}</div>
+                <div className="hk-menu-item" style={{ cursor: 'default' }}>
+                  <span className={`cp-status-dot${ping.state === 'offline' ? ' off' : ''}`} />
+                  {ping.state === 'checking'
+                    ? L('Checking…', '检测中…')
+                    : ping.state === 'ok'
+                      ? L(`Tutor online · ${ping.ms} ms`, `导师在线 · ${ping.ms} 毫秒`)
+                      : L('Offline — demo mode', '离线——演示模式')}
+                </div>
+                <div className="hk-menu-item" style={{ cursor: 'default' }}>
+                  <span className="cp-status-dot" style={{ background: '#E5A23C' }} />
+                  {L('Credits', '积分')}
+                  <span className="hk-menu-hint">{state.identity ? state.identity.credits : '—'}</span>
+                </div>
+                <button
+                  className="hk-menu-item"
+                  onClick={() => {
+                    setPing({ state: 'checking' });
+                    void pingBackend().then((ms) => setPing(ms === null ? { state: 'offline' } : { state: 'ok', ms }));
+                  }}
+                >
+                  {L('Re-check', '重新检测')}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
         <button
           className="cp-send"
           type="button"
@@ -644,123 +766,6 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         </button>
       </div>
 
-      {/* 工具菜单:朗读开关 / 语音输入 / 语速 —— 全部真实生效 */}
-      {menu === 'tools' && (
-        <>
-          <div className="cp-menu-veil" onClick={() => setMenu('none')} />
-          <div className="hk-menu cp-menu" style={{ bottom: 78, left: 220 }}>
-            <button className="hk-menu-item" onClick={() => set({ autoSpeak: !state.autoSpeak })}>
-              <Volume2 size={14} />
-              {L('Read replies aloud', '自动朗读回复')}
-              <span className={`hk-menu-hint${state.autoSpeak ? ' on' : ''}`}>
-                {state.autoSpeak ? L('On', '开') : L('Off', '关')}
-              </span>
-            </button>
-            <button className="hk-menu-item" onClick={startVoice}>
-              <AudioWaveform size={14} />
-              {L('Voice input', '语音输入')}
-            </button>
-            <div className="hk-menu-label">{L('Speech speed', '朗读语速')}</div>
-            {SPEEDS.map((sp) => (
-              <button
-                key={sp}
-                className={`hk-menu-item${state.speed === sp ? ' active' : ''}`}
-                onClick={() => {
-                  set({ speed: sp });
-                  tts.setPlaybackRate(sp);
-                  setMenu('none');
-                }}
-              >
-                {sp}×
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* 回复模式菜单(standard/fast,随请求透传后端) */}
-      {menu === 'mode' && (
-        <>
-          <div className="cp-menu-veil" onClick={() => setMenu('none')} />
-          <div className="hk-menu cp-menu" style={{ bottom: 78, right: 170 }}>
-            {(['flash', 'pro'] as const).map((m) => (
-              <button
-                key={m}
-                className={`hk-menu-item cp-model-item${state.chatModel === m ? ' active' : ''}`}
-                onClick={() => {
-                  set({ chatModel: m });
-                  setMenu('none');
-                  toast(
-                    m === 'pro'
-                      ? L('Lattice Pro on — applies to new replies', '见界 Pro 已启用——下一条回复生效')
-                      : L('Lattice Flash on — applies to new replies', '见界 Flash 已启用——下一条回复生效'),
-                  );
-                }}
-              >
-                {m === 'pro' ? (
-                  <>
-                    <span className="cp-model-line">
-                      <span className="cp-model-name">{L('Lattice Pro', '见界 Pro')}</span>
-                      <span className="cp-model-badge">{L('Launch offer', '限时')}</span>
-                      <span className="cp-model-price">
-                        <del>5</del> {L('2 cr', '2 积分')}
-                      </span>
-                    </span>
-                    <span className="cp-model-desc">
-                      {L(
-                        'Deeper reasoning. Thinking takes longer — replies may feel slower. Launch period: same cost as Flash.',
-                        '更深推理。思考时间会变长，回答时可能感觉卡顿。新上线期间消耗对齐 Flash。',
-                      )}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="cp-model-line">
-                      <span className="cp-model-name">{L('Lattice Flash', '见界 Flash')}</span>
-                      <span className="cp-model-price">{L('2 cr', '2 积分')}</span>
-                    </span>
-                    <span className="cp-model-desc">
-                      {L('Fast replies. Great for everyday questions and course tutoring.', '速度快。适合日常问答与课程辅导。')}
-                    </span>
-                  </>
-                )}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* 状态面板:真实探测后端往返延迟 + 余额 */}
-      {menu === 'status' && (
-        <>
-          <div className="cp-menu-veil" onClick={() => setMenu('none')} />
-          <div className="hk-menu cp-menu" style={{ bottom: 78, right: 138, minWidth: 230 }}>
-            <div className="hk-menu-label">{L('Connection', '连接状态')}</div>
-            <div className="hk-menu-item" style={{ cursor: 'default' }}>
-              <span className={`cp-status-dot${ping.state === 'offline' ? ' off' : ''}`} />
-              {ping.state === 'checking'
-                ? L('Checking…', '检测中…')
-                : ping.state === 'ok'
-                  ? L(`Tutor online · ${ping.ms} ms`, `导师在线 · ${ping.ms} 毫秒`)
-                  : L('Offline — demo mode', '离线——演示模式')}
-            </div>
-            <div className="hk-menu-item" style={{ cursor: 'default' }}>
-              <span className="cp-status-dot" style={{ background: '#E5A23C' }} />
-              {L('Credits', '积分')}
-              <span className="hk-menu-hint">{state.identity ? state.identity.credits : '—'}</span>
-            </div>
-            <button
-              className="hk-menu-item"
-              onClick={() => {
-                setPing({ state: 'checking' });
-                void pingBackend().then((ms) => setPing(ms === null ? { state: 'offline' } : { state: 'ok', ms }));
-              }}
-            >
-              {L('Re-check', '重新检测')}
-            </button>
-          </div>
-        </>
-      )}
     </div>
 
     {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} title={t('chatResponse.haveAnIssue')} />}

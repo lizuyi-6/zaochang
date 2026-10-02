@@ -403,6 +403,10 @@
    否则全部菜单条目点击穿透——模型选择/翻译/工具/状态全灭,点外部也无法关闭 */
 .cp-menu { position: fixed; pointer-events: auto; }
 .cp-menu-veil { position: fixed; inset: 0; z-index: 88; pointer-events: auto; }
+/* 锚定菜单:从各自按钮正上方弹出,不再写死视口坐标(曾落在侧栏底下成孤儿) */
+.cp-anchor { position: relative; display: inline-flex; }
+.cp-menu-anchored { position: absolute; bottom: calc(100% + 10px); left: 0; right: auto; z-index: 90; }
+.cp-menu-status { right: 0; left: auto; min-width: 230px; }
 /* 模型菜单项的块状布局规则已收编 shell.css(.cp-model-item),此处只留字级覆盖 */
 .cp-menu .hk-menu-item { font-size: 12.5px; }
 .hk-menu-hint.on { color: var(--coral-700); }
