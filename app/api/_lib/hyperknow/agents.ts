@@ -105,7 +105,9 @@ export async function generateCourseInquiryQuestions(
         content: `Course topic: "${topic}"\nOutput language: ${effLang}${roundNote}${answersNote}`,
       },
     ],
-    { jsonMode: true, signal: opts.signal, maxTokens: 2048, model: CHAT_MODEL_MAP[opts.model ?? "flash"] },
+    /* maxTokens 4096:混合推理模型会先把预算花在思考上——2048 时部分主题
+     * (如宏观经济学)推理吃满额度,正文被截成空,inquiry_empty_response。 */
+    { jsonMode: true, signal: opts.signal, maxTokens: 4096, model: CHAT_MODEL_MAP[opts.model ?? "flash"] },
   );
   return parseInquiryQuestions(jsonStr);
 }
