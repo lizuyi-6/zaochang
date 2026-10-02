@@ -2,7 +2,7 @@
 // No server, build, or new dependencies; exercise the public client API with real streams.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chatLive, translateLive, generateCourseLive, fetchCourseDetail } from '../hyperknow-spa/src/lattice/backend.ts';
+import { chatLive, translateLive, generateCourseLive, fetchCourseDetail, planLectureLive } from '../hyperknow-spa/src/lattice/backend.ts';
 import { normalizeBackendCourse } from '../hyperknow-spa/src/lattice/backend-course.ts';
 
 const error = { ok: false, reason: 'error' };
@@ -201,4 +201,28 @@ test('course: errors stay terminal and incomplete streams fail', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => Response.json(body));
     assert.equal(await fetchCourseDetail('id'), null);
   }
+});
+
+test('whiteboard plan: parser preserves quick_check explanation and degraded flag', async (t) => {
+  // 回归:planLectureLive 曾把 quick_check 的 explanation 丢掉(预热与直取两路都经它解析,
+  // UI 答错反馈因此拿不到解析);degraded 标记也曾不透传,预热缓存会把 5 步模板课当正常计划发给学员。
+  t.mock.method(globalThis, 'fetch', async () => Response.json({
+    session_id: 's-1', topic: 'GDP', degraded: true,
+    steps: [
+      { step_id: 'step_1', spoken_text: '旁白', board_action: { type: 'card', title: 'T', content: '<p>x</p>' } },
+      { step_id: 'step_2', spoken_text: '检测', board_action: { type: 'quick_check', question: 'Q', options: ['A', 'B'], answer: 0, explanation: 'A 对因为符合机制;B 错在把 X 和 Y 混淆' } },
+    ],
+  }));
+  const plan = await planLectureLive({ topic: 'GDP' });
+  assert.ok(plan);
+  assert.equal(plan.degraded, true, 'degraded 标记必须透传(预热缓存靠它拒存模板课)');
+  assert.equal(plan.steps[1].board_action.explanation, 'A 对因为符合机制;B 错在把 X 和 Y 混淆', 'quick_check 解析必须保留 explanation');
+
+  t.mock.method(globalThis, 'fetch', async () => Response.json({
+    session_id: 's-2', topic: 'GDP',
+    steps: [{ step_id: 'step_1', spoken_text: '旁白', board_action: { type: 'card', title: 'T', content: '<p>x</p>' } }],
+  }));
+  const okPlan = await planLectureLive({ topic: 'GDP' });
+  assert.ok(okPlan);
+  assert.equal(okPlan.degraded, undefined, '正常计划不得带 degraded 标记');
 });

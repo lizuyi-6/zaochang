@@ -459,6 +459,7 @@ export interface LiveBoardAction {
   question?: string;
   options?: string[];
   answer?: number;
+  explanation?: string;
   nodes?: Array<{ id: string; label: string }>;
   edges?: Array<{ from: string; to: string; label?: string }>;
 }
@@ -473,6 +474,8 @@ export interface LiveLecturePlan {
   session_id: string;
   topic: string;
   steps: LiveLectureStep[];
+  /** true = 后端上游故障落了 5 步模板计划;预热缓存不得存它,调用方可据此重取。 */
+  degraded?: boolean;
 }
 
 export interface PlanLectureParams {
@@ -511,7 +514,7 @@ export async function planLectureLive(
   }
   if (!res.ok) return null;
   try {
-    const json = (await res.json()) as { session_id?: unknown; topic?: unknown; steps?: unknown };
+    const json = (await res.json()) as { session_id?: unknown; topic?: unknown; steps?: unknown; degraded?: unknown };
     if (!Array.isArray(json.steps) || !json.steps.length) return null;
     const steps: LiveLectureStep[] = [];
     for (const raw of json.steps) {
@@ -535,11 +538,17 @@ export async function planLectureLive(
           ? { options: action.options.filter((o): o is string => typeof o === 'string' && !!o).slice(0, 4) }
           : {}),
         ...(typeof action.answer === 'number' ? { answer: action.answer } : {}),
+        ...(typeof action.explanation === 'string' && action.explanation ? { explanation: action.explanation } : {}),
       };
       steps.push({ step_id: String(step.step_id ?? `step_${steps.length + 1}`), spoken_text: step.spoken_text, board_action });
     }
     return steps.length
-      ? { session_id: typeof json.session_id === 'string' ? json.session_id : '', topic: String(json.topic ?? reqBody.topic), steps }
+      ? {
+          session_id: typeof json.session_id === 'string' ? json.session_id : '',
+          topic: String(json.topic ?? reqBody.topic),
+          steps,
+          ...(json.degraded === true ? { degraded: true } : {}),
+        }
       : null;
   } catch {
     return null;
