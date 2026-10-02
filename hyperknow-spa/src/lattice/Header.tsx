@@ -20,6 +20,9 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
 
   const energy = state.identity?.credits ?? state.energy ?? (state.lectureDone ? 15 : 20);
   const showPlan = s !== 'chat';
+  /* 身份未落定前不渲染真实套餐/积分:初始默认是 FREE/15,直绘会先闪一帧
+   * 「FREE 15」再跳成真实账户(用户报告的右上角闪变)。骨架占位保布局不跳。 */
+  const identityPending = !state.bootReady;
   /* 邀请:复制造场链接(邀请码体系在主站注册侧,这里给的是可直接打开的入口) */
   const copyInvite = async () => {
     const ok = await copyText(`${window.location.origin}/?utm_source=hyperknow&utm_medium=invite`);
@@ -52,15 +55,24 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
       <div className="hk-header">
         {showPlan && (
           <>
-            <span
-              className={`hk-free-badge${(state.identity?.tier || state.plan) === 'MAX' ? ' hk-tier-max' : ''}`}
-            >
-              {(state.identity?.tier || state.plan) === 'MAX' ? '✦ MAX' : (state.identity?.tier ?? 'FREE')}
-            </span>
-            <span className="hk-energy" title={L('Energy', '能量')}>
-              <Sparkles size={16} />
-              <span>{energy}</span>
-            </span>
+            {identityPending ? (
+              <>
+                <span className="hk-free-badge hk-skel-bar" style={{ width: 52, height: 22 }} aria-hidden="true" />
+                <span className="hk-energy hk-skel-bar" style={{ width: 46, height: 22 }} aria-hidden="true" />
+              </>
+            ) : (
+              <>
+                <span
+                  className={`hk-free-badge${(state.identity?.tier || state.plan) === 'MAX' ? ' hk-tier-max' : ''}`}
+                >
+                  {(state.identity?.tier || state.plan) === 'MAX' ? '✦ MAX' : (state.identity?.tier ?? 'FREE')}
+                </span>
+                <span className="hk-energy" title={L('Energy', '能量')}>
+                  <Sparkles size={16} />
+                  <span>{energy}</span>
+                </span>
+              </>
+            )}
           </>
         )}
         <LanguageSwitcher />
