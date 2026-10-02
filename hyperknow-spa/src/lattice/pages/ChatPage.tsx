@@ -113,7 +113,9 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   useEffect(() => tts.subscribe((on) => !on && setSpeakingIdx(null)), []);
 
   /* 演示交换(参考截图的 ping 问答+流水线)只在纯演示态展示;一旦有真实会话内容即隐藏 */
-  const showDemoExchange = msgs.length === 0 && !state.activeConversationId;
+  /* 演示交换仅限纯离线演示态(静态托管/身份拉取失败):真实账户进入聊天页
+   * 就是干净的新对话——用户把写死的演示气泡误读成"旧对话"(用户报告)。 */
+  const showDemoExchange = msgs.length === 0 && !state.activeConversationId && (!state.bootReady || !state.identity);
 
   const lastAssistantIdx = (() => {
     for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].role === 'assistant' && msgs[i].text.trim()) return i;

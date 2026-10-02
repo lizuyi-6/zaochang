@@ -2,7 +2,7 @@ import { requireMember } from "../../_lib/access-control";
 import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
-import { generateCourseBlueprint, generateUnitDetails, repairUnit } from "../../_lib/hyperknow/agents";
+import { generateCourseBlueprint, generateUnitDetails, repairUnit, CHAT_MODEL_MAP, resolveChatModel } from "../../_lib/hyperknow/agents";
 import { resolveConfigOrThrow } from "../../_lib/hyperknow/config";
 import { finalizeCourseDependencies } from "../../_lib/hyperknow/dag-finalizer";
 import {
@@ -70,6 +70,7 @@ export async function POST(request: Request) {
       action?: unknown;
       selectedUnits?: unknown;
       requireConfirmation?: unknown;
+      model?: unknown;
     };
 
     const query = String(input.query ?? input.prompt ?? "").trim().slice(0, 300);
@@ -88,6 +89,8 @@ export async function POST(request: Request) {
     const action = typeof input.action === "string" ? input.action.trim() : undefined;
     const requireConfirmation = Boolean(input.requireConfirmation);
     const selectedUnits = Array.isArray(input.selectedUnits) ? input.selectedUnits.map(String) : undefined;
+    // 见界双模型:Pro=step-5-preview / Flash=step-3.7-flash(默认);白名单外回落 Flash
+    const chatModel = CHAT_MODEL_MAP[resolveChatModel(input.model)];
 
     if (!query && !resumeUuid) {
       return Response.json({ error: "query_required" }, { status: 400 });
@@ -244,6 +247,7 @@ export async function POST(request: Request) {
                   i,
                   taskResearchHits,
                   taskLanguage,
+                  chatModel,
                 );
 
                 completedUnits[i] = unit;
@@ -265,7 +269,7 @@ export async function POST(request: Request) {
               }
 
               await finalizeCourseDependencies(completedUnits,
-                (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, taskLanguage), signal);
+                (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, taskLanguage, undefined, chatModel), signal);
 
               const completeCourse = {
                 courseUuid: resumeUuid,
@@ -645,7 +649,7 @@ export async function POST(request: Request) {
             });
 
             // 真实蓝图生成
-            const blueprint = await generateCourseBlueprint(query, signal, researchHits.slice(0, 8), brief);
+            const blueprint = await generateCourseBlueprint(query, signal, researchHits.slice(0, 8), brief, chatModel);
 
             // 更新任务状态与蓝图落库
             await updateCourseTaskBlueprint(
@@ -732,6 +736,7 @@ export async function POST(request: Request) {
                 i,
                 researchHits.slice(0, 8),
                 blueprintLanguage,
+                chatModel,
               );
               generatedUnits.push(concreteUnit);
 
@@ -754,7 +759,7 @@ export async function POST(request: Request) {
             }
 
             await finalizeCourseDependencies(generatedUnits,
-              (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, blueprintLanguage), signal);
+              (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, blueprintLanguage, undefined, chatModel), signal);
 
             const course = {
               courseUuid,

@@ -205,7 +205,7 @@ export const Home = ({ state, set }: PageProps) => {
   const [phIdx, setPhIdx] = useState(0);
   const [topic, setTopic] = useState('');
   const [note, setNote] = useState('');
-  const [menu, setMenu] = useState<'none' | 'source' | 'notes' | 'persona' | 'tools' | 'speed'>('none');
+  const [menu, setMenu] = useState<'none' | 'source' | 'notes' | 'persona' | 'tools' | 'speed' | 'model'>('none');
   const [notesDraft, setNotesDraft] = useState('');
   const [attachments, setAttachments] = useState<Array<{ name: string; url: string }>>([]);
   const [uploading, setUploading] = useState(false);
@@ -330,7 +330,8 @@ export const Home = ({ state, set }: PageProps) => {
     if (!text) return;
     const withFiles = attachLine();
     setAttachments([]);
-    set({ screen: 'chat', chatNote: withFiles ? `${text}\n\n${withFiles}` : text });
+    // 首页发出的是全新提问:清掉残留的会话选择,否则会续在旧会话尾巴上
+    set({ screen: 'chat', chatNote: withFiles ? `${text}\n\n${withFiles}` : text, activeConversationId: null });
   };
 
   const pickFile = async (file: File | undefined) => {
@@ -680,6 +681,60 @@ export const Home = ({ state, set }: PageProps) => {
                   )}
                 </div>
                 <div className="hm-menu-anchor">
+                  <button className="hm-chip" onClick={() => setMenu(menu === 'model' ? 'none' : 'model')}>
+                    <Layers size={15} />
+                    {state.chatModel === 'pro' ? L('LATTICE Pro', '见界 Pro') : L('LATTICE Flash', '见界 Flash')}
+                    <ChevronDown size={13} />
+                  </button>
+                  {menu === 'model' && (
+                    <div className="hk-menu hm-menu">
+                      {(['flash', 'pro'] as const).map((m) => (
+                        <button
+                          key={m}
+                          className={`hk-menu-item${state.chatModel === m ? ' active' : ''}`}
+                          onClick={() => {
+                            set({ chatModel: m });
+                            setMenu('none');
+                            toast(
+                              m === 'pro'
+                                ? L('LATTICE Pro on — applies to new courses & replies', '见界 Pro 已启用——新课程与回复生效')
+                                : L('LATTICE Flash on — applies to new courses & replies', '见界 Flash 已启用——新课程与回复生效'),
+                            );
+                          }}
+                        >
+                          {m === 'pro' ? (
+                            <>
+                              <span className="cp-model-line">
+                                <span className="cp-model-name">{L('LATTICE Pro', '见界 Pro')}</span>
+                                <span className="cp-model-badge">{L('Launch offer', '限时')}</span>
+                                <span className="cp-model-price">
+                                  <del>5</del> {L('2 cr', '2 积分')}
+                                </span>
+                              </span>
+                              <span className="cp-model-desc">
+                                {L(
+                                  'Deeper reasoning for course content. Thinking takes longer.',
+                                  '课程内容更深推理。思考时间会变长。',
+                                )}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="cp-model-line">
+                                <span className="cp-model-name">{L('LATTICE Flash', '见界 Flash')}</span>
+                                <span className="cp-model-price">{L('2 cr', '2 积分')}</span>
+                              </span>
+                              <span className="cp-model-desc">
+                                {L('Fast course crafting and replies.', '课程打造与回复都更快。')}
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="hm-menu-anchor">
                   <button className="hm-chip" onClick={() => setMenu(menu === 'tools' ? 'none' : 'tools')}>
                     <SlidersHorizontal size={15} />
                     {t('home.tools')}
@@ -734,21 +789,52 @@ export const Home = ({ state, set }: PageProps) => {
                   <div className="hm-menu-anchor">
                     <button className="hm-speed" onClick={() => setMenu(menu === 'speed' ? 'none' : 'speed')}>
                       <Layers size={16} />
-                      {state.replyMode === 'fast' ? t('home.speedModeFast') : t('home.speedModeNormal')}
+                      {state.chatModel === 'pro' ? L('LATTICE Pro', '见界 Pro') : L('LATTICE Flash', '见界 Flash')}
                       <ChevronDown size={14} />
                     </button>
                     {menu === 'speed' && (
                       <div className="hk-menu hm-menu hm-menu-up">
-                        {(['standard', 'fast'] as const).map((m) => (
+                        {(['flash', 'pro'] as const).map((m) => (
                           <button
                             key={m}
-                            className={`hk-menu-item${state.replyMode === m ? ' active' : ''}`}
+                            className={`hk-menu-item${state.chatModel === m ? ' active' : ''}`}
                             onClick={() => {
-                              set({ replyMode: m });
+                              set({ chatModel: m });
                               setMenu('none');
+                              toast(
+                                m === 'pro'
+                                  ? L('LATTICE Pro on — applies to new replies', '见界 Pro 已启用——下一条回复生效')
+                                  : L('LATTICE Flash on — applies to new replies', '见界 Flash 已启用——下一条回复生效'),
+                              );
                             }}
                           >
-                            {m === 'fast' ? t('home.speedModeFast') : t('home.speedModeNormal')}
+                            {m === 'pro' ? (
+                              <>
+                                <span className="cp-model-line">
+                                  <span className="cp-model-name">{L('LATTICE Pro', '见界 Pro')}</span>
+                                  <span className="cp-model-badge">{L('Launch offer', '限时')}</span>
+                                  <span className="cp-model-price">
+                                    <del>5</del> {L('2 cr', '2 积分')}
+                                  </span>
+                                </span>
+                                <span className="cp-model-desc">
+                                  {L(
+                                    'Deeper reasoning. Thinking takes longer — replies may feel slower.',
+                                    '更深推理。思考时间会变长，回答时可能感觉卡顿。',
+                                  )}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="cp-model-line">
+                                  <span className="cp-model-name">{L('LATTICE Flash', '见界 Flash')}</span>
+                                  <span className="cp-model-price">{L('2 cr', '2 积分')}</span>
+                                </span>
+                                <span className="cp-model-desc">
+                                  {L('Fast replies. Great for everyday questions.', '速度快。适合日常问答。')}
+                                </span>
+                              </>
+                            )}
                           </button>
                         ))}
                       </div>
