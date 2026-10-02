@@ -10,19 +10,6 @@
   overflow: hidden;
 }
 
-/* veil covering the shell header (hidden on this screen in the real product) */
-.cp-header-veil {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 780px;
-  height: 76px;
-  background-color: var(--app-bg, var(--sand-100));
-  background-image: radial-gradient(var(--sand-300) 1.2px, transparent 1.3px);
-  background-size: 14px 14px;
-  z-index: 26;
-}
-
 /* floating top-right utility cluster */
 .cp-utility {
   position: fixed;

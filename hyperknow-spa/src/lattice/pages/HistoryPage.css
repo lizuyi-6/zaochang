@@ -131,7 +131,7 @@
   transition: background 0.1s;
 }
 .hs-row + .hs-row {
-  border-top: 1px solid #f1f2f4;
+  border-top: 1px solid color-mix(in srgb, var(--sand-300, #EADFCE) 55%, transparent);
 }
 .hs-row:hover {
   background: #fafbfc;

@@ -1172,3 +1172,13 @@
 .cp-model-item .cp-model-desc { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.55; color: var(--ink-600, #8A7B66); }
 .hk-menu:has(.cp-model-item) { min-width: 264px; padding: 8px; }
 .hk-menu .cp-model-item + .cp-model-item { margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--sand-200, #EADFCE); }
+
+/* 近期活动行:行间发丝线+呼吸感(此前 34px 高度无分隔挤成一坨) */
+.hk-activity-row { height: auto; min-height: 36px; padding-top: 7px; padding-bottom: 7px; }
+.hk-activity-row + .hk-activity-row,
+.hk-activity-row + .hk-skel-row,
+.hk-skel-row + .hk-activity-row {
+  border-top: 1px solid color-mix(in srgb, var(--sand-300, #EADFCE) 55%, transparent);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}

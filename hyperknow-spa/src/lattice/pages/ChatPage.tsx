@@ -355,9 +355,6 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
 
   return (
   <div className="hk-page cp-page">
-    {/* covers the global shell header, which the real product hides on this screen */}
-    <div className="cp-header-veil" />
-
     {/* floating top-right utility cluster */}
     <div className="cp-utility">
       <button
