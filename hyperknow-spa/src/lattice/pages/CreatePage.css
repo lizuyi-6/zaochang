@@ -487,6 +487,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  white-space: nowrap;
   border: 1px solid var(--border-color, var(--sand-300));
   background: var(--panel-bg, var(--white));
   color: var(--ink-700);
