@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Headset, Sparkles, CreditCard, Gift, Smile, SlidersHorizontal, Podcast, LogOut, Flag, Upload } from 'lucide-react';
+import { Headset, Sparkles, CreditCard, Gift, Smile, SlidersHorizontal, Podcast, LogOut, Flag } from 'lucide-react';
 import { AvatarCat } from './illustrations';
 import { LanguageSwitcher } from './i18n/LanguageSwitcher';
 import { useI18n } from './i18n';
 import { L } from './i18n/content';
 import { SupportModal } from './SupportModal';
 import { WhatsNewModal } from './WhatsNewModal';
-import { copyText, shareLink } from './actions';
+import { copyText } from './actions';
 import { toast } from './toast';
 import type { AppState, AppAction } from './types';
 
@@ -14,12 +14,14 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
   const { t } = useI18n();
   const [supportTitle, setSupportTitle] = useState<string | null>(null);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
-  /* Header cluster varies per screen (reference: 17/22/23/26/20; feed/history/marketplace have none). */
+  /* Header cluster varies per screen (reference: 17/22/23/26/20; feed/history/marketplace have none).
+   * chat 也隐藏:聊天页有自己的右上工具簇(翻译/分享/遇到问题/头像),
+   * 壳层头部若同屏渲染,其隐形按钮会劫持工具簇的点击(实测 elementFromPoint 实锤)。 */
   const s = state.screen;
-  if (s === 'marketplace' || s === 'history' || s === 'feed') return null;
+  if (s === 'marketplace' || s === 'history' || s === 'feed' || s === 'chat') return null;
 
   const energy = state.identity?.credits ?? state.energy ?? (state.lectureDone ? 15 : 20);
-  const showPlan = s !== 'chat';
+  const showPlan = true;
   /* 身份未落定前不渲染真实套餐/积分:初始默认是 FREE/15,直绘会先闪一帧
    * 「FREE 15」再跳成真实账户(用户报告的右上角闪变)。骨架占位保布局不跳。 */
   const identityPending = !state.bootReady;
@@ -43,7 +45,7 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
         <Gift size={16} />
         <span>{t('home.inviteAndEarn')}</span>
       </button>
-    ) : s === 'courseJourney' || s === 'chat' ? (
+    ) : s === 'courseJourney' ? (
       <button className="hk-founders-btn" type="button" onClick={() => setSupportTitle(t('chatResponse.haveAnIssue'))}>
         <Flag size={15} />
         <span>{t('chatResponse.haveAnIssue')}</span>
@@ -76,15 +78,6 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
           </>
         )}
         <LanguageSwitcher />
-        {s === 'chat' && (
-          <button
-            className="hk-icon-btn"
-            title={t('chatResponse.share')}
-            onClick={() => void shareLink(window.location.href, L('Lattice conversation', '见界对话'))}
-          >
-            <Upload size={16} />
-          </button>
-        )}
         {cta}
         <span
           style={{ cursor: 'pointer', display: 'inline-flex' }}
