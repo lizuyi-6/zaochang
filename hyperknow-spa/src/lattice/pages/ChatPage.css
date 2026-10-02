@@ -77,6 +77,8 @@
   justify-content: flex-end;
   animation: cp-fade 0.35s ease both;
 }
+.cp-bubble-row:not(.user) { justify-content: flex-start; }
+.cp-bubble:not(.user) { max-width: 100%; }
 .cp-bubble {
   background: var(--coral-050);
   border-radius: 16px;
@@ -417,7 +419,7 @@
 .cp-util-btn,.cp-issue,.cp-chip,.cp-composer,.cp-translation { background: var(--panel-bg); border-color: var(--border-color); }
 
 /* ---------------- 导师回复富文本(Markdown + <div content-section> 容器) ---------------- */
-.cp-markup { display: grid; gap: 10px; text-align: left; word-break: break-word; }
+.cp-markup { display: grid; gap: 10px; text-align: left; word-break: break-word; min-width: 0; max-width: 100%; }
 .cp-markup p { line-height: 1.7; margin: 0; }
 .cp-markup ul, .cp-markup ol { display: grid; gap: 6px; line-height: 1.65; margin: 0; padding-left: 20px; }
 .cp-markup strong { font-weight: 700; }
@@ -433,7 +435,7 @@ h5.cp-markup-heading { font-size: 13.5px; }
 .cp-markup-math { background: color-mix(in srgb, var(--ink-900) 6%, transparent); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; padding: 1px 6px; }
 .cp-markup-math-block { font-family: var(--font-display); font-size: 14px; font-style: italic; line-height: 1.6; overflow-x: auto; padding: 4px 2px; white-space: pre-wrap; }
 /* content-section 教学区块:白纸卡 + 珊瑚左肩线 + mono 眉标(编辑排印语言) */
-.cp-markup-section { background: var(--panel-bg); border: 1px solid var(--sand-300); border-left: 3px solid var(--coral-500); border-radius: 8px; display: grid; gap: 9px; padding: 13px 15px; }
+.cp-markup-section { background: var(--panel-bg); border: 1px solid var(--sand-300); border-left: 3px solid var(--coral-500); border-radius: 8px; display: grid; gap: 9px; padding: 13px 15px; min-width: 0; max-width: 100%; }
 .cp-markup-section-kicker { color: var(--coral-600); font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 /* <diagram> 视觉命令:聊天里以虚线占位签呈现(实体图在白板/课程内渲染) */
 .cp-markup-diagram { align-items: center; border: 1px dashed var(--sand-400); border-radius: 8px; color: var(--ink-600); display: flex; flex-wrap: wrap; font-size: 12px; gap: 7px; padding: 10px 13px; }
