@@ -26,6 +26,7 @@ const CourseJourney = React.lazy(() => import('./lattice/pages/CourseJourney'));
 const MarketplacePage = React.lazy(() => import('./lattice/pages/MarketplacePage'));
 const PlansPage = React.lazy(() => import('./lattice/pages/PlansPage').then(m => ({ default: m.PlansPage })));
 const ChatPage = React.lazy(() => import('./lattice/pages/ChatPage').then(m => ({ default: m.ChatPage })));
+const CreatePage = React.lazy(() => import('./lattice/pages/CreatePage').then(m => ({ default: m.CreatePage })));
 const WhiteboardPage = React.lazy(() => import('./lattice/whiteboard/WhiteboardPage').then(m => ({ default: m.WhiteboardPage })));
 
 /* ---------------- hash routing ---------------- */
@@ -85,6 +86,8 @@ function stateFromHash(): Partial<AppState> | null {
       return { screen: 'plans', ...done, ...extras };
     case '/chat':
       return { screen: 'chat', ...done, ...extras };
+    case '/create':
+      return { screen: 'create', ...done, ...extras };
     case '/whiteboard':
       return { screen: 'whiteboard', whiteboardMode: q.has('practice') ? 'practice' : 'lecture' };
     default: {
@@ -346,6 +349,7 @@ export const App: React.FC = () => {
           {s === 'marketplace' && <MarketplacePage state={state} set={set} />}
           {s === 'plans' && <PlansPage state={state} set={set} />}
           {s === 'chat' && <ChatPage state={state} set={set} />}
+          {s === 'create' && <CreatePage state={state} set={set} />}
           {s === 'whiteboard' && (
             /* key 强制换课/换模式时整体重挂载:旧课的音频、字幕、相机、测验绝不污染新课 */
             <WhiteboardPage
