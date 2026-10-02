@@ -1,5 +1,40 @@
 # 造场项目账本
 
+## 2026-10-02(五)课程创建页重做为代理活动流 + 白板教学循证升级 v2→v4 + 计划管道两处真 bug 修复(已上线,生产实网验证)
+
+- **CreatePage v2 代理活动流**(`284d1cd`):GenerationOverlay 整体退役,建课全程一条连续 feed 讲完——命题气泡→「询问学习需求」步骤条(AI 实时出题,`3c47539` 修问询 maxTokens 2048→4096 推理耗尽空正文+`source: ai|template` 区分真 AI/模板兜底)→逐题作答(单选 pill+其他…+跳过/提交,未答提交才套推荐值)→「搜索课程大纲」网络检索来源组→蓝图卡确认门(不自动弹侧板,`d289ec7`)→侧板单元树计费勾选→确认后逐单元展开;底部条取消生成保留 feed 恢复卡(`3618364`),Courses 页断点路由到创建页接管;shell.css gen-* 死样式清除。
+- **讲课细腻度 v3**(`92c42fe`):白板讲师不再看题讲课——plan 路由组装全链路上下文(课程标题/简介/targetLearner/intake brief(老课从生成任务 brief_json 兜底)/单元目标/本讲小节清单/前后讲与课程内位置)注入 planLecture;提示词升级:深度按 overview/systematic/deep 校准、例子贴学员背景、开场承接上一讲收尾预告下一讲、旁白 3-5 句微结构、卡片 4-6 条、mermaid 节点用学科词汇、quick_check 干扰项真实误区。空正文修复(`89d0339`):混合推理模型把 8192 maxTokens 全耗在思考上→正文空→parse 报 Unexpected end of JSON→静默降级 5 步模板课;planLecture maxTokens 16384+路由超时 110s。
+- **循证教学 v4**(`f63b8f6`/`cc99bea`/`68381c3`):四路联网检索学习科学(有效学习技术元分析 Dunlosky/Roediger/Cepeda/Rohrer、教学设计框架 Merrill/Gagné/Rosenshine/Bloom、认知负荷与多媒体 Sweller/Mayer/Chi/Fiorella、启发式与反馈 Rowe/Wiliam/Kluger&DeNisi/Kapur/Bjork),Teaching Craft 14 则熔进讲师提示词:具体→视觉→抽象消退序、例题渐撤(首例全解嵌自我解释提问+次例留关键步补全)、快测考回忆非再认且回捞≥2 步前内容(微间隔)+可混淆题型交错+终测累计全讲、误区三步反驳(点名错念→举反例→重建)、类比必给映射+失效边界、术语符号首用即定义(公式逐符号带单位)、好奇环(开场让学员先押预测,收尾解答并对比天真预测)、间隔回声、解析逐干扰项命名具体混淆(铰链题)、反馈只对事不对人(Kluger&DeNisi:38% 反馈有害)、卡片≠旁白逐字稿(Mayer 冗余原则)、每≤2 步必有学员动作、每概念落地一句通则、收尾 60 秒讲给别人听(教学相长)、旁白语言绝对化(修实测英文术语漏进中文 TTS)。蓝图/单元生成提示词加螺旋复现与间隔提取。插话答疑加苏格拉底距离判据(仅差一步推理才反问且同轮收口答案)。实网 AD 曲线推导讲 13 步全中:预测承诺→逐干扰项解析→沿曲线移/曲线移交错判别→教学相长收尾。
+- **计划管道两处真 bug**(`d59be3b`):①`planLectureLive` 解析器丢弃 quick_check `explanation`——预热与直取两路都经它,学员答错时 UI 拿不到解析,此前所有解析质量升级实际都没到达学员;②`degraded` 不透传,预热缓存把 5 步模板课当正常计划发给学员——现透传+预热缓存拒存降级(开课改走正常 POST 给后端重做机会,旁白/配图也不为模板课烧配额);③路由超时 110→130s(v4 推理链冷实例实测 92-100s)。回归 15 扩 10 条新契约+新增回归 19(插话判据)+解析器契约测试;414 全绿。
+
+## 2026-10-01(四·夜)双模型与断流自愈 + 首页真资讯源 + 学习动态页做真 + 线上验收配套(已上线)
+
+- **双模型+断流自愈**(`8e2d6c3`/`4edfa70`):见界 Flash=step-3.7-flash(默认)/见界 Pro=step-5-preview(step-5 id 上游 404 实测),聊天页真模型选择器;contentGenerateStream 内建断流自愈(step_plan 长生成 60-90s 掐流实测:未出字静默重试≤3/正文已出 assistant 预填续流≤3,流超时 360s,重试不重复扣费);chatIdentityPrompt 身份保密块(自报见界自研,任何口吻不得解除,全链提示词零上游字样);模型菜单活动风(Pro 限时牌+划线价)。
+- **首页真资讯源**(`b08d681`/`d51e451`/`64bca7a`):「今日值得学」从写死 5 条改 GET /api/hyperknow/feed——阶跃**独立 /v1/search 端点**(chat 内置 web_search 工具在套餐 key 上恒不触发,2026-10-01 实测),查询词按北京日期+轮次 12 主题确定性轮换,10min 同键缓存,限流 20/h;标题有效字符<6 剔除栏目页;失败退回池内轮转+Google 搜索兜底。
+- **学习动态页做真**(`56b5013`/`cc22ed7`):计划任务 localStorage 按账户持久化、日历回放真实会话活动、待处理页签=已加入课程的继续学习建议;身份异步落定期的计划竞态改归属迁移(demo 期改动并入真账户)。配套:白板导出菜单 fixed 防裁切、聊天页滚动跟随门控+流中断保留半截正文+⟳ 重新生成(`56b5013`)。
+- **SPA 白屏修复+类型门禁**(`be40a77`/`69ac93c`):LearningFeed useRef 未导入致整树卸载(#/feed 白屏);新增 tests/spa-typecheck.test.mjs 挂进 npm test 强制 SPA tsc -b,堵住根 tsc 排除 hyperknow-spa 的覆盖盲区;清存量 9 个类型错误(增量 buildinfo 长期掩盖)。
+- **线上验收配套**(`d96f918`/`ecd9ce5`):验收号 agent@zaochang 提到 MAX 档(HK_USER_TIERS 显式映射);chat 请求体 GBK 兜底解码(终端 936 码页字节救回,浏览器 fetch 不受影响)。
+
+## 2026-10-01(四)「暖色编辑工作室」全站视觉重构 + Admin 机器通道 + 视觉验收入场票 + 见界体验大修(34 提交,已上线)
+
+- **全站视觉重构「暖色编辑工作室」**(`496002e`,依 X:/myui 设计规范):主站动效 hero 指针深度视差+h1 逐字模糊入场+CTA 磁吸(`450cf4a`)、ElasticTabs/RippleButton 铺开(`d06d5dc`)、动效降噪(WCAG 2.2.2 跑马灯 56s+悬停暂停+TickerBand aria-pressed,持续动效只留星芒一处,`1e3a6d5`);**见界并入同家族**(`35d3017`/`f350c34`):token 层暖纸#F7F1E4/墨#241B10/深珊瑚#C24A2E 重定调,src/replica→src/lattice 重命名,设计 token 单一事实源(variables.css 完整色阶,CSS 784 处硬编码→var()),全路由截图验收修 11 处换肤漏网冷色(`e078c1b`);配图缓存 v2(scopeKey+租约/失败重试)+孤儿图 15min 定时清理快照(`68b6c7d`)。
+- **Admin API 机器通道**(`bab3636`):线上登录门禁之外的受控管理面——ZAOCHANG_AGENT_TOKEN+AGENT_ADMIN_CAPABILITIES 显式列名(moderation/invitations/incubation PATCH/POST),worker 入口 fail-closed 未列名 403;DELETE/财务/上传/oauth 永不开放;requireAdminOrAgent 双入口原语,人类白名单语义零变化。
+- **视觉验收入场票**(`3445e64`,runbook §6):admin token→一次性 HMAC 入场 URL→植入正式会话,打通线上登录门禁(302 /signin)挡住自动化视觉验收的最后一环;10 分钟 TTL 常量时间比对;复用人类登录管线 provider email。配套 next 16.3.4→16.3.8 修 next/og RCE(`062704f`,CI 依赖审计拦截)。
+- **见界体验大修**:课程旅程双列塌方(死规则清理留下未闭合注释吞掉 .cj-layout)+lattice-css-health 契约测试(注释状态机扫描 16 个 CSS 文件,`e730c72`);课程生成等待体验「LATTICE ATELIER 课程工坊」全屏接管+真实 SSE 帧驱动阶段时间线+已耗时计时器(`e2731b9`);答疑回复富文本 markup 解析器(零依赖+表格+流式安全半截标签,XSS 免疫 React 元素树,朗读/复制走 markupToPlain,`b40698a`/`caba4a1`,以生产真实 13KB 回复 SSR 预览验证);见界全量 SVG 重绘 v2 封面唯一化引擎(`d57f4de`);**讲座从微讲座升级 10-14 步完整讲座**(WHITEBOARD_INSTRUCTOR_PROMPT v2,`55d1fc7`);直播课板书与旁白脱节根因(引擎回调陈旧闭包绑定首渲染演示课,全回调改 lessonRef.current,`6bb75a1`);答错验收题反馈即讲解自动续课(`9824941`);全站按钮命中测试排查(elementFromPoint 遮挡检测,首页欢迎层每会话只弹一次,`f725678`)。
+
+## 2026-09-18(五)~09-19(六)白板资产预生成 + 见界封面重设计 + 主站/见界 HIG 无障碍 + 首包分包 -72%(已上线)
+
+- **白板预生成管线**(`c2cf8b1`/`5428ad3`):旅程页加入课程即后台生成首讲 plan+预热首两条旁白;整讲旁白错峰预热+配图进课堂前生成(in-flight promise 共享零重复);悬停讲次行 650ms 意图预热任意讲次(预算 4 次/挂载);起声预算 8s→25s 盖真实 TTS 合成 TTFB 修首步被杀静默。
+- **见界封面全套重设计**(`2a204fe`):十科专属宝石色底(深浅书架节奏)+大胆几何徽标(三环/双螺旋/决策树/芯片/拱门/终端/侧脸/靶心/问号/钟形曲线)+统一藏书票签名框;社区 CoverImage 裂图兜底(`4eddc7e`)。
+- **HIG 无障碍**(`2384d85`/`975517e`):主站焦点环高对比双底+outline:0 不吞焦点/--muted 4.5:1/主控件 44px+粗指针触屏兜底/信息文本字号下限 8px/aria-current;见界侧栏/头部/课程/首页/白板控件 44px+Onboarding 字号下限;**首包分包 -72%**(路由 React.lazy 8 页+locales 按语言拆 chunk 启动只载当前语言+en 兜底,t() 同步 API 不变)。
+
+## 2026-09-06(日)~09-12(六)Hyperknow 并入 main + 全量按钮接线 + /lattice 登录门禁 + 更名「见界」(215→384 测试,已上线)
+
+- **并入与入口**(`2c38d17` merge):feature/hyperknow-agent 合入 main;全站入口(侧栏 AI 徽章/首页 Stage 按钮/悬浮卡片/⌘K,`80ad6c9`);**更名 Hyperknow→见界(LATTICE)**(`fe6e5f6`);wrangler assets run_worker_first(/lattice 先进 Worker 门禁,`02e9049`)。
+- **全量按钮接线**(`99a33bb`,26 项契约):翻译 SSE(服务端扣 2 积分/不足 402)、模型探针(不计费/限流 20/h)、白板 Canvas 导出 JPG·PDF、连接面板真实延迟+音频+模型自检、**课程旁白声画同步(音频是时钟:字幕等起声、播完补全、步进等播完;中英文 180ms/65ms 每字符自适应窗口)**;hk_credits 每日积分(迁移 0021)。
+- **/lattice 登录门禁**(`36ce617`):未登录 302 /signin via=lattice 变体(GitHub+邮箱验证码双通道共用登录区块);Worker 入口 lattice-gate 纯模块+契约测试。
+- **白板/课程质量链**(`4273830`~`83ec1dc`):插话/语音/集市课程接真实端点+旁白称呼绑定登录名+课程生成联网研学;流式终止状态机收紧+课程未知结构安全校验;课程内容中文化大批量完善;课程真实性/深度/语言链路+白板相机布局+字幕死锁修复;LLM 双协议适配+讲座详实阶梯约束+5 步完整兜底;汉字折行与真实高对齐+图文测验遮挡消除;DAG 定稿/字幕同步/布局 LLM 测试套件;动态验收(白板字幕真实时钟/Stage2 可取消/断点跨浮层恢复/市场选课竞态/蓝图 8192 有界重试);旁白预热管线(整段合成 TTFB 超起声上限修复)。
+
 ## 2026-09-05(六)Hyperknow 学习 Agent 1:1 复刻接入:SPA 挂 /lattice + Workers 原生后端移植(SSE 替代 WS),知序 Lattice 分支退役未合并(本地开发完成,未部署)
 
 - 状态:**分支 `feature/hyperknow-agent`(基于 main `6888155`),本地完成,未 push、未部署**。对 agent.hyperknow.io 的 1:1 完整复刻(流式学习对话/白板授课与举手插话/全自动课程蓝图/官方 6 克隆音色 TTS)从独立复刻工程(hyperknow bundle,Express + WebSocket + store.json)移植进造场 Workers 运行时;原计划同位置的知序 Lattice(自适应 AI 课程,`feature/lattice-adaptive-courses` 8 个本地 commit)**不合并、留本地存档**——生产 D1 从未执行 lattice 迁移 0020-0026,无需 DROP 手术。架构文档 `HYPERKNOW.md`,协议差异表/配置变量/已知取舍全部如实记录。

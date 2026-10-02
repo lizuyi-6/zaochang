@@ -14,9 +14,9 @@ Requires Node `>=22.13.0` (tests use `node:sqlite` and `--experimental-strip-typ
 npm ci                          # install
 npm run dev                     # vinext dev server (local D1/R2 via @cloudflare/vite-plugin)
 npm run build                   # -> dist/server/index.js (Worker) + dist/client (assets)
-npm test                        # builds, then runs the full suite (173 tests — 以 node:test 输出为准)
+npm test                        # builds (vinext), runs the full suite (414 tests — 以 node:test 输出为准)
 npm run lint                    # eslint
-npx tsc --noEmit                # typecheck
+npx tsc --noEmit                # typecheck (root; hyperknow-spa 有独立 tsc,由 spa-typecheck 测试门禁强制)
 npm run db:generate             # should output "No schema changes"; new SQL = drift (see below)
 npm audit --omit=dev --audit-level=high --prefer-online   # use --prefer-online: stale cache gives false HIGH findings
 git diff --check                # whitespace gate (also enforced in CI)
@@ -67,13 +67,14 @@ All DB access in routes goes through `database()` in `app/api/_lib/community.ts`
 
 ## Tests
 
-`npm test` runs three node:test entry files (with `--experimental-strip-types`, so tests can import `.ts` source directly):
+`npm test` runs ~22 node:test entry files (with `--experimental-strip-types`, so tests can import `.ts` source directly), all registered in `package.json`'s `test` script:
 
-- `tests/rendered-html.test.mjs` — a **thin runner** (`concurrency: false`) that drives the serial suites in `tests/suites/01..10` in order. All of them share one harness, `tests/harness/preview.mjs`: a **real Wrangler preview server** on port 4179 against a fresh local D1 (applies all migrations from empty), plus a fake upload scanner, fake AI chat upstream, and fake email transport — asserting real HTTP responses + DB field state against the live worker runtime and real triggers, not mocks. The suites are **not** runnable in parallel outside the runner (each file's before-hook would start its own preview server and collide on the port).
-- `tests/hello-system-freeze.test.mjs` — 《Hello System》book freeze contract (78 nodes / stable id-slug / UPSERT semantics / reading_progress preservation).
-- `tests/worker-contracts.test.mjs` — pure-Node contracts for the Worker pipeline (request-body guard, anonymous edge cache, security headers) plus the purge registry and OIDC discovery; no Wrangler startup.
+- `tests/rendered-html.test.mjs` — a **thin runner** (`concurrency: false`) that drives the serial suites in `tests/suites/01..11` in order. All of them share one harness, `tests/harness/preview.mjs`: a **real Wrangler preview server** on port 4179 against a fresh local D1 (applies all migrations from empty), plus a fake upload scanner, fake AI chat upstream, and fake email transport — asserting real HTTP responses + DB field state against the live worker runtime and real triggers, not mocks. The suites are **not** runnable in parallel outside the runner (each file's before-hook would start its own preview server and collide on the port).
+- The rest are pure-Node contract tests (no Wrangler startup): worker pipeline (`worker-contracts`), 《Hello System》 freeze, admin/agent API capability tables, migration drift, modularization, and the **见界 suite** — `hyperknow-*` / `lattice-*` / `whiteboard-*` cover the SPA's backend client parsing, whiteboard caption/engine contracts (incl. `WHITEBOARD_INSTRUCTOR_PROMPT` pedagogy invariants in `whiteboard-caption-sync` Regressions 15/19), course DAG finalization, CSS health (unclosed-comment scanner), brand copy, layout, and markup rendering. `tests/spa-typecheck.test.mjs` forces `tsc -b` inside `hyperknow-spa/` — the root `tsconfig` excludes the SPA, so this gate is the only thing catching its type errors (added after a missing-import white-screen shipped to prod).
+- 见界 SPA has its own oxlint; run it inside `hyperknow-spa/` (`npx oxlint src`).
+- The suite must stay `failed=0 / skipped=0 / todo=0`; CI rejects disabled-test syntax. The freeze test writes temporary SQL/local D1/backup artifacts and may rewrite `content/import-hellosystem.sql` — judge whether that diff is expected before resetting it.
 
-The suite must stay `failed=0 / skipped=0 / todo=0`; CI rejects disabled-test syntax. Tests cover auth, invite flow, OIDC, payments/refunds, review gating, uploads, and the galaxy showcase. The freeze test writes temporary SQL/local D1/backup artifacts and may rewrite `content/import-hellosystem.sql` — judge whether that diff is expected before resetting it.
+**见界 (LATTICE) — the learning-agent SPA at `/lattice/`** (full module ledger: `HYPERKNOW.md`). Source is a separate Vite project `hyperknow-spa/` (React 19) whose **built output is committed** to `public/lattice/` — CI does not install SPA deps, so any change under `hyperknow-spa/src` requires `cd hyperknow-spa && npm run build` before commit, or the fix silently never ships (this bit once: a pipeline fix committed without rebuilding). Backend lives in `app/api/hyperknow/*` + `app/api/_lib/hyperknow/`; the LLM is hybrid-reasoning (chain-of-thought tokens count toward `max_tokens`), so JSON-mode calls need generous `maxTokens` (inquiry 4096 / lecture plan 16384) or the answer comes back empty and silently degrades to template fallback — a recurring failure mode; check `wrangler tail` for `parse failed`/`empty` before suspecting prompts. Whiteboard lecture generation is slow by design (60-100s); the plan route budget is 130s.
 
 ## Deploy
 
@@ -88,5 +89,5 @@ Push to `main` → `.github/workflows/ci.yml` (`release-gates`: tsc, lint, disab
 - **Migration drift:** `npm run db:generate` must stay a no-op. If it emits SQL, `db/schema.ts`, the migration SQL, and `drizzle/meta/*.snapshot.json` are out of sync — reconcile before committing. CI checks this.
 - **`PROJECT_STATUS.md`** is a chronological ledger but **can lag reality** (it has done before). Verify deploy state against live (`wrangler deployments list`, `gh run list`, or the box) rather than trusting it.
 - Tests run on Windows; `git` may flag LF→CRLF conversions as warnings — those are not failures. `git diff --check` exit 0 is the gate.
-- Authoritative docs: `CLOUDFLARE_RUNBOOK.md` (prod deploy + topology), `OAUTH_SETUP.md` (OAuth/OIDC config), `RELEASE_RUNBOOK.md` (release gates + rollback), `db/schema.ts` (data model), `worker/index.ts` (request pipeline + security headers), `android/README.md` (安卓壳构建/发布/回滚).
+- Authoritative docs: `CLOUDFLARE_RUNBOOK.md` (prod deploy + topology; §2 secrets; §6 视觉验收入场票), `HYPERKNOW.md` (见界 module architecture/protocol diffs/prompt evolution), `OAUTH_SETUP.md` (OAuth/OIDC config), `RELEASE_RUNBOOK.md` (release gates + rollback), `PROJECT_STATUS.md` (chronological ledger), `db/schema.ts` (data model), `worker/index.ts` (request pipeline + security headers), `android/README.md` (安卓壳构建/发布/回滚).
 - Path alias: `@/*` maps to the repo root (`tsconfig.json` paths); app code imports via `@/...`.

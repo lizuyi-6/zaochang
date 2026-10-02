@@ -9,13 +9,19 @@ R2。像素级前端以预构建 SPA 挂载在 `/lattice/`(与 `public/product-a
 ## 组成
 
 ```
-hyperknow-spa/                 # 复刻前端源码(React 19 + Vite,独立工程,CI 不安装其依赖)
-  └── 构建产物提交在 public/lattice/(vite base=/lattice/,见其 vite.config.ts)
-app/api/hyperknow/**           # REST + SSE 端点(12 条路由,全部 requireMember)
-app/api/_lib/hyperknow/        # 移植层:prompts(纯)/protocol(纯)/config/llm/agents/tts/store/guards
-db/schema.ts                   # hk_conversations / hk_courses / hk_whiteboard_sessions(迁移 0020)
-tests/hyperknow-core.test.mjs  # 纯逻辑单测(SSE 解析/fallback/缓存 key/节奏公式)
-tests/suites/11-hyperknow.tests.mjs # 集成套件(真实 Wrangler 预览 + 假 AI/TTS 上游)
+hyperknow-spa/                 # 前端源码(React 19 + Vite,独立工程,CI 不安装其依赖;src/lattice/)
+  └── 构建产物提交在 public/lattice/(vite base=/lattice/,见其 vite.config.ts)——改 src 必须重构建再提交
+app/api/hyperknow/**           # REST + SSE 端点(12 组路由:auth/chat/conversations/course-generation/
+                               #   course-inquiry/courses/feed/marketplace/model-check/translate/tts/whiteboard,
+                               #   全部 requireMember)
+app/api/_lib/hyperknow/        # 16 模块:prompts(纯)/protocol(纯)/config/llm/agents/tts/store/guards/
+                               #   credits/dag-finalizer/feed/websearch/image-gen/image-cache/
+                               #   image-upload-state/samples
+db/schema.ts                   # hk_conversations/hk_courses/hk_whiteboard_sessions(0020)+
+                               #   hk_credits 每日积分(0021)/hk_course_tasks 生成任务与断点/image-cache 表
+tests/                         # hyperknow-core(纯逻辑)+ suites/11-hyperknow(集成,Wrangler 预览)+
+                               #   契约族 lattice-*/whiteboard-*(含讲师提示词教学法不变量、
+                               #   白板字幕/引擎、backend 解析器、CSS 健康、DAG 定稿、spa-typecheck 门禁)
 ```
 
 ## 与原复刻工程的协议差异(全部如实声明)
@@ -100,3 +106,12 @@ CI 不安装 hyperknow-spa 依赖、不参与主站 tsc/eslint(tsconfig/eslint �
 - **配图缓存与租约**：带课程 UUID 的请求须提供能在课程树中精确定位的 `unitId/lectureId/sessionId`；缓存作用域包含完整课程路径，旧式无课程请求按会话或提示词隔离。缓存版本从 `v1` 变为 `v2`，旧缓存不会命中，首次请求可能重新消耗当日生图配额。等待 15 秒后租约仍有效返回 409，不调用上游；仅过期或失败行可接管。上传后若失去租约，不回填缓存；私有资产先删 R2 对象，再删 D1 元数据。`hyperknow_image` 标记随上传元数据先写入；后台认领超过 15 分钟且未引用的 `pending/clean/error/infected` 行。上传完成状态只能在清理令牌为空时写为 `clean`，缓存 finalizer 同样要求令牌为空；这样认领成功后，已开始的上传无法把被扫除对象登记为成功。后台先删最终对象和 `quarantine/` 临时对象，候选若在本轮开始时为终态则两者成功后删除 D1 行；若开始时为 `pending`，即使同一轮转为终态也保留带 15 分钟过期时间的 tombstone，下一轮再扫，以覆盖清理期间迟到的 R2 写入。失败时认领令牌保留到下个重试窗口，已引用的课程缓存不会被认领或清理。若上传进程永久停在 `pending`，D1 tombstone 也会保留并每 15 分钟重试，这是避免迟到对象失去清理标记的代价。
 - **Messages 流终态**：流式模型响应只有 `message_delta.stop_reason=end_turn` 后收到 `message_stop` 才视为正常结束；`error`、`max_tokens` 或提前 EOF 抛错，聊天/翻译不应保存或报告半截回复为正常完成。流式请求已输出部分内容后不改用另一协议重放。
 - **证据边界**：本地 SQLite 状态测试执行清理、上传完成和缓存 finalizer SQL，断言清理先后竞态、pending tombstone 对迟到 R2 写入的再次清理、最终对象删除未生效、只删除最终对象、R2 两个对象已删而 D1 失败，以及重试后的 D1/R2 最终状态；独立测试还核对 15 分钟和 6 小时 Cron 路由与生产配置一致。缓存租约 45 秒，测试中未来 lease 只用于合成两个 SQL 更新先后顺序，不代表生产可出现的租约时序。这些本地证据不等于 Cloudflare 生产 D1/R2 故障注入或 Worker Cron 实际触发验证。定时 Worker 必须同时具备 `DB` 与 `UPLOADS` 绑定，缺少 `UPLOADS` 时会留下显式 cron 错误日志。
+
+## 2026-10-02 课程创建代理活动流 + 白板教学循证升级
+
+- **课程创建页(CreatePage v2)**：GenerationOverlay 退役,建课全程一条连续 feed(AI 实时问询→检索来源组→蓝图确认门+侧板→逐单元大纲);`POST /api/hyperknow/course-inquiry` 出题一律 AI 实时生成(`COURSE_INQUIRY_PROMPT`+`parseInquiryQuestions`,模板仅上游故障兜底,响应带 `source: ai|template` 供前端区分);问询 maxTokens 4096(混合推理模型先思考后作答,2048 会被推理耗尽致正文空→误降模板)。intake brief 随 course_json 持久化,老课从 hk_course_tasks.brief_json 兜底。
+- **讲师上下文注入**:`whiteboard/plan` 路由把全链路课程上下文(课程/单元目标/本讲小节清单/前后讲/课程内位置/brief)组装为 `LectureCourseContext` 注入 planLecture——深度按 overview/systematic/deep 校准、例子贴学员背景、开场承接上一讲收尾预告下一讲、范围锁定本讲目标。
+- **WHITEBOARD_INSTRUCTOR_PROMPT v2→v4 演进**:v2 微讲座→10-14 步完整讲座;v3 旁白 3-5 句微结构+卡片 4-6 条+干扰项真实误区;v4 基于四路联网学习科学研究(元分析/教学设计框架/认知负荷与多媒体/启发式与反馈)注入 Teaching Craft 14 则:具体→视觉→抽象、例题渐撤+自我解释提问、快测考回忆非再认且回捞≥2 步+混淆题型交错+终测累计、误区三步反驳、类比映射+失效边界、符号首用即定义、好奇环(开场押预测收尾解答)、间隔回声、解析逐干扰项(铰链题)、反馈只对事不对人、卡片≠旁白逐字稿(Mayer 冗余)、每≤2 步一学员动作、概念落地通则、60 秒教学相长收尾、**旁白语言绝对化**(中文课旁白 100% 中文,禁把指令英文术语漏进 TTS)。教学法不变量由 `tests/whiteboard-caption-sync.test.mjs` Regression 15(讲师契约)与 19(插话苏格拉底距离判据:仅差一步推理才反问且同轮收口)钉住。
+- **空正文/预算纪律**(反复出现的故障模式):混合推理模型链式思考计入 max_tokens——planLecture 8192 被思考耗尽→parse Unexpected end of JSON→静默降级 5 步模板课;现 16384+路由超时 130s(冷实例实测 92-100s)。诊断入口:wrangler tail 找 `lecture plan parse failed ... payload head:`(空 head=正文空)。
+- **计划管道解析契约**:`planLectureLive`(预热与直取共用解析器)必须透传 quick_check `explanation`(学员答错 UI 反馈的唯一来源)与顶层 `degraded`;预热缓存(planPrefetch)拒存 degraded 计划——开课取不到预热就走正常 POST 给后端重做机会,旁白/配图不为模板课烧配额。契约由 `tests/lattice-backend.test.mjs` 钉住。
+- **蓝图/单元螺旋课程**:COURSE_BLUEPRINT_PROMPT/UNIT_GENERATION_PROMPT 要求后续单元在新情境复用早前技能、项目跨单元累积、测验回捞旧单元内容(间隔提取)。
