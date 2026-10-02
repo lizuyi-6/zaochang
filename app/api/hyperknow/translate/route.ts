@@ -102,7 +102,11 @@ export async function POST(request: Request) {
               if (chunk.type === "text" && chunk.text) push({ type: "content_chunk", chunk: chunk.text });
             }
             push({ type: "complete" });
-          } catch {
+          } catch (error) {
+            console.error(
+              "[hyperknow-translate] mid-stream failure:",
+              error instanceof Error ? error.message : error,
+            );
             push({ type: "error", message: "translate_failed" });
           }
           closed = true;
