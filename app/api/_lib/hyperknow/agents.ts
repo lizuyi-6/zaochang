@@ -261,7 +261,10 @@ export async function planLecture(
         content: `Create a step-by-step whiteboard lecture for: "${topic}"${langNote}${nameNote}${buildLectureContextNote(context)}`,
       },
     ],
-    { jsonMode: true, signal, maxTokens: 8192 },
+    /* maxTokens 16384:混合推理模型先思考后写——细腻化提示词(课程上下文+3-5句旁白
+     * 微结构)显著加长思考链,8192 会被推理耗尽致正文为空(parse 报 Unexpected end
+     * of JSON input→静默降级模板课)。与课程蓝图同一量级取双倍保险。 */
+    { jsonMode: true, signal, maxTokens: 16384 },
   ).catch((error) => {
     // 上游故障留痕后落语言一致的 fallback;不能让中文课程静默变成英文模板课。
     console.warn(
