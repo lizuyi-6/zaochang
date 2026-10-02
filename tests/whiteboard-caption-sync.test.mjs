@@ -901,6 +901,7 @@ test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures 
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Curiosity loop/i, '开场谜题必须在收尾闭环');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Spaced echo/i, '后段快测必须回捞开头内容(间隔回声)');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /NO markdown, bullet characters, or LaTeX in spoken_text/i, '旁白必须纯口语(逐字进 TTS)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /narration language is ABSOLUTE/i, '中文旁白不得混入英文术语(实测模型把 worked/faded/mastery 读进了 TTS)');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /silently verify/i, '必须要求输出前静默自检');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Faded Worked Example/i, '进度结构必须含渐撤例题步');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Synthesis & Closure/i, '进度结构必须含综合收束步');
