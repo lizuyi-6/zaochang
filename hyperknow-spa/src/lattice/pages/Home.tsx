@@ -536,6 +536,60 @@ export const Home = ({ state, set }: PageProps) => {
                     </div>
                   )}
                 </div>
+                <div className="hm-menu-anchor">
+                  <button className="hm-chip" onClick={() => setMenu(menu === 'model' ? 'none' : 'model')}>
+                    <Layers size={15} />
+                    {state.chatModel === 'pro' ? L('LATTICE Pro', '见界 Pro') : L('LATTICE Flash', '见界 Flash')}
+                    <ChevronDown size={13} />
+                  </button>
+                  {menu === 'model' && (
+                    <div className="hk-menu hm-menu hm-menu-up">
+                      {(['flash', 'pro'] as const).map((m) => (
+                        <button
+                          key={m}
+                          className={`hk-menu-item${state.chatModel === m ? ' active' : ''}`}
+                          onClick={() => {
+                            set({ chatModel: m });
+                            setMenu('none');
+                            toast(
+                              m === 'pro'
+                                ? L('LATTICE Pro on — applies to new courses', '见界 Pro 已启用——新课程生效')
+                                : L('LATTICE Flash on — applies to new courses', '见界 Flash 已启用——新课程生效'),
+                            );
+                          }}
+                        >
+                          {m === 'pro' ? (
+                            <>
+                              <span className="cp-model-line">
+                                <span className="cp-model-name">{L('LATTICE Pro', '见界 Pro')}</span>
+                                <span className="cp-model-badge">{L('Launch offer', '限时')}</span>
+                                <span className="cp-model-price">
+                                  <del>5</del> {L('2 cr', '2 积分')}
+                                </span>
+                              </span>
+                              <span className="cp-model-desc">
+                                {L(
+                                  'Deeper reasoning for course content. Thinking takes longer.',
+                                  '课程内容更深推理。思考时间会变长。',
+                                )}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="cp-model-line">
+                                <span className="cp-model-name">{L('LATTICE Flash', '见界 Flash')}</span>
+                                <span className="cp-model-price">{L('2 cr', '2 积分')}</span>
+                              </span>
+                              <span className="cp-model-desc">
+                                {L('Fast course crafting.', '课程打造更快。')}
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="hm-toolbar-right">
                   <span className="hm-cost">
                     <Sparkles size={14} color="#6E6152" />
@@ -675,60 +729,6 @@ export const Home = ({ state, set }: PageProps) => {
                           }}
                         >
                           {L(en, zh)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="hm-menu-anchor">
-                  <button className="hm-chip" onClick={() => setMenu(menu === 'model' ? 'none' : 'model')}>
-                    <Layers size={15} />
-                    {state.chatModel === 'pro' ? L('LATTICE Pro', '见界 Pro') : L('LATTICE Flash', '见界 Flash')}
-                    <ChevronDown size={13} />
-                  </button>
-                  {menu === 'model' && (
-                    <div className="hk-menu hm-menu">
-                      {(['flash', 'pro'] as const).map((m) => (
-                        <button
-                          key={m}
-                          className={`hk-menu-item${state.chatModel === m ? ' active' : ''}`}
-                          onClick={() => {
-                            set({ chatModel: m });
-                            setMenu('none');
-                            toast(
-                              m === 'pro'
-                                ? L('LATTICE Pro on — applies to new courses & replies', '见界 Pro 已启用——新课程与回复生效')
-                                : L('LATTICE Flash on — applies to new courses & replies', '见界 Flash 已启用——新课程与回复生效'),
-                            );
-                          }}
-                        >
-                          {m === 'pro' ? (
-                            <>
-                              <span className="cp-model-line">
-                                <span className="cp-model-name">{L('LATTICE Pro', '见界 Pro')}</span>
-                                <span className="cp-model-badge">{L('Launch offer', '限时')}</span>
-                                <span className="cp-model-price">
-                                  <del>5</del> {L('2 cr', '2 积分')}
-                                </span>
-                              </span>
-                              <span className="cp-model-desc">
-                                {L(
-                                  'Deeper reasoning for course content. Thinking takes longer.',
-                                  '课程内容更深推理。思考时间会变长。',
-                                )}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="cp-model-line">
-                                <span className="cp-model-name">{L('LATTICE Flash', '见界 Flash')}</span>
-                                <span className="cp-model-price">{L('2 cr', '2 积分')}</span>
-                              </span>
-                              <span className="cp-model-desc">
-                                {L('Fast course crafting and replies.', '课程打造与回复都更快。')}
-                              </span>
-                            </>
-                          )}
                         </button>
                       ))}
                     </div>
