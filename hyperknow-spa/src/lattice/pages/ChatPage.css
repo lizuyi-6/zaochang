@@ -463,3 +463,15 @@ h5.cp-markup-heading { font-size: 13.5px; }
 @keyframes cp-typing-bounce { 0%, 100% { transform: none; opacity: 0.35; } 45% { transform: translateY(-4px); opacity: 1; } }
 .cp-typing-label { font-size: 12px; color: var(--ink-600, #8A7B66); margin-left: 4px; }
 @media (prefers-reduced-motion: reduce) { .cp-typing-dot { animation: none; opacity: 0.6; } }
+
+/* 新对话开场欢迎屏 */
+.cp-welcome { display: grid; justify-items: center; text-align: center; padding: 9vh 12px 0; }
+.cp-welcome-title { font-family: var(--font-display, 'EB Garamond', serif); font-size: 24px; font-weight: 600; color: var(--ink-900); margin: 14px 0 6px; }
+.cp-welcome-sub { margin: 0 0 22px; font-size: 13px; line-height: 1.6; color: var(--ink-600); max-width: 460px; }
+.cp-welcome-chips { display: grid; gap: 9px; width: 100%; max-width: 430px; }
+.cp-welcome-chip {
+  border: 1px solid var(--sand-300); border-radius: 12px; background: var(--panel-bg);
+  color: var(--ink-700); cursor: pointer; font-size: 13px; line-height: 1.5;
+  padding: 11px 16px; text-align: left; transition: border-color 0.14s ease, transform 0.14s ease, background 0.14s ease;
+}
+.cp-welcome-chip:hover { border-color: var(--coral-500); background: var(--coral-050); color: var(--ink-900); transform: translateY(-1px); }
