@@ -278,6 +278,8 @@ export async function POST(request: Request) {
                 targetLearner: blueprint.targetLearner,
                 tags: blueprint.tags,
                 units: completedUnits,
+                // brief 随课程持久化:白板讲师据此做深度校准与个性化举例
+                ...(brief ? { brief } : {}),
               };
 
               // 落库持久化完整课程
@@ -768,6 +770,8 @@ export async function POST(request: Request) {
               targetLearner: blueprint.targetLearner,
               tags: blueprint.tags,
               units: generatedUnits,
+              // brief 随课程持久化:白板讲师据此做深度校准与个性化举例
+              ...(brief ? { brief } : {}),
             };
 
             await saveCourse(courseUuid, member.email, course as unknown as Record<string, unknown>, autoLeaseToken!);

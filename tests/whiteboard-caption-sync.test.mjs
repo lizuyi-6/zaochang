@@ -873,17 +873,21 @@ test('Regression 14: liveLessonFromPlan handles intermediate quick_checks with e
   assert.equal(s4.systemEnd, true, '最后一步讲座带有 systemEnd 标志');
 });
 
-test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures (10-14 steps, 2-4 sentence narration), diagram invariant, and answer-gated checks', () => {
-  // 用户反馈"每一讲都讲的很少就结束了"→ 提示词从 5-7 步微讲座升级为 10-14 步完整讲座
+test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures (10-14 steps, 3-5 sentence narration), diagram invariant, and answer-gated checks', () => {
+  // 用户反馈"每一讲都讲的很少就结束了"→ 提示词从 5-7 步微讲座升级为 10-14 步完整讲座;
+  // 用户反馈"讲课不够细腻"→ 旁白升至 3-5 句(承接/讲解/指板/过渡微结构)+ 课程上下文注入
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /10 to 14 steps/i, 'Prompt 必须要求 10-14 步完整讲座');
-  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /2 to 4 crisp, conversational sentences/i, 'Prompt 必须要求每步 2-4 句旁白');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3 to 5 crisp, conversational sentences/i, 'Prompt 必须要求每步 3-5 句旁白');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /COURSE CONTEXT/i, 'Prompt 必须定义课程上下文块(深度校准/个性化举例/前后讲衔接)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /recalls the previous lecture/i, '开场必须承接上一讲');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /hands off to the next lecture/i, '收尾必须预告下一讲');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /FULL-LENGTH lecture/i, '必须定义为完整讲座而非微讲座');
   assert.doesNotMatch(WHITEBOARD_INSTRUCTOR_PROMPT, /micro-lecture|5 to 7 bite-sized|strictly 1 to 2/i, '旧版微讲座要求必须已被移除');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /at least one Mermaid diagram/i, '必须保留 diagram 不变量');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3 quick_check steps/i, '必须保留 3 处 quick_check(含终末)不变量');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Worked Example/i, '必须包含实例演示步');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Common Mistakes/i, '必须包含常见误区步');
-  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3-5 substantive bullet points/i, '卡片必须要求 3-5 条实质要点');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /4-6 substantive bullet points/i, '卡片必须要求 4-6 条实质要点');
 
   // fallbackLecturePlan 保持紧凑(仅上游故障应急路径):5 步 + 阶段快测
   const zhPlan = fallbackLecturePlan('认知心理学');

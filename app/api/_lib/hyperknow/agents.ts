@@ -185,14 +185,69 @@ export async function generateNextSteps(userQuery: string, responseText: string,
 }
 
 // ── Whiteboard Instructor(白板讲师)───────────────────────────────────────
+/** 讲课上下文:课程/单元/讲次全链路信息,让讲师不再"看题讲课"——
+ *  深度按 intake 档位校准、例子贴学员背景、开场承接上一讲、收尾预告下一讲。 */
+export interface LectureCourseContext {
+  courseTitle?: string;
+  courseDescription?: string;
+  targetLearner?: string;
+  brief?: CourseBrief;
+  unitTitle?: string;
+  unitObjectives?: string[];
+  lectureTitle?: string;
+  sessionTitles?: string[];
+  prevLectureTitle?: string;
+  nextLectureTitle?: string;
+  lecturePosition?: string;
+}
+
+function buildLectureContextNote(ctx?: LectureCourseContext): string {
+  if (!ctx) return "";
+  const parts: string[] = [];
+  if (ctx.courseTitle) {
+    parts.push(`Course: "${ctx.courseTitle}"${ctx.courseDescription ? ` — ${ctx.courseDescription}` : ""}`);
+  }
+  if (ctx.targetLearner) parts.push(`Target learner: ${ctx.targetLearner}`);
+  const b = ctx.brief;
+  if (b) {
+    const profile = [
+      b.goal ? `goal=${b.goal}` : "",
+      b.background ? `background=${b.background}` : "",
+      b.depth ? `depth=${b.depth}` : "",
+      b.preference ? `preference=${b.preference}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+    if (profile) parts.push(`Learner intake profile (authoritative for depth & examples): ${profile}`);
+  }
+  if (ctx.unitTitle) {
+    parts.push(
+      `This unit: "${ctx.unitTitle}"${ctx.unitObjectives?.length ? ` (unit objectives: ${ctx.unitObjectives.join("; ")})` : ""}`,
+    );
+  }
+  if (ctx.lectureTitle) {
+    parts.push(
+      `This lecture: "${ctx.lectureTitle}"${ctx.sessionTitles?.length ? ` (sessions: ${ctx.sessionTitles.join("; ")})` : ""}`,
+    );
+  }
+  if (ctx.lecturePosition) {
+    parts.push(
+      `Position in course: lecture ${ctx.lecturePosition}${ctx.prevLectureTitle ? `; previous lecture: "${ctx.prevLectureTitle}" (recall it briefly in the opening)` : ""}${ctx.nextLectureTitle ? `; next lecture: "${ctx.nextLectureTitle}" (tease it in the closing)` : ""}`,
+    );
+  }
+  if (parts.length === 0) return "";
+  return `\n\n## COURSE CONTEXT (authoritative — follow the Course & Learner Context rules for this lecture)\n${parts.join("\n")}`;
+}
+
 export async function planLecture(
   topic: string,
   signal?: AbortSignal,
   learnerName = "",
   language?: string,
+  context?: LectureCourseContext,
 ): Promise<LecturePlan> {
   // 语言规则:优先显式 language,兜底 zh-CN
-  const effLang = resolveEffectiveLanguage(language);
+  const effLang = resolveEffectiveLanguage(language ?? context?.brief?.language);
   const langNote = `\nCRITICAL LANGUAGE REQUIREMENT: The spoken_text, card titles, diagram labels, and quick_check questions MUST be strictly in ${effLang}.`;
   // 学员称呼:旁白里用登录名打招呼/收尾(与前端演示课同一绑定);板书正文不写名字。
   const nameNote = learnerName
@@ -201,7 +256,10 @@ export async function planLecture(
   const jsonStr = await chat(
     [
       { role: "system", content: WHITEBOARD_INSTRUCTOR_PROMPT },
-      { role: "user", content: `Create a step-by-step whiteboard lecture for: "${topic}"${langNote}${nameNote}` },
+      {
+        role: "user",
+        content: `Create a step-by-step whiteboard lecture for: "${topic}"${langNote}${nameNote}${buildLectureContextNote(context)}`,
+      },
     ],
     { jsonMode: true, signal, maxTokens: 8192 },
   ).catch((error) => {
