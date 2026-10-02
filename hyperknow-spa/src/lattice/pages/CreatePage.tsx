@@ -23,12 +23,25 @@ import './CreatePage.css';
 /**
  * 课程创建页(cr-) — 「打造课程」的独立对话式工作台(与即时协助同构:进入单独页,不再弹窗)。
  * 会话结构:用户命题气泡 → 每轮问询一张导师卡(选项 chips + 自定义输入) → 底部操作栏
- * (跳过定制 / 智能追问澄清(≤2轮) / 推荐继续)。推荐继续后仍由全屏 GenerationOverlay
- * 接管真实生成;取消生成即回到本页对话,可继续调整再确认。
+ * (跳过定制 / 智能追问澄清(≤2轮) / 推荐继续)。首轮与追问轮的问询都由 AI 针对主题
+ * 实时出题(等待期思考气泡),表单不预置答案——未作答字段在点「推荐继续」时才采用
+ * AI 推荐值。推荐继续后仍由全屏 GenerationOverlay 接管真实生成;取消生成即回到本页
+ * 对话,可继续调整再确认。
  */
 
-/** 一轮问询(初始推荐一轮;智能追问每成功一次追加一轮) */
+/** 一轮问询(首轮与追问轮都来自 AI 实时出题;模板仅上游故障兜底) */
 type InquiryRound = { questions: InquiryQuestion[]; viaAI: boolean };
+
+/** 问询字段的中文名(自定义输入占位用,不再露出 goal/depth 等原始键) */
+const FIELD_LABELS: Record<string, [string, string]> = {
+  goal: ['learning goal', '学习目标'],
+  background: ['background', '知识基础'],
+  duration: ['time budget', '学习周期'],
+  depth: ['depth', '知识深度'],
+  preference: ['teaching style', '授课偏好'],
+  visual: ['visual style', '板书风格'],
+  language: ['language', '授课语言'],
+};
 
 export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const { t, lng } = useI18n();
@@ -44,6 +57,8 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const [supportOpen, setSupportOpen] = useState(false);
 
   const seededRef = useRef(false);
+  /** 会话代号:重开课程/换命题使在途的 AI 出题响应作废,迟到的响应绝不写进新会话 */
+  const runRef = useRef(0);
   const colEndRef = useRef<HTMLDivElement | null>(null);
   const columnRef = useRef<HTMLDivElement | null>(null);
   const followRef = useRef(true);
@@ -63,17 +78,35 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     if (followRef.current) colEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [rounds, loading, topic]);
 
-  /** 以一条命题开启问询对话:命题成用户气泡,首轮默认问询立即成卡(0ms,不转圈) */
+  /** 以一条命题开启问询对话:命题先成用户气泡,问询由 AI 针对主题实时生成
+   *  (等待期显示思考气泡)。AI 不可达才回退本地标准问询,绝不阻塞开课。 */
   const startWithTopic = (prompt: string) => {
-    const initial = buildDefaultInquiryQuestions(prompt, isZh);
-    const seeded: Record<string, string> = {};
-    for (const q of initial) seeded[q.field] = q.recommended;
+    const run = ++runRef.current;
     setTopic(prompt);
-    setRounds([{ questions: initial, viaAI: false }]);
-    setAnswers(seeded);
+    setRounds([]);
+    setAnswers({});
     setRound(0);
     setFollowUpAllowed(true);
     followRef.current = true;
+    setLoading(true);
+    void (async () => {
+      const res = await fetchCourseInquiry({
+        topic: prompt,
+        brief: { version: 0, language: isZh ? 'zh-CN' : 'en-US' },
+        followUpRound: 0,
+        model: state.chatModel,
+        timeoutMs: 20000,
+      });
+      if (runRef.current !== run) return; // 会话已被重开,响应作废
+      if (res && res.questions && res.questions.length > 0) {
+        setRounds([{ questions: res.questions, viaAI: true }]);
+        setFollowUpAllowed(res.followUpAllowed);
+      } else {
+        setRounds([{ questions: buildDefaultInquiryQuestions(prompt, isZh), viaAI: false }]);
+        toast(L('AI intake is unavailable right now — using the standard questionnaire.', 'AI 实时出题暂时不可用，已改用标准问询。'));
+      }
+      setLoading(false);
+    })();
   };
 
   /* 首页「打造课程」带进来的命题:进场即播种,随后清空传输字段(刷新/重进不再复读旧命题) */
@@ -87,25 +120,31 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 确认定制 → 交棒全屏课程工坊(真实生成)。与原弹窗逻辑逐字段一致。 */
+  /** 确认定制 → 交棒全屏课程工坊(真实生成)。未作答的字段此刻才采用 AI 推荐值
+   *  (表单本身不预置,用户作答过的字段永远以用户为准)。 */
   const confirmGeneration = () => {
     if (!topic.trim()) return;
+    const merged: Record<string, string> = { ...answers };
+    for (const r of rounds) for (const q of r.questions) {
+      if (!merged[q.field] || !merged[q.field].trim()) merged[q.field] = q.recommended;
+    }
     const finalBrief: CourseBriefParams = {
       version: round + 1,
-      goal: answers.goal,
-      background: answers.background,
-      duration: answers.duration,
-      depth: normalizeDepth(answers.depth),
-      preference: answers.preference,
-      language: answers.language || (isZh ? 'zh-CN' : 'en-US'),
-      visual: answers.visual || 'Hand-drawn whiteboard diagrams & cards',
+      goal: merged.goal,
+      background: merged.background,
+      duration: merged.duration,
+      depth: normalizeDepth(merged.depth),
+      preference: merged.preference,
+      language: merged.language || (isZh ? 'zh-CN' : 'en-US'),
+      visual: merged.visual || 'Hand-drawn whiteboard diagrams & cards',
     };
     set({ generating: true, genQuery: topic, courseBrief: finalBrief, generated: null });
   };
 
-  /** 智能追问澄清(≤2 轮):成功则把新问题追加为新的一张导师卡 */
+  /** 智能追问澄清(≤2 轮):AI 基于已答内容实时出 1-2 个新问题,追加为新的一张导师卡 */
   const handleSmartFollowUp = async () => {
     if (round >= 2 || !followUpAllowed || loading) return;
+    const run = runRef.current;
     setLoading(true);
     try {
       const res = await fetchCourseInquiry({
@@ -113,29 +152,29 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
         brief: { version: round + 1, ...answers },
         answers,
         followUpRound: round + 1,
+        model: state.chatModel,
+        timeoutMs: 20000,
       });
+      if (runRef.current !== run) return;
       if (res && res.questions && res.questions.length > 0) {
         setRounds((r) => [...r, { questions: res.questions, viaAI: true }]);
         setFollowUpAllowed(res.followUpAllowed);
         setRound((v) => v + 1);
-        setAnswers((prev) => {
-          const next = { ...prev };
-          for (const q of res.questions) if (!next[q.field]) next[q.field] = q.recommended;
-          return next;
-        });
       } else {
         setFollowUpAllowed(false);
         toast(L('Current recommendations are fully calibrated.', '当前问询已对齐最佳配置'));
       }
     } catch {
+      if (runRef.current !== run) return;
       setFollowUpAllowed(false);
     } finally {
       setLoading(false);
     }
   };
 
-  /** 页内重新开始:清空对话回到命题输入(换一门课,不回首页) */
+  /** 页内重新开始:清空对话回到命题输入(换一门课,不回首页);作废在途 AI 出题 */
   const restart = () => {
+    runRef.current += 1;
     setTopic('');
     setRounds([]);
     setAnswers({});
@@ -262,7 +301,10 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
                         <input
                           type="text"
                           className="cr-q-input"
-                          placeholder={L(`Custom ${String(q.field)} (or pick above)`, `自定义${String(q.field)}（或点击上方选项）`)}
+                          placeholder={L(
+                            `Custom ${FIELD_LABELS[q.field]?.[0] ?? String(q.field)} (or pick above)`,
+                            `自定义${FIELD_LABELS[q.field]?.[1] ?? String(q.field)}（或点击上方选项）`,
+                          )}
                           value={answers[q.field] ?? ''}
                           onChange={(e) => setAnswers((prev) => ({ ...prev, [q.field]: e.target.value }))}
                         />
@@ -273,7 +315,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
               </div>
             ))}
 
-            {/* 追问生成中的思考气泡:等待可见,不再是死按钮 */}
+            {/* 追问/首轮出题中的思考气泡:等待可见,不再是死按钮 */}
             {loading && (
               <div className="cr-bubble-row">
                 <div className="cr-bubble">
@@ -282,7 +324,9 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
                     <span className="cr-typing-dot" />
                     <span className="cr-typing-dot" />
                     <span className="cr-typing-label">
-                      {L('Tailoring follow-up questions…', '正在生成追问…')}
+                      {rounds.length === 0
+                        ? L('Tailoring questions to your topic…', '正在针对你的主题实时出题…')
+                        : L('Tailoring follow-up questions…', '正在生成追问…')}
                     </span>
                   </span>
                 </div>
@@ -324,7 +368,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
               <button type="button" className="cr-ghost-btn" onClick={confirmGeneration}>
                 {L('Skip (Use Defaults)', '跳过定制 (直接生成)')}
               </button>
-              {followUpAllowed && round < 2 && (
+              {rounds.length > 0 && followUpAllowed && round < 2 && (
                 <button
                   type="button"
                   className="cr-followup-btn"
@@ -341,10 +385,12 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
                 <Sparkles size={14} />
                 10
               </span>
-              <DarkPill style={{ height: 38, padding: '0 18px', fontWeight: 600 }} onClick={confirmGeneration}>
-                <Check size={14} style={{ marginRight: 6 }} />
-                {L('Continue with Recommended', '推荐继续')}
-              </DarkPill>
+              {rounds.length > 0 && (
+                <DarkPill style={{ height: 38, padding: '0 18px', fontWeight: 600 }} onClick={confirmGeneration}>
+                  <Check size={14} style={{ marginRight: 6 }} />
+                  {L('Continue with Recommended', '推荐继续')}
+                </DarkPill>
+              )}
             </div>
           </div>
         )}

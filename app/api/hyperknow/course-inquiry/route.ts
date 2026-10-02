@@ -2,6 +2,7 @@ import { requireMember } from "../../_lib/access-control";
 import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
+import { generateCourseInquiryQuestions, resolveChatModel } from "../../_lib/hyperknow/agents";
 import type { CourseBrief } from "../../_lib/hyperknow/protocol";
 
 export const dynamic = "force-dynamic";
@@ -147,6 +148,60 @@ export function generateDefaultInquiries(topic: string, currentBrief?: CourseBri
   ];
 }
 
+/** 追问轮模板兜底 (仅在 AI 实时出题失败时使用;中英双语自适应) */
+function fallbackFollowUpQuestions(topic: string, currentBrief?: CourseBrief): InquiryQuestion[] {
+  const isZh = (currentBrief?.language?.toLowerCase().startsWith("zh") ?? false) || /[\u4e00-\u9fa5]/.test(topic);
+  return isZh
+    ? [
+        {
+          id: "focus_area",
+          field: "preference",
+          prompt: `针对《${topic}》，你更希望最终能交付实战大作业，还是吃透严谨的理论概念？`,
+          recommended: "可用于作品集展示的生产级实战项目",
+          options: [
+            "可用于作品集展示的生产级实战项目",
+            "严谨的理论分类与定理推导",
+            "核心高频踩坑点与工程排错指南",
+          ],
+        },
+        {
+          id: "visual_style",
+          field: "visual",
+          prompt: "在白板讲解过程中，你偏好高密度的架构图表还是精炼的概念卡片？",
+          recommended: "包含逐步展开的高密度架构图表",
+          options: [
+            "包含逐步展开的高密度架构图表",
+            "精炼的概念卡片与公式推导",
+            "极简核心要点与直观示意图",
+          ],
+        },
+      ]
+    : [
+        {
+          id: "focus_area",
+          field: "preference",
+          prompt: `For "${topic}", would you like to focus on specific capstone deliverables or formal conceptual frameworks?`,
+          recommended: "Portfolio-ready capstone deliverable",
+          options: [
+            "Portfolio-ready capstone deliverable",
+            "Rigorous conceptual taxonomy & derivations",
+            "Fast troubleshooting & real-world war stories",
+          ],
+        },
+        {
+          id: "visual_style",
+          field: "visual",
+          prompt: "Do you prefer high-density technical diagrams or conceptual card outlines on the whiteboard?",
+          recommended: "High-density technical diagrams with step-by-step reveals",
+          options: [
+            "High-density technical diagrams with step-by-step reveals",
+            "Conceptual cards and formula derivations",
+            "Minimalist key takeaways with illustrated concepts",
+          ],
+        },
+      ];
+}
+
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
@@ -160,6 +215,7 @@ export async function POST(request: Request) {
       brief?: CourseBrief;
       answers?: Record<string, string>;
       followUpRound?: unknown;
+      model?: unknown;
     };
 
     const topic = typeof input.topic === "string" ? input.topic.trim().slice(0, 300) : "";
@@ -186,60 +242,22 @@ export async function POST(request: Request) {
     // 最多 2 轮智能追问限制 (round 0 允许追问第 1 轮，round 1 允许追问第 2 轮，>=2 截止)
     const followUpAllowed = currentRound < 2;
 
-    let questions = generateDefaultInquiries(topic, updatedBrief);
-
-    // 如果已经是追问轮次，针对性生成 1-2 个深化/澄清追问 (中英双语自适应)
-    if (currentRound === 1) {
-      const isZh = (updatedBrief.language?.toLowerCase().startsWith("zh") ?? false) || /[\u4e00-\u9fa5]/.test(topic);
-      questions = isZh
-        ? [
-            {
-              id: "focus_area",
-              field: "preference",
-              prompt: `针对《${topic}》，你更希望最终能交付实战大作业，还是吃透严谨的理论概念？`,
-              recommended: "可用于作品集展示的生产级实战项目",
-              options: [
-                "可用于作品集展示的生产级实战项目",
-                "严谨的理论分类与定理推导",
-                "核心高频踩坑点与工程排错指南",
-              ],
-            },
-            {
-              id: "visual_style",
-              field: "visual",
-              prompt: "在白板讲解过程中，你偏好高密度的架构图表还是精炼的概念卡片？",
-              recommended: "包含逐步展开的高密度架构图表",
-              options: [
-                "包含逐步展开的高密度架构图表",
-                "精炼的概念卡片与公式推导",
-                "极简核心要点与直观示意图",
-              ],
-            },
-          ]
-        : [
-            {
-              id: "focus_area",
-              field: "preference",
-              prompt: `For "${topic}", would you like to focus on specific capstone deliverables or formal conceptual frameworks?`,
-              recommended: "Portfolio-ready capstone deliverable",
-              options: [
-                "Portfolio-ready capstone deliverable",
-                "Rigorous conceptual taxonomy & derivations",
-                "Fast troubleshooting & real-world war stories",
-              ],
-            },
-            {
-              id: "visual_style",
-              field: "visual",
-              prompt: "Do you prefer high-density technical diagrams or conceptual card outlines on the whiteboard?",
-              recommended: "High-density technical diagrams with step-by-step reveals",
-              options: [
-                "High-density technical diagrams with step-by-step reveals",
-                "Conceptual cards and formula derivations",
-                "Minimalist key takeaways with illustrated concepts",
-              ],
-            },
-          ];
+    // 首轮与追问轮一律 AI 实时出题(题干与选项贴合主题);上游故障才降级模板兜底。
+    let questions: InquiryQuestion[];
+    try {
+      const drafts = await generateCourseInquiryQuestions(topic, {
+        round: currentRound,
+        brief: updatedBrief,
+        answers,
+        model: resolveChatModel(input.model),
+      });
+      questions = drafts as InquiryQuestion[];
+    } catch (error) {
+      console.warn(
+        "[hyperknow] course-inquiry AI generation failed, falling back to templates:",
+        error instanceof Error ? error.message : error,
+      );
+      questions = currentRound === 1 ? fallbackFollowUpQuestions(topic, updatedBrief) : generateDefaultInquiries(topic, updatedBrief);
     }
 
     return Response.json({
