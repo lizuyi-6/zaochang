@@ -18,6 +18,7 @@ import {
   X,
   FileText,
   RefreshCw,
+  SquarePen,
 } from 'lucide-react';
 import type { PageProps } from '../types';
 import { chatUserMessage } from '../data';
@@ -67,6 +68,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   const seededRef = useRef(false);
   const colEndRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   /** 本屏绑定的后端会话(从历史打开 → 预置;新发消息 → conversation_created 回填) */
   const convIdRef = useRef<string | null>(null);
   const conversationsRef = useRef(state.conversations);
@@ -348,6 +350,21 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
 
   const translateTargets = LANGUAGES.filter((l) => l.code !== 'en');
 
+  /** 页内新开对话:中断在途流、清空本地消息与会话绑定,回到开场欢迎屏。 */
+  const startNewConversation = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    convIdRef.current = null;
+    setStreaming(false);
+    setMsgs([]);
+    setTranslations({});
+    setFeedback({});
+    setSpeakingIdx(null);
+    setInput('');
+    followRef.current = true;
+    if (state.activeConversationId) set({ activeConversationId: null });
+  };
+
   return (
   <div className="hk-page cp-page">
     {/* covers the global shell header, which the real product hides on this screen */}
@@ -395,6 +412,58 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
 
     {/* conversation column */}
     <div className="cp-column" ref={columnRef}>
+      {/* 新对话开场欢迎屏:登录用户空态显示——问候 + 可点建议(填入输入框),
+       * 替代此前"一片空白难判是否新对话"的观感;离线演示态仍走下方演示交换。 */}
+      {msgs.length === 0 && !streaming && !showDemoExchange && (
+        <div className="cp-welcome">
+          <AvatarCat size={64} ring />
+          <h2 className="cp-welcome-title">
+            {state.identity?.username
+              ? L(`Hi ${state.identity.username}, I'm Lattice.`, `你好，${state.identity.username}！我是见界。`)
+              : L("Hi, I'm Lattice.", '你好，我是见界。')}
+          </h2>
+          <p className="cp-welcome-sub">
+            {L(
+              'Your personal tutor for anything — ask a question, paste notes, or pick a starter below.',
+              '你的私人学习导师——直接提问、粘贴笔记，或从下面的 starters 开始。',
+            )}
+          </p>
+          <div className="cp-welcome-chips">
+            {(
+              [
+                [
+                  'Teach me a concept I choose, step by step, with a diagram.',
+                  '一步步给我讲透一个概念，并配上图示。',
+                ],
+                [
+                  'Turn a piece of news I paste into a mini interactive lesson.',
+                  '把我贴进来的一则新闻变成一节互动小课。',
+                ],
+                [
+                  'Help me review a topic before an exam — key points first.',
+                  '帮我考前复习一个主题——先抓重点。',
+                ],
+                [
+                  'Quiz me with 5 questions on any topic and grade me.',
+                  '就任意主题出 5 道题考我，并给我打分。',
+                ],
+              ] as const
+            ).map(([en, zh]) => (
+              <button
+                key={en}
+                type="button"
+                className="cp-welcome-chip"
+                onClick={() => {
+                  setInput(L(en, zh));
+                  inputRef.current?.focus();
+                }}
+              >
+                {L(en, zh)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {showDemoExchange && (
         <>
           <div className="cp-bubble-row">
@@ -613,6 +682,14 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         <button
           className="cp-icon"
           type="button"
+          title={L('New conversation', '新对话')}
+          onClick={startNewConversation}
+        >
+          <SquarePen size={16} />
+        </button>
+        <button
+          className="cp-icon"
+          type="button"
           title={L('Past conversations', '历史会话')}
           onClick={() => set({ screen: 'history' })}
         >
@@ -666,6 +743,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           <AudioWaveform size={16} />
         </button>
         <input
+          ref={inputRef}
           className="cp-input"
           type="text"
           value={input}
