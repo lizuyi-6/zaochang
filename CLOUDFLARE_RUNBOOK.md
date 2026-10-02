@@ -101,6 +101,7 @@ ZAOCHANG_AGENT_TOKEN(可选;admin API 机器通道,见 §6)
 - **禁止**把 `LOCAL_DEV_LOGIN` 配进生产/staging secrets:它是本地模拟登录(`/api/auth/dev-login`)的开关,生产侧由 `APP_ENV=production` 无条件 404 兜底(双 fail-closed,见 `app/api/_lib/dev-login-gate.ts`),不要给第二道门留例外。
 
 - **唯一权威来源** = 盒子 `/etc/zaochang/zaochang.env`(app secrets)+ `/etc/zaochang/scanner.env`(`SCANNER_TOKEN`)。
+- ⚠️ **已知漂移(2026-10-02 实测)**:`ZAOCHANG_AGENT_TOKEN` 盒子值 ≠ 线上 secret——secret 名确已部署(wrangler secret list),但盒子值作 Bearer 打 `/api/admin/capabilities` 得 401 `auth_required`(agent 身份未识别→回落人类会话→无会话),盒子值作 HMAC key 本地签视觉入场票打 `/enter` 得 403 `bad_signature`(密钥级比对,两路证据独立)。盒子 env mtime=2026-08-23(与该 token 进代码 08-10/触碰 08-23 吻合,当时两边应同步);漂移在其后产生(10-01 机器通道/视觉票上线时 `wrangler secret put` 未回写盒子,或最初 put 带尾随换行)。**在漂移修复前,盒子 env 对此变量不是权威副本;也不要用盒子值"恢复"线上 secret(会打挂 10-01 起依赖现值的验收/机器通道)。** 修复 = 轮换:生成新值→`wrangler secret put`→同值回写盒子 env。
 - **`UPLOAD_SCANNER_TOKEN` 必须 == 盒子的 `SCANNER_TOKEN`**(扫描器 Bearer 鉴权;不等 → 上传 401/503)。
 - **AI_CHAT_\* 三件(阅读页「问 AI」)**:OpenAI 兼容 chat-completions 上游(DeepSeek/OpenRouter/Moonshot 等)。
   `AI_CHAT_BASE_URL` 需含版本段(如 `https://api.deepseek.com/v1`,路由在其后拼 `/chat/completions`);
