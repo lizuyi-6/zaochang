@@ -197,7 +197,8 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
                   className="btn primary"
                   style={{ padding: '6px 14px', fontSize: 12, borderRadius: 6, flexShrink: 0 }}
                   onClick={() =>
-                    set({ generating: true, genQuery: state.genResume!.query, genResumeUuid: state.genResume!.uuid, genResume: null })
+                    /* 生成已并入课程创建页(代理活动流):路由过去由其接管检查点恢复 */
+                    set({ screen: 'create', generating: true, genQuery: state.genResume!.query, genResumeUuid: state.genResume!.uuid, genResume: null })
                   }
                 >
                   {L('Resume generation', '继续生成')}

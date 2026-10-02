@@ -8,7 +8,6 @@ import { SignIn } from './lattice/pages/SignIn';
 import { Onboarding } from './lattice/pages/Onboarding';
 import { Home } from './lattice/pages/Home';
 import { I18nProvider } from './lattice/i18n';
-import { GenerationOverlay } from './lattice/GenerationOverlay';
 import { ToastHost } from './lattice/toast';
 import { courseFromBackend } from './lattice/generate';
 import { fetchConversations, fetchCourseDetail, fetchMarketCourses, fetchMe } from './lattice/backend';
@@ -361,7 +360,6 @@ export const App: React.FC = () => {
         </React.Suspense>
 
         {state.settingsOpen && <SettingsModal state={state} set={set} />}
-        {state.generating && <GenerationOverlay state={state} set={set} />}
 
         {veil !== 'idle' && (
           <div className={`app-veil${veil === 'fade' ? ' fade' : ''}`} onAnimationEnd={() => veil === 'fade' && setVeil('idle')} />
