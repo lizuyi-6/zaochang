@@ -3,7 +3,7 @@
 // LLM 编排。原版四个类是无状态单例、只依赖 llmService——Workers 版保持无状态,
 // 会话历史由路由层从 D1 读出再传入(原版的连接级内存 history 数组随 WS 一起退役)。
 
-import { chat, streamChat, type LlmMessage } from "./llm";
+import { chat, streamChat, streamChatOpenAI, type LlmMessage } from "./llm";
 import {
   CONTENT_GENERATOR_SYSTEM_PROMPT,
   chatIdentityPrompt,
@@ -435,7 +435,7 @@ export async function* translateStream(
       : baseMessages;
     let sawText = false;
     try {
-      for await (const chunk of streamChat(messages, { signal, maxTokens: 2048 })) {
+      for await (const chunk of streamChatOpenAI(messages, { signal, maxTokens: 8192 })) {
         if (chunk.type === "text") {
           partial += chunk.text;
           sawText = true;

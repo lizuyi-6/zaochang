@@ -50,7 +50,7 @@ function messagesEndpoint(baseUrl: string): string {
   return baseUrl.endsWith("/messages") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/messages`;
 }
 
-function chatCompletionsEndpoint(baseUrl: string): string {
+export function chatCompletionsEndpoint(baseUrl: string): string {
   if (baseUrl.includes("/chat/completions")) return baseUrl;
   const base = baseUrl.replace(/\/messages\/?$/, "").replace(/\/+$/, "");
   return `${base}/chat/completions`;
@@ -184,6 +184,38 @@ export async function* streamChat(messages: LlmMessage[], options: ChatOptions =
     yield* consumeMessagesSse(response.body!, options.signal);
     return;
   }
+  try {
+    response = await fetch(chatCompletionsEndpoint(config.baseUrl), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: targetModel, messages, max_tokens: options.maxTokens || 8192, stream: true }),
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    throw new HyperknowUpstreamError("ai_upstream_error", 503);
+  }
+  if (!response.ok || !response.body) {
+    await response.body?.cancel().catch(() => {});
+    if (response.status === 401 || response.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
+    if (response.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
+    throw new HyperknowUpstreamError("ai_upstream_error", 503);
+  }
+  yield* consumeChatCompletionsSse(response.body, options.signal);
+}
+
+/**
+ * 强制 OpenAI chat/completions 协议的流式调用。
+ * /messages 与 /chat/completions 在上游前置策略上行为不同(2026-10-02 实测:
+ * Worker 出口 IP 下长 CJK body 走 /messages 会被秒断流,同 body 走
+ * /chat/completions 正常)——翻译等长文本场景强制走此协议。
+ */
+export async function* streamChatOpenAI(messages: LlmMessage[], options: ChatOptions = {}): AsyncGenerator<StreamChunk> {
+  const config = resolveConfigOrThrow();
+  options.signal?.throwIfAborted();
+  const primaryModel = options.model || config.model;
+  const targetModel = primaryModel === "step-explore" ? "step-3.7-flash" : primaryModel;
+  let response: Response;
   try {
     response = await fetch(chatCompletionsEndpoint(config.baseUrl), {
       method: "POST",
