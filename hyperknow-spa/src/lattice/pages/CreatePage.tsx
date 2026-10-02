@@ -238,6 +238,25 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     if (blueprintUuidRef.current) set({ genResume: { uuid: blueprintUuidRef.current, query: topic } });
   };
 
+  /** 底部条「取消生成」:中断在途请求但保留对话 feed,就地给出检查点恢复/重新定制 */
+  const cancelToFeed = () => {
+    if (phase !== 'generating' || ready || genFailed || insufficient || cancelled) {
+      abandonAll();
+      return;
+    }
+    finishedRef.current = true;
+    inGenRef.current = false;
+    stage1CtrlRef.current?.abort();
+    stage2CtrlRef.current?.abort();
+    if (finishTimerRef.current !== null) {
+      window.clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = null;
+    }
+    set({ generating: false });
+    registerCheckpoint();
+    setCancelled(true);
+  };
+
   /** 整页放弃:问询中=直接回空态;生成中=先中断再回空态 */
   const abandonAll = () => {
     if (phase === 'generating' && !ready && !genFailed && !insufficient && !cancelled) {
@@ -929,7 +948,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
           )}
           <div className="cr-bottombar-row">
             <span className="cr-bb-spacer" />
-            <button type="button" className="cr-cancel" onClick={abandonAll}>
+            <button type="button" className="cr-cancel" onClick={cancelToFeed}>
               <Square size={11} fill="currentColor" />
               {phase === 'generating' ? L('Cancel generation', '取消生成') : L('Cancel intake', '取消定制')}
             </button>
