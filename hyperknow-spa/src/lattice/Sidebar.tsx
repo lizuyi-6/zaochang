@@ -253,7 +253,7 @@ export const LatticeSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
           onClick={() => { closeMobile(); setWhatsNewOpen(true); }}
         >
           <Sparkles size={12} />
-          <span>{t('whatsNew.triggerLabel', { version: '2.0.0' })}</span>
+          <span>{t('whatsNew.triggerLabel', { version: '2.1.0' })}</span>
         </button>
       </div>
 
