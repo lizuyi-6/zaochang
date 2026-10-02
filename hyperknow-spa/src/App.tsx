@@ -14,6 +14,7 @@ import { courseFromBackend } from './lattice/generate';
 import { fetchConversations, fetchCourseDetail, fetchMarketCourses, fetchMe } from './lattice/backend';
 import { toast } from './lattice/toast';
 import { L } from './lattice/i18n/content';
+import { ProLaunchModal, markProLaunchSeen, proLaunchSeen } from './lattice/ProLaunchModal';
 import './lattice/shell.css';
 
 /* 次级页面按需加载:登录/引导/首页保持同步(首屏体验),重页面(白板/聊天/课程等)
@@ -120,6 +121,31 @@ type Veil = 'idle' | 'cover' | 'fade';
 export const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => ({ ...initialAppState, ...stateFromHash() }));
   const [veil, setVeil] = useState<Veil>('idle');
+  /* 见界 Pro 上线宣布:每账户一次性(电子邮箱 key),首页身份落定后延迟出现,
+   * 避开欢迎回来接管层与首屏渲染。任何关闭路径都记「已看过」。 */
+  const [proLaunchOpen, setProLaunchOpen] = useState(false);
+  const proLaunchTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!state.bootReady || state.screen !== 'home' || !state.identity?.email) return;
+    const email = state.identity.email;
+    if (proLaunchSeen(email)) return;
+    if (proLaunchTimerRef.current !== null) return;
+    proLaunchTimerRef.current = window.setTimeout(() => {
+      proLaunchTimerRef.current = null;
+      if (proLaunchSeen(email)) return;
+      setProLaunchOpen(true);
+    }, 1400);
+    return () => {
+      if (proLaunchTimerRef.current !== null) {
+        window.clearTimeout(proLaunchTimerRef.current);
+        proLaunchTimerRef.current = null;
+      }
+    };
+  }, [state.bootReady, state.screen, state.identity?.email]);
+  const closeProLaunch = () => {
+    if (state.identity?.email) markProLaunchSeen(state.identity.email);
+    setProLaunchOpen(false);
+  };
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -296,6 +322,18 @@ export const App: React.FC = () => {
 
         {shell && <LatticeSidebar state={state} set={set} />}
         {shell && <LatticeHeader state={state} set={set} />}
+
+        {proLaunchOpen && (
+          <ProLaunchModal
+            onClose={closeProLaunch}
+            onTryPro={() => {
+              if (state.identity?.email) markProLaunchSeen(state.identity.email);
+              setProLaunchOpen(false);
+              set({ chatModel: 'pro', screen: 'chat' });
+              toast(L('LATTICE Pro on — applies to new replies', '见界 Pro 已启用——下一条回复生效'));
+            }}
+          />
+        )}
 
         {s === 'signin' && <SignIn state={state} set={set} />}
         {s === 'onboarding' && <Onboarding state={state} set={set} />}
