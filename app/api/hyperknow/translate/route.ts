@@ -3,7 +3,8 @@ import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { resolveConfigOrThrow } from "../../_lib/hyperknow/config";
-import { streamChat, HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/hyperknow/llm";
+import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/hyperknow/llm";
+import { translateStream } from "../../_lib/hyperknow/agents";
 import { consumeCredits, currentCredits, HK_CHAT_COST, HK_DAILY_CREDITS } from "../../_lib/hyperknow/credits";
 
 export const dynamic = "force-dynamic";
@@ -62,18 +63,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const generator = streamChat(
-      [
-        {
-          role: "system",
-          content:
-            `You are a precise translator. Translate the user's message into ${TARGET_LANGUAGES[target]}. ` +
-            "Preserve markdown structure, code blocks, LaTeX, and links exactly as they appear. " +
-            "Output ONLY the translation — no notes, no quotes, no preamble.",
-        },
-        { role: "user", content: text },
-      ],
-      { maxTokens: 2048, signal: AbortSignal.any([request.signal, AbortSignal.timeout(120_000)]) },
+    const generator = translateStream(
+      text,
+      TARGET_LANGUAGES[target],
+      AbortSignal.any([request.signal, AbortSignal.timeout(240_000)]),
     );
 
     // 预取首个增量:上游在发流前失败时仍能回干净 JSON。

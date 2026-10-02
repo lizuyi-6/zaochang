@@ -403,3 +403,57 @@ export async function generateUnitDetails(
   }
   return unit;
 }
+
+// ── 翻译流(带断流自愈)──────────────────────────────────────────────────────
+// 与 contentGenerateStream 同一套韧性:上游 step_plan 对长生成会掐流,
+// 未出字整体静默重试 ≤2 次;正文已出用 assistant 预填 + 接续指令续流 ≤2 次;
+// 客户端断开永不重试。翻译不吃 thinking 预算,长文也能在自愈窗口内跑完。
+const TRANSLATE_CONTINUE_INSTRUCTION =
+  "Continue exactly where you left off above. Do NOT repeat any content you have already translated; resume mid-sentence if needed.";
+
+export async function* translateStream(
+  text: string,
+  targetLanguage: string,
+  signal?: AbortSignal,
+): AsyncGenerator<StreamChunk> {
+  const baseMessages: LlmMessage[] = [
+    {
+      role: "system",
+      content:
+        `You are a precise translator. Translate the user's message into ${targetLanguage}. ` +
+        "Preserve markdown structure, code blocks, LaTeX, and links exactly as they appear. " +
+        "Output ONLY the translation — no notes, no quotes, no preamble.",
+    },
+    { role: "user", content: text },
+  ];
+  let partial = "";
+  let freshRetries = 0;
+  let continuations = 0;
+  for (;;) {
+    const messages: LlmMessage[] = partial
+      ? [...baseMessages, { role: "assistant", content: partial }, { role: "user", content: TRANSLATE_CONTINUE_INSTRUCTION }]
+      : baseMessages;
+    let sawText = false;
+    try {
+      for await (const chunk of streamChat(messages, { signal, maxTokens: 2048 })) {
+        if (chunk.type === "text") {
+          partial += chunk.text;
+          sawText = true;
+        }
+        yield chunk;
+      }
+      return;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      if (!sawText && freshRetries < 2) {
+        freshRetries += 1;
+        continue;
+      }
+      if (sawText && continuations < 2) {
+        continuations += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
+}
