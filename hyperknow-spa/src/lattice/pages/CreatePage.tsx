@@ -375,10 +375,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
             if (uuid) updateBlueprintUuid(uuid);
             const allIds = bp.units?.map((u) => u.unitId).filter(Boolean) as string[] | undefined;
             if (allIds) setSelectedUnits(allIds);
-            if (reqConfirm) {
-              setWaiting(true);
-              setPanelOpen(true);
-            }
+            if (reqConfirm) setWaiting(true);
           },
           onRemaining: (remaining) => {
             if (runRef.current !== run) return;
@@ -394,7 +391,6 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
         if ('requiresConfirmation' in result && result.requiresConfirmation) {
           setWaiting(true);
           setStepStatus((s) => ({ ...s, generating_initial_syllabus: 'completed' }));
-          setPanelOpen(true);
         } else if ('course' in result) {
           setReady(true);
           const gen = courseFromBackend(result.course, query);
