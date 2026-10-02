@@ -99,7 +99,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
       });
       if (runRef.current !== run) return; // 会话已被重开,响应作废
       if (res && res.questions && res.questions.length > 0) {
-        setRounds([{ questions: res.questions, viaAI: true }]);
+        setRounds([{ questions: res.questions, viaAI: res.source !== 'template' }]);
         setFollowUpAllowed(res.followUpAllowed);
       } else {
         setRounds([{ questions: buildDefaultInquiryQuestions(prompt, isZh), viaAI: false }]);
@@ -157,7 +157,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
       });
       if (runRef.current !== run) return;
       if (res && res.questions && res.questions.length > 0) {
-        setRounds((r) => [...r, { questions: res.questions, viaAI: true }]);
+        setRounds((r) => [...r, { questions: res.questions, viaAI: res.source !== 'template' }]);
         setFollowUpAllowed(res.followUpAllowed);
         setRound((v) => v + 1);
       } else {
