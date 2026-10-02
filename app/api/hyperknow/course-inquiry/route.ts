@@ -20,6 +20,8 @@ export interface InquiryResponse {
   questions: InquiryQuestion[];
   followUpAllowed: boolean;
   followUpRound: number;
+  /** questions 来源:ai=模型实时出题;template=上游故障降级模板(前端不得标 AI) */
+  source: "ai" | "template";
 }
 
 // 推荐问询模版: 3-5 问询推荐继续，必要时最多 2 次智能追问 (中英双语自适应)
@@ -244,6 +246,7 @@ export async function POST(request: Request) {
 
     // 首轮与追问轮一律 AI 实时出题(题干与选项贴合主题);上游故障才降级模板兜底。
     let questions: InquiryQuestion[];
+    let source: "ai" | "template" = "ai";
     try {
       const drafts = await generateCourseInquiryQuestions(topic, {
         round: currentRound,
@@ -257,6 +260,7 @@ export async function POST(request: Request) {
         "[hyperknow] course-inquiry AI generation failed, falling back to templates:",
         error instanceof Error ? error.message : error,
       );
+      source = "template";
       questions = currentRound === 1 ? fallbackFollowUpQuestions(topic, updatedBrief) : generateDefaultInquiries(topic, updatedBrief);
     }
 
@@ -265,6 +269,7 @@ export async function POST(request: Request) {
       questions,
       followUpAllowed,
       followUpRound: currentRound,
+      source,
     });
   } catch (error) {
     return jsonError(error);

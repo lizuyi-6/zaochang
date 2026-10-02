@@ -104,6 +104,8 @@ export interface InquiryResult {
   questions: InquiryQuestion[];
   followUpAllowed: boolean;
   followUpRound: number;
+  /** questions 来源:ai=模型实时出题;template=上游故障降级(不得标 AI) */
+  source?: "ai" | "template";
 }
 
 /** 课程前置问询(AI 实时出题,首轮与追问轮同源;LLM 生成需要时间,超时按调用方传入放宽) */
