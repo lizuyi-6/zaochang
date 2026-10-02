@@ -1,7 +1,7 @@
 import type { InquiryQuestion } from './backend';
 
-/** 0ms 瞬间生成初始推荐问询，默认全中文友好，绝不转圈卡顿。
- *  (原在 Home.tsx;问询改为独立课程创建页后迁至此共享。) */
+/** 本地标准问询模板 — 仅作 AI 实时出题不可达时的兜底(正常路径一律后端 AI 出题,
+ *  题干与选项贴合主题)。 */
 export function buildDefaultInquiryQuestions(prompt: string, isZh: boolean): InquiryQuestion[] {
   const isCodeOrTech = /(vue|react|angular|svelte|next|nuxt|vite|webpack|typescript|javascript|python|rust|golang|go|java|c\+\+|linux|docker|k8s|ai|llm|deep learning|machine learning|code|api|web|algorithm|database|微积分|物理|数学|代码|编程|算法)/i.test(prompt);
 

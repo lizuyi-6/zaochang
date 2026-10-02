@@ -106,15 +106,19 @@ export interface InquiryResult {
   followUpRound: number;
 }
 
-/** 课程前置问询与最多 2 轮智能追问 (带 5s 严格超时防卡死) */
+/** 课程前置问询(AI 实时出题,首轮与追问轮同源;LLM 生成需要时间,超时按调用方传入放宽) */
 export async function fetchCourseInquiry(args: {
   topic: string;
   brief?: CourseBriefParams;
   answers?: Record<string, string>;
   followUpRound?: number;
+  /** 对话模型:flash(默认)/pro,后端据此选上游 */
+  model?: "flash" | "pro";
+  /** AbortSignal 超时(毫秒);默认 5s,AI 出题建议 20s+ */
+  timeoutMs?: number;
 }): Promise<InquiryResult | null> {
   try {
-    const timeout = AbortSignal.timeout(5000);
+    const timeout = AbortSignal.timeout(args.timeoutMs ?? 5000);
     const res = await fetch('/api/hyperknow/course-inquiry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

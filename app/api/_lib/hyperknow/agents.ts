@@ -6,6 +6,7 @@
 import { chat, streamChat, streamChatOpenAI, type LlmMessage } from "./llm";
 import {
   CONTENT_GENERATOR_SYSTEM_PROMPT,
+  COURSE_INQUIRY_PROMPT,
   chatIdentityPrompt,
   COURSE_ARCHITECT_PROMPT,
   COURSE_BLUEPRINT_PROMPT,
@@ -21,6 +22,8 @@ import {
   formatUntrustedResearchNote,
   parseCourseBlueprint,
   parseCourseStructure,
+  parseInquiryQuestions,
+  type InquiryQuestionDraft,
   parseInterjectionAnswer,
   parseLecturePlan,
   parseNextSteps,
@@ -70,6 +73,41 @@ export const CHAT_MODEL_MAP: Record<ChatModelId, string> = { flash: "step-3.7-fl
 
 export function resolveChatModel(raw: unknown): ChatModelId {
   return raw === "pro" ? "pro" : "flash";
+}
+
+// ── 课程前置问询(AI 实时出题)────────────────────────────────────────────
+// 首轮与追问轮问询都由模型针对主题即时生成;失败由调用方(course-inquiry 路由)
+// 降级到模板,绝不把模板冒充 AI 出题成功。
+export async function generateCourseInquiryQuestions(
+  topic: string,
+  opts: {
+    round: number;
+    brief?: CourseBrief;
+    answers?: Record<string, string>;
+    signal?: AbortSignal;
+    model?: ChatModelId;
+  },
+): Promise<InquiryQuestionDraft[]> {
+  const effLang = resolveEffectiveLanguage(opts.brief?.language);
+  const roundNote =
+    opts.round > 0
+      ? `\nThis is follow-up round ${opts.round}: ask only 1-2 NEW clarifying questions.`
+      : "\nThis is the initial intake round: ask 4-5 questions.";
+  const answered = Object.entries(opts.answers ?? {}).filter(([, v]) => v && v.trim());
+  const answersNote = answered.length
+    ? `\nLearner's answers so far (never re-ask these): ${JSON.stringify(Object.fromEntries(answered))}`
+    : "";
+  const jsonStr = await chat(
+    [
+      { role: "system", content: COURSE_INQUIRY_PROMPT },
+      {
+        role: "user",
+        content: `Course topic: "${topic}"\nOutput language: ${effLang}${roundNote}${answersNote}`,
+      },
+    ],
+    { jsonMode: true, signal: opts.signal, maxTokens: 2048, model: CHAT_MODEL_MAP[opts.model ?? "flash"] },
+  );
+  return parseInquiryQuestions(jsonStr);
 }
 
 // 断流接续指令:assistant 预填已出正文,让模型从中断处无缝接着说。
