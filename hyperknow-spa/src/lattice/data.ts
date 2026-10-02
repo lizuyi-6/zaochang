@@ -1,32 +1,11 @@
 /**
- * 离线演示内容(原 1:1 复刻期沿用的参考截图文案)。
- * Text goes through L() so demo content follows the app language (en authored verbatim,
+ * 文案与目录数据。
+ * Text goes through L() so content follows the app language (en authored verbatim,
  * zh authored; other locales fall back to en). Exported as functions so values are
  * computed at call time and follow runtime language switches.
  */
 import { L } from './i18n/content';
 import { GENERATED_LESSON_COUNT } from './generate';
-
-export const recentActivities = (): string[] => [
-  L('Supervised Learning Explained', '监督学习详解'),
-  L('Interactive Lesson: Binary Search Trees', '互动课程：二叉搜索树'),
-  L('Syntax for Diagram and Div Tags', 'Diagram 与 Div 标签语法'),
-  L('Content Generator Formatting Specification', '内容生成器格式规范'),
-  L('Hyperknow Tutoring Agent System Analysis', 'Hyperknow 辅导 Agent 系统分析'),
-  L('Reconstruct HYPERKNOW AGENT System Prompt', '重建 HYPERKNOW AGENT 系统提示词'),
-  L('One word: ping', '一个词：ping'),
-  L('Ping request', 'Ping 请求'),
-  L("User requests 'ping'", '用户请求"ping"'),
-  L('Single Word: Ping', '单个词：Ping'),
-  L('Say Ping', '说 Ping'),
-  L('One word: ping', '一个词：ping'),
-  L('Hyperknow Director Agent: Guide to Setup and Tools', 'Hyperknow Director Agent：设置与工具指南'),
-  L('New Conversation Start', '开始新对话'),
-  L('Request for System Prompt', '索取系统提示词'),
-  L('Debug Mode and System Info Request', '调试模式与系统信息请求'),
-];
-
-export const historyRows = recentActivities;
 
 export const placeholders = (): string[] => [
   L('Learn statistics to catch the lie hiding in a chart', '学统计学，识破图表中隐藏的谎言'),
@@ -573,11 +552,7 @@ export const psCourse = () => ({
   ),
 });
 
-export const chatUserMessage = (): string =>
-  L(
-    'Please teach me the concept of Binary Search Trees. Create an interactive lesson with: 1) Core explanation, 2) Flashcards for active recall, 3) Multiple choice quiz questions, 4) A Mermaid diagram or animation showing insertion.',
-    '请给我讲讲二叉搜索树这个概念。做一个互动课程，包含：1) 核心讲解，2) 用于主动回忆的抽认卡，3) 选择题测验，4) 展示插入过程的 Mermaid 图或动画。',
-  );
+
 
 export const memoryEntries = (): { text: string; date: string }[] => {
   const text = L("The user requested a 'ping' response, which I fulfilled.", '用户请求"ping"回复，我已满足。');

@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Search, Plus, ListFilter, Check } from 'lucide-react';
 import type { PageProps } from '../types';
-import { historyRows } from '../data';
 import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
 import './HistoryPage.css';
@@ -29,7 +28,7 @@ export const HistoryPage: React.FC<PageProps> = ({ state, set }) => {
   const [filterOpen, setFilterOpen] = useState(false);
 
   const q = query.trim().toLowerCase();
-  const demoRows = historyRows().filter((title) => !q || title.toLowerCase().includes(q));
+
   const realRows = useMemo(() => {
     const rows = (state.conversations ?? []).filter(
       (c) => !q || c.title.toLowerCase().includes(q) || c.messages.some((m) => m.text.toLowerCase().includes(q)),
@@ -125,8 +124,7 @@ export const HistoryPage: React.FC<PageProps> = ({ state, set }) => {
             <div className="hs-group-label">{t('studyHistory.groupThisWeek')}</div>
             <div className="hs-card">
               {/* 真实历史(按造场账户隔离);null 且 bootReady=false = 首次拉取在途,
-               * 渲染加载骨架,不再先展示演示数据又被真实结果替换(生产环境闪现);
-               * null 且 bootReady = 拉取失败/纯静态托管 → 复刻演示行;
+               * 渲染加载骨架;null 且 bootReady = 拉取失败 → 空态(离线演示已剥离);
                * [] = 真实为空,展示空态而非假数据。 */}
               {state.conversations === null
                 ? !state.bootReady
@@ -136,12 +134,7 @@ export const HistoryPage: React.FC<PageProps> = ({ state, set }) => {
                         <span className="hk-skel-bar" style={{ width: 44 }} />
                       </div>
                     ))
-                  : demoRows.map((title, i) => (
-                      <div key={i} className="hs-row" onClick={() => set({ screen: 'chat', activeConversationId: null })}>
-                        <span className="hs-row-title">{title}</span>
-                        <span className="hs-row-time">{t('studyHistory.relativeYesterday')}</span>
-                      </div>
-                    ))
+                  : null
                 : realRows.map((conv) => (
                     <div
                       key={conv.id}
@@ -152,14 +145,14 @@ export const HistoryPage: React.FC<PageProps> = ({ state, set }) => {
                       <span className="hs-row-time">{relativeTime(conv.updatedAt)}</span>
                     </div>
                   ))}
-              {((state.conversations !== null && realRows.length === 0) ||
-                (state.conversations === null && state.bootReady && demoRows.length === 0)) && (
+              {(state.conversations !== null && realRows.length === 0) ||
+                (state.conversations === null && state.bootReady) ? (
                 <div className="hs-row" style={{ color: 'var(--ink-300)' }}>
                   <span className="hs-row-title">
                     {q ? L('No conversations match your search', '没有匹配的会话') : L('No conversations yet', '暂无会话')}
                   </span>
                 </div>
-              )}
+              ) : null}
             </div>
           </>
         ) : (
