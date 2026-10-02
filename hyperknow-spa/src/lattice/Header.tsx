@@ -15,10 +15,10 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
   const [supportTitle, setSupportTitle] = useState<string | null>(null);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   /* Header cluster varies per screen (reference: 17/22/23/26/20; feed/history/marketplace have none).
-   * chat 也隐藏:聊天页有自己的右上工具簇(翻译/分享/遇到问题/头像),
+   * chat/create 也隐藏:两页都有自己的右上工具簇(翻译/分享/遇到问题/头像),
    * 壳层头部若同屏渲染,其隐形按钮会劫持工具簇的点击(实测 elementFromPoint 实锤)。 */
   const s = state.screen;
-  if (s === 'marketplace' || s === 'history' || s === 'feed' || s === 'chat') return null;
+  if (s === 'marketplace' || s === 'history' || s === 'feed' || s === 'chat' || s === 'create') return null;
 
   const energy = state.identity?.credits ?? state.energy ?? (state.lectureDone ? 15 : 20);
   const showPlan = true;

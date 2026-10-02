@@ -14,6 +14,7 @@ export type Screen =
   | 'courseJourney'
   | 'marketplace'
   | 'chat'
+  | 'create'
   | 'whiteboard'
   | 'plans';
 
@@ -62,6 +63,8 @@ export interface AppState {
   generated: GeneratedCourse | null;
   /** 即时协助:用户实际输入的问题(空则回退演示消息) */
   chatNote: string;
+  /** 课程创建页:首页打造课程带进来的原始命题(含附件引用行;进场播种后即清空) */
+  createPrompt: string;
   /** 造场账户身份(启动时 get_user_info 拉取;null = 拉取失败/纯静态演示) */
   identity: MeInfo | null;
   /** true = 启动身份拉取已结算(无论成败);演示课开播前等它,旁白称呼绑定本次登录名 */
@@ -130,6 +133,7 @@ export const initialAppState: AppState = {
   genResume: null,
   generated: null,
   chatNote: '',
+  createPrompt: '',
   identity: null,
   bootReady: false,
   plan: 'FREE',
