@@ -136,6 +136,8 @@ export interface CourseGenParams {
   action?: 'confirm_blueprint' | 'generate_units';
   selectedUnits?: string[];
   requireConfirmation?: boolean;
+  /** 对话模型:flash=step-3.7-flash(默认),pro=step-5-preview;蓝图与单元生成都用它 */
+  model?: 'flash' | 'pro';
 }
 
 /** 在线调用失败原因:offline=静态托管/断网(可伪生成兜底);insufficient=积分不足(绝不可兜底);error=后端/上游故障。 */

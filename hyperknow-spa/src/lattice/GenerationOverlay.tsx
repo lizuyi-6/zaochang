@@ -176,6 +176,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
           resumeUuid: blueprintUuid,
           action: 'confirm_blueprint',
           selectedUnits: unitsToGenerate,
+          model: state.chatModel,
         },
         {
           onStep: (id, status) => {
@@ -258,6 +259,7 @@ export const GenerationOverlay: React.FC<PageProps> = ({ state, set }) => {
           brief: state.courseBrief,
           idempotencyKey: crypto.randomUUID(),
           requireConfirmation: true, // 请求真实蓝图阶段，等待前端确认
+          model: state.chatModel,
         },
         {
           onStep: (id, status) => {

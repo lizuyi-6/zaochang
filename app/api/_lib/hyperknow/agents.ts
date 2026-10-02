@@ -66,7 +66,7 @@ export async function directorAnalyzeIntent(
 
 /** 见界双模型:Flash=step-3.7-flash(快),Pro=step-5-preview(质量优先;step-5 这个 id 上游不存在,2026-10-01 实测 404)。 */
 export type ChatModelId = "flash" | "pro";
-const CHAT_MODEL_MAP: Record<ChatModelId, string> = { flash: "step-3.7-flash", pro: "step-5-preview" };
+export const CHAT_MODEL_MAP: Record<ChatModelId, string> = { flash: "step-3.7-flash", pro: "step-5-preview" };
 
 export function resolveChatModel(raw: unknown): ChatModelId {
   return raw === "pro" ? "pro" : "flash";
@@ -226,6 +226,7 @@ export async function repairUnit(
   signal?: AbortSignal,
   language = "zh-CN",
   budget?: { expectedUnitId?: string; expectedLectures?: number; expectedSessions?: number },
+  model?: string,
 ): Promise<CourseUnit | null> {
   const effLang = resolveEffectiveLanguage(language);
   const budgetReq = budget
@@ -239,7 +240,7 @@ export async function repairUnit(
         content: `Course Context: "${courseContext}"\nTarget Language: ${effLang}${budgetReq}\nValidation Errors:\n${errors.map((e) => `- ${e}`).join("\n")}\nDamaged Unit JSON:\n${JSON.stringify(unit)}`,
       },
     ],
-    { jsonMode: true, signal, maxTokens: 4096 },
+    { jsonMode: true, signal, maxTokens: 4096, model },
   ).catch(() => "");
 
   if (!jsonStr) return null;
@@ -258,6 +259,7 @@ export async function generateCourseBlueprint(
   signal?: AbortSignal,
   research: WebSearchHit[] = [],
   brief?: CourseBrief,
+  model?: string,
 ): Promise<CourseBlueprint> {
   const researchNote = formatUntrustedResearchNote(research);
   const briefNote = formatCourseBrief(brief);
@@ -281,7 +283,7 @@ export async function generateCourseBlueprint(
             content: `Design a structured course blueprint for: "${query}" (Target Depth: ${normDepth}, reference unit scale: ${scale.refUnits} units, Language: ${effLang})${briefNote}${researchNote}`,
           },
         ],
-        { jsonMode: true, signal, maxTokens: 8192 },
+        { jsonMode: true, signal, maxTokens: 8192, model },
       );
       blueprint = parseCourseBlueprint(jsonStr);
       break;
@@ -327,6 +329,7 @@ export async function generateUnitDetails(
   unitIndex: number = 0,
   research: WebSearchHit[] = [],
   language = "zh-CN",
+  model?: string,
 ): Promise<CourseUnit> {
   const researchNote = formatUntrustedResearchNote(research);
   const effLang = resolveEffectiveLanguage(language);
@@ -345,7 +348,7 @@ export async function generateUnitDetails(
         content: `Course Context: "${courseTitle}"${prevSummary}${researchNote}\nTarget Language: ${effLang}\nUnit: "${blueprintUnit.unitId}" - "${blueprintUnit.title}"\nRequirements: generate EXACTLY ${expectedLectures} lectures and total ${expectedSessions} sessions.\nPrerequisites: ${JSON.stringify(blueprintUnit.prerequisites ?? [])}\nObjectives: ${JSON.stringify(blueprintUnit.objectives ?? [])}\nCompletion Criteria: ${JSON.stringify(blueprintUnit.completionCriteria ?? [])}\nGenerate concrete lectures and sessions for this unit in ${effLang}.`,
       },
     ],
-    { jsonMode: true, signal, maxTokens: 4096 },
+    { jsonMode: true, signal, maxTokens: 4096, model },
   );
 
   let unit = parseUnitDetails(jsonStr);
@@ -372,7 +375,7 @@ export async function generateUnitDetails(
   const check = validateUnitStructure(unit, budget);
   if (!check.valid) {
     try {
-      const repaired = await repairUnit(unit, check.errors, courseTitle, signal, effLang, budget);
+      const repaired = await repairUnit(unit, check.errors, courseTitle, signal, effLang, budget, model);
       if (repaired && validateUnitStructure(repaired, budget).valid) {
         unit = repaired;
       }
