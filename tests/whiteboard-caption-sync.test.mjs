@@ -65,7 +65,7 @@ const liveLessonModule = loadTsModule(new URL('src/lattice/whiteboard/liveLesson
 const { liveLessonFromPlan } = liveLessonModule;
 const { lessonDelay } = loadTsModule(new URL('src/lattice/whiteboard/lessonDelay.ts', spa));
 const { choiceIndexFromInput } = loadTsModule(new URL('src/lattice/whiteboard/choiceInput.ts', spa));
-import { WHITEBOARD_INSTRUCTOR_PROMPT, fallbackLecturePlan } from '../app/api/_lib/hyperknow/prompts.ts';
+import { WHITEBOARD_INSTRUCTOR_PROMPT, INTERJECTION_ANSWER_PROMPT, fallbackLecturePlan } from '../app/api/_lib/hyperknow/prompts.ts';
 
 test('interjection cooldown advances while lecture is paused; normal lesson time does not', async () => {
   const control = { cancelled: false, paused: true, skipped: false };
@@ -906,6 +906,20 @@ test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures 
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Faded Worked Example/i, '进度结构必须含渐撤例题步');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Synthesis & Closure/i, '进度结构必须含综合收束步');
 
+  // 联网学习科学研究升级(2026-10 四路检索:Merrill/Gagné/Rosenshine/Bloom 框架审计 +
+  // Dunlosky/Roediger/Cepeda/Rohrer 元分析 + Sweller/Mayer/Chi/Fiorella 认知负荷与多媒体 +
+  // Rowe/Wiliam/Kluger&DeNisi/Kapur/Bjork 启发式与反馈)
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /commit to a prediction/i, '钩子步必须让学员先押预测(有效失败/前测效应)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /at least 2 steps back/i, '快测必须回捞至少 2 步前的内容(微间隔)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /cumulative across the whole lecture/i, '终测必须累计覆盖全讲');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /why EACH tempting distractor fails/i, '解析必须逐干扰项说明为何错(铰链题)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /never the person/i, '反馈必须指向任务而非人身(Kluger & DeNisi)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /never run three consecutive expository steps/i, '不得连续三步纯讲授(Rosenshine/ICAP)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /never copy narration sentences onto the card/i, '卡片不得照抄旁白(Mayer 冗余原则)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /one-line generalization/i, '每个概念必须落地一句可带走的通则');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /teach the core mechanism back/i, '收尾必须邀请学员讲给别人听(教学相长)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /interleave/i, '混淆题型必须交错考查');
+
   // fallbackLecturePlan 保持紧凑(仅上游故障应急路径):5 步 + 阶段快测
   const zhPlan = fallbackLecturePlan('认知心理学');
   assert.equal(zhPlan.steps.length, 5);
@@ -1032,4 +1046,14 @@ test('Regression 18: Whiteboard high-contrast ink, font fallbacks, and writing i
   // 3. 图表与插图手绘写作态透明度不得低于 0.65，杜绝看不清的灰白底稿
   assert.match(cssContent, /\.wb-item\.wb-diagram\.writing\s*\{\s*opacity:\s*0\.7/s, '图表写作态透明度应保持在 0.7 易读水平');
   assert.match(cssContent, /\.wb-item\.wb-image-card\.writing\s*\{\s*opacity:\s*0\.75/s, '图片卡片写作态透明度应保持在 0.75 易读水平');
+});
+
+test('Regression 19: INTERJECTION_ANSWER_PROMPT uses the Socratic distance rule and task-focused framing', () => {
+  // 联网检索(2026-10):启发式反问只在"差一步推理"时使用且必须当场收口答案;
+  // 反馈指向任务而非人身(Kluger & DeNisi 1996:38% 反馈反而有害)。
+  assert.match(INTERJECTION_ANSWER_PROMPT, /exactly ONE inference away/i, '反问引导仅限差一步推理的问题');
+  assert.match(INTERJECTION_ANSWER_PROMPT, /ALWAYS close with the explicit answer in the same reply/i, '反问后必须同轮收口答案,不得留空');
+  assert.match(INTERJECTION_ANSWER_PROMPT, /never about the person/i, '反馈必须指向任务而非人身');
+  assert.match(INTERJECTION_ANSWER_PROMPT, /currently on the board/i, '回答必须锚定当前板书');
+  assert.match(INTERJECTION_ANSWER_PROMPT, /no markdown or LaTeX/i, '答疑旁白必须纯口语(逐字进 TTS)');
 });
