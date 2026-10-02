@@ -142,7 +142,9 @@ export async function POST(request: Request) {
     // 语言优先级: course saved language -> request language -> zh-CN 兜底
     const effectiveLanguage = resolveEffectiveLanguage(courseSavedLanguage, requestLanguage);
 
-    const signal = AbortSignal.timeout(60_000);
+    // 细腻化后的讲课计划生成(推理+长输出)可达 60s 以上:放宽到 110s,
+    // 绝不让路由超时把一次成功的计划掐死在半路(掐死=学员拿到模板降级课)。
+    const signal = AbortSignal.timeout(110_000);
     let plan;
     try {
       plan = await planLecture(resolvedTopic, signal, member.displayName, effectiveLanguage, lectureContext);
