@@ -71,6 +71,16 @@ const BlockView: React.FC<{ block: MarkupBlock }> = ({ block }) => {
       );
     }
     case 'code':
+      /* mermaid 围栏与 <diagram> 同语义:聊天气泡里渲染为虚线占位签,不裸奔源码 */
+      if (block.lang.toLowerCase() === 'mermaid') {
+        return (
+          <div className="cp-markup-diagram">
+            <PenTool size={13} />
+            <strong>{L('Flow diagram', '流程图')}</strong>
+            <span>mermaid</span>
+          </div>
+        );
+      }
       return (
         <pre>
           <code>{block.text}</code>

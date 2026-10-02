@@ -210,6 +210,41 @@ function pushMarkdownBlocks(text: string, out: MarkupBlock[]): void {
 
 /** 容器内部 HTML 子集解析:p/ul/ol/li/strong/b/em/i/code/br/h1-h4/table;未知标签丢弃。 */
 function parseHtmlContainer(src: string): MarkupBlock[] {
+  // 模型偶尔会把 ```mermaid 等 Markdown 围栏直接写进 content-section 容器
+  // (违反 prompt 契约但真实发生):容器解析器不认围栏会整段裸奔成文本。
+  // 先按行剥出围栏段为独立代码块,其余再走标签解析。
+  const out: MarkupBlock[] = [];
+  const lines = src.split('\n');
+  let buf: string[] = [];
+  const flushBuf = (): void => {
+    if (!buf.length) return;
+    const seg = buf.join('\n');
+    buf = [];
+    if (seg.trim()) out.push(...parseHtmlContainerInner(seg));
+  };
+  let i = 0;
+  while (i < lines.length) {
+    const fence = /^\s*```\s*([\w+-]*)\s*$/.exec(lines[i]);
+    if (fence) {
+      flushBuf();
+      const body: string[] = [];
+      i += 1;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) {
+        body.push(lines[i]);
+        i += 1;
+      }
+      i += 1; // 闭合围栏(或流式 EOF)
+      out.push({ kind: 'code', lang: fence[1] ?? '', text: body.join('\n') });
+      continue;
+    }
+    buf.push(lines[i]);
+    i += 1;
+  }
+  flushBuf();
+  return out;
+}
+
+function parseHtmlContainerInner(src: string): MarkupBlock[] {
   const out: MarkupBlock[] = [];
   /** 当前区块已累积的行内片段(样式随标签开合即时生效) */
   let runs: MarkupInline[] = [];
