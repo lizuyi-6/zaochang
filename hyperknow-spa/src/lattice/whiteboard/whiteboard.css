@@ -1139,6 +1139,33 @@
 .wb-intro-cta:hover { background: var(--color-primary-hover); }
 .wb-intro-cta:disabled { opacity: 0.72; cursor: default; }
 
+/* 自由讲座命题(直进白板先收话题,再 AI 实时备课) */
+.wb-topic-form { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 380px; }
+.wb-topic-input {
+  align-self: stretch;
+  height: 44px; padding: 0 14px;
+  border: 1.5px solid var(--ink-250); border-radius: 10px;
+  background: #fff; color: var(--ink-900);
+  font-size: 14px; font-family: inherit;
+}
+.wb-topic-input:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; border-color: var(--color-primary); }
+.wb-topic-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.wb-topic-chip {
+  padding: 7px 13px;
+  border-radius: 999px; border: 1px solid var(--ink-250);
+  background: #fff; color: var(--ink-600);
+  font-size: 12px; font-family: inherit; cursor: pointer;
+}
+.wb-topic-chip:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
+.wb-topic-error { font-size: 12px; line-height: 1.5; color: #B23A1F; margin: 0 0 10px; max-width: 360px; }
+.wb-topic-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; font-size: 12px; color: var(--ink-500); margin: 16px 0 0; }
+.wb-intro-link {
+  background: none; border: none; padding: 0;
+  color: var(--color-primary); font-size: 12px; font-family: inherit;
+  text-decoration: underline; cursor: pointer;
+}
+.wb-intro-link:hover { color: var(--color-primary-hover); }
+
 /* runner animation */
 @keyframes wb-runner-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-7px) rotate(2deg); } }
 @keyframes wb-runner-streak { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.8; } }
@@ -1483,4 +1510,6 @@
   .wb-feedback-submit { height: 44px; }
   /* 引入卡唯一退出控件,粗指针下与全站 44px 兜底对齐(qa-runs P-006) */
   .wb-intro-close { width: 44px; height: 44px; }
+  .wb-topic-chip { min-height: 44px; padding: 10px 16px; }
+  .wb-topic-foot .wb-intro-link { min-height: 44px; display: inline-flex; align-items: center; }
 }
