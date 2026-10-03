@@ -58,7 +58,7 @@ export function downloadIcs(event: { title: string; description?: string; start:
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Hyperknow//Study Session//EN',
+    'PRODID:-//LATTICE//Study Session//EN',
     'BEGIN:VEVENT',
     `UID:${crypto.randomUUID()}@aetherstudio.top`,
     `DTSTAMP:${stamp(new Date())}`,
@@ -158,7 +158,7 @@ export async function audioCheck(opts: { muted?: boolean; speakAloud?: boolean }
 export const SUPPORT_EMAIL = 'zaochang@aetherstudio.top';
 
 /** 打开系统邮件客户端并带上正文;正文为空时提示而不是静默失败。 */
-export function openFeedbackMail(text: string, subject = L('Hyperknow feedback', 'Hyperknow 反馈')): boolean {
+export function openFeedbackMail(text: string, subject = L('LATTICE feedback', '见界反馈')): boolean {
   const body = text.trim();
   if (!body) {
     toast(L('Please describe the issue first', '请先描述你遇到的问题'));

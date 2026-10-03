@@ -172,11 +172,31 @@ test("lattice-brand: document title and key localized auth branding contain no o
   /* 字典已按语言拆到 i18n/locales/<lang>.json(首包只载当前语言),品牌断言逐文件执行 */
   for (const localeFile of readdirSync(new URL("src/lattice/i18n/locales", spa))) {
     const strings = JSON.parse(readFileSync(new URL(`src/lattice/i18n/locales/${localeFile}`, spa), "utf8"));
-    for (const key of ["welcomeToHyperknow", "createAccountSubtitle", "termsAndPolicy"]) {
+    for (const key of ["welcome", "createAccountSubtitle", "termsAndPolicy"]) {
       assert.equal(typeof strings.auth?.[key], "string", `${localeFile}: ${key}`);
       assert.doesNotMatch(strings.auth[key], /hyperknow/i, `${localeFile}: ${key}`);
     }
   }
+});
+
+test("lattice-brand: no old brand token anywhere in SPA source (values, keys, literals, filenames)", () => {
+  // 回归审计 R-001(2026-10-03):更名见界/LATTICE 时只改了字典值,漏了硬编码 L() 字面量
+  // 与字典里的提示语文案(含指向 hyperknow.io 的死邮箱)。本守卫把整类问题锁死:
+  // SPA 源码任何文件不得再出现大小写敏感的 "Hyperknow"——内部标识符(hyperknow 包名、
+  // /api/hyperknow/* 路径、注释)是小写,不受影响。
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = new URL(`${entry.name}`, dir.href.endsWith("/") ? dir : `${dir.href}/`);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ts|tsx|json|css|html)$/.test(entry.name)) {
+        const text = readFileSync(full, "utf8");
+        if (text.includes("Hyperknow")) offenders.push(decodeURIComponent(full.pathname));
+      }
+    }
+  };
+  walk(new URL("src/", spa));
+  assert.deepEqual(offenders, [], "SPA 源码残留旧品牌字面量(用户可见文案/键名/文件名),必须改为 见界/LATTICE");
 });
 
 test("lattice-brand: seeded covers are unique per course and stable across renders", () => {

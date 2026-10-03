@@ -1,0 +1,46 @@
+{
+  "visible": [
+    "/ \"造场\" 70x27@16",
+    "/discover \"进入现场\" 108x44@363",
+    "/lattice/ \"见界研学\" 130x44@363",
+    "/studio/new \"带一件作品来\" 72x32@369",
+    "/galaxy \"PRODUCT / EC\" 172x88@637",
+    "/ \"首页\" 74x35@795",
+    "/discover \"探索\" 74x35@795",
+    "/bookshelf \"书架\" 74x35@795",
+    "/circles \"圈子\" 74x35@795",
+    "/studio/new \"\" 45x45@781"
+  ],
+  "afterFab": [],
+  "dests": [
+    "/",
+    "/discover",
+    "/feed",
+    "/circles",
+    "/challenges",
+    "/collections",
+    "/bookshelf",
+    "/lattice/",
+    "/docs",
+    "/studio",
+    "/developers",
+    "/wallet"
+  ],
+  "reached": {
+    "/": true,
+    "/discover": true,
+    "/feed": false,
+    "/circles": true,
+    "/challenges": false,
+    "/collections": false,
+    "/bookshelf": true,
+    "/lattice/": true,
+    "/docs": false,
+    "/studio": false,
+    "/developers": false,
+    "/wallet": false
+  },
+  "shots": [
+    "01-home"
+  ]
+}

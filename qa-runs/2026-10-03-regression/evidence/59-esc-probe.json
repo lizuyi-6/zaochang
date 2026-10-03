@@ -1,0 +1,58 @@
+{
+  "trials": [
+    {
+      "how": "mouse",
+      "opened": {
+        "found": true,
+        "ariaExpanded": "true",
+        "cls": "deep-account",
+        "panelCls": "account-menu",
+        "panelVisible": true,
+        "menuText": false
+      },
+      "afterEsc": {
+        "found": true,
+        "ariaExpanded": "true",
+        "cls": "deep-account",
+        "panelCls": "account-menu",
+        "panelVisible": true,
+        "menuText": false
+      }
+    },
+    {
+      "how": "keyboard",
+      "opened": {
+        "found": true,
+        "ariaExpanded": "false",
+        "cls": "deep-account",
+        "panelCls": null,
+        "panelVisible": null,
+        "menuText": false
+      },
+      "afterEsc": {
+        "found": true,
+        "ariaExpanded": "false",
+        "cls": "deep-account",
+        "panelCls": null,
+        "panelVisible": null,
+        "menuText": false
+      }
+    },
+    {
+      "how": "probe-handler",
+      "escReachesDocument": true
+    },
+    {
+      "how": "outside-click",
+      "afterOutsideClick": {
+        "found": true,
+        "ariaExpanded": "false",
+        "cls": "deep-account",
+        "panelCls": null,
+        "panelVisible": null,
+        "menuText": false
+      }
+    }
+  ],
+  "notes": []
+}

@@ -1,0 +1,150 @@
+{
+  "capturedAt": "2026-10-03T04:04:38.189Z",
+  "results": [
+    {
+      "key": "r01-lattice-home",
+      "url": "/lattice/#/home",
+      "status": 200,
+      "finalUrl": "/lattice/#/home",
+      "textLen": 2530,
+      "err": null,
+      "fp": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermai",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r02-lattice-create",
+      "url": "/lattice/#/create",
+      "status": 200,
+      "finalUrl": "/lattice/#/create",
+      "textLen": 1639,
+      "err": null,
+      "fp": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermai",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r03-lattice-feed",
+      "url": "/lattice/#/feed",
+      "status": 200,
+      "finalUrl": "/lattice/#/feed",
+      "textLen": 1641,
+      "err": null,
+      "fp": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermai",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r04-lattice-plans",
+      "url": "/lattice/#/plans",
+      "status": 200,
+      "finalUrl": "/lattice/#/plans",
+      "textLen": 2203,
+      "err": null,
+      "fp": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermai",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r05-whiteboard-intro",
+      "url": "/lattice/#/whiteboard",
+      "status": 200,
+      "finalUrl": "/lattice/#/whiteboard",
+      "textLen": 418,
+      "err": null,
+      "fp": "Speaker, Message, and Audience 135% 1/2 Live AI lecture What do you want to learn? Name any topic — the tutor plans a lesson for it right now and teaches it liv",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r06-main-home",
+      "url": "/",
+      "status": 200,
+      "finalUrl": "/",
+      "textLen": 1454,
+      "err": null,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r07-main-book",
+      "url": "/bookshelf/hello-system",
+      "status": 200,
+      "finalUrl": "/bookshelf/hello-system",
+      "textLen": 5796,
+      "err": null,
+      "fp": "跳到主要内容 造场 0 果 造 造场 LIVE COMMUNITY / 2026 书架 Hello System · 图解软件系统 序言: 还原软件系统的本来面目 序章: 一次点击 第一部分: 程序开始变大 (01~12) 第01章 从单行脚本到复杂系统：为什么我们需要架构？ 第02章 变量为什么开始失控？——从平铺变",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r08-main-chapter",
+      "url": "/bookshelf/hello-system/part-1/01-why-architecture-matters",
+      "status": 200,
+      "finalUrl": "/bookshelf/hello-system/part-1/01-why-architecture-matters",
+      "textLen": 6170,
+      "err": null,
+      "fp": "跳到主要内容 造场 0 果 造 造场 LIVE COMMUNITY / 2026 书架 Hello System · 图解软件系统 序言: 还原软件系统的本来面目 序章: 一次点击 第一部分: 程序开始变大 (01~12) 第01章 从单行脚本到复杂系统：为什么我们需要架构？ 第02章 变量为什么开始失控？——从平铺变",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r09-main-devdocs",
+      "url": "/developers/docs",
+      "status": 200,
+      "finalUrl": "/developers/docs",
+      "textLen": 2406,
+      "err": null,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r10-main-galaxy",
+      "url": "/galaxy",
+      "status": 200,
+      "finalUrl": "/galaxy",
+      "textLen": 1170,
+      "err": null,
+      "fp": "造场产品银河 PRODUCT GALAXY · HANGZHOU 银河探索 全部产品 公司中心 孵化控制台 申请加入 ZAOCHANG PRODUCT GALAXY · 04 SECTORS / 12 PRODUCTS 探索造场产品宇宙 每一个星系代表一条产品赛道，每一颗行星代表一个正在运行、开发或孵化中的产品。 开始",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r11-main-discover",
+      "url": "/discover",
+      "status": 200,
+      "finalUrl": "/discover",
+      "textLen": 729,
+      "err": null,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "r12-main-product",
+      "url": "/product/loops",
+      "status": 200,
+      "finalUrl": "/product/loops",
+      "textLen": 473,
+      "err": null,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "console": [
+        {
+          "type": "warning",
+          "text": "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://galaxy.zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        }
+      ],
+      "http4xx5xx": []
+    }
+  ]
+}

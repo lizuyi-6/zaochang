@@ -1,0 +1,973 @@
+{
+  "capturedAt": "2026-10-03T04:32:53.865Z",
+  "out": [
+    {
+      "key": "c01-home",
+      "url": "https://aetherstudio.top/lattice/#/home",
+      "status": 200,
+      "finalUrl": "/lattice/#/home",
+      "textLen": 2521,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 283,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c01-home-win-s30.png",
+            [
+              {
+                "sel": "[class*=toolbar]",
+                "top": 318,
+                "h": 36,
+                "pinned": false
+              }
+            ],
+            "c01-home-win-s60.png",
+            [
+              {
+                "sel": "[class*=toolbar]",
+                "top": 318,
+                "h": 36,
+                "pinned": false
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 283,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 283,
+          "shots": [
+            "c01-home-c1-s30.png",
+            [
+              {
+                "sel": "[class*=toolbar]",
+                "top": 35,
+                "h": 36,
+                "pinned": false
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 1178,
+      "walk": {
+        "scrolls": 5,
+        "maxScroll": 1178,
+        "scrolledTo": 1178,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c02-courses",
+      "url": "https://aetherstudio.top/lattice/#/courses",
+      "status": 200,
+      "finalUrl": "/lattice/#/courses",
+      "textLen": 2166,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 620,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar cs-page"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c02-courses-win-s30.png",
+            [
+              {
+                "sel": "[class*=toolbar]",
+                "top": 99,
+                "h": 36,
+                "pinned": false
+              }
+            ],
+            "c02-courses-win-s60.png",
+            [
+              {
+                "sel": "[class*=toolbar]",
+                "top": 99,
+                "h": 36,
+                "pinned": false
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 620,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar cs-page",
+          "scrolls": 2,
+          "scrolledTo": 620,
+          "shots": [
+            "c02-courses-c1-s30.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 1515,
+      "walk": {
+        "scrolls": 5,
+        "maxScroll": 1515,
+        "scrolledTo": 1515,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "Switch language",
+          "before": 2166,
+          "after": 2228,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "All\nIn Progress\nCompleted",
+          "before": 2166,
+          "after": 2166,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "All",
+          "before": 2166,
+          "after": 2166,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "In Progress",
+          "before": 2166,
+          "after": 2166,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Completed",
+          "before": 2166,
+          "after": 2166,
+          "changed": false
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c03-feed",
+      "url": "https://aetherstudio.top/lattice/#/feed",
+      "status": 200,
+      "finalUrl": "/lattice/#/feed",
+      "textLen": 1641,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c03-feed-win-s30.png",
+            [
+              {
+                "sel": "[class*=toolbar]",
+                "top": 30,
+                "h": 64,
+                "pinned": false
+              }
+            ],
+            "c03-feed-win-s60.png",
+            [
+              {
+                "sel": "[class*=toolbar]",
+                "top": 30,
+                "h": 64,
+                "pinned": false
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 895,
+      "walk": {
+        "scrolls": 3,
+        "maxScroll": 895,
+        "scrolledTo": 895,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c04-history",
+      "url": "https://aetherstudio.top/lattice/#/history",
+      "status": 200,
+      "finalUrl": "/lattice/#/history",
+      "textLen": 3065,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 1060,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar hs-page"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c04-history-win-s30.png",
+            [],
+            "c04-history-win-s60.png",
+            []
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 1060,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar hs-page",
+          "scrolls": 3,
+          "scrolledTo": 1060,
+          "shots": [
+            "c04-history-c1-s30.png",
+            [],
+            "c04-history-c1-s60.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 1955,
+      "walk": {
+        "scrolls": 6,
+        "maxScroll": 1955,
+        "scrolledTo": 1955,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "Sort",
+          "before": 3065,
+          "after": 3120,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Conversations\nDeep learn sessi",
+          "before": 3120,
+          "after": 3065,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Conversations",
+          "before": 3065,
+          "after": 3065,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Deep learn sessions",
+          "before": 3065,
+          "after": 3065,
+          "changed": false
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c05-marketplace",
+      "url": "https://aetherstudio.top/lattice/#/marketplace",
+      "status": 200,
+      "finalUrl": "/lattice/#/marketplace",
+      "textLen": 1915,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 1143,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar mp-page"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c05-marketplace-win-s30.png",
+            [],
+            "c05-marketplace-win-s60.png",
+            []
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 1143,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar mp-page",
+          "scrolls": 3,
+          "scrolledTo": 1143,
+          "shots": [
+            "c05-marketplace-c1-s30.png",
+            [],
+            "c05-marketplace-c1-s60.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 2038,
+      "walk": {
+        "scrolls": 6,
+        "maxScroll": 2038,
+        "scrolledTo": 2038,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "All\nExam Prep\nMath & Statistic",
+          "before": 4566,
+          "after": 1915,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "All",
+          "before": 1915,
+          "after": 1915,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Exam Prep",
+          "before": 1915,
+          "after": 1915,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Math & Statistics",
+          "before": 1915,
+          "after": 1915,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Computer Science",
+          "before": 1915,
+          "after": 1915,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "AI & Data Science",
+          "before": 1915,
+          "after": 1915,
+          "changed": false
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c06-chat",
+      "url": "https://aetherstudio.top/lattice/#/chat",
+      "status": 200,
+      "finalUrl": "/lattice/#/chat",
+      "textLen": 1663,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c06-chat-win-s30.png",
+            [],
+            "c06-chat-win-s60.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 895,
+      "walk": {
+        "scrolls": 3,
+        "maxScroll": 895,
+        "scrolledTo": 895,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c07-create",
+      "url": "https://aetherstudio.top/lattice/#/create",
+      "status": 200,
+      "finalUrl": "/lattice/#/create",
+      "textLen": 1639,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c07-create-win-s30.png",
+            [],
+            "c07-create-win-s60.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 895,
+      "walk": {
+        "scrolls": 3,
+        "maxScroll": 895,
+        "scrolledTo": 895,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c08-plans",
+      "url": "https://aetherstudio.top/lattice/#/plans",
+      "status": 200,
+      "finalUrl": "/lattice/#/plans",
+      "textLen": 2203,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c08-plans-win-s30.png",
+            [],
+            "c08-plans-win-s60.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 895,
+      "walk": {
+        "scrolls": 3,
+        "maxScroll": 895,
+        "scrolledTo": 895,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "Switch language",
+          "before": 2203,
+          "after": 2266,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c09-course-preview",
+      "url": "https://aetherstudio.top/lattice/#/course/preview",
+      "status": 200,
+      "finalUrl": "/lattice/#/course/preview",
+      "textLen": 3841,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 973,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar cj-page"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c09-course-preview-win-s30.png",
+            [],
+            "c09-course-preview-win-s60.png",
+            []
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 973,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar cj-page",
+          "scrolls": 3,
+          "scrolledTo": 973,
+          "shots": [
+            "c09-course-preview-c1-s30.png",
+            [],
+            "c09-course-preview-c1-s60.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 1868,
+      "walk": {
+        "scrolls": 6,
+        "maxScroll": 1868,
+        "scrolledTo": 1868,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "Switch language",
+          "before": 3858,
+          "after": 3920,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Units\nMaterials\nPractices",
+          "before": 3858,
+          "after": 3841,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Units",
+          "before": 3841,
+          "after": 3841,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Materials",
+          "before": 3841,
+          "after": 3841,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Practices",
+          "before": 3841,
+          "after": 3841,
+          "changed": false
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c10-course-journey",
+      "url": "https://aetherstudio.top/lattice/#/course/journey",
+      "status": 200,
+      "finalUrl": "/lattice/#/course/journey",
+      "textLen": 3836,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 973,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar cj-page"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "c10-course-journey-win-s30.png",
+            [],
+            "c10-course-journey-win-s60.png",
+            []
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 973,
+          "clientH": 900,
+          "w": 1178,
+          "h": 900,
+          "cls": "hk-page with-sidebar cj-page",
+          "scrolls": 3,
+          "scrolledTo": 973,
+          "shots": [
+            "c10-course-journey-c1-s30.png",
+            [],
+            "c10-course-journey-c1-s60.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 1868,
+      "walk": {
+        "scrolls": 6,
+        "maxScroll": 1868,
+        "scrolledTo": 1868,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "Switch language",
+          "before": 3853,
+          "after": 3915,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Units\nMaterials\nPractices",
+          "before": 3853,
+          "after": 3836,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Units",
+          "before": 3836,
+          "after": 3836,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Materials",
+          "before": 3836,
+          "after": 3836,
+          "changed": false
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "Practices",
+          "before": 3836,
+          "after": 3836,
+          "changed": false
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c11-whiteboard",
+      "url": "https://aetherstudio.top/lattice/#/whiteboard",
+      "status": 200,
+      "finalUrl": "/lattice/#/whiteboard",
+      "textLen": 418,
+      "containers": [],
+      "walked": [],
+      "maxScrollTotal": 0,
+      "walk": {
+        "scrolls": 0,
+        "maxScroll": 0,
+        "scrolledTo": 0,
+        "containerCount": 0,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c12-whiteboard-practice",
+      "url": "https://aetherstudio.top/lattice/#/whiteboard?practice=1",
+      "status": 200,
+      "finalUrl": "/lattice/#/whiteboard?practice=1",
+      "textLen": 1317,
+      "containers": [],
+      "walked": [],
+      "maxScrollTotal": 0,
+      "walk": {
+        "scrolls": 0,
+        "maxScroll": 0,
+        "scrolledTo": 0,
+        "containerCount": 0,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "Export",
+          "before": 1036,
+          "after": 1089,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c13-onboarding-1",
+      "url": "https://aetherstudio.top/lattice/#/onboarding/1",
+      "status": 200,
+      "finalUrl": "/lattice/#/onboarding/1",
+      "textLen": 177,
+      "containers": [],
+      "walked": [],
+      "maxScrollTotal": 0,
+      "walk": {
+        "scrolls": 0,
+        "maxScroll": 0,
+        "scrolledTo": 0,
+        "containerCount": 0,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c14-onboarding-5",
+      "url": "https://aetherstudio.top/lattice/#/onboarding/5",
+      "status": 200,
+      "finalUrl": "/lattice/#/onboarding/5",
+      "textLen": 1353,
+      "containers": [],
+      "walked": [],
+      "maxScrollTotal": 0,
+      "walk": {
+        "scrolls": 0,
+        "maxScroll": 0,
+        "scrolledTo": 0,
+        "containerCount": 0,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "c15-signin-deeplink",
+      "url": "https://aetherstudio.top/lattice/#/signin",
+      "status": 200,
+      "finalUrl": "/lattice/#/signin",
+      "textLen": 717,
+      "containers": [],
+      "walked": [],
+      "maxScrollTotal": 0,
+      "walk": {
+        "scrolls": 0,
+        "maxScroll": 0,
+        "scrolledTo": 0,
+        "containerCount": 0,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "Switch language",
+          "before": 717,
+          "after": 779,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    }
+  ]
+}

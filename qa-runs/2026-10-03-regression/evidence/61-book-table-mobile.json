@@ -1,0 +1,434 @@
+{
+  "tables": [
+    {
+      "label": "mobile-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "info": [
+        {
+          "tableW": 358,
+          "parentW": 358,
+          "parentOverflowX": "visible",
+          "tableScrollW": 358,
+          "tableClientW": 358,
+          "cols": 4,
+          "rows": 10,
+          "cellsOverflowing": 0,
+          "cells": [
+            {
+              "w": 45,
+              "sw": 44,
+              "cw": 44,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "演变阶段"
+            },
+            {
+              "w": 40,
+              "sw": 39,
+              "cw": 39,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "对应篇章"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "系统形态与所处阶段"
+            },
+            {
+              "w": 183,
+              "sw": 182,
+              "cw": 182,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "核心要解决的矛盾与引入的抽象"
+            },
+            {
+              "w": 45,
+              "sw": 44,
+              "cw": 44,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V0: 散落变量"
+            },
+            {
+              "w": 40,
+              "sw": 39,
+              "cw": 39,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 01 ~ 02 章"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "单文件控制台脚本，变量平铺"
+            },
+            {
+              "w": 183,
+              "sw": 182,
+              "cw": 182,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "变量数量膨胀、隐式命名前缀脆弱、数据"
+            },
+            {
+              "w": 45,
+              "sw": 44,
+              "cw": 44,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V1: 自治对象"
+            },
+            {
+              "w": 40,
+              "sw": 39,
+              "cw": 39,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 03 ~ 06 章"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "面向对象建模，状态受控"
+            },
+            {
+              "w": 183,
+              "sw": 182,
+              "cw": 182,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "外部代码直接篡改数据导致负数名额 \n"
+            },
+            {
+              "w": 45,
+              "sw": 44,
+              "cw": 44,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V2: 抽象协作"
+            },
+            {
+              "w": 40,
+              "sw": 39,
+              "cw": 39,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 07 ~ 11 章"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "多对象协作，接口与分层"
+            },
+            {
+              "w": 183,
+              "sw": 182,
+              "cw": 182,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "类型分支爆炸、硬编码依赖导致测试困难"
+            },
+            {
+              "w": 45,
+              "sw": 44,
+              "cw": 44,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V3: 经典分层"
+            },
+            {
+              "w": 40,
+              "sw": 39,
+              "cw": 39,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 12 章"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "Controller-Service"
+            },
+            {
+              "w": 183,
+              "sw": 182,
+              "cw": 182,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "单一上帝类承担过多职责 \n𝑜\no "
+            },
+            {
+              "w": 45,
+              "sw": 44,
+              "cw": 44,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V4: 声明式前端"
+            },
+            {
+              "w": 40,
+              "sw": 39,
+              "cw": 39,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 13 ~ 24 章"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "原生 DOM \n𝑜\no Vue 3"
+            },
+            {
+              "w": 183,
+              "sw": 182,
+              "cw": 182,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "命令式 DOM 操作导致界面与状态不"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "desktop-1440",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "info": [
+        {
+          "tableW": 812,
+          "parentW": 812,
+          "parentOverflowX": "visible",
+          "tableScrollW": 812,
+          "tableClientW": 812,
+          "cols": 4,
+          "rows": 10,
+          "cellsOverflowing": 0,
+          "cells": [
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "演变阶段"
+            },
+            {
+              "w": 75,
+              "sw": 74,
+              "cw": 74,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "对应篇章"
+            },
+            {
+              "w": 158,
+              "sw": 157,
+              "cw": 157,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "系统形态与所处阶段"
+            },
+            {
+              "w": 489,
+              "sw": 488,
+              "cw": 488,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "核心要解决的矛盾与引入的抽象"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V0: 散落变量"
+            },
+            {
+              "w": 75,
+              "sw": 74,
+              "cw": 74,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 01 ~ 02 章"
+            },
+            {
+              "w": 158,
+              "sw": 157,
+              "cw": 157,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "单文件控制台脚本，变量平铺"
+            },
+            {
+              "w": 489,
+              "sw": 488,
+              "cw": 488,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "变量数量膨胀、隐式命名前缀脆弱、数据"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V1: 自治对象"
+            },
+            {
+              "w": 75,
+              "sw": 74,
+              "cw": 74,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 03 ~ 06 章"
+            },
+            {
+              "w": 158,
+              "sw": 157,
+              "cw": 157,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "面向对象建模，状态受控"
+            },
+            {
+              "w": 489,
+              "sw": 488,
+              "cw": 488,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "外部代码直接篡改数据导致负数名额 \n"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V2: 抽象协作"
+            },
+            {
+              "w": 75,
+              "sw": 74,
+              "cw": 74,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 07 ~ 11 章"
+            },
+            {
+              "w": 158,
+              "sw": 157,
+              "cw": 157,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "多对象协作，接口与分层"
+            },
+            {
+              "w": 489,
+              "sw": 488,
+              "cw": 488,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "类型分支爆炸、硬编码依赖导致测试困难"
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V3: 经典分层"
+            },
+            {
+              "w": 75,
+              "sw": 74,
+              "cw": 74,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 12 章"
+            },
+            {
+              "w": 158,
+              "sw": 157,
+              "cw": 157,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "Controller-Service"
+            },
+            {
+              "w": 489,
+              "sw": 488,
+              "cw": 488,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "单一上帝类承担过多职责 \n𝑜\no "
+            },
+            {
+              "w": 89,
+              "sw": 88,
+              "cw": 88,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "V4: 声明式前端"
+            },
+            {
+              "w": 75,
+              "sw": 74,
+              "cw": 74,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "第 13 ~ 24 章"
+            },
+            {
+              "w": 158,
+              "sw": 157,
+              "cw": 157,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "原生 DOM \n𝑜\no Vue 3"
+            },
+            {
+              "w": 489,
+              "sw": 488,
+              "cw": 488,
+              "overflowX": "visible",
+              "ws": "normal",
+              "txt": "命令式 DOM 操作导致界面与状态不"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "--- mobile-390 ---",
+    "--- desktop-1440 ---"
+  ]
+}

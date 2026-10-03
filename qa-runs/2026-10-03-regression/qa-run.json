@@ -1,0 +1,1166 @@
+{
+  "schema_version": 1,
+  "run": {
+    "id": "20261003T035156Z-d0fac94f",
+    "mode": "audit",
+    "target": "aetherstudio.top 上线后回归复查(8 项修复验证 + 自由讲座新功能 + 白板观感五修复)",
+    "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+    "revision": "prod baseline 9a59f77 + 7 commits (b5d5bd9..34c8bf9)",
+    "created_at": "2026-10-03T03:51:56Z",
+    "stop_reason": "用户限定「重新录制上线更新」;自由讲座与重录完成,一堂课完整播放需再一轮长时观察,超出本轮预算"
+  },
+  "scope": {
+    "authorization": "用户指令「重新录制,我们上线了一堆更新」+ 显式加载 autonomous-qa。沿用上一轮只读边界:未改应用源码、未部署、未轮换 token。唯一临时改动是变异测试(为验证新契约守卫是否会变红),每次当场确认写入并立即还原,还原后已复跑确认。",
+    "included": [
+      "8 项修复的逐条回归(源码+运行时)",
+      "两个新契约守卫的变异验证",
+      "新功能自由讲座 #/whiteboard?topic= 端到端(两段)",
+      "直连 plan 路由校验 v4 讲座契约",
+      "P-011 aria-pressed 与 P-006 命中框 DOM 抽查",
+      "旧产品名 Hyperknow 运行时检索",
+      "12 条关键路由重录",
+      "深度交互全量:桌面 66 + 手机 15 + 平板 10 = 91 个页面录制,每页多容器逐屏滚动 + 结构性点击 + 录像 + 观察者",
+      "侧栏真实点击走查(精确 href,11 个目的地)",
+      "手机导航可达性穷举:7 个种子页 x 逐屏滚动 x 命中测试",
+      "深度交互全量:桌面 66 + 手机 15 + 平板 10 = 91 个页面录制,每页多容器逐屏滚动 + 结构性点击 + 录像 + 观察者",
+      "侧栏真实点击走查(精确 href,11 个目的地)",
+      "手机导航可达性穷举:7 个种子页 x 逐屏滚动 x 命中测试"
+    ],
+    "excluded": [],
+    "capabilities": [
+      {
+        "name": "Playwright 1.58.2 (global) + Chromium 1208 + recordVideo",
+        "available": true
+      },
+      {
+        "name": "Video parsing via read tool (webm -> ffmpeg -> mp4)",
+        "available": true
+      },
+      {
+        "name": "console / pageerror / requestfailed / HTTP>=400 observers",
+        "available": true
+      },
+      {
+        "name": "DOM geometry + attribute inspection (read-only)",
+        "available": true
+      },
+      {
+        "name": "Direct API calls with session cookie (read + one POST each for plan / course-inquiry / whiteboard plan)",
+        "available": true
+      },
+      {
+        "name": "Mutation testing of new contract guards (temporary, restored in-command)",
+        "available": true
+      },
+      {
+        "name": "Full lecture playthrough (all steps + quick_check interaction + mermaid + KaTeX on board)",
+        "available": false,
+        "note": "stopped after step 1-2; board renders and plays but the full 10-14 step arc was not observed"
+      },
+      {
+        "name": "Screen reader observation",
+        "available": false,
+        "note": "a11y conclusions from DOM attributes only"
+      },
+      {
+        "name": "Full lecture playthrough (all steps + quick_check + board mermaid/KaTeX)",
+        "available": false,
+        "note": "仍只到第 1-2 步"
+      },
+      {
+        "name": "Keyboard accessibility walkthrough (Tab order, focus, Esc)",
+        "available": false,
+        "note": "本轮只做鼠标与触达点击"
+      },
+      {
+        "name": "Production write actions (create post / like / pay / upload / refund)",
+        "available": false,
+        "note": "只验证了无凭据时正确 fail-closed"
+      },
+      {
+        "name": "Full lecture playthrough (all steps + quick_check + board mermaid/KaTeX)",
+        "available": false,
+        "note": "仍只到第 1-2 步"
+      },
+      {
+        "name": "Keyboard accessibility walkthrough (Tab order, focus, Esc)",
+        "available": false,
+        "note": "本轮只做鼠标与触达点击"
+      },
+      {
+        "name": "Production write actions (create post / like / pay / upload / refund)",
+        "available": false,
+        "note": "只验证了无凭据时正确 fail-closed"
+      }
+    ]
+  },
+  "hypotheses": [
+    {
+      "id": "H-001",
+      "question": "上一轮 11 条问题的 8 项修复是否真的在线上生效(而非只改了源码)",
+      "risk": "high",
+      "status": "executed",
+      "experiment": "逐条:源码落点 + 线上实测 + 守卫变异验证",
+      "observed": "8/8 源码落地;7 项运行时实证通过(P-001 三次冷实例 plan 100-106s 全部存活、P-002 23.3s 返回 source:template、P-004/005 由 500 转 401、P-006 粗指针 <44px 由 2 降 1、P-010 字体 404 转 200、P-011 aria-pressed 已带);P-003 因需构造字典 import 挂起态未触发。两个守卫经变异确认会变红。",
+      "evidence": [
+        "E-001",
+        "E-002",
+        "E-003"
+      ]
+    },
+    {
+      "id": "H-002",
+      "question": "自由讲座能否让我第一次真正进入白板授课(关闭上一轮最大盲区)",
+      "risk": "high",
+      "status": "executed",
+      "experiment": "#/whiteboard?topic= 端到端两段:备课 -> 越交互模式门禁 -> 开讲",
+      "observed": "plan 101.6s/105.3s 返回并存活;选择 Typing/Voice 后 Start learning 由禁用转可用;开讲后板书渐进书写(笔尖光标+逐段变深)、字幕逐字浮现、手写体中文渲染正常、TTS 连续 200/206。盲区关闭,但未完整播放一堂课。",
+      "evidence": [
+        "E-002",
+        "E-007",
+        "E-008"
+      ]
+    },
+    {
+      "id": "H-003",
+      "question": "v4 循证教学契约(10-14 步 / >=2 mermaid / 恰好 3 quick_check)在自由讲座主题上是否成立",
+      "risk": "high",
+      "status": "executed",
+      "experiment": "直连 POST /api/hyperknow/whiteboard/plan,解析完整响应",
+      "observed": "本次返回 degraded:true、5 步、0 mermaid、2 quick_check —— 命中 92c42fe 记录的 5 步应急兜底。UI 侧有自由讲座模式的自动重挣(WhiteboardPage.tsx:353-360)与预热拒存(planPrefetch.ts:120-122);但本次未能确认 UI 那两次拿到的计划是否降级,亦未确认降级是否对学员披露。记为信息项 R-004。",
+      "evidence": [
+        "E-003",
+        "E-004"
+      ]
+    },
+    {
+      "id": "H-004",
+      "question": "9 月更名见界/LATTICE 后,旧代号 Hyperknow 是否还有残留",
+      "risk": "medium",
+      "status": "executed",
+      "experiment": "grep SPA 源码 + 运行时检索 3 条 lattice 页面 DOM",
+      "observed": "源码 8 处用户可见字面量残留(账户删除申请邮件正文 / 导出板书标题 / 反馈邮件主题 / 讲座简介正文 / 策展人署名 x3 / iCal PRODID)。运行时实证 1 处(讲座简介正文截图可见 every Hyperknow lesson does);策展人署名在 course-preview/journey/marketplace 三页检索 0 次,未复现。更名当时只改了 i18n 值,漏了硬编码字面量。",
+      "evidence": [
+        "E-004",
+        "E-009"
+      ]
+    },
+    {
+      "id": "H-005",
+      "question": "旁白文本是否仍有上次修掉的英文/标点污染",
+      "risk": "low",
+      "status": "executed",
+      "experiment": "逐字解码 TTS tts/stream 的 text 参数 + 读 sanitizeNarration 实现",
+      "observed": "未见英文词泄漏(唯一拉丁词是登录名 Agent,符合设计)。但两次旁白句中出现孤立「且闭括号缺失,另有一处错字「传导辑径」应为「路径」。sanitizeNarration 只剥标签/解实体/收空白,完全不碰「」,故属模型原始输出质量问题而非管线 bug。单次观测,第 3 次未复现。",
+      "evidence": [
+        "E-001",
+        "E-002"
+      ]
+    },
+    {
+      "id": "H-006",
+      "question": "新增契约测试是否真会拦(而非空过)",
+      "risk": "high",
+      "status": "executed",
+      "experiment": "反向变异:plan 预算常量改回 60s;产物 CSS 字体名改错",
+      "observed": "两者均变红并在还原后恢复。过程中我第一次变异挑错了 CSS 文件导致假阴性,已纠正 —— 变异测试只有在变异确实落地时才有意义。",
+      "evidence": [
+        "E-003",
+        "E-005"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "hypothesis_id": "H-001",
+      "title": "上一轮的 8 条修复问题:线上已全部消解(修复由团队实施,本轮只做验证)",
+      "status": "dismissed",
+      "severity": "informational",
+      "impact": "P-001/P-002/P-004/P-005/P-006/P-010/P-011 线上实测确认修复;P-003 源码守卫到位、运行时未触发(需构造挂起态)。原 gate 的三条阻断理由已全部消除。",
+      "expected": "上一轮问题文档所列的修复方向",
+      "expectation_basis": "上一轮 ISSUES.md + commit b5d5bd9 的修复声明",
+      "actual": "见 hypothesis H-001 观测;P-001 三次冷实例 plan 100-106s 全部存活为最强运行时证据。",
+      "steps": [
+        "逐条读源码落点",
+        "线上直连/浏览器实测",
+        "守卫变异验证"
+      ],
+      "reproduction": {
+        "attempts": 8,
+        "observed": 7
+      },
+      "evidence": [
+        "E-001",
+        "E-002",
+        "E-003",
+        "E-004",
+        "E-005",
+        "E-006"
+      ],
+      "countercheck": {
+        "alternative": "源码改了但线上未重新部署,或部署了但只有部分生效",
+        "result": "已排除:线上 401/200 状态码、DOM aria-pressed、命中框几何、字体 200 均为实测值,非源码推断。",
+        "evidence": [
+          "E-001",
+          "E-002",
+          "E-003"
+        ]
+      }
+    },
+    {
+      "id": "F-002",
+      "hypothesis_id": "H-004",
+      "title": "[新] 旧产品名 Hyperknow 残留在 8 处用户可见文案(含账户删除申请邮件正文)",
+      "status": "confirmed",
+      "severity": "medium",
+      "impact": "9 月更名只改了 i18n 字典的值,硬编码 L() 字面量全部漏掉。账户删除申请邮件正文与导出板书标题会以旧代号出现在用户面前;运行时已实证讲座简介正文泄漏。",
+      "expected": "更名后用户可见文案不再出现旧代号",
+      "expectation_basis": "commit fe6e5f6(2026-09-06)更名 + i18n 值确已为 Lattice/见界",
+      "actual": "SettingsModal.tsx:242-243 / boardExport.ts:395 / actions.ts:161 / WhiteboardPage.tsx:280-281 / data.ts:536 / generate.ts:175,254 / actions.ts:61",
+      "steps": [
+        "grep Hyperknow 全 SPA 源码",
+        "运行时检索 3 条 lattice 页面",
+        "比对更名 commit 的实际改动范围"
+      ],
+      "reproduction": {
+        "attempts": 1,
+        "observed": 1
+      },
+      "evidence": [
+        "E-004",
+        "E-009"
+      ],
+      "countercheck": {
+        "alternative": "也许这些字面量在不可达分支里(如仅 dev 可见)",
+        "result": "未推翻:讲座简介正文已在生产截图实证;其余为组件内确定性字面量(删除申请按钮/导出/反馈),代码路径可达,但本轮未逐个点击验证,故明确标注为「源码可达、未运行时逐项确认」。策展人署名经运行时检索 0 次,已从确认项降级为潜在项。",
+        "evidence": [
+          "E-004"
+        ]
+      }
+    },
+    {
+      "id": "F-003",
+      "hypothesis_id": "H-002",
+      "title": "自由讲座英文简介把中文主题硬拼进英文句子,语法不成立,且会被 TTS 念出",
+      "status": "confirmed",
+      "severity": "low",
+      "impact": "WhiteboardPage.tsx:280 英文变体无引号/语法适配,中文主题直接嵌入句中;同一句是旁白与字幕共用的文案,会被 TTS 逐字朗读。中文变体处理正确,英文变体未跟进。",
+      "expected": "英文 UI 下的简介应为合法英文句;至少应对非拉丁主题做引号/模板适配",
+      "expectation_basis": "同文件中文字变体已用「」包裹的正确处理方式(同一模板的两种语言应对齐)",
+      "actual": "线上渲染为 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: ...",
+      "steps": [
+        "打开 /lattice/#/whiteboard?topic=中文主题",
+        "截图读取简介正文",
+        "读 WhiteboardPage.tsx:278-283 双语模板"
+      ],
+      "reproduction": {
+        "attempts": 1,
+        "observed": 1
+      },
+      "evidence": [
+        "E-007",
+        "E-009"
+      ],
+      "countercheck": {
+        "alternative": "也许英文 UI 下不会出现中文主题",
+        "result": "已排除:本次会话 UI 为英文,主题为中文,正是会触发的组合;且自由讲座的产品定位就是学员用母语命题。",
+        "evidence": [
+          "E-007"
+        ]
+      }
+    },
+    {
+      "id": "F-004",
+      "hypothesis_id": "H-005",
+      "title": "[新] 旁白出现孤立「未闭合与一处错字(模型输出,非管线 bug)",
+      "status": "suspected",
+      "severity": "low",
+      "impact": "旁白逐字进 TTS 与字幕,孤立标点会被念出/显示。团队今日已投入 5 个 commit 治理旁白质量。",
+      "expected": "旁白为通顺中文散文,标点配对",
+      "expectation_basis": "sanitizeNarration 的契约注释(spoken_text 的契约是纯散文)",
+      "actual": "两次旁白出现孤立「(闭括号缺失)与「传导辑径」错字(应为路径)",
+      "steps": [
+        "解码 TTS text 参数",
+        "读 sanitizeNarration 确认其不碰「」"
+      ],
+      "reproduction": {
+        "attempts": 2,
+        "observed": 1
+      },
+      "evidence": [
+        "E-001"
+      ],
+      "countercheck": {
+        "alternative": "也许是我解码出错或净化逻辑引入",
+        "result": "已排除净化逻辑(sanitizeNarration 只剥标签/解实体/收空白);解码用两次独立调用结果一致。第 3 次生成未复现,故为单次观测,状态 suspected。",
+        "evidence": [
+          "E-003"
+        ]
+      }
+    },
+    {
+      "id": "F-005",
+      "hypothesis_id": "H-006",
+      "title": "[观察] 8 项修复中 4 项无守卫测试,同类回归可再次无声发生",
+      "status": "confirmed",
+      "severity": "low",
+      "impact": "P-002(55s<60s)与 P-001 是同一族时限不变量却无测试;P-003(i18n 预算)、P-006(44px 触达)、P-011(aria-pressed)同样无测试。上一轮事故正是「加了测试但没测到真问题」,同类风险仍在。",
+      "expected": "每类不变量至少一条契约测试",
+      "expectation_basis": "本次新加的 whiteboard-plan-budget 与 build-assets 证明该做法在本仓可行",
+      "actual": "tests/ 中检索 LOCALE_LOAD_BUDGET/prepareI18n/course-inquiry/aria-pressed/wb-intro-close 均无命中",
+      "steps": [
+        "列出本次新增的 4 个测试文件",
+        "逐项检索 8 项修复在 tests/ 的覆盖"
+      ],
+      "reproduction": {
+        "attempts": 8,
+        "observed": 3
+      },
+      "evidence": [
+        "E-005"
+      ],
+      "countercheck": {
+        "alternative": "也许被其他测试间接覆盖",
+        "result": "检索的是全 tests/ 目录的全部 mjs,匹配到的 44/timeoutMs 均为无关项(图分叉间距、字幕启动超时、白板相机),确认无覆盖。",
+        "evidence": [
+          "E-005"
+        ]
+      }
+    },
+    {
+      "id": "F-006",
+      "hypothesis_id": "H-003",
+      "title": "[信息] plan 曾降级为 5 步模板;UI 是否有披露未验证",
+      "status": "suspected",
+      "severity": "informational",
+      "impact": "直连 API 一次返回 degraded:true(5 步/0 图/2 quick_check),而 v4 契约是 10-14 步/≥2 图/恰好 3 检。UI 有自动重挣与预热拒存,但学员是否被告知未验证。",
+      "expected": "降级对学员可见且可重试",
+      "expectation_basis": "92c42fe 记录的降级路径 + WhiteboardPage.tsx:353-360 的重挣逻辑",
+      "actual": "3 次观测中 1 次直连调用降级;UI 两次只见单次 plan 响应,无法判定其计划质量",
+      "steps": [
+        "直连 plan 解析 steps/图/quick_check/degraded",
+        "比对 UI 两次的网络日志"
+      ],
+      "reproduction": {
+        "attempts": 3,
+        "observed": 1
+      },
+      "evidence": [
+        "E-003"
+      ],
+      "countercheck": {
+        "alternative": "UI 那次其实也是降级课",
+        "result": "无法判定:UI 只见一次 plan 响应,与「第一次就是好计划」和「重试后合并」都相容。不作缺陷结论,列为待验证项。",
+        "evidence": [
+          "E-002"
+        ]
+      }
+    },
+    {
+      "id": "F-007",
+      "hypothesis_id": "H-001",
+      "title": "[新,高] 手机端 6 个主目的地完全没有导航入口",
+      "status": "confirmed",
+      "severity": "high",
+      "impact": "390x844 下,遍历 7 个种子页、逐屏滚动、命中测试后,/challenges /collections /docs /studio /developers /wallet 全程零可达入口;手机用户只能到 12 个主板块中的 6 个。源码 site-shell.tsx:58 mobileTabHrefs 只有 4 项,且移动端导航无任何溢出/更多触发器,被裁掉的 6 项没有兜底。/studio/new(FAB 可点)通达,但 /studio 本身不可点。",
+      "expected": "裁剪 tab 栏是有意的(源码注释「主入口白名单」),但被裁项应有溢出菜单兜底",
+      "expectation_basis": "site-shell.tsx 源码 + 运行时可达性穷举",
+      "actual": "mobileTabHrefs 只含 4 项(/、/discover、/bookshelf、/circles);移动端 nav 只渲染这 4 项 + deep-mobile-create(/studio/new);运行时 7 种子页逐屏命中测试,该 6 项从未进入视口",
+      "steps": [
+        "读 site-shell.tsx 确认 mobileTabHrefs 与移动端 nav 的渲染范围",
+        "390x844 下枚举主屏可见可点链接(带命中测试)",
+        "逐屏滚到底统计可见可点链接",
+        "跨 7 个种子页取并集,验证不是首页独有"
+      ],
+      "reproduction": {
+        "attempts": 7,
+        "observed": 7
+      },
+      "evidence": [
+        "E-016",
+        "E-017",
+        "E-019"
+      ],
+      "countercheck": {
+        "alternative": "也许这些目的地从别的页面可达,只是首页没有",
+        "result": "已排除:跨 /、/discover、/circles、/bookshelf、/collections、/challenges、/docs 七个种子页逐屏滚动取并集,该 6 项仍零入口。竞争解释「mobileTabHrefs 裁剪本身是缺陷」不成立 —— 裁剪 tab 有源码注释说明;缺的是溢出菜单。",
+        "evidence": [
+          "E-017"
+        ]
+      }
+    },
+    {
+      "id": "F-008",
+      "hypothesis_id": "H-001",
+      "title": "91 个页面深度交互录制:产品侧零异常(负面结论)",
+      "status": "dismissed",
+      "severity": "informational",
+      "impact": "无异常:滚动未到底 0、错误 0、>=400 0、console error 0;左右两栏全程粘性固定;长内容覆盖到位(书籍正文 6429px/12 步)。",
+      "expected": "深交互可能暴露浅层导航看不到的懒加载失败/滚动端点破版",
+      "expectation_basis": "oracles:Do not report every layout change as a defect; no observed anomalies means only no observed anomalies in the sampled scope",
+      "actual": "45-deep-summary.json 聚合 91 个页面录制:全部指标为 0 异常",
+      "steps": [
+        "四批次 + 两视口共 91 页录制",
+        "聚合滚动覆盖/错误/4xx/console 统计"
+      ],
+      "reproduction": {
+        "attempts": 91,
+        "observed": 0
+      },
+      "evidence": [
+        "E-022"
+      ],
+      "countercheck": {
+        "alternative": "也许只是没测到",
+        "result": "覆盖面已记录:手机/平板仅 15/10 页非全量;键盘可达性未测;帧级瞬态不可判定。这些盲区已在报告中列明,故此结论只覆盖采样范围。",
+        "evidence": [
+          "E-022"
+        ]
+      }
+    },
+    {
+      "id": "F-009",
+      "hypothesis_id": "H-001",
+      "title": "[方法论] 深交互驱动器的四个缺陷均已定位并修正,前三个曾造成假阴性",
+      "status": "dismissed",
+      "severity": "informational",
+      "impact": "(1) scroll-behavior:smooth 下赋 scrollTop 会启动动画,立即读回仍是旧值 -> 误判没动而 break(/developers/docs 1174px 只滚 1 步);(2) 每步重挑最大可滚动元素 -> 懒加载元素出现后目标换人,下半段永远滚不到;(3) 只取最大容器 -> 漏掉「页面不滚动但固定区域可滚」这一类(/feed 侧栏 62px 整段未测);(4) a:has-text() 匹配祖先 -> 侧栏点击点到 14x14 圆点链接,伪造出「导航在 /feed 坏掉」的假象。",
+      "expected": "驱动器测出的覆盖率与异常应真实",
+      "expectation_basis": "自身工具链可信度(oracles:Do not claim an unseen channel was inspected)",
+      "actual": "四项全部由判别实验定位并修正;修正后导航走查 11/11 正常、/feed 侧栏 62px 被覆盖、/developers/docs 滚到 1236px",
+      "steps": [
+        "每项假阴性单独设计判别实验",
+        "修正后复跑对照"
+      ],
+      "reproduction": {
+        "attempts": 4,
+        "observed": 4
+      },
+      "evidence": [
+        "E-016",
+        "E-019",
+        "E-022"
+      ],
+      "countercheck": {
+        "alternative": "第四项可能是真产品缺陷",
+        "result": "已排除:精确 a[href=\"/circles\"] 点击后 /feed -> /circles -> /challenges 全部正常跳转,产品无损。",
+        "evidence": [
+          "E-019"
+        ]
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E-001",
+      "path": "evidence/21-free-lecture.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/test-free-lecture.mjs free lecture leg 1: plan 101.6s survived, TTS 200/206, narration text captured",
+      "sha256": "dd56d5199c1716a5cacf566952afc4ac3c8e5eaa974a247f8d29e59be09e3881",
+      "bytes": 37798,
+      "registered_at": "2026-10-03T04:06:56Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-002",
+      "path": "evidence/22-lecture-play.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/test-lecture-play.mjs free lecture leg 2: plan 105.3s, mode gate, Start learning enabled, lecture began (board=114, captions=2)",
+      "sha256": "ace089a9f2de93877d2aa853c2f07bbfadd8dc68e0f900e724e38f39b9fba78b",
+      "bytes": 4582,
+      "registered_at": "2026-10-03T04:06:57Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-003",
+      "path": "evidence/25-plan-contract.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "direct POST /api/hyperknow/whiteboard/plan 102.8s -> degraded:true, 5 steps, 0 mermaid, 2 quick_checks",
+      "sha256": "09078dea4a3461b0fa0abf64141c07a9f2fa3b3b2ce8f18ad09e4b0b363e0566",
+      "bytes": 3787,
+      "registered_at": "2026-10-03T04:06:57Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-004",
+      "path": "evidence/24-hypernow-leak-runtime.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/check-stale-name.mjs runtime search for stale 'Hyperknow' on 3 lattice pages (0 hits - curator NOT reproduced)",
+      "sha256": "7f30935afa040de20eea8b3a2bde43a54ac7b2605a11fc7e3b7cb1b1d89ae1e8",
+      "bytes": 322,
+      "registered_at": "2026-10-03T04:06:57Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-005",
+      "path": "evidence/23-rerecord.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/rerecord.mjs 12 key routes re-recorded after deploy, all 200, no KaTeX 404s",
+      "sha256": "feb6b5b88c6d0c1838d0008af7d4b13cef6d0ac0b131cd37ad82bdc01990b792",
+      "bytes": 7130,
+      "registered_at": "2026-10-03T04:06:57Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-006",
+      "path": "evidence/31-play-04-final.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "whiteboard lecture in progress: handwritten CN title, 3-part body, subtitle bar",
+      "sha256": "b6e6169b71715155871a9f30a6864b745c59af238e6f6b3fd8868d584af5bf1f",
+      "bytes": 152977,
+      "registered_at": "2026-10-03T04:06:57Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-007",
+      "path": "evidence/31-play-02-lecture-begin.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "board mid-write: progressive writing, pen cursor, subtitle typing in",
+      "sha256": "308e163e307416ab6f4d0b4f86724aa0c5280391a81e970ce398458a5127f734",
+      "bytes": 137566,
+      "registered_at": "2026-10-03T04:06:58Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-008",
+      "path": "evidence/30-free-10-prep-9.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "free lecture intro card with 'Preparing this lecture...' + Hyperknow stale name + ungrammatical EN splice",
+      "sha256": "a089bd9d9919fee57b11044892132686d08cf5219e76322391ef1988ddc5a1da",
+      "bytes": 56702,
+      "registered_at": "2026-10-03T04:06:58Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-009",
+      "path": "evidence/31-free-lecture-play.webm",
+      "kind": "video",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "free lecture full recording (157s): prepare -> gate -> lecture playback",
+      "sha256": "bee0dfd93098d8a9d0342d59b9609dc8e00a05db704a66679380e1120cdedde3",
+      "bytes": 10138632,
+      "registered_at": "2026-10-03T04:06:58Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-010",
+      "path": "evidence/20-regression-dom.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/check-dom.mjs P-011 aria-pressed + P-006 hit targets across 2 pointer modes",
+      "sha256": "ea773d50b56d549b40a2d1feb1c6976f71db1c4452295637da84a3af94852bfc",
+      "bytes": 3897,
+      "registered_at": "2026-10-03T04:07:11Z",
+      "captured_at": "unknown",
+      "environment": "unknown",
+      "revision": "prod baseline 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-011",
+      "path": "evidence/48-mobile.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/run-viewports.mjs 390x844 hasTouch, 15 pages deep walk",
+      "sha256": "87108ea0e79dcb4e6ae0ca81efdad25bb86842cc3c18948867bdcf34c65d589a",
+      "bytes": 29169,
+      "registered_at": "2026-10-03T04:56:32Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-012",
+      "path": "evidence/49-tablet.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/run-viewports.mjs 820x1180, 10 pages deep walk",
+      "sha256": "1f206871777ba556fb5a916ef281d67831f1135a5879e95eef43d46df7cec01a",
+      "bytes": 18550,
+      "registered_at": "2026-10-03T04:56:32Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-013",
+      "path": "evidence/50-click-deep.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/click-deep.mjs per-page structural controls with account-menu skipped",
+      "sha256": "1c4550c01efdcd3d81f92f0f3e390d92ce409f2357e8a12fb48e27293fcb0b20",
+      "bytes": 21852,
+      "registered_at": "2026-10-03T04:56:32Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-014",
+      "path": "evidence/52-nav-click-walk2.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/nav-click-walk.mjs precise-href sidebar click walkthrough (10/11 landed, 1 timing artifact)",
+      "sha256": "f8820326dc817f95631712ce70095db591bca0afa3d2f79c518e1c243c7c1c80",
+      "bytes": 3094,
+      "registered_at": "2026-10-03T04:56:33Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-015",
+      "path": "evidence/56-mobile-reachability.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "P-101 CORE EVIDENCE: 7 seed pages x full scroll x hit-testing -> 6 destinations unreachable on mobile",
+      "sha256": "ed8dfe9f0d61f77049acfb255bafe12d8be7ac20e9add19b579eed362b230e05",
+      "bytes": 3030,
+      "registered_at": "2026-10-03T04:56:33Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-016",
+      "path": "evidence/55-mobile-nav-scroll.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-mobile-nav3.mjs per-scroll-position visible+tappable link census on mobile home",
+      "sha256": "f2a19d9a3a40a4fceb2b94be108e678dcbc49e21cbb0b9250a14b1346a1adb71",
+      "bytes": 864,
+      "registered_at": "2026-10-03T04:56:33Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-017",
+      "path": "evidence/51-probe-nav-click.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-nav-click.mjs discriminating test that OVERTURNS my own 'circles nav broken' hypothesis",
+      "sha256": "01a7c06dcbd9dc0b46c6f5bafe9d9f5612e20fc631b47ef044dae27fbcda4e87",
+      "bytes": 722,
+      "registered_at": "2026-10-03T04:56:33Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-018",
+      "path": "evidence/54-mobile-nav-probe.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-mobile-nav2.mjs mobile nav trigger + strip enumeration",
+      "sha256": "034a53e347d3bcdc776c3bf237a2338c615bbc36e4e31a5b295e547505fdd49c",
+      "bytes": 1389,
+      "registered_at": "2026-10-03T04:56:34Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-019",
+      "path": "evidence/53-mobile-nav.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-mobile-nav.mjs first mobile nav reachability census",
+      "sha256": "d27f8767869b2247ad23e79c15ca41716f780126ec728aea2a8b88ae3bdceb41",
+      "bytes": 960,
+      "registered_at": "2026-10-03T04:56:34Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-020",
+      "path": "evidence/mnav-01-home.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "mobile home 390x844 - tab bar has only 4 items + publish FAB, no overflow",
+      "sha256": "e2ad5ffb06242b84e8b5b0322c3e35c2216d2ee03a0b95d53a1ccd706144af73",
+      "bytes": 193549,
+      "registered_at": "2026-10-03T04:56:34Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-021",
+      "path": "evidence/m01-home-top.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "mobile home full-res: layout adapts cleanly, serif headline scales, editorial cards preserved",
+      "sha256": "cc2b0b1f4efd608820cabc7e86a61cc20811cc0e73ab13b15cd0097cb1fdd03c",
+      "bytes": 191926,
+      "registered_at": "2026-10-03T04:56:34Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)",
+      "reRegisteredNote": "文件在首次登记后被重跑覆盖,已按当前内容重新登记"
+    },
+    {
+      "id": "E-022",
+      "path": "evidence/45-deep-summary.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/summarize-deep.mjs aggregate over 91 page-views: 0 errors, 0 >=400, 0 console errors, all scroll containers reached bottom",
+      "sha256": "8a7ab2104772edb4d111fae1f63fd8f00269b3646e78a7e6b1d88d647675f3fd",
+      "bytes": 181698,
+      "registered_at": "2026-10-03T04:57:56Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-023",
+      "path": "evidence/58-keyboard.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/test-keyboard.mjs 12 pages x 18 Tabs: focus ring 100% visible, skip-link on main site, Esc-doesn't-close finding",
+      "sha256": "32c0046e5f37c2c411148cb251fc27cba199c097ad70859a73db5f491c2b9592",
+      "bytes": 74668,
+      "registered_at": "2026-10-03T05:13:45Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-024",
+      "path": "evidence/59-esc-probe.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-esc.mjs discriminating test for P-102: mouse-open+Esc stays open, outside-click closes, Esc reaches document",
+      "sha256": "3d7c3c6139111dfde203b116c36833be7046230f477129a6e25763fa3b2db5f3",
+      "bytes": 1237,
+      "registered_at": "2026-10-03T05:13:46Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-025",
+      "path": "evidence/60-collapse-focus.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-collapse-focus.mjs OVERTURNS my own 'invisible focus' hypothesis: collapse button lights up on focus (opacity 1, 2px ring)",
+      "sha256": "2eb60bba77e0bb54dee9d5539824bdce993a2fe7fe41eb54764dacb151734a75",
+      "bytes": 533,
+      "registered_at": "2026-10-03T05:13:46Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-026",
+      "path": "evidence/esc-2-mouse-after-esc.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "P-102 visual proof: account menu STILL OPEN after pressing Escape",
+      "sha256": "dca7dddc4fd71ac5bc89107ba74396ec11acfdaeaa14d9c9f9d793c07962eda8",
+      "bytes": 485943,
+      "registered_at": "2026-10-03T05:13:46Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-027",
+      "path": "evidence/kbd01-home-focus.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "keyboard focus state on main site home (focus ring visible)",
+      "sha256": "d98ef77b147318d53eec6029dbb14f926e55ae20900899d8edc15299e1869d02",
+      "bytes": 484195,
+      "registered_at": "2026-10-03T05:13:46Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-028",
+      "path": "evidence/kbd-collapse-focused.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "lattice sidebar collapse button correctly lit on keyboard focus",
+      "sha256": "ad9c5e99eb4f3d1707870c90ad34cd7e2c994c410cfa3f11f3979605b7186277",
+      "bytes": 184107,
+      "registered_at": "2026-10-03T05:13:46Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-029",
+      "path": "evidence/57-mobile-full.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/run-mobile-full.mjs ALL 54 pages at 390x844 hasTouch: 0 errors, 0 >=400",
+      "sha256": "69f4d0948ef3036d7b5ac8bf060d40cf345c39a41f21be6a6dd71a4f3e5896ca",
+      "bytes": 91976,
+      "registered_at": "2026-10-03T05:24:08Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-030",
+      "path": "evidence/61-book-table-mobile.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-book-table.mjs OVERTURNS my own 'book table text collision' impression: 0/24 cells overflow, table 358px in 358px container",
+      "sha256": "55fdf476ba594d94cfd98ba9b3ce5a84d5c17a7aa5f720a9c2eebae88f14c38c",
+      "bytes": 11488,
+      "registered_at": "2026-10-03T05:24:08Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    },
+    {
+      "id": "E-031",
+      "path": "evidence/table-mobile-390.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "book 4-column table at 390px: cramped (40-45px columns) but NOT broken - no overlap/overflow/clipping",
+      "sha256": "83c7585b4e819354f37186e5afad2739d4e7f39fc8d3dcc4e828ec0b4900df1b",
+      "bytes": 163277,
+      "registered_at": "2026-10-03T05:24:08Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge; 浏览器经本机透明代理,API 探测经盒子 --resolve 到 CF 边缘)",
+      "revision": "prod 9a59f77 + 7 commits (2026-10-03)"
+    }
+  ],
+  "coverage": {
+    "exercised": [
+      {
+        "area": "上一轮 8 项修复的源码 + 运行时回归",
+        "risk": "high",
+        "reason": "7 项线上实测确认,P-003 需构造挂起态未触发",
+        "evidence": [
+          "E-001",
+          "E-002",
+          "E-003",
+          "E-004",
+          "E-005",
+          "E-006"
+        ]
+      },
+      {
+        "area": "自由讲座端到端(新功能,关闭最大盲区)",
+        "risk": "high",
+        "reason": "备课 101.6/105.3s 存活 -> 越门禁 -> 开讲,板书渐进书写/字幕/TTS/手写字体均实证",
+        "evidence": [
+          "E-002",
+          "E-007",
+          "E-008"
+        ]
+      },
+      {
+        "area": "两个新契约守卫的变异验证",
+        "risk": "high",
+        "reason": "改坏常量/字体名均变红,还原后恢复",
+        "evidence": [
+          "E-001",
+          "E-002"
+        ]
+      },
+      {
+        "area": "12 条关键路由重录",
+        "risk": "medium",
+        "reason": "全部 200,书/章节页 KaTeX 404 已消失",
+        "evidence": [
+          "E-005",
+          "E-006",
+          "E-007"
+        ]
+      },
+      {
+        "area": "91 个页面深度交互录制(桌面/手机/平板,多容器滚动+结构点击)",
+        "risk": "high",
+        "reason": "0 错误 / 0 >=400 / 0 console error / 全部可滚区滚到底;发现 P-101 手机导航缺口",
+        "evidence": [
+          "E-022"
+        ]
+      },
+      {
+        "area": "侧栏真实点击走查(精确 href)",
+        "risk": "high",
+        "reason": "11 个目的地全部正常跳转,推翻 v1 的假阳性",
+        "evidence": [
+          "E-020"
+        ]
+      },
+      {
+        "area": "手机导航可达性穷举(7 种子页 x 逐屏 x 命中测试)",
+        "risk": "high",
+        "reason": "6 个目的地零入口,源码与运行时双向坐实",
+        "evidence": [
+          "E-017"
+        ]
+      },
+      {
+        "area": "91 个页面深度交互录制(桌面/手机/平板,多容器滚动+结构点击)",
+        "risk": "high",
+        "reason": "0 错误 / 0 >=400 / 0 console error / 全部可滚区滚到底;发现 P-101 手机导航缺口",
+        "evidence": [
+          "E-022"
+        ]
+      },
+      {
+        "area": "侧栏真实点击走查(精确 href)",
+        "risk": "high",
+        "reason": "11 个目的地全部正常跳转,推翻 v1 的假阳性",
+        "evidence": [
+          "E-020"
+        ]
+      },
+      {
+        "area": "手机导航可达性穷举(7 种子页 x 逐屏 x 命中测试)",
+        "risk": "high",
+        "reason": "6 个目的地零入口,源码与运行时双向坐实",
+        "evidence": [
+          "E-017"
+        ]
+      }
+    ],
+    "untested": [
+      {
+        "area": "一堂课完整播放(全部步骤 + quick_check 答题 + 板上 mermaid 图 + KaTeX 公式)",
+        "risk": "high",
+        "reason": "只到第 1-2 步即停止观察;这是 gate 未转 ready 的主因",
+        "evidence": []
+      },
+      {
+        "area": "字幕分句(≤2 句)与旁白净化在真实播放中的表现",
+        "risk": "medium",
+        "reason": "有契约测试但未在播放中观察到",
+        "evidence": []
+      },
+      {
+        "area": "降级计划是否对学员披露",
+        "risk": "medium",
+        "reason": "UI 那两次计划质量无法判定",
+        "evidence": []
+      },
+      {
+        "area": "移动端视觉走查 / 多语言 / 多账户",
+        "risk": "low",
+        "reason": "沿用上一轮,未做",
+        "evidence": []
+      },
+      {
+        "area": "键盘可达性(Tab 序列/焦点顺序/Esc 关闭)",
+        "risk": "high",
+        "reason": "本轮只做鼠标与触达点击;对一份刚做过 HIG 整改的站点是实质盲区",
+        "evidence": []
+      },
+      {
+        "area": "手机/平板全量页面(仅 15/10 页)",
+        "risk": "medium",
+        "reason": "主站 24 页与动态 17 页只在桌面视口录过",
+        "evidence": []
+      },
+      {
+        "area": "键盘可达性(Tab 序列/焦点顺序/Esc 关闭)",
+        "risk": "high",
+        "reason": "本轮只做鼠标与触达点击;对一份刚做过 HIG 整改的站点是实质盲区",
+        "evidence": []
+      },
+      {
+        "area": "手机/平板全量页面(仅 15/10 页)",
+        "risk": "medium",
+        "reason": "主站 24 页与动态 17 页只在桌面视口录过",
+        "evidence": []
+      }
+    ],
+    "blocked": [
+      {
+        "area": "P-003 运行时复现(字典 import 挂起)",
+        "risk": "medium",
+        "reason": "只读约束下无法在生产构造网络挂起态;源码守卫已确认到位",
+        "evidence": []
+      }
+    ]
+  },
+  "gate": {
+    "decision": "not_ready",
+    "rationale": "本轮深交互在产品侧未发现新缺陷(91 个页面录制零异常),但挖出一条新的高危问题 P-101(手机端 6/12 主板块无导航入口),且上一轮继承的 R-001(旧产品名残留在账户删除申请邮件正文等处)仍未修。此外键盘可达性完全未测,而这正是一份刚做过 HIG 整改的站点的关键面。是否放行由产品负责人裁决。",
+    "required_checks": [
+      {
+        "name": "上一轮 8 项修复线上生效",
+        "result": "passed",
+        "evidence": [
+          "E-001",
+          "E-002",
+          "E-003",
+          "E-004",
+          "E-005",
+          "E-006"
+        ]
+      },
+      {
+        "name": "新契约守卫会拦(变异验证)",
+        "result": "passed",
+        "evidence": [
+          "E-001",
+          "E-002"
+        ]
+      },
+      {
+        "name": "自由讲座端到端可进入并开讲",
+        "result": "passed",
+        "evidence": [
+          "E-002",
+          "E-007"
+        ]
+      },
+      {
+        "name": "一堂课完整播放 + quick_check 交互 + 板上公式与图",
+        "result": "not_run",
+        "evidence": []
+      },
+      {
+        "name": "旧产品名 Hyperknow 残留清零",
+        "result": "failed",
+        "evidence": [
+          "E-004",
+          "E-009"
+        ]
+      },
+      {
+        "name": "每类不变量均有契约测试",
+        "result": "failed",
+        "evidence": [
+          "E-005"
+        ]
+      },
+      {
+        "name": "91 个页面深度交互无异常",
+        "result": "passed",
+        "evidence": [
+          "E-022"
+        ]
+      },
+      {
+        "name": "侧栏导航 11 个目的地可达",
+        "result": "passed",
+        "evidence": [
+          "E-020"
+        ]
+      },
+      {
+        "name": "手机端主导航完整性",
+        "result": "failed",
+        "evidence": [
+          "E-017"
+        ]
+      },
+      {
+        "name": "键盘可达性",
+        "result": "not_run",
+        "evidence": []
+      },
+      {
+        "name": "旧产品名 Hyperknow 残留清零",
+        "result": "failed",
+        "evidence": [
+          "E-004",
+          "E-009"
+        ]
+      },
+      {
+        "name": "91 个页面深度交互无异常",
+        "result": "passed",
+        "evidence": [
+          "E-022"
+        ]
+      },
+      {
+        "name": "侧栏导航 11 个目的地可达",
+        "result": "passed",
+        "evidence": [
+          "E-020"
+        ]
+      },
+      {
+        "name": "手机端主导航完整性",
+        "result": "failed",
+        "evidence": [
+          "E-017"
+        ]
+      },
+      {
+        "name": "键盘可达性",
+        "result": "not_run",
+        "evidence": []
+      },
+      {
+        "name": "旧产品名 Hyperknow 残留清零",
+        "result": "failed",
+        "evidence": [
+          "E-004",
+          "E-009"
+        ]
+      }
+    ],
+    "accepted_risks": []
+  }
+}

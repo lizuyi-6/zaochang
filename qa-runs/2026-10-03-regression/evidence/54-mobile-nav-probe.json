@@ -1,0 +1,82 @@
+{
+  "triggers": [
+    {
+      "t": "",
+      "cls": "deep-search-trigger",
+      "exp": null,
+      "hsp": null,
+      "rect": "293,12 40x35",
+      "vis": true
+    },
+    {
+      "t": "造",
+      "cls": "deep-account",
+      "exp": "false",
+      "hsp": null,
+      "rect": "341,8 38x44",
+      "vis": true
+    }
+  ],
+  "stripItems": [
+    {
+      "t": "PRODUCT / EC",
+      "cls": "galaxy-gateway",
+      "top": 637,
+      "w": 172,
+      "h": 88
+    },
+    {
+      "t": "首页",
+      "cls": "active",
+      "top": 795,
+      "w": 74,
+      "h": 35
+    },
+    {
+      "t": "探索",
+      "cls": "",
+      "top": 795,
+      "w": 74,
+      "h": 35
+    },
+    {
+      "t": "书架",
+      "cls": "",
+      "top": 795,
+      "w": 74,
+      "h": 35
+    },
+    {
+      "t": "圈子",
+      "cls": "",
+      "top": 795,
+      "w": 74,
+      "h": 35
+    },
+    {
+      "t": "",
+      "cls": "deep-mobile-create",
+      "top": 781,
+      "w": 45,
+      "h": 45
+    }
+  ],
+  "found": {
+    "/feed": true,
+    "/challenges": true,
+    "/collections": true,
+    "/docs": true,
+    "/studio": true,
+    "/developers": true,
+    "/wallet": true
+  },
+  "notes": [
+    "点「PRODUCT / EC」后 URL=/galaxy 新增可达:无 链接数=11",
+    "点「首页」失败",
+    "点「探索」失败",
+    "点「书架」失败",
+    "点「圈子」失败",
+    "点「」失败"
+  ],
+  "hscroll": []
+}

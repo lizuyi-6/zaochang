@@ -1,0 +1,137 @@
+{
+  "capturedAt": "2026-10-03T04:55:54.773Z",
+  "elapsedMs": 53946,
+  "steps": [
+    {
+      "label": "start",
+      "atMs": 0,
+      "url": "/",
+      "textLen": 1438,
+      "landedUrl": "/"
+    },
+    {
+      "label": "首页",
+      "href": "/",
+      "before": "/",
+      "atMs": 11789,
+      "textLen": 1438,
+      "landedUrl": "/"
+    },
+    {
+      "label": "探索",
+      "href": "/discover",
+      "before": "/",
+      "atMs": 14883,
+      "textLen": 715,
+      "landedUrl": "/discover"
+    },
+    {
+      "label": "动态",
+      "href": "/feed",
+      "before": "/discover",
+      "atMs": 18877,
+      "textLen": 345,
+      "landedUrl": "/feed"
+    },
+    {
+      "label": "圈子",
+      "href": "/circles",
+      "before": "/feed",
+      "atMs": 24391,
+      "textLen": 567,
+      "landedUrl": "/circles"
+    },
+    {
+      "label": "挑战",
+      "href": "/challenges",
+      "before": "/circles",
+      "atMs": 27952,
+      "textLen": 556,
+      "landedUrl": "/challenges"
+    },
+    {
+      "label": "收藏",
+      "href": "/collections",
+      "before": "/challenges",
+      "atMs": 30957,
+      "textLen": 362,
+      "landedUrl": "/collections"
+    },
+    {
+      "label": "书架",
+      "href": "/bookshelf",
+      "before": "/collections",
+      "atMs": 34235,
+      "textLen": 635,
+      "landedUrl": "/bookshelf"
+    },
+    {
+      "label": "文档",
+      "href": "/docs",
+      "before": "/bookshelf",
+      "atMs": 37198,
+      "textLen": 272,
+      "landedUrl": "/docs"
+    },
+    {
+      "label": "创作台",
+      "href": "/studio",
+      "before": "/docs",
+      "atMs": 40007,
+      "textLen": 408,
+      "landedUrl": "/studio"
+    },
+    {
+      "label": "开发者",
+      "href": "/developers",
+      "before": "/studio",
+      "atMs": 42761,
+      "textLen": 518,
+      "landedUrl": "/developers"
+    },
+    {
+      "label": "果子钱包",
+      "href": "/wallet",
+      "before": "/developers",
+      "atMs": 45692,
+      "textLen": 719,
+      "landedUrl": "/wallet"
+    },
+    {
+      "label": "end",
+      "atMs": 48595,
+      "url": "/wallet",
+      "textLen": 719,
+      "landedUrl": "/wallet"
+    }
+  ],
+  "console": [
+    {
+      "type": "error",
+      "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+    }
+  ],
+  "http4xx5xx": [],
+  "failedReq": [
+    {
+      "method": "GET",
+      "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "err": "csp"
+    },
+    {
+      "method": "GET",
+      "url": "/bookshelf.rsc?_rsc=3Ia66_MOZuj_ywFU",
+      "err": "net::ERR_ABORTED"
+    },
+    {
+      "method": "GET",
+      "url": "/docs.rsc?_rsc=ALXXxqikpVJsr5zX",
+      "err": "net::ERR_ABORTED"
+    },
+    {
+      "method": "GET",
+      "url": "/developers.rsc?_rsc=ZUs2_D3uYzB6zWSu",
+      "err": "net::ERR_ABORTED"
+    }
+  ]
+}

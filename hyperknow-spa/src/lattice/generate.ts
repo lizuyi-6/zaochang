@@ -172,7 +172,7 @@ export function buildGeneratedCourse(prompt: string): GeneratedCourse {
   return {
     topic,
     title: cap(T),
-    curator: 'Hyperknow Official',
+    curator: 'LATTICE Official',
     description: L(
       `A self-paced course on ${T}. It starts from the core intuition, builds up the essential methods, then puts them to work in realistic scenarios — with interactive whiteboard lessons, quick checks and milestone projects along the way.`,
       `一门关于${sp(T)}的自适应课程。从核心直觉出发，逐步建立关键方法，再放到真实场景里运用——全程配有互动白板课节、随堂快检与阶段性项目。`,
@@ -251,7 +251,7 @@ export function courseFromBackend(cs: BackendCourse, fallbackTopic: string): Gen
     title: cs.courseTitle || fallbackTopic,
     /* 真课 UUID 必须随课程树走:旅程页 hash/深链/刷新复原都靠它 */
     ...(cs.courseUuid ? { courseUuid: cs.courseUuid } : {}),
-    curator: 'Hyperknow Official',
+    curator: 'LATTICE Official',
     description: cs.courseDescription || '',
     tags: (cs.tags ?? []).slice(0, 4).map((t) => (t.startsWith('#') ? t : `# ${t}`)),
     unit1Chip: L(`UNIT 1 OF ${n}`, `第 1 单元，共 ${n} 单元`),

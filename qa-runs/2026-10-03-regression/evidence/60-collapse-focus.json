@@ -1,0 +1,25 @@
+{
+  "before": {
+    "found": true,
+    "opacity": "0",
+    "visibility": "visible",
+    "rect": "24x24",
+    "display": "flex",
+    "outline": "none 0px rgb(110, 97, 82)",
+    "boxShadow": "none"
+  },
+  "afterFocus": {
+    "found": true,
+    "isActiveElement": true,
+    "opacity": "1",
+    "visibility": "visible",
+    "rect": "24x24",
+    "outline": "solid 2px rgb(194, 74, 46)",
+    "boxShadow": "rgb(255, 253, 248) 0px 0px 0px 3px",
+    "sidebarHovered": false
+  },
+  "afterHover": {
+    "opacity": "1",
+    "rect": "24x24"
+  }
+}

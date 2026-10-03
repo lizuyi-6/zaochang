@@ -21,6 +21,11 @@ export function sanitizeNarration(text: string): string {
   // 数学比较"x < y 且 y > 0"里的 < 后跟空格,不在此列,正文不被误吞。
   out = out.replace(/<\/?[a-zA-Z][^>]*>/g, '');
   for (const [re, rep] of BASIC_ENTITIES) out = out.replace(re, rep);
+  // 未配对的角括号折掉:实测模型旁白写出孤立的「(闭括号丢失),TTS/字幕原样带出;
+  // 两侧都在视为配对成功,不做过深嵌套推断。
+  if (out.includes('「') !== out.includes('」')) {
+    out = out.replace(/[「」]/g, '');
+  }
   // 标签剥除后的残留:多余空白收敛(换行/制表 → 单空格;连续空格 → 一个)
   out = out.replace(/\s+/g, ' ').trim();
   // 剥标签造成的粘连空格补正:中文标点前不留空格

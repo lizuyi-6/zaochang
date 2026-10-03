@@ -1,0 +1,2082 @@
+{
+  "capturedAt": "2026-10-03T04:24:15.497Z",
+  "out": [
+    {
+      "key": "a01-home",
+      "url": "https://aetherstudio.top/",
+      "status": 200,
+      "finalUrl": "/",
+      "textLen": 1454,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 1761,
+          "clientH": 900,
+          "w": 1440,
+          "h": 2661,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 1761,
+          "clientH": 900,
+          "w": 1440,
+          "h": 2661,
+          "cls": "",
+          "scrolls": 4,
+          "scrolledTo": 1761,
+          "shots": [
+            "a01-home-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ],
+            "a01-home-win-s60.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ],
+            "a01-home-win-s90.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a01-home-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 1823,
+      "walk": {
+        "scrolls": 6,
+        "maxScroll": 1823,
+        "scrolledTo": 1823,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 1454,
+          "after": 1491,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a02-discover",
+      "url": "https://aetherstudio.top/discover",
+      "status": 200,
+      "finalUrl": "/discover",
+      "textLen": 729,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 371,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1271,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 371,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1271,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 371,
+          "shots": [
+            "a02-discover-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a02-discover-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 433,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 433,
+        "scrolledTo": 433,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "全部",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "互动体验",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "效率工具",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "声音影像",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "生活方式",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "开发工具",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a03-feed",
+      "url": "https://aetherstudio.top/feed",
+      "status": 200,
+      "finalUrl": "/feed",
+      "textLen": 397,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a03-feed-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 62,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 62,
+        "scrolledTo": 62,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 397,
+          "after": 434,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a04-circles",
+      "url": "https://aetherstudio.top/circles",
+      "status": 200,
+      "finalUrl": "/circles",
+      "textLen": 573,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 402,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1302,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 402,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1302,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 402,
+          "shots": [
+            "a04-circles-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a04-circles-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 464,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 464,
+        "scrolledTo": 464,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 573,
+          "after": 610,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a05-challenges",
+      "url": "https://aetherstudio.top/challenges",
+      "status": 200,
+      "finalUrl": "/challenges",
+      "textLen": 564,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 276,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1176,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 276,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1176,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 276,
+          "shots": [
+            "a05-challenges-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a05-challenges-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 338,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 338,
+        "scrolledTo": 338,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 564,
+          "after": 601,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a06-collections",
+      "url": "https://aetherstudio.top/collections",
+      "status": 200,
+      "finalUrl": "/collections",
+      "textLen": 339,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 142,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1042,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 142,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1042,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 142,
+          "shots": [
+            "a06-collections-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a06-collections-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 204,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 204,
+        "scrolledTo": 204,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 339,
+          "after": 376,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a07-bookshelf",
+      "url": "https://aetherstudio.top/bookshelf",
+      "status": 200,
+      "finalUrl": "/bookshelf",
+      "textLen": 610,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 102,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1002,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 102,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1002,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 102,
+          "shots": [
+            "a07-bookshelf-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a07-bookshelf-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 164,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 164,
+        "scrolledTo": 164,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 610,
+          "after": 647,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a08-docs",
+      "url": "https://aetherstudio.top/docs",
+      "status": 200,
+      "finalUrl": "/docs",
+      "textLen": 274,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a08-docs-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 62,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 62,
+        "scrolledTo": 62,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 274,
+          "after": 311,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a09-studio",
+      "url": "https://aetherstudio.top/studio",
+      "status": 200,
+      "finalUrl": "/studio",
+      "textLen": 447,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 319,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1219,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 319,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1219,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 319,
+          "shots": [
+            "a09-studio-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a09-studio-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 381,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 381,
+        "scrolledTo": 381,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 447,
+          "after": 484,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a10-studio-new",
+      "url": "https://aetherstudio.top/studio/new",
+      "status": 200,
+      "finalUrl": "/studio/new",
+      "textLen": 385,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 67,
+          "clientH": 900,
+          "w": 1440,
+          "h": 967,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 67,
+          "clientH": 900,
+          "w": 1440,
+          "h": 967,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 67,
+          "shots": [
+            "a10-studio-new-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a10-studio-new-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 129,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 129,
+        "scrolledTo": 129,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 385,
+          "after": 422,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a11-developers",
+      "url": "https://aetherstudio.top/developers",
+      "status": 200,
+      "finalUrl": "/developers",
+      "textLen": 525,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 401,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1301,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 401,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1301,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 401,
+          "shots": [
+            "a11-developers-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a11-developers-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 463,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 463,
+        "scrolledTo": 463,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 525,
+          "after": 562,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a12-developers-docs",
+      "url": "https://aetherstudio.top/developers/docs",
+      "status": 200,
+      "finalUrl": "/developers/docs",
+      "textLen": 2406,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 1174,
+          "clientH": 900,
+          "w": 1440,
+          "h": 2074,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 1174,
+          "clientH": 900,
+          "w": 1440,
+          "h": 2074,
+          "cls": "",
+          "scrolls": 3,
+          "scrolledTo": 1174,
+          "shots": [
+            "a12-developers-docs-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ],
+            "a12-developers-docs-win-s60.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a12-developers-docs-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 1236,
+      "walk": {
+        "scrolls": 5,
+        "maxScroll": 1236,
+        "scrolledTo": 1236,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 2406,
+          "after": 2443,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a13-wallet",
+      "url": "https://aetherstudio.top/wallet",
+      "status": 200,
+      "finalUrl": "/wallet",
+      "textLen": 725,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 362,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1262,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 362,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1262,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 362,
+          "shots": [
+            "a13-wallet-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a13-wallet-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 424,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 424,
+        "scrolledTo": 424,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 725,
+          "after": 762,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a14-profile",
+      "url": "https://aetherstudio.top/profile",
+      "status": 200,
+      "finalUrl": "/profile",
+      "textLen": 453,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 131,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1031,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 131,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1031,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 131,
+          "shots": [
+            "a14-profile-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a14-profile-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 193,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 193,
+        "scrolledTo": 193,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 453,
+          "after": 490,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a15-profile-edit",
+      "url": "https://aetherstudio.top/profile/edit",
+      "status": 200,
+      "finalUrl": "/profile/edit",
+      "textLen": 321,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a15-profile-edit-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 62,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 62,
+        "scrolledTo": 62,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 321,
+          "after": 358,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a16-notifications",
+      "url": "https://aetherstudio.top/notifications",
+      "status": 200,
+      "finalUrl": "/notifications",
+      "textLen": 340,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a16-notifications-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 62,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 62,
+        "scrolledTo": 62,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 340,
+          "after": 377,
+          "changed": true
+        },
+        {
+          "sel": "[class*=\"tab\"]:not(button[type=\"submit\"]):not([disabled])",
+          "text": "全部\n互动\n讨论\n作品\n关注",
+          "before": 340,
+          "after": 340,
+          "changed": false
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a17-guide",
+      "url": "https://aetherstudio.top/guide",
+      "status": 200,
+      "finalUrl": "/guide",
+      "textLen": 682,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 653,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1553,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 653,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1553,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 653,
+          "shots": [
+            "a17-guide-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a17-guide-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 715,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 715,
+        "scrolledTo": 715,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 682,
+          "after": 719,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a18-app",
+      "url": "https://aetherstudio.top/app",
+      "status": 200,
+      "finalUrl": "/app",
+      "textLen": 637,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a18-app-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 62,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 62,
+        "scrolledTo": 62,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 637,
+          "after": 674,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a19-galaxy",
+      "url": "https://aetherstudio.top/galaxy",
+      "status": 200,
+      "finalUrl": "/galaxy",
+      "textLen": 1170,
+      "containers": [],
+      "walked": [],
+      "maxScrollTotal": 0,
+      "walk": {
+        "scrolls": 0,
+        "maxScroll": 0,
+        "scrolledTo": 0,
+        "containerCount": 0,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a20-galaxy-products",
+      "url": "https://aetherstudio.top/galaxy/products",
+      "status": 200,
+      "finalUrl": "/galaxy/products",
+      "textLen": 2577,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 2010,
+          "clientH": 900,
+          "w": 1440,
+          "h": 2910,
+          "cls": ""
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 2010,
+          "clientH": 900,
+          "w": 1440,
+          "h": 2910,
+          "cls": "",
+          "scrolls": 4,
+          "scrolledTo": 2010,
+          "shots": [
+            "a20-galaxy-products-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 68,
+                "pinned": true
+              }
+            ],
+            "a20-galaxy-products-win-s60.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 68,
+                "pinned": true
+              }
+            ],
+            "a20-galaxy-products-win-s90.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 68,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 2010,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 2010,
+        "scrolledTo": 2010,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a21-galaxy-company",
+      "url": "https://aetherstudio.top/galaxy/company",
+      "status": 200,
+      "finalUrl": "/galaxy/company",
+      "textLen": 672,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 350,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1250,
+          "cls": ""
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 350,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1250,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 350,
+          "shots": [
+            "a21-galaxy-company-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 68,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 350,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 350,
+        "scrolledTo": 350,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a22-galaxy-incubator",
+      "url": "https://aetherstudio.top/galaxy/incubator",
+      "status": 200,
+      "finalUrl": "/galaxy/incubator",
+      "textLen": 128,
+      "containers": [],
+      "walked": [],
+      "maxScrollTotal": 0,
+      "walk": {
+        "scrolls": 0,
+        "maxScroll": 0,
+        "scrolledTo": 0,
+        "containerCount": 0,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a23-galaxy-apply",
+      "url": "https://aetherstudio.top/galaxy/apply",
+      "status": 200,
+      "finalUrl": "/galaxy/apply",
+      "textLen": 373,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 56,
+          "clientH": 900,
+          "w": 1440,
+          "h": 956,
+          "cls": ""
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 56,
+          "clientH": 900,
+          "w": 1440,
+          "h": 956,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 56,
+          "shots": [
+            "a23-galaxy-apply-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 68,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 56,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 56,
+        "scrolledTo": 56,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "a24-signin-gate",
+      "url": "https://aetherstudio.top/signin",
+      "status": 200,
+      "finalUrl": "/",
+      "textLen": 1454,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 1761,
+          "clientH": 900,
+          "w": 1440,
+          "h": 2661,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 1761,
+          "clientH": 900,
+          "w": 1440,
+          "h": 2661,
+          "cls": "",
+          "scrolls": 4,
+          "scrolledTo": 1761,
+          "shots": [
+            "a24-signin-gate-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ],
+            "a24-signin-gate-win-s60.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ],
+            "a24-signin-gate-win-s90.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "a24-signin-gate-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 1823,
+      "walk": {
+        "scrolls": 6,
+        "maxScroll": 1823,
+        "scrolledTo": 1823,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 1454,
+          "after": 1491,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    }
+  ]
+}

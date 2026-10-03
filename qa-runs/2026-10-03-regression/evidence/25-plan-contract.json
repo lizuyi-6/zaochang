@@ -1,0 +1,74 @@
+{
+  "ms": 102790,
+  "status": 200,
+  "plan": {
+    "session_id": "6556bfe3-9e6a-4da8-ad86-93b16ae73017",
+    "topic": "为什么说并发问题的本质是可见性,而不是加锁",
+    "course_uuid": null,
+    "unit_id": null,
+    "lecture_id": null,
+    "session_id_ref": null,
+    "language": "zh-CN",
+    "resumed": false,
+    "status": "active",
+    "degraded": true,
+    "steps": [
+      {
+        "step_id": "step_1",
+        "spoken_text": "造场 Agent，你好！今天我们来深入探索为什么说并发问题的本质是可见性,而不是加锁的核心思维框架。",
+        "board_action": {
+          "type": "card",
+          "title": "为什么说并发问题的本质是可见性,而不是加锁",
+          "content": "<p><strong>核心内涵：</strong>为什么说并发问题的本质是可见性,而不是加锁的基本定位与核心关切。</p><ul><li><strong>核心议题：</strong>把握其背后的基本逻辑与问题意识。</li><li><strong>认知目标：</strong>建立系统化视角，理解各要素的内在联系。</li></ul>"
+        }
+      },
+      {
+        "step_id": "step_2",
+        "spoken_text": "请看流程图，理清为什么说并发问题的本质是可见性,而不是加锁的核心传导逻辑。",
+        "board_action": {
+          "type": "diagram",
+          "code": "graph TD\n  Context[\"现实背景与核心情境\"] --> Mechanism[\"核心概念与关键机制\"]\n  Mechanism --> Interaction[\"多维要素的相互作用\"]\n  Interaction --> Outcome[\"具体实践与深远影响\"]"
+        }
+      },
+      {
+        "step_id": "step_3",
+        "spoken_text": "先通过随堂小测确认你对传导机制的理解。",
+        "board_action": {
+          "type": "quick_check",
+          "question": "在理清 为什么说并发问题的本质是可见性,而不是加锁 的传导机制时，最核心的着眼点是什么？",
+          "options": [
+            "把握核心机制与多维要素间的动态互动",
+            "仅做孤立片面的静态表面记录"
+          ],
+          "answer": 0,
+          "explanation": "各要素之间的动态互动是传导逻辑的核心枢纽。"
+        }
+      },
+      {
+        "step_id": "step_4",
+        "spoken_text": "请注意卡片上的避坑提示，在分析时保持批判性思维。",
+        "board_action": {
+          "type": "card",
+          "title": "常见认知误区与避坑指南",
+          "content": "<p><strong>⚠️ 常见思考陷阱：</strong></p><ul><li><strong>孤立片面归因：</strong>忽略整体结构与背景约束的影响。</li><li><strong>静态表面定论：</strong>忽视事物随时间与情境的动态演进。</li><li><strong>概念混淆套用：</strong>未把握核心边界而随意泛化结论。</li></ul>"
+        }
+      },
+      {
+        "step_id": "step_5",
+        "spoken_text": "最后通过这道综合测验，检验本节核心要点的掌握情况。",
+        "board_action": {
+          "type": "quick_check",
+          "question": "在深入理解 为什么说并发问题的本质是可见性,而不是加锁 时，以下哪种思考方式最符合其核心视角？",
+          "options": [
+            "将具体现象置于宏观结构与动态情境中进行多维审视",
+            "脱离时代背景与外部情境，仅做孤立片面的静态归因",
+            "直接套用经验直觉，拒绝探究底层驱动机制与逻辑联系",
+            "将所有现象归结为单一偶然因素，忽视规律与结构作用"
+          ],
+          "answer": 0,
+          "explanation": "将具体现象置于宏观结构与动态情境中多维审视，能精准把握底层驱动规律与各要素间的深层联系。"
+        }
+      }
+    ]
+  }
+}
