@@ -884,6 +884,7 @@ test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures 
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /FULL-LENGTH lecture/i, '必须定义为完整讲座而非微讲座');
   assert.doesNotMatch(WHITEBOARD_INSTRUCTOR_PROMPT, /micro-lecture|5 to 7 bite-sized|strictly 1 to 2/i, '旧版微讲座要求必须已被移除');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /at least one Mermaid diagram/i, '必须保留 diagram 不变量');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /NEVER lay out tables or matrices as ASCII art/i, '必须明令禁止 ASCII 摆阵(矩阵走 LaTeX,结构走 diagram)——实测收益矩阵写成斜杠表格无法阅读');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3 quick_check steps/i, '必须保留 3 处 quick_check(含终末)不变量');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Worked Example/i, '必须包含实例演示步');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Common Mistakes/i, '必须包含常见误区步');

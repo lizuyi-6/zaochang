@@ -202,7 +202,12 @@ export interface LectureCourseContext {
 }
 
 function buildLectureContextNote(ctx?: LectureCourseContext): string {
-  if (!ctx) return "";
+  if (!ctx) {
+    // 自由讲座(无课程归属):讲师会沿用课程课的"承接上一讲"惯性虚构前文,
+    // 而学员根本没有上一讲(实测:开场白凭空"上一讲我们学完…")——显式声明
+    // 独立讲次,杜绝幻影承接。
+    return "\n\n## COURSE CONTEXT\nThis is a STANDALONE lecture, not part of any course: there is NO previous lecture and NO next lecture. Never reference prior or future lectures/units; teach the topic as a complete, self-contained session.";
+  }
   const parts: string[] = [];
   if (ctx.courseTitle) {
     parts.push(`Course: "${ctx.courseTitle}"${ctx.courseDescription ? ` — ${ctx.courseDescription}` : ""}`);

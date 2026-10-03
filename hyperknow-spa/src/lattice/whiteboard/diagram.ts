@@ -59,11 +59,92 @@ const unescapeLabel = (s: string): string =>
     .replace(/&#39;/g, "'")
     .trim();
 
-const splitLabel = (s: string): string[] =>
-  unescapeLabel(s)
-    .split('\n')
-    .filter((l) => l.length > 0)
-    .slice(0, 4);
+const splitLabel = (s: string): string[] => {
+  const lines: string[] = [];
+  for (const raw of unescapeLabel(s).split('\n')) {
+    if (!raw) continue;
+    lines.push(...wrapLabel(raw));
+    if (lines.length >= MAX_LABEL_LINES) break;
+  }
+  /* 超行截断:末行补省略号,如实表达"还有",绝不静默吞内容 */
+  if (lines.length > MAX_LABEL_LINES) {
+    const capped = lines.slice(0, MAX_LABEL_LINES);
+    capped[MAX_LABEL_LINES - 1] = capped[MAX_LABEL_LINES - 1].replace(/\s+$/, '') + '…';
+    return capped;
+  }
+  return lines.slice(0, MAX_LABEL_LINES);
+};
+
+/* ---------------- 文本测量与折行(标签渲染真实宽度) ---------------- */
+
+const FONT = 17;
+const CHAR_W = 7.6; // 拉丁/数字均宽
+const CJK_W = 17; // 汉字/全角 ≈ 字号宽——此前按 CHAR_W 一律 7.6 量,CJK 标签盒宽被低估一半以上,文字溢出盒子互相压盖
+const GAP_X = 44;
+const GAP_Y = 60;
+export const LABEL_MAX_W = 158; // 标签行内宽上限(px),超出折行
+const MAX_LABEL_LINES = 3;
+
+/** 逐字测量渲染宽度(Caveat 17px:CJK ≈ 17,拉丁 ≈ 7.6,窄符/宽符分档) */
+export const measureText = (s: string): number => {
+  let w = 0;
+  for (const ch of s) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (
+      (code >= 0x2e80 && code <= 0x9fff) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xff01 && code <= 0xff60) ||
+      (code >= 0x20000 && code <= 0x2fa1f)
+    ) {
+      w += CJK_W;
+    } else if (ch === ' ' || ch === '\t') {
+      w += 4;
+    } else if ('ilj.,:;\'"!()[]{}|/\\'.includes(ch)) {
+      w += 4.5;
+    } else if ('mwMW@#%&'.includes(ch)) {
+      w += 10;
+    } else {
+      w += CHAR_W;
+    }
+  }
+  return w;
+};
+
+/** 标签折行:CJK 逐字折,拉丁按词折,行宽 LABEL_MAX_W */
+function wrapLabel(line: string): string[] {
+  const tokens: string[] = [];
+  let latin = '';
+  for (const ch of line) {
+    if (measureText(ch) >= CJK_W) {
+      if (latin) tokens.push(latin);
+      latin = '';
+      tokens.push(ch);
+    } else {
+      latin += ch;
+    }
+  }
+  if (latin) tokens.push(latin);
+
+  const out: string[] = [];
+  let cur = '';
+  for (const tok of tokens) {
+    if (cur && measureText(cur + tok) > LABEL_MAX_W) {
+      out.push(cur.trimEnd());
+      cur = tok.trimStart();
+    } else {
+      cur += tok;
+    }
+    /* 单个词超宽(长拉丁串):硬折,绝不溢出盒子 */
+    while (measureText(cur) > LABEL_MAX_W && cur.length > 1) {
+      let cut = cur.length - 1;
+      while (cut > 1 && measureText(cur.slice(0, cut)) > LABEL_MAX_W) cut--;
+      out.push(cur.slice(0, cut));
+      cur = cur.slice(cut);
+    }
+  }
+  if (cur.trim()) out.push(cur.trimEnd());
+  return out;
+}
 
 /* 确定性抖动:同一 id 每次渲染同一波形(hash → ±2.8px) */
 const hash32 = (s: string): number => {
@@ -183,11 +264,6 @@ export function parseMermaid(code: string): DiagGraph | null {
 /* 布局 + SVG                                                          */
 /* ------------------------------------------------------------------ */
 
-const FONT = 17;
-const CHAR_W = 7.6;
-const GAP_X = 44;
-const GAP_Y = 60;
-
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 /** 路径数值统一一位小数,避免浮点尾迹污染 SVG 源码 */
 const r1 = (v: number): number => Math.round(v * 10) / 10;
@@ -215,10 +291,11 @@ export function renderDiagram(code: string): RenderedDiagram | null {
   const compact = new Map(usedLayers.map((l, i) => [l, i]));
   for (const n of g.nodes) layerOf.set(n.id, compact.get(layerOf.get(n.id) ?? 0) ?? 0);
 
-  /* 每层内保持声明顺序;几何:TD = 纵向层,LR = 横向层 */
+  /* 每层内保持声明顺序;几何:TD = 纵向层,LR = 横向层。
+   * 盒宽按折行后的真实测量(最长行像素 + 内边距)——CJK 标签不再溢出压盖邻盒 */
   const sizeOf = (n: DiagNode): { w: number; h: number } => {
-    const maxLen = Math.max(...n.lines.map((l) => l.length), 3);
-    return { w: clamp(maxLen * CHAR_W + 26, 64, 188), h: n.lines.length * 20 + 20 };
+    const maxW = Math.max(...n.lines.map(measureText), 24);
+    return { w: clamp(maxW + 26, 64, LABEL_MAX_W + 42), h: n.lines.length * 20 + 20 };
   };
   const sizes = new Map(g.nodes.map((n) => [n.id, sizeOf(n)]));
 
@@ -335,9 +412,9 @@ export function renderDiagram(code: string): RenderedDiagram | null {
     if (e.label) {
       const lx = (a.x + b.x) / 2;
       const ly = (a.y + b.y) / 2 - 6;
-      const lw = e.label.length * CHAR_W * 0.82 + 10;
+      const lw = measureText(e.label) + 14;
       edgeLabels.push(
-        `<rect x="${(lx - lw / 2).toFixed(1)}" y="${ly - 12}" width="${lw.toFixed(1)}" height="17" rx="4" fill="#FCFCFC" opacity="0.92"/>` +
+        `<rect x="${r1(lx - lw / 2)}" y="${ly - 12}" width="${r1(lw)}" height="17" rx="4" fill="#FCFCFC" opacity="0.92"/>` +
           `<text x="${lx.toFixed(1)}" y="${ly}" text-anchor="middle" font-size="14" fill="#374151">${esc(e.label)}</text>`,
       );
     }

@@ -10,6 +10,7 @@ import {
   type Seg,
 } from './lessonScript';
 import { diagramBox, renderDiagram } from './diagram';
+import { FormulaBlock } from './FormulaBlock';
 import { BoardCircle, BoardPencil, BoardUnderline } from '../illustrations';
 import {
   clampZoom,
@@ -340,7 +341,7 @@ export const Board: React.FC<BoardProps> = ({
         x: it.x,
         y: it.y,
         width: d ? d.w : (it.w ?? 340),
-        height: d ? d.h : it.image ? (it.image.width ?? 340) + 64 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
+        height: d ? d.h : it.image ? (it.image.width ?? 340) + 64 : it.formula ? 120 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
       };
     });
 
@@ -352,7 +353,7 @@ export const Board: React.FC<BoardProps> = ({
           x: it.x,
           y: it.y,
           width: d ? d.w : (it.w ?? 340),
-          height: d ? d.h : it.image ? (it.image.width ?? 340) + 64 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
+          height: d ? d.h : it.image ? (it.image.width ?? 340) + 64 : it.formula ? 120 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
         }];
       }
     }
@@ -696,6 +697,19 @@ export const Board: React.FC<BoardProps> = ({
                       <div className="wb-image-caption">{item.image.caption}</div>
                     )}
                   </div>
+                </div>
+              );
+            }
+
+            // LaTeX 公式:KaTeX 排版(按需加载);mono 语义仅作节奏/导出回退,渲染必先走这里
+            if (item.formula) {
+              return (
+                <div
+                  key={item.id}
+                  className={`wb-item wb-formula-item${isWriting ? ' writing' : ' drawn'}`}
+                  style={{ left: item.x, top: item.y, width: item.w ?? 320 }}
+                >
+                  <FormulaBlock latex={item.formula.latex} />
                 </div>
               );
             }

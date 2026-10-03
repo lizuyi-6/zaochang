@@ -211,9 +211,24 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
         advance(0);
       }
     } else if (action.type === 'formula') {
-      const formH = 64;
+      const latex = action.latex ?? action.content ?? '';
+      /* 高度估算:KaTeX 实际高度渲染后才知道,布局先按结构保守估(换行阵列/分式/
+       * 求和积分矩阵都显著增行高),宁可留白不可压盖下一个元素 */
+      const rows = (latex.match(/\\\\/g) || []).length;
+      const stacks = (latex.match(/\\frac|\\sqrt|\\sum|\\int|\\prod|\\begin\{/g) || []).length;
+      const formH = Math.min(240, 64 + rows * 26 + stacks * 14);
       ensureSpace(formH);
-      items.push({ id: `f${id}`, step: id, size: 16, mono: true, w: COL_W, lines: [plain(action.latex ?? action.content ?? '')], x: COL_X[cursor.col], y: cursor.y });
+      items.push({
+        id: `f${id}`,
+        step: id,
+        size: 16,
+        mono: true, // 书写节奏/导出文本沿用等宽语义;Board 渲染走 formula 分支
+        formula: { latex },
+        w: COL_W,
+        lines: [plain(latex)],
+        x: COL_X[cursor.col],
+        y: cursor.y,
+      });
       advance(formH);
     } else if (action.type === 'diagram') {
       let code = action.code ?? action.content ?? '';

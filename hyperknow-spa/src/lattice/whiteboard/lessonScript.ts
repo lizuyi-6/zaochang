@@ -36,6 +36,8 @@ export interface BoardItem {
   mono?: boolean; // mermaid code block
   /** mermaid flowchart 源码:可渲染时以手绘图呈现,lines 作为不可渲染时的回退文本 */
   diagram?: string;
+  /** LaTeX 公式:KaTeX 渲染(见 FormulaBlock);lines 保留源码作导出/加载失败回退 */
+  formula?: { latex: string };
   /** 真实图片层:支持按需生图(pending/ready/failed)、固定比例、图注与放大 */
   image?: {
     url?: string;
