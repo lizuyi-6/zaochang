@@ -883,7 +883,11 @@ test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures 
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /hands off to the next lecture/i, '收尾必须预告下一讲');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /FULL-LENGTH lecture/i, '必须定义为完整讲座而非微讲座');
   assert.doesNotMatch(WHITEBOARD_INSTRUCTOR_PROMPT, /micro-lecture|5 to 7 bite-sized|strictly 1 to 2/i, '旧版微讲座要求必须已被移除');
-  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /at least one Mermaid diagram/i, '必须保留 diagram 不变量');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /at least TWO Mermaid diagrams/i, 'diagram 下限已升至两张(实测整讲只画一张,文字板观感差)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /sequence, causality, comparison, hierarchy, or state/i, '有序/因果/比较/层级内容必须画图而非堆卡片');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Example casting/i, '必须保留举例主体规则');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /never put the LEARNER.*unfortunate/is, '举例不得让学生充当倒霉/尴尬主体(实测"如果你检测结果呈阳性"被用户指冒犯)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /neutral third party/i, '负面领域例子必须改用中立第三方');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /NEVER lay out tables or matrices as ASCII art/i, '必须明令禁止 ASCII 摆阵(矩阵走 LaTeX,结构走 diagram)——实测收益矩阵写成斜杠表格无法阅读');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3 quick_check steps/i, '必须保留 3 处 quick_check(含终末)不变量');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Worked Example/i, '必须包含实例演示步');
