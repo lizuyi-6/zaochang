@@ -170,11 +170,11 @@ export function researchQueriesFor(query: string): string[] {
 
 /**
  * StepFun MCP 优先传输:无状态 tools/call 一跳完成,信封解析在 extractStepfunMcpHits。
- * 终态直接返回:success / auth_failed / rate_limited(同 key 打 /v1/search 必然同样
- * 结果,429 回退只会放大限流)/ timeout(共享同一超时预算,回退无意义)。
- * 其余一切——HTTP 非鉴权限流状态码、JSON-RPC error、isError、信封解析不出
- * results、网络错误——返回 null,由调用方落回 /v1/search 原路径,绝不因新通道
- * 降级搜索质量。外部取消信号原样上抛(契约与 REST 路径一致)。
+ * 唯一终态是 success;timeout 也收口为终态(与 REST 共享同一超时预算,回退必败)。
+ * 其余一切——401/403/429/其他非 2xx、JSON-RPC error、isError、信封解析不出
+ * results、空结果、网络错误——一律返回 null 落回 /v1/search 原路径:线上 key 与
+ * 套餐权限可能与本地不同,新通道任何异常都不得比旧通道差(搜索是增强不是门槛)。
+ * 外部取消信号原样上抛(契约与 REST 路径一致)。
  */
 async function stepfunMcpSearch(
   query: string,
@@ -199,14 +199,6 @@ async function stepfunMcpSearch(
       }),
       signal: perCallSignal,
     });
-    if (response.status === 401 || response.status === 403) {
-      await response.body?.cancel().catch(() => {});
-      return { status: "auth_failed", hits: [], provider: "stepfun", reason: "Search upstream authentication failed" };
-    }
-    if (response.status === 429) {
-      await response.body?.cancel().catch(() => {});
-      return { status: "rate_limited", hits: [], provider: "stepfun", reason: "Search upstream rate limit exceeded" };
-    }
     if (!response.ok) {
       await response.body?.cancel().catch(() => {});
       return null;
