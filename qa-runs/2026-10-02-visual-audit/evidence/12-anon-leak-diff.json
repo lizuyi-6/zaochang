@@ -1,0 +1,132 @@
+{
+  "capturedAt": "2026-10-02T15:57:54.367Z",
+  "out": [
+    {
+      "path": "/wallet",
+      "anonTextNodes": 93,
+      "authTextNodes": 93,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包 | 造场",
+        "果子钱包",
+        "果子钱包",
+        "果子只从真实贡献中生长",
+        "可用余额 ·",
+        "新成员余额从 0 开始。创作者只通过不同真实用户的首次有效点赞获得新发行的果子。",
+        "果子的三条真实路径",
+        "新成员余额从 0 开始",
+        "果子只表达社区内部的贡献与选择，不购买排名，也不承诺任何法币价值。",
+        "订单请求必须幂等，余额不能为负"
+      ],
+      "authOnlySamples": []
+    },
+    {
+      "path": "/profile",
+      "anonTextNodes": 49,
+      "authTextNodes": 78,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包"
+      ],
+      "authOnlySamples": [
+        "CREATOR PROFILE /",
+        "2026",
+        "MAKER PROFILE",
+        "造场 Agent",
+        "正在把一个想法变成作品。",
+        "杭州",
+        "编辑主页",
+        "作品体验",
+        "收到喜欢",
+        "关注者"
+      ]
+    },
+    {
+      "path": "/studio",
+      "anonTextNodes": 75,
+      "authTextNodes": 75,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包"
+      ],
+      "authOnlySamples": []
+    },
+    {
+      "path": "/studio/new",
+      "anonTextNodes": 72,
+      "authTextNodes": 72,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "发布新作品 | 造场",
+        "果子钱包",
+        "发布新作品"
+      ],
+      "authOnlySamples": []
+    },
+    {
+      "path": "/notifications",
+      "anonTextNodes": 55,
+      "authTextNodes": 55,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包",
+        "通知中心",
+        "全部已读",
+        "只保留与你的作品、关系和项目进度直接相关的通知。"
+      ],
+      "authOnlySamples": []
+    },
+    {
+      "path": "/collections",
+      "anonTextNodes": 63,
+      "authTextNodes": 63,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包"
+      ],
+      "authOnlySamples": []
+    },
+    {
+      "path": "/challenges",
+      "anonTextNodes": 81,
+      "authTextNodes": 81,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包",
+        "这里目前是命题预览，不统计虚构参与人数，也不承诺尚未建立规则与资金来源的果子奖励。"
+      ],
+      "authOnlySamples": []
+    },
+    {
+      "path": "/circles",
+      "anonTextNodes": 106,
+      "authTextNodes": 106,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包"
+      ],
+      "authOnlySamples": []
+    },
+    {
+      "path": "/discover",
+      "anonTextNodes": 122,
+      "authTextNodes": 122,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包"
+      ],
+      "authOnlySamples": []
+    },
+    {
+      "path": "/feed",
+      "anonTextNodes": 69,
+      "authTextNodes": 69,
+      "anonAgentValueLeak": [],
+      "anonPersonalMarkers": [
+        "果子钱包",
+        "写下版本变化、失败原因和下一步；发布动态不会额外发行果子。"
+      ],
+      "authOnlySamples": []
+    }
+  ]
+}

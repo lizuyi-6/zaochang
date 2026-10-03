@@ -155,10 +155,30 @@ export function localizedField<T>(obj: Record<string, T> | null | undefined, fie
 const initialLng = readStoredLng();
 let activeLng = initialLng;
 
-/** 启动门:渲染前加载当前语言 + 英文兜底(translate 的回退链依赖 en 就绪)。 */
+/* 字典 chunk 是本地静态资源,正常毫秒级;但请求挂起(极端网络/CDN 节点异常)会让
+ * Promise.all 永远 pending → createRoot 不执行 → 永久白屏且零报错(qa-runs 2026-10-02
+ * P-003 实测 11.6s 全空白)。给每个加载设硬上限:超时按"未加载"放行渲染,translate
+ * 回退 en→键名;迟到完成的 import 仍会写入 TREES(translate 每次现读),下一渲染自愈。 */
+const LOCALE_LOAD_BUDGET_MS = 3000;
+
+function ensureLocaleBounded(lng: string): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    void ensureLocale(lng).then(done, done);
+    setTimeout(done, LOCALE_LOAD_BUDGET_MS);
+  });
+}
+
+/** 启动门:渲染前加载当前语言 + 英文兜底(translate 的回退链依赖 en 就绪)——但有硬上限,
+ *  挂起不再能阻塞首屏。 */
 export function prepareI18n(): Promise<void> {
-  const loads = [ensureLocale(initialLng)];
-  if (initialLng !== DEFAULT_LNG) loads.push(ensureLocale(DEFAULT_LNG));
+  const loads = [ensureLocaleBounded(initialLng)];
+  if (initialLng !== DEFAULT_LNG) loads.push(ensureLocaleBounded(DEFAULT_LNG));
   return Promise.all(loads).then(() => undefined);
 }
 

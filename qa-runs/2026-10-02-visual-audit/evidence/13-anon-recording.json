@@ -1,0 +1,202 @@
+{
+  "capturedAt": "2026-10-02T16:05:14.217Z",
+  "results": [
+    {
+      "key": "a01-signin-anon",
+      "path": "/signin",
+      "status": 200,
+      "finalUrl": "/signin",
+      "title": "造场 | 创作者的试玩社区",
+      "textLen": 277,
+      "fp": "造场 ZAOCHANG / ACCOUNT 返回 造场账号 进入造场 公开测试期间支持 GitHub 或邮箱验证码登录。已有账号直接登录，首次注册需要邀请码。 使用 GitHub 登录 或邮箱验证码 邮箱 未注册邮箱需邀请码 邀请码 仅首次注册需要 发送验证码 首次注册（GitHub） 邀请码 首次注册必填 使用邀请码注册 邀请码只在首次创建造场账号时原子消耗；后续登录不再需要。GitHub 登录",
+      "err": null,
+      "actionState": [],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a02-home-anon",
+      "path": "/",
+      "status": 200,
+      "finalUrl": "/",
+      "title": "造场 | 创作者的试玩社区",
+      "textLen": 1456,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K -- 果 发布作品 登录 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创作者指南 © 2026 造场 今日造场 LIVE COMMUNITY / 2",
+      "err": null,
+      "actionState": [
+        {
+          "text": "发布作品",
+          "tag": "a",
+          "disabled": false,
+          "href": "/studio/new"
+        }
+      ],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a03-wallet-anon",
+      "path": "/wallet",
+      "status": 200,
+      "finalUrl": "/wallet",
+      "title": "果子钱包 | 造场",
+      "textLen": 727,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K -- 果 发布作品 登录 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创作者指南 © 2026 造场 果子钱包 LIVE COMMUNITY / 2",
+      "err": null,
+      "actionState": [
+        {
+          "text": "发布作品",
+          "tag": "a",
+          "disabled": false,
+          "href": "/studio/new"
+        }
+      ],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a04-profile-anon",
+      "path": "/profile",
+      "status": 200,
+      "finalUrl": "/profile",
+      "title": "创作者主页 | 造场",
+      "textLen": 277,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K -- 果 发布作品 登录 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创作者指南 © 2026 造场 创作者主页 LIVE COMMUNITY / ",
+      "err": null,
+      "actionState": [
+        {
+          "text": "发布作品",
+          "tag": "a",
+          "disabled": false,
+          "href": "/studio/new"
+        }
+      ],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a05-notifications-anon",
+      "path": "/notifications",
+      "status": 200,
+      "finalUrl": "/notifications",
+      "title": "造场 | 创作者的试玩社区",
+      "textLen": 346,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K -- 果 发布作品 登录 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创作者指南 © 2026 造场 通知中心 LIVE COMMUNITY / 2",
+      "err": null,
+      "actionState": [
+        {
+          "text": "发布作品",
+          "tag": "a",
+          "disabled": false,
+          "href": "/studio/new"
+        },
+        {
+          "text": "全部已读",
+          "tag": "button",
+          "disabled": true,
+          "href": ""
+        }
+      ],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a06-studio-anon",
+      "path": "/studio",
+      "status": 200,
+      "finalUrl": "/studio",
+      "title": "创作台 | 造场",
+      "textLen": 455,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K -- 果 发布作品 登录 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创作者指南 © 2026 造场 我的创作台 LIVE COMMUNITY / ",
+      "err": null,
+      "actionState": [
+        {
+          "text": "发布作品",
+          "tag": "a",
+          "disabled": false,
+          "href": "/studio/new"
+        },
+        {
+          "text": "创建新作品",
+          "tag": "a",
+          "disabled": false,
+          "href": "/signin?return_to=%2Fstudio%2Fnew"
+        },
+        {
+          "text": "发布动态",
+          "tag": "a",
+          "disabled": false,
+          "href": "/feed"
+        }
+      ],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a07-lattice-gate-anon",
+      "path": "/lattice/",
+      "status": 200,
+      "finalUrl": "/signin?return_to=%2Flattice%2F&via=lattice",
+      "title": "造场 | 创作者的试玩社区",
+      "textLen": 278,
+      "fp": "造场 ZAOCHANG / ACCOUNT 返回 造场账户 使用造场账户登录 此功能仅对造场账户开放。支持 GitHub 或邮箱验证码登录，首次注册需要邀请码。 使用 GitHub 登录 或邮箱验证码 邮箱 未注册邮箱需邀请码 邀请码 仅首次注册需要 发送验证码 首次注册（GitHub） 邀请码 首次注册必填 使用邀请码注册 邀请码只在首次创建造场账号时原子消耗；后续登录不再需要。GitHub 登",
+      "err": null,
+      "actionState": [],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a08-profile-edit-anon",
+      "path": "/profile/edit",
+      "status": 200,
+      "finalUrl": "/signin?return_to=%2Fprofile%2Fedit",
+      "title": "造场 | 创作者的试玩社区",
+      "textLen": 277,
+      "fp": "造场 ZAOCHANG / ACCOUNT 返回 造场账号 进入造场 公开测试期间支持 GitHub 或邮箱验证码登录。已有账号直接登录，首次注册需要邀请码。 使用 GitHub 登录 或邮箱验证码 邮箱 未注册邮箱需邀请码 邀请码 仅首次注册需要 发送验证码 首次注册（GitHub） 邀请码 首次注册必填 使用邀请码注册 邀请码只在首次创建造场账号时原子消耗；后续登录不再需要。GitHub 登录",
+      "err": null,
+      "actionState": [],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a09-discover-anon",
+      "path": "/discover",
+      "status": 200,
+      "finalUrl": "/discover",
+      "title": "探索作品 | 造场",
+      "textLen": 731,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K -- 果 发布作品 登录 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创作者指南 © 2026 造场 探索作品 LIVE COMMUNITY / 2",
+      "err": null,
+      "actionState": [
+        {
+          "text": "发布作品",
+          "tag": "a",
+          "disabled": false,
+          "href": "/studio/new"
+        }
+      ],
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "a10-bookshelf-anon",
+      "path": "/bookshelf",
+      "status": 200,
+      "finalUrl": "/bookshelf",
+      "title": "书架 | 造场",
+      "textLen": 612,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K -- 果 发布作品 登录 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创作者指南 © 2026 造场 书架 LIVE COMMUNITY / 202",
+      "err": null,
+      "actionState": [
+        {
+          "text": "发布作品",
+          "tag": "a",
+          "disabled": false,
+          "href": "/studio/new"
+        }
+      ],
+      "console": [],
+      "http4xx5xx": []
+    }
+  ]
+}

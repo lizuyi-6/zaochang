@@ -1,0 +1,1031 @@
+{
+  "capturedAt": "2026-10-02T16:00:00.899Z",
+  "out": [
+    {
+      "path": "/api/community",
+      "method": "GET",
+      "no-cred": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"products\":[],\"posts\":[{\"id\":2,\"ownerName\":\"Abraham Valerio\",\"content\":\"哈喽，哈喽！\",\"productI"
+      },
+      "bad-cookie": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"products\":[],\"posts\":[{\"id\":2,\"ownerName\":\"Abraham Valerio\",\"content\":\"哈喽，哈喽！\",\"productI"
+      },
+      "bad-bearer": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"products\":[],\"posts\":[{\"id\":2,\"ownerName\":\"Abraham Valerio\",\"content\":\"哈喽，哈喽！\",\"productI"
+      }
+    },
+    {
+      "path": "/api/shell-state",
+      "method": "GET",
+      "no-cred": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"platformStats\":{\"posts\":1},\"circleStats\":[],\"wallet\":null,\"hasUnread\":false}"
+      },
+      "bad-cookie": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"platformStats\":{\"posts\":1},\"circleStats\":[],\"wallet\":null,\"hasUnread\":false}"
+      },
+      "bad-bearer": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"platformStats\":{\"posts\":1},\"circleStats\":[],\"wallet\":null,\"hasUnread\":false}"
+      }
+    },
+    {
+      "path": "/api/actions",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/comments",
+      "method": "GET",
+      "no-cred": {
+        "status": 400,
+        "loc": "",
+        "body": "{\"error\":\"invalid_target\"}"
+      },
+      "bad-cookie": {
+        "status": 400,
+        "loc": "",
+        "body": "{\"error\":\"invalid_target\"}"
+      },
+      "bad-bearer": {
+        "status": 400,
+        "loc": "",
+        "body": "{\"error\":\"invalid_target\"}"
+      }
+    },
+    {
+      "path": "/api/comments",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/docs",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/docs",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/docs",
+      "method": "PATCH",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/docs",
+      "method": "DELETE",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/docs/cover",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/products",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/uploads",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/wallet",
+      "method": "GET",
+      "no-cred": {
+        "status": 404,
+        "loc": "",
+        "body": "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" conte"
+      },
+      "bad-cookie": {
+        "status": 404,
+        "loc": "",
+        "body": "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" conte"
+      },
+      "bad-bearer": {
+        "status": 404,
+        "loc": "",
+        "body": "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" conte"
+      }
+    },
+    {
+      "path": "/api/v1/fruit/wallet",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_token\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_token\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_token\"}"
+      }
+    },
+    {
+      "path": "/api/v1/fruit/payments",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_token\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_token\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_token\"}"
+      }
+    },
+    {
+      "path": "/api/v1/fruit/payments/approve",
+      "method": "POST",
+      "no-cred": {
+        "status": 403,
+        "loc": "",
+        "body": "{\"error\":\"invalid_origin\"}"
+      },
+      "bad-cookie": {
+        "status": 403,
+        "loc": "",
+        "body": "{\"error\":\"invalid_origin\"}"
+      },
+      "bad-bearer": {
+        "status": 403,
+        "loc": "",
+        "body": "{\"error\":\"invalid_origin\"}"
+      }
+    },
+    {
+      "path": "/api/payments",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/payments",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/reading-progress",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/reading-progress",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/reports",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/incubation",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/incubation",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/developer/clients",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/developer/clients",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/admin/capabilities",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/admin/moderation",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/admin/moderation",
+      "method": "PATCH",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/admin/invitations",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/admin/invitations",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/admin/incubation",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/admin/visual-session",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/auth/logout",
+      "method": "GET",
+      "no-cred": {
+        "status": 307,
+        "loc": "https://aetherstudio.top/",
+        "body": ""
+      },
+      "bad-cookie": {
+        "status": 307,
+        "loc": "https://aetherstudio.top/",
+        "body": ""
+      },
+      "bad-bearer": {
+        "status": 307,
+        "loc": "https://aetherstudio.top/",
+        "body": ""
+      }
+    },
+    {
+      "path": "/api/auth/dev-login",
+      "method": "GET",
+      "no-cred": {
+        "status": 404,
+        "loc": "",
+        "body": "{\"error\":\"not_found\"}"
+      },
+      "bad-cookie": {
+        "status": 404,
+        "loc": "",
+        "body": "{\"error\":\"not_found\"}"
+      },
+      "bad-bearer": {
+        "status": 404,
+        "loc": "",
+        "body": "{\"error\":\"not_found\"}"
+      }
+    },
+    {
+      "path": "/api/ai/reading",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/chat",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/whiteboard/plan",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/course-generation",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/course-inquiry",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/translate",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/model-check",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/tts/stream",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/feed",
+      "method": "GET",
+      "no-cred": {
+        "status": 500,
+        "loc": "",
+        "body": "{\"error\":\"feed_failed\"}"
+      },
+      "bad-cookie": {
+        "status": 500,
+        "loc": "",
+        "body": "{\"error\":\"feed_failed\"}"
+      },
+      "bad-bearer": {
+        "status": 500,
+        "loc": "",
+        "body": "{\"error\":\"feed_failed\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/marketplace/courses",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/conversations/list_past_conversations",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/auth/get_user_info",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/whiteboard/interject",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/hyperknow/whiteboard/image",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/oauth/jwks",
+      "method": "GET",
+      "no-cred": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"keys\":[{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"DblnJhlI-s8GTvvCrFVtbK_S94gzSnJKsxvFdyXMtsE\",\"y\":\""
+      },
+      "bad-cookie": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"keys\":[{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"DblnJhlI-s8GTvvCrFVtbK_S94gzSnJKsxvFdyXMtsE\",\"y\":\""
+      },
+      "bad-bearer": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"keys\":[{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"DblnJhlI-s8GTvvCrFVtbK_S94gzSnJKsxvFdyXMtsE\",\"y\":\""
+      }
+    },
+    {
+      "path": "/api/oauth/consents",
+      "method": "GET",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"auth_required\"}"
+      }
+    },
+    {
+      "path": "/api/oauth/token",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_client\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_client\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_client\"}"
+      }
+    },
+    {
+      "path": "/api/oauth/authorize",
+      "method": "POST",
+      "no-cred": {
+        "status": 500,
+        "loc": "",
+        "body": "{\"error\":\"server_error\"}"
+      },
+      "bad-cookie": {
+        "status": 500,
+        "loc": "",
+        "body": "{\"error\":\"server_error\"}"
+      },
+      "bad-bearer": {
+        "status": 500,
+        "loc": "",
+        "body": "{\"error\":\"server_error\"}"
+      }
+    },
+    {
+      "path": "/api/oauth/revoke",
+      "method": "POST",
+      "no-cred": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_client\"}"
+      },
+      "bad-cookie": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_client\"}"
+      },
+      "bad-bearer": {
+        "status": 401,
+        "loc": "",
+        "body": "{\"error\":\"invalid_client\"}"
+      }
+    },
+    {
+      "path": "/api/app-shell",
+      "method": "GET",
+      "no-cred": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"schemaVersion\":1,\"channel\":\"production\",\"web\":{\"buildId\":\"2026-08-26.2\",\"mode\":\"remote\","
+      },
+      "bad-cookie": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"schemaVersion\":1,\"channel\":\"production\",\"web\":{\"buildId\":\"2026-08-26.2\",\"mode\":\"remote\","
+      },
+      "bad-bearer": {
+        "status": 200,
+        "loc": "",
+        "body": "{\"schemaVersion\":1,\"channel\":\"production\",\"web\":{\"buildId\":\"2026-08-26.2\",\"mode\":\"remote\","
+      }
+    }
+  ]
+}

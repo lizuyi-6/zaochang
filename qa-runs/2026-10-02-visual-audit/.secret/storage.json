@@ -1,0 +1,15 @@
+{
+  "cookies": [
+    {
+      "name": "zaochang_session",
+      "value": "Y83cGnkwrkMohcZ4WlasYf5h7SvJYtRJehFqnHupANc",
+      "domain": "aetherstudio.top",
+      "path": "/",
+      "expires": 1793547391.783877,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

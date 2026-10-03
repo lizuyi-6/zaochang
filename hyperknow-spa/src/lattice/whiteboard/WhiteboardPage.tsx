@@ -31,7 +31,7 @@ import {
   type Rich,
 } from './lessonScript';
 import { liveLessonFromPlan, type LessonScript } from './liveLesson';
-import { fetchLectureImageLive, interjectLive, planLectureLive } from '../backend';
+import { fetchLectureImageLive, interjectLive, planLectureLive, PLAN_CLIENT_TIMEOUT_MS } from '../backend';
 import { getBackendLang, getCurrentLng } from '../i18n';
 import { L } from '../i18n/content';
 import { exportBoard, type ExportFormat, type ExportPage } from '../boardExport';
@@ -313,7 +313,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   useEffect(() => {
     if (!liveTopic) return;
     const ctrl = new AbortController();
-    const timer = window.setTimeout(() => ctrl.abort(), 65_000); // 服务端 60s 超时 + 余量
+    // 预算必须盖过服务端 130s 路由超时(冷实例 92-100s),否则浏览器提前掐死成功在望的计划
+    const timer = window.setTimeout(() => ctrl.abort(), PLAN_CLIENT_TIMEOUT_MS);
     let alive = true;
     const appLang = getBackendLang() || getCurrentLng() || 'en';
     const planParams = {

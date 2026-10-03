@@ -1481,4 +1481,6 @@
   .wb-pill .seg { width: 44px; height: 44px; border-radius: 22px; }
   .wb-listen-pill { height: 44px; border-radius: 22px; }
   .wb-feedback-submit { height: 44px; }
+  /* 引入卡唯一退出控件,粗指针下与全站 44px 兜底对齐(qa-runs P-006) */
+  .wb-intro-close { width: 44px; height: 44px; }
 }

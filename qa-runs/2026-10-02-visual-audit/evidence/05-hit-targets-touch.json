@@ -1,0 +1,329 @@
+[
+  {
+    "mode": "fine-1440x900",
+    "route": "whiteboard",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "total": 14,
+    "below44": 6,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "wb-intro-close",
+        "w": 28,
+        "h": 32,
+        "name": "Close"
+      },
+      {
+        "cls": "seg",
+        "w": 38,
+        "h": 38,
+        "name": "Zoom out"
+      },
+      {
+        "cls": "seg",
+        "w": 38,
+        "h": 38,
+        "name": "Zoom in"
+      },
+      {
+        "cls": "seg",
+        "w": 38,
+        "h": 38,
+        "name": "Previous page"
+      }
+    ]
+  },
+  {
+    "mode": "fine-1440x900",
+    "route": "create",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "total": 3,
+    "below44": 3,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "cr-send",
+        "w": 28,
+        "h": 28,
+        "name": "Start"
+      },
+      {
+        "cls": "cr-util-btn",
+        "w": 30,
+        "h": 30,
+        "name": "Back to home"
+      },
+      {
+        "cls": "cr-util-btn",
+        "w": 30,
+        "h": 30,
+        "name": "Start a new course"
+      }
+    ]
+  },
+  {
+    "mode": "fine-1440x900",
+    "route": "home",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "total": 4,
+    "below44": 4,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "hm-circle-btn",
+        "w": 36,
+        "h": 36,
+        "name": "Add attachment"
+      },
+      {
+        "cls": "hm-send",
+        "w": 36,
+        "h": 36,
+        "name": "Generate Course"
+      },
+      {
+        "cls": "hm-chip icon-only",
+        "w": 40,
+        "h": 36,
+        "name": "Notes"
+      },
+      {
+        "cls": "language-switcher",
+        "w": 40,
+        "h": 40,
+        "name": "Switch language"
+      }
+    ]
+  },
+  {
+    "mode": "touch-390x844",
+    "route": "whiteboard",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "total": 14,
+    "below44": 2,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "wb-intro-close",
+        "w": 28,
+        "h": 32,
+        "name": "Close"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Exit session"
+      },
+      {
+        "cls": "seg",
+        "w": 44,
+        "h": 44,
+        "name": "Zoom out"
+      },
+      {
+        "cls": "seg",
+        "w": 44,
+        "h": 44,
+        "name": "Zoom in"
+      }
+    ]
+  },
+  {
+    "mode": "touch-390x844",
+    "route": "create",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "total": 5,
+    "below44": 2,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "hk-sidebar-expand hk-mobile-trigge",
+        "w": 32,
+        "h": 32,
+        "name": "Expand sidebar"
+      },
+      {
+        "cls": "hk-sidebar-collapse",
+        "w": 36,
+        "h": 36,
+        "name": "Collapse sidebar"
+      },
+      {
+        "cls": "cr-util-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Back to home"
+      },
+      {
+        "cls": "cr-util-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Start a new course"
+      }
+    ]
+  },
+  {
+    "mode": "touch-390x844",
+    "route": "home",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "total": 6,
+    "below44": 4,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "hk-sidebar-expand hk-mobile-trigge",
+        "w": 32,
+        "h": 32,
+        "name": "Expand sidebar"
+      },
+      {
+        "cls": "hk-sidebar-collapse",
+        "w": 36,
+        "h": 36,
+        "name": "Collapse sidebar"
+      },
+      {
+        "cls": "language-switcher",
+        "w": 40,
+        "h": 40,
+        "name": "Switch language"
+      },
+      {
+        "cls": "hm-chip icon-only",
+        "w": 40,
+        "h": 44,
+        "name": "Notes"
+      }
+    ]
+  },
+  {
+    "mode": "touch-820x1180",
+    "route": "whiteboard",
+    "viewport": {
+      "width": 820,
+      "height": 1180
+    },
+    "total": 14,
+    "below44": 3,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "wb-intro-close",
+        "w": 28,
+        "h": 32,
+        "name": "Close"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 34,
+        "h": 44,
+        "name": "Exit session"
+      },
+      {
+        "cls": "seg",
+        "w": 44,
+        "h": 44,
+        "name": "Zoom out"
+      },
+      {
+        "cls": "seg",
+        "w": 44,
+        "h": 44,
+        "name": "Zoom in"
+      }
+    ]
+  },
+  {
+    "mode": "touch-820x1180",
+    "route": "create",
+    "viewport": {
+      "width": 820,
+      "height": 1180
+    },
+    "total": 4,
+    "below44": 1,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "hk-sidebar-collapse",
+        "w": 36,
+        "h": 36,
+        "name": "Collapse sidebar"
+      },
+      {
+        "cls": "cr-util-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Back to home"
+      },
+      {
+        "cls": "cr-util-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Start a new course"
+      },
+      {
+        "cls": "cr-send",
+        "w": 44,
+        "h": 44,
+        "name": "Start"
+      }
+    ]
+  },
+  {
+    "mode": "touch-820x1180",
+    "route": "home",
+    "viewport": {
+      "width": 820,
+      "height": 1180
+    },
+    "total": 5,
+    "below44": 3,
+    "below24": 0,
+    "smallest": [
+      {
+        "cls": "hk-sidebar-collapse",
+        "w": 36,
+        "h": 36,
+        "name": "Collapse sidebar"
+      },
+      {
+        "cls": "language-switcher",
+        "w": 40,
+        "h": 40,
+        "name": "Switch language"
+      },
+      {
+        "cls": "hm-chip icon-only",
+        "w": 40,
+        "h": 44,
+        "name": "Notes"
+      },
+      {
+        "cls": "hm-circle-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Add attachment"
+      }
+    ]
+  }
+]

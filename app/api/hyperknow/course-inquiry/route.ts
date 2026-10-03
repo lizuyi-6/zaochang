@@ -253,6 +253,10 @@ export async function POST(request: Request) {
         brief: updatedBrief,
         answers,
         model: resolveChatModel(input.model),
+        /* 服务端 55s 上限,必须低于客户端 60s 兜底(CreatePage timeoutMs):让"降级模板"
+         * 由服务端先给出真实响应(source:template 如实标注),而不是客户端 ERR_ABORTED
+         * 后本地拼模板——上游挂起时后者既烧连接又丢诊断信息。 */
+        signal: AbortSignal.timeout(55_000),
       });
       questions = drafts as InquiryQuestion[];
     } catch (error) {

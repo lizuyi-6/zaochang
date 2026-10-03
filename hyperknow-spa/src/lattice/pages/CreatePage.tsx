@@ -75,7 +75,7 @@ const hostOf = (link: string): string => {
 };
 
 /** 步骤条目:粗标题 + 进行中省略号/完成对勾 */
-const StepRow: React.FC<{ title: string; state: 'loading' | 'done'; sub?: string }> = ({ title, state, sub }) => (
+const StepRow: React.FC<{ title: string; state: 'loading' | 'done'; sub?: React.ReactNode }> = ({ title, state, sub }) => (
   <div className={`cr-step ${state}`}>
     <span className="cr-step-ico" aria-hidden="true">
       {state === 'done' ? <Check size={14} strokeWidth={3} /> : <span className="cr-step-dot" />}
@@ -441,7 +441,9 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
         brief: { version: 0, language: isZh ? 'zh-CN' : 'en-US' },
         followUpRound: 0,
         model: state.chatModel,
-        timeoutMs: 20000,
+        // 60s 客户端兜底:必须大于服务端 55s 上限(路由内先降级模板并如实标注 source),
+        // 冷实例混合推理出题实测 30s+;20s 会在 AI 仍在思考时主动放弃,模板 brief 持久化进课程
+        timeoutMs: 60_000,
       });
       if (runRef.current !== run) return;
       if (res && res.questions && res.questions.length > 0) {
@@ -633,8 +635,15 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
               sub={
                 intakeLoading
                   ? L('Tailoring questions to your topic…', '正在针对你的主题实时出题…')
-                  : intakeSource === 'template'
-                    ? L('AI unavailable — standard questionnaire', 'AI 暂不可用——已用标准问询')
+                  : intakeSource === 'template' && !intakeDone
+                    ? (
+                      <span className="cr-fallback">
+                        {L('AI unavailable — standard questionnaire', 'AI 暂不可用——已用标准问询')}
+                        <button type="button" className="cr-retry" onClick={() => startIntake(topic)}>
+                          {L('Retry AI questions', '重试 AI 出题')}
+                        </button>
+                      </span>
+                    )
                     : undefined
               }
             />
