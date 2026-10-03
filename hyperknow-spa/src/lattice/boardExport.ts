@@ -386,13 +386,13 @@ export async function exportBoard(format: ExportFormat, page: ExportPage, snap: 
   }
 
   if (format === 'jpg') {
-    downloadBlob(blob, `hyperknow-board-${page === 'all' ? 'all' : 'page'}-${Date.now()}.jpg`);
+    downloadBlob(blob, `lattice-board-${page === 'all' ? 'all' : 'page'}-${Date.now()}.jpg`);
     toast(L('Board exported as JPG', '板书已导出为 JPG'));
     return;
   }
 
   const url = URL.createObjectURL(blob);
-  const title = L('Hyperknow board', 'Hyperknow 板书');
+  const title = L('LATTICE board', '见界板书');
   printWindow!.document.open();
   printWindow!.document.write(
     `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +

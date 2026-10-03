@@ -1,0 +1,86 @@
+{
+  "capturedAt": "2026-10-03T04:01:51.165Z",
+  "topic": "为什么说并发问题的本质是可见性,而不是加锁",
+  "elapsedMs": 157081,
+  "finalDom": {
+    "katex": 0,
+    "katexErr": 0,
+    "mermaid": 0,
+    "board": 114,
+    "captions": 2
+  },
+  "finalBodyText": "为什么说并发问题的本质是可 见性,而不是加锁 核心内涵：为什么说并发问题的本 质是可见性,而不是加锁的基本定位 与核心关切。 核心议题：把握其背后的基本逻辑 与问题意识。 认知目标：建立系统化视角，理解 各要素的内在联系。 为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 造场 Agent，你好！今天我们来深入探索为什么说并发问题的本质是可见性,而不是加锁的核心思维框架。",
+  "network": [
+    {
+      "atMs": 105295,
+      "path": "/api/hyperknow/whiteboard/plan",
+      "status": 200,
+      "ct": "application/json"
+    },
+    {
+      "atMs": 143369,
+      "path": "/api/hyperknow/tts/stream?text=%E8%AF%B7%E7%9C%8B%E6%B5%81%E7%A8%8B%E5",
+      "status": 200,
+      "ct": "audio/mpeg"
+    },
+    {
+      "atMs": 144149,
+      "path": "/api/hyperknow/tts/stream?text=%E9%80%A0%E5%9C%BA%20Agent%EF%BC%8C%E4%",
+      "status": 200,
+      "ct": "audio/mpeg"
+    },
+    {
+      "atMs": 145834,
+      "path": "/api/hyperknow/tts/stream?text=%E9%80%A0%E5%9C%BA%20Agent%EF%BC%8C%E4%",
+      "status": 206,
+      "ct": "audio/mpeg"
+    },
+    {
+      "atMs": 148334,
+      "path": "/api/hyperknow/tts/stream?text=%E5%85%88%E9%80%9A%E8%BF%87%E9%9A%8F%E5",
+      "status": 200,
+      "ct": "audio/mpeg"
+    }
+  ],
+  "steps": [
+    {
+      "label": "ready",
+      "atMs": 140906,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+    },
+    {
+      "label": "mode-chosen",
+      "atMs": 144442,
+      "textLen": 554,
+      "tail": "our questions in the chat box. The tutor still speaks and writes on the board as usual. Voice and typing BETA Just say it out loud. The tutor stops the moment it hears you, answers your question, then picks the lesson back up where it paused. Start learning You can switch any time with the microphone button in the input box at the bottom right. Voice is still in beta — we would love your feedback."
+    },
+    {
+      "label": "lecture-begin",
+      "atMs": 148707,
+      "textLen": 165,
+      "tail": "为什么说并发问题的本质是可 见性,而不是加锁 核心内涵：为什么说并发问题的本 质是可见性,而不是加锁的基本定位 与核心关切。 核心议题：把握其背后的基本逻辑 与问题意识。 认知目标：建立系统化视角，理解 各要素的内在联系。 为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 造场 Agent，你好！今天我们来深入探索为"
+    },
+    {
+      "label": "play-0",
+      "atMs": 156813,
+      "textLen": 193,
+      "tail": "为什么说并发问题的本质是可 见性,而不是加锁 核心内涵：为什么说并发问题的本 质是可见性,而不是加锁的基本定位 与核心关切。 核心议题：把握其背后的基本逻辑 与问题意识。 认知目标：建立系统化视角，理解 各要素的内在联系。 为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 造场 Agent，你好！今天我们来深入探索为什么说并发问题的本质是可见性,而不是加锁的核心思维框架。",
+      "dom": {
+        "katex": 0,
+        "katexErr": 0,
+        "mermaid": 0,
+        "board": 114,
+        "captions": 2
+      }
+    },
+    {
+      "label": "final",
+      "atMs": 156913,
+      "textLen": 193,
+      "tail": "为什么说并发问题的本质是可 见性,而不是加锁 核心内涵：为什么说并发问题的本 质是可见性,而不是加锁的基本定位 与核心关切。 核心议题：把握其背后的基本逻辑 与问题意识。 认知目标：建立系统化视角，理解 各要素的内在联系。 为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 造场 Agent，你好！今天我们来深入探索为什么说并发问题的本质是可见性,而不是加锁的核心思维框架。"
+    }
+  ],
+  "console": [],
+  "http4xx5xx": []
+}

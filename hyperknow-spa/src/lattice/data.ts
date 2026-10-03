@@ -533,7 +533,7 @@ export const publicSpeaking = (): Unit[] => [
 
 export const psCourse = () => ({
   title: L('Public Speaking', '公开演讲'),
-  curator: 'Hyperknow Official',
+  curator: 'LATTICE Official',
   description: L(
     'A comprehensive journey through the art and science of public speaking. This course provides a structured workflow for planning, writing, and delivering talks that move people — from reading your audience and shaping a single clear message, to managing stage fright, grounding claims in evidence and story, and handling Q&A with composure.',
     '一场关于公开演讲艺术与科学的全面旅程。本课程提供一套结构化的工作流程，用于规划、撰写与呈现能打动人的演讲——从读懂听众、塑造一条清晰的核心信息，到管理怯场、用证据与故事支撑观点，再到从容应对问答环节。',

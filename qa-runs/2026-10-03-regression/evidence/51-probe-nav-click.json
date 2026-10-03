@@ -1,0 +1,38 @@
+[
+  {
+    "label": "载入 /feed",
+    "url": "/feed",
+    "txt": 397,
+    "backdrops": [],
+    "hitCircles": {
+      "navRect": "18,230 195x44",
+      "hitTag": "a",
+      "hitCls": "",
+      "isSelfOrChild": true
+    }
+  },
+  {
+    "label": "点侧栏「圈子」后",
+    "url": "/circles",
+    "txt": 573,
+    "backdrops": [],
+    "hitCircles": {
+      "navRect": "18,230 195x44",
+      "hitTag": "span",
+      "hitCls": "deep-nav-active",
+      "isSelfOrChild": true
+    }
+  },
+  {
+    "label": "再点「挑战」后",
+    "url": "/challenges",
+    "txt": 564,
+    "backdrops": [],
+    "hitCircles": {
+      "navRect": "18,230 195x44",
+      "hitTag": "a",
+      "hitCls": "",
+      "isSelfOrChild": true
+    }
+  }
+]

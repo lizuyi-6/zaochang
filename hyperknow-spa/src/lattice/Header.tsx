@@ -27,7 +27,7 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
   const identityPending = !state.bootReady;
   /* 邀请:复制造场链接(邀请码体系在主站注册侧,这里给的是可直接打开的入口) */
   const copyInvite = async () => {
-    const ok = await copyText(`${window.location.origin}/?utm_source=hyperknow&utm_medium=invite`);
+    const ok = await copyText(`${window.location.origin}/?utm_source=lattice&utm_medium=invite`);
     toast(
       ok
         ? L('Invite link copied — share it with a friend', '邀请链接已复制——发给朋友吧')

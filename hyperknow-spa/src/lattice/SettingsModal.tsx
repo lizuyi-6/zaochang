@@ -239,8 +239,8 @@ function GeneralTab({ state, set }: Pick<PageProps, 'state' | 'set'>) {
                 onClick={() => {
                   const ok = openFeedbackMail(
                     L(
-                      `Please delete my Hyperknow account (${state.identity?.email ?? 'unknown email'}) and all data tied to it.`,
-                      `请删除我的 Hyperknow 账户（${state.identity?.email ?? '未知邮箱'}）及其全部关联数据。`,
+                      `Please delete my LATTICE account (${state.identity?.email ?? 'unknown email'}) and all data tied to it.`,
+                      `请删除我的见界账户（${state.identity?.email ?? '未知邮箱'}）及其全部关联数据。`,
                     ),
                     L('Account deletion request', '账户删除申请'),
                   );

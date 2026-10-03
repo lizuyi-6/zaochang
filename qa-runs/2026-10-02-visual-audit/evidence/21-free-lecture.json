@@ -1,0 +1,540 @@
+{
+  "capturedAt": "2026-10-03T03:57:34.870Z",
+  "topic": "为什么说并发问题的本质是可见性,而不是加锁",
+  "elapsedMs": 224799,
+  "planResponse": {
+    "atMs": 101569,
+    "path": "/api/hyperknow/whiteboard/plan",
+    "status": 200,
+    "ct": "application/json"
+  },
+  "planObservedAtMs": 101569,
+  "network": [
+    {
+      "atMs": 101569,
+      "path": "/api/hyperknow/whiteboard/plan",
+      "status": 200,
+      "ct": "application/json"
+    },
+    {
+      "atMs": 146024,
+      "path": "/api/hyperknow/tts/stream?text=%E9%80%A0%E5%9C%BA%20Agent%EF%BC%8C%E4%BD%A0%E5%A5%BD%EF%BC%81%E4%BB%8A%E5%A4%A9%E6%88%91%E4%BB%AC%E6%9D%A5%E6%B7%B1%E5%85%A5%E6%8E%A2%E7%B4%A2%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%B4%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98%E7%9A%84%E6%9C%AC%E8%B4%A8%E6%98%AF%E5%8F%AF%E8%A7%81%E6%80%A7%2C%E8%80%8C%E4%B8%8D%E6%98%AF%E5%8A%A0%E9%94%81%E7%9A%84%E6%A0%B8%E5%BF%83%E6%80%9D%E7%BB%B4%E6%A1%86%E6%9E%B6%E3%80%82&voice=warm&speed=1",
+      "status": 200,
+      "ct": "audio/mpeg"
+    },
+    {
+      "atMs": 146776,
+      "path": "/api/hyperknow/tts/stream?text=%E8%AF%B7%E7%9C%8B%E6%B5%81%E7%A8%8B%E5%9B%BE%EF%BC%8C%E7%90%86%E6%B8%85%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%B4%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98%E7%9A%84%E6%9C%AC%E8%B4%A8%E6%98%AF%E5%8F%AF%E8%A7%81%E6%80%A7%2C%E8%80%8C%E4%B8%8D%E6%98%AF%E5%8A%A0%E9%94%81%E7%9A%84%E6%A0%B8%E5%BF%83%E4%BC%A0%E5%AF%BC%E9%80%BB%E8%BE%91%E3%80%82&voice=warm&speed=1",
+      "status": 200,
+      "ct": "audio/mpeg"
+    }
+  ],
+  "steps": [
+    {
+      "label": "entered",
+      "atMs": 9510,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+    },
+    {
+      "label": "prep-0",
+      "atMs": 15643,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-1",
+      "atMs": 21757,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-2",
+      "atMs": 27887,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-3",
+      "atMs": 34030,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-4",
+      "atMs": 40177,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-5",
+      "atMs": 46300,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-6",
+      "atMs": 52447,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-7",
+      "atMs": 58597,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-8",
+      "atMs": 64722,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-9",
+      "atMs": 70821,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-10",
+      "atMs": 76944,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-11",
+      "atMs": 83140,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-12",
+      "atMs": 89255,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-13",
+      "atMs": 95387,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-14",
+      "atMs": 101518,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-15",
+      "atMs": 107642,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-16",
+      "atMs": 113805,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-17",
+      "atMs": 119942,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-18",
+      "atMs": 126137,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-19",
+      "atMs": 132248,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-20",
+      "atMs": 138376,
+      "textLen": 267,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": false,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/2 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Preparing this lecture…"
+      }
+    },
+    {
+      "label": "prep-21",
+      "atMs": 144525,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "prep-22",
+      "atMs": 150640,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "prep-23",
+      "atMs": 156771,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "prep-24",
+      "atMs": 162890,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "prep-25",
+      "atMs": 169064,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "prep-26",
+      "atMs": 175183,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "prep-27",
+      "atMs": 181304,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "prep-28",
+      "atMs": 187418,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "prep-29",
+      "atMs": 193553,
+      "textLen": 258,
+      "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning",
+      "dom": {
+        "mermaid": 0,
+        "katex": 0,
+        "katexFallback": 0,
+        "boardNodes": 0,
+        "hasStart": true,
+        "hasPrep": false,
+        "tail": "为什么说并发问题的本质是可见性,而不是加锁 135% 1/1 WHAT YOU WILL LEARN 为什么说并发问题的本质是可见性,而不是加锁 This session opens 为什么说并发问题的本质是可见性,而不是加锁 the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today. Start learning"
+      }
+    },
+    {
+      "label": "lecture-0",
+      "atMs": 199768,
+      "textLen": 554,
+      "tail": "alk with your tutor? This session can listen to you, not just read what you type. Typing only Type your questions in the chat box. The tutor still speaks and writes on the board as usual. Voice and typing BETA Just say it out loud. The tutor stops the moment it hears you, answers your question, then picks the lesson back up where it paused. Start learning You can switch any time with the microphone button in the input box at the bottom right. Voice is still in beta — we would love your feedback."
+    },
+    {
+      "label": "lecture-1",
+      "atMs": 205921,
+      "textLen": 554,
+      "tail": "alk with your tutor? This session can listen to you, not just read what you type. Typing only Type your questions in the chat box. The tutor still speaks and writes on the board as usual. Voice and typing BETA Just say it out loud. The tutor stops the moment it hears you, answers your question, then picks the lesson back up where it paused. Start learning You can switch any time with the microphone button in the input box at the bottom right. Voice is still in beta — we would love your feedback."
+    },
+    {
+      "label": "lecture-2",
+      "atMs": 212069,
+      "textLen": 554,
+      "tail": "alk with your tutor? This session can listen to you, not just read what you type. Typing only Type your questions in the chat box. The tutor still speaks and writes on the board as usual. Voice and typing BETA Just say it out loud. The tutor stops the moment it hears you, answers your question, then picks the lesson back up where it paused. Start learning You can switch any time with the microphone button in the input box at the bottom right. Voice is still in beta — we would love your feedback."
+    },
+    {
+      "label": "lecture-3",
+      "atMs": 218236,
+      "textLen": 554,
+      "tail": "alk with your tutor? This session can listen to you, not just read what you type. Typing only Type your questions in the chat box. The tutor still speaks and writes on the board as usual. Voice and typing BETA Just say it out loud. The tutor stops the moment it hears you, answers your question, then picks the lesson back up where it paused. Start learning You can switch any time with the microphone button in the input box at the bottom right. Voice is still in beta — we would love your feedback."
+    },
+    {
+      "label": "lecture-4",
+      "atMs": 224448,
+      "textLen": 554,
+      "tail": "alk with your tutor? This session can listen to you, not just read what you type. Typing only Type your questions in the chat box. The tutor still speaks and writes on the board as usual. Voice and typing BETA Just say it out loud. The tutor stops the moment it hears you, answers your question, then picks the lesson back up where it paused. Start learning You can switch any time with the microphone button in the input box at the bottom right. Voice is still in beta — we would love your feedback."
+    },
+    {
+      "label": "final",
+      "atMs": 224610,
+      "textLen": 554,
+      "tail": "alk with your tutor? This session can listen to you, not just read what you type. Typing only Type your questions in the chat box. The tutor still speaks and writes on the board as usual. Voice and typing BETA Just say it out loud. The tutor stops the moment it hears you, answers your question, then picks the lesson back up where it paused. Start learning You can switch any time with the microphone button in the input box at the bottom right. Voice is still in beta — we would love your feedback."
+    }
+  ],
+  "console": [],
+  "http4xx5xx": [],
+  "failedReq": [
+    {
+      "method": "GET",
+      "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "err": "csp"
+    },
+    {
+      "method": "POST",
+      "url": "/api/hyperknow/whiteboard/plan",
+      "err": "net::ERR_ABORTED"
+    }
+  ]
+}

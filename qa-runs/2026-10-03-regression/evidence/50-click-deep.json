@@ -1,0 +1,670 @@
+{
+  "capturedAt": "2026-10-03T04:52:54.702Z",
+  "out": [
+    {
+      "key": "k01-devdocs",
+      "url": "/developers/docs",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k02-doc-trial",
+      "url": "/docs/trial-welcome",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k03-wallet",
+      "url": "/wallet",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k04-home",
+      "url": "/",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k05-discover",
+      "url": "/discover",
+      "clicks": [
+        {
+          "kind": "tab",
+          "text": "全部",
+          "before": 729,
+          "after": 729,
+          "changed": false,
+          "shot": "k05-discover-clk0.png"
+        },
+        {
+          "kind": "tab",
+          "text": "互动体验",
+          "before": 729,
+          "after": 456,
+          "changed": true,
+          "shot": "k05-discover-clk1.png"
+        },
+        {
+          "kind": "tab",
+          "text": "效率工具",
+          "before": 729,
+          "after": 382,
+          "changed": true,
+          "shot": "k05-discover-clk2.png"
+        },
+        {
+          "kind": "tab",
+          "text": "声音影像",
+          "before": 729,
+          "after": 456,
+          "changed": true,
+          "shot": "k05-discover-clk3.png"
+        },
+        {
+          "kind": "tab",
+          "text": "生活方式",
+          "before": 729,
+          "after": 386,
+          "changed": true,
+          "shot": "k05-discover-clk4.png"
+        },
+        {
+          "kind": "tab",
+          "text": "开发工具",
+          "before": 729,
+          "after": 331,
+          "changed": true,
+          "shot": "k05-discover-clk5.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "全部\n互动体验\n效率工具\n声音影像\n生活方式\n开发工具",
+          "before": 729,
+          "after": 729,
+          "changed": false,
+          "shot": "k05-discover-clk6.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "全部",
+          "before": 729,
+          "after": 729,
+          "changed": false,
+          "shot": "k05-discover-clk7.png"
+        }
+      ],
+      "cands": 12,
+      "err": null,
+      "candList": [
+        "tab:\"全部\"",
+        "tab:\"互动体验\"",
+        "tab:\"效率工具\"",
+        "tab:\"声音影像\"",
+        "tab:\"生活方式\"",
+        "tab:\"开发工具\"",
+        "tabclass:\"全部\n互动体验\n效率工具\n声音影像\n生活方式\n开发工具\"",
+        "tabclass:\"全部\"",
+        "tabclass:\"互动体验\"",
+        "tabclass:\"效率工具\"",
+        "tabclass:\"声音影像\"",
+        "tabclass:\"生活方式\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k06-circles",
+      "url": "/circles",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k07-challenges",
+      "url": "/challenges",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k08-studio-new",
+      "url": "/studio/new",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k09-profile",
+      "url": "/profile",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k10-guide",
+      "url": "/guide",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k11-book",
+      "url": "/bookshelf/hello-system",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k12-product",
+      "url": "/product/loops",
+      "clicks": [
+        {
+          "kind": "tabclass",
+          "text": "体验\n关于\n版本记录\n讨论 0",
+          "before": 473,
+          "after": 473,
+          "changed": false,
+          "shot": "k12-product-clk0.png"
+        }
+      ],
+      "cands": 1,
+      "err": null,
+      "candList": [
+        "tabclass:\"体验\n关于\n版本记录\n讨论 0\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        },
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k13-lattice-marketplace",
+      "url": "/lattice/#/marketplace",
+      "clicks": [
+        {
+          "kind": "tabclass",
+          "text": "All\nExam Prep\nMath & Statistics\nCo",
+          "before": 4566,
+          "after": 1915,
+          "changed": true,
+          "shot": "k13-lattice-marketplace-clk0.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "All",
+          "before": 1915,
+          "after": 1915,
+          "changed": false,
+          "shot": "k13-lattice-marketplace-clk1.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Exam Prep",
+          "before": 1915,
+          "after": 1915,
+          "changed": false,
+          "shot": "k13-lattice-marketplace-clk2.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Math & Statistics",
+          "before": 1915,
+          "after": 1915,
+          "changed": false,
+          "shot": "k13-lattice-marketplace-clk3.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Computer Science",
+          "before": 1915,
+          "after": 1915,
+          "changed": false,
+          "shot": "k13-lattice-marketplace-clk4.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "AI & Data Science",
+          "before": 1915,
+          "after": 1915,
+          "changed": false,
+          "shot": "k13-lattice-marketplace-clk5.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Science",
+          "before": 1915,
+          "after": 1915,
+          "changed": false,
+          "shot": "k13-lattice-marketplace-clk6.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Business & Economics",
+          "before": 1915,
+          "after": 1915,
+          "changed": false,
+          "shot": "k13-lattice-marketplace-clk7.png"
+        }
+      ],
+      "cands": 11,
+      "err": null,
+      "candList": [
+        "tabclass:\"All\nExam Prep\nMath & Statistics\nCo\"",
+        "tabclass:\"All\"",
+        "tabclass:\"Exam Prep\"",
+        "tabclass:\"Math & Statistics\"",
+        "tabclass:\"Computer Science\"",
+        "tabclass:\"AI & Data Science\"",
+        "tabclass:\"Science\"",
+        "tabclass:\"Business & Economics\"",
+        "tabclass:\"Psychology\"",
+        "tabclass:\"Philosophy\"",
+        "tabclass:\"Social Science\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k14-lattice-courses",
+      "url": "/lattice/#/courses",
+      "clicks": [
+        {
+          "kind": "tabclass",
+          "text": "All\nIn Progress\nCompleted",
+          "before": 2166,
+          "after": 2166,
+          "changed": false,
+          "shot": "k14-lattice-courses-clk0.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "All",
+          "before": 2166,
+          "after": 2166,
+          "changed": false,
+          "shot": "k14-lattice-courses-clk1.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "In Progress",
+          "before": 2166,
+          "after": 2166,
+          "changed": false,
+          "shot": "k14-lattice-courses-clk2.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Completed",
+          "before": 2166,
+          "after": 2166,
+          "changed": false,
+          "shot": "k14-lattice-courses-clk3.png"
+        },
+        {
+          "kind": "expanded",
+          "text": "Switch language",
+          "before": 2166,
+          "after": 2228,
+          "changed": true,
+          "shot": "k14-lattice-courses-clk4.png"
+        }
+      ],
+      "cands": 5,
+      "err": null,
+      "candList": [
+        "tabclass:\"All\nIn Progress\nCompleted\"",
+        "tabclass:\"All\"",
+        "tabclass:\"In Progress\"",
+        "tabclass:\"Completed\"",
+        "expanded:\"Switch language\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k15-lattice-history",
+      "url": "/lattice/#/history",
+      "clicks": [
+        {
+          "kind": "tabclass",
+          "text": "Conversations\nDeep learn sessions",
+          "before": 3065,
+          "after": 3065,
+          "changed": false,
+          "shot": "k15-lattice-history-clk0.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Conversations",
+          "before": 3065,
+          "after": 3065,
+          "changed": false,
+          "shot": "k15-lattice-history-clk1.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Deep learn sessions",
+          "before": 3065,
+          "after": 3065,
+          "changed": false,
+          "shot": "k15-lattice-history-clk2.png"
+        },
+        {
+          "kind": "expanded",
+          "text": "Sort",
+          "before": 3065,
+          "after": 3120,
+          "changed": true,
+          "shot": "k15-lattice-history-clk3.png"
+        }
+      ],
+      "cands": 4,
+      "err": null,
+      "candList": [
+        "tabclass:\"Conversations\nDeep learn sessions\"",
+        "tabclass:\"Conversations\"",
+        "tabclass:\"Deep learn sessions\"",
+        "expanded:\"Sort\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k16-lattice-preview",
+      "url": "/lattice/#/course/preview",
+      "clicks": [
+        {
+          "kind": "tabclass",
+          "text": "Units\nMaterials\nPractices",
+          "before": 3858,
+          "after": 3841,
+          "changed": true,
+          "shot": "k16-lattice-preview-clk0.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Units",
+          "before": 3841,
+          "after": 3841,
+          "changed": false,
+          "shot": "k16-lattice-preview-clk1.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Materials",
+          "before": 3841,
+          "after": 3841,
+          "changed": false,
+          "shot": "k16-lattice-preview-clk2.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Practices",
+          "before": 3841,
+          "after": 3841,
+          "changed": false,
+          "shot": "k16-lattice-preview-clk3.png"
+        },
+        {
+          "kind": "expanded",
+          "text": "Switch language",
+          "before": 3841,
+          "after": 3903,
+          "changed": true,
+          "shot": "k16-lattice-preview-clk4.png"
+        }
+      ],
+      "cands": 5,
+      "err": null,
+      "candList": [
+        "tabclass:\"Units\nMaterials\nPractices\"",
+        "tabclass:\"Units\"",
+        "tabclass:\"Materials\"",
+        "tabclass:\"Practices\"",
+        "expanded:\"Switch language\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k17-lattice-journey",
+      "url": "/lattice/#/course/journey",
+      "clicks": [
+        {
+          "kind": "tabclass",
+          "text": "Units\nMaterials\nPractices",
+          "before": 3853,
+          "after": 3836,
+          "changed": true,
+          "shot": "k17-lattice-journey-clk0.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Units",
+          "before": 3836,
+          "after": 3836,
+          "changed": false,
+          "shot": "k17-lattice-journey-clk1.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Materials",
+          "before": 3836,
+          "after": 3836,
+          "changed": false,
+          "shot": "k17-lattice-journey-clk2.png"
+        },
+        {
+          "kind": "tabclass",
+          "text": "Practices",
+          "before": 3836,
+          "after": 3836,
+          "changed": false,
+          "shot": "k17-lattice-journey-clk3.png"
+        },
+        {
+          "kind": "expanded",
+          "text": "Switch language",
+          "before": 3836,
+          "after": 3898,
+          "changed": true,
+          "shot": "k17-lattice-journey-clk4.png"
+        }
+      ],
+      "cands": 5,
+      "err": null,
+      "candList": [
+        "tabclass:\"Units\nMaterials\nPractices\"",
+        "tabclass:\"Units\"",
+        "tabclass:\"Materials\"",
+        "tabclass:\"Practices\"",
+        "expanded:\"Switch language\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k18-lattice-plans",
+      "url": "/lattice/#/plans",
+      "clicks": [
+        {
+          "kind": "expanded",
+          "text": "Switch language",
+          "before": 2203,
+          "after": 2266,
+          "changed": true,
+          "shot": "k18-lattice-plans-clk0.png"
+        }
+      ],
+      "cands": 1,
+      "err": null,
+      "candList": [
+        "expanded:\"Switch language\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k19-lattice-whiteboard",
+      "url": "/lattice/#/whiteboard",
+      "clicks": [],
+      "cands": 4,
+      "err": null,
+      "candList": [
+        "seg:\"Zoom out\"",
+        "seg:\"Zoom in\"",
+        "seg:\"Next page\"",
+        "expanded:\"Export\""
+      ],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "k20-lattice-create",
+      "url": "/lattice/#/create",
+      "clicks": [],
+      "cands": 0,
+      "err": null,
+      "candList": [],
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": []
+    }
+  ]
+}

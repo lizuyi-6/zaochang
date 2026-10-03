@@ -1,0 +1,165 @@
+{
+  "perPage": {
+    "/": {
+      "maxScroll": 2506,
+      "hrefs": [
+        "/",
+        "/discover",
+        "/lattice/",
+        "/studio/new",
+        "/galaxy",
+        "/bookshelf",
+        "/circles",
+        "/product/mori",
+        "/product/wander",
+        "/product/typewave",
+        "/product/loops",
+        "/feed"
+      ]
+    },
+    "/discover": {
+      "maxScroll": 2221,
+      "hrefs": [
+        "/",
+        "/product/mori",
+        "/discover",
+        "/bookshelf",
+        "/circles",
+        "/studio/new",
+        "/product/wander",
+        "/product/typewave",
+        "/product/loops",
+        "/product/sprout",
+        "/product/minute"
+      ]
+    },
+    "/circles": {
+      "maxScroll": 779,
+      "hrefs": [
+        "/",
+        "/discover",
+        "/bookshelf",
+        "/circles",
+        "/studio/new"
+      ]
+    },
+    "/bookshelf": {
+      "maxScroll": 1209,
+      "hrefs": [
+        "/",
+        "/bookshelf/hello-llm",
+        "/discover",
+        "/bookshelf",
+        "/circles",
+        "/studio/new",
+        "/bookshelf/hello-computer",
+        "/bookshelf/hello-system/part-1/01-why-architecture-matters"
+      ]
+    },
+    "/collections": {
+      "maxScroll": 188,
+      "hrefs": [
+        "/",
+        "/discover",
+        "/bookshelf",
+        "/circles",
+        "/studio/new"
+      ]
+    },
+    "/challenges": {
+      "maxScroll": 647,
+      "hrefs": [
+        "/",
+        "/studio/new?prompt=waiting",
+        "/discover",
+        "/bookshelf",
+        "/circles",
+        "/studio/new",
+        "/studio/new?prompt=one-button"
+      ]
+    },
+    "/docs": {
+      "maxScroll": 0,
+      "hrefs": [
+        "/",
+        "/docs/trial-welcome",
+        "/discover",
+        "/bookshelf",
+        "/circles",
+        "/studio/new"
+      ]
+    }
+  },
+  "reachableFrom": {
+    "/": [
+      "/",
+      "/discover",
+      "/circles",
+      "/bookshelf",
+      "/collections",
+      "/challenges",
+      "/docs"
+    ],
+    "/discover": [
+      "/",
+      "/discover",
+      "/circles",
+      "/bookshelf",
+      "/collections",
+      "/challenges",
+      "/docs"
+    ],
+    "/feed": [
+      "/"
+    ],
+    "/circles": [
+      "/",
+      "/discover",
+      "/circles",
+      "/bookshelf",
+      "/collections",
+      "/challenges",
+      "/docs"
+    ],
+    "/challenges": [],
+    "/collections": [],
+    "/bookshelf": [
+      "/",
+      "/discover",
+      "/circles",
+      "/bookshelf",
+      "/collections",
+      "/challenges",
+      "/docs"
+    ],
+    "/lattice/": [
+      "/"
+    ],
+    "/docs": [],
+    "/studio": [],
+    "/developers": [],
+    "/wallet": []
+  },
+  "anyVisible": {
+    "/": true,
+    "/discover": true,
+    "/feed": true,
+    "/circles": true,
+    "/challenges": false,
+    "/collections": false,
+    "/bookshelf": true,
+    "/lattice/": true,
+    "/docs": false,
+    "/studio": false,
+    "/developers": false,
+    "/wallet": false
+  },
+  "deadOnMobile": [
+    "/challenges",
+    "/collections",
+    "/docs",
+    "/studio",
+    "/developers",
+    "/wallet"
+  ]
+}

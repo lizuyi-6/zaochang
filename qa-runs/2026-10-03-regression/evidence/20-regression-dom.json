@@ -1,0 +1,220 @@
+[
+  {
+    "check": "P-011 aria-pressed",
+    "path": "/product/loops",
+    "rows": [
+      {
+        "text": "收藏",
+        "ariaPressed": "false",
+        "cls": ""
+      },
+      {
+        "text": "喜欢",
+        "ariaPressed": "false",
+        "cls": ""
+      }
+    ]
+  },
+  {
+    "check": "P-011 aria-pressed",
+    "path": "/product/mori",
+    "rows": [
+      {
+        "text": "收藏",
+        "ariaPressed": "false",
+        "cls": ""
+      },
+      {
+        "text": "喜欢",
+        "ariaPressed": "false",
+        "cls": ""
+      }
+    ]
+  },
+  {
+    "check": "P-006 hit targets",
+    "mode": "fine-1440x900",
+    "total": 14,
+    "below44": 6,
+    "below24": 0,
+    "rows": [
+      {
+        "cls": "wb-intro-close",
+        "w": 28,
+        "h": 32,
+        "name": "Close"
+      },
+      {
+        "cls": "seg",
+        "w": 38,
+        "h": 38,
+        "name": "Zoom out"
+      },
+      {
+        "cls": "seg",
+        "w": 38,
+        "h": 38,
+        "name": "Zoom in"
+      },
+      {
+        "cls": "seg",
+        "w": 38,
+        "h": 38,
+        "name": "Previous page"
+      },
+      {
+        "cls": "seg",
+        "w": 38,
+        "h": 38,
+        "name": "Next page"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Exit session"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Export"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Have an issue?"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Session settings"
+      },
+      {
+        "cls": "wb-dock-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Pause"
+      },
+      {
+        "cls": "wb-dock-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Mute"
+      },
+      {
+        "cls": "wb-dock-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Microphone off"
+      },
+      {
+        "cls": "wb-dock-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Open transcript"
+      },
+      {
+        "cls": "wb-conn-btn",
+        "w": 145,
+        "h": 32,
+        "name": "Connection status"
+      }
+    ]
+  },
+  {
+    "check": "P-006 hit targets",
+    "mode": "touch-390x844",
+    "total": 14,
+    "below44": 1,
+    "below24": 0,
+    "rows": [
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Exit session"
+      },
+      {
+        "cls": "seg",
+        "w": 44,
+        "h": 44,
+        "name": "Zoom out"
+      },
+      {
+        "cls": "seg",
+        "w": 44,
+        "h": 44,
+        "name": "Zoom in"
+      },
+      {
+        "cls": "seg",
+        "w": 44,
+        "h": 44,
+        "name": "Previous page"
+      },
+      {
+        "cls": "seg",
+        "w": 44,
+        "h": 44,
+        "name": "Next page"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Export"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Have an issue?"
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Session settings"
+      },
+      {
+        "cls": "wb-dock-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Pause"
+      },
+      {
+        "cls": "wb-dock-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Mute"
+      },
+      {
+        "cls": "wb-dock-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Microphone off"
+      },
+      {
+        "cls": "wb-dock-btn",
+        "w": 44,
+        "h": 44,
+        "name": "Open transcript"
+      },
+      {
+        "cls": "wb-intro-close",
+        "w": 44,
+        "h": 44,
+        "name": "Close"
+      },
+      {
+        "cls": "wb-conn-btn",
+        "w": 145,
+        "h": 32,
+        "name": "Connection status"
+      }
+    ]
+  }
+]

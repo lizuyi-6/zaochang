@@ -46,3 +46,21 @@ test('plan budget: no inline abort timers on plan fetch paths anywhere in the SP
   walk(spaSrc);
   assert.deepEqual(offenders, [], '发现内联 abort 毫秒数,必须改用 PLAN_CLIENT_TIMEOUT_MS 等导出常量');
 });
+
+test('inquiry budget: server degrade ceiling (55s) stays below the client fallback (60s)', () => {
+  // 同族时限不变量(qa-runs 2026-10-02 P-002):服务端 55s 先降级并如实标注 source,
+  // 客户端 60s 兜底只负责网络层失败。若两端被单独改动而倒挂(服务端 ≥ 客户端),
+  // 客户端会先 ERR_ABORTED,拿不到真实降级响应,静默拼本地模板。
+  const route = read('app/api/hyperknow/course-inquiry/route.ts');
+  const serverMatch = route.match(/AbortSignal\.timeout\((\d+_000)\)/);
+  assert.ok(serverMatch, 'course-inquiry 路由必须显式设置 AbortSignal.timeout(服务端降级上限)');
+  const serverMs = Number(serverMatch[1].replace('_', ''));
+
+  const page = read('hyperknow-spa/src/lattice/pages/CreatePage.tsx');
+  const clientMatch = page.match(/timeoutMs:\s*(\d+_000)/);
+  assert.ok(clientMatch, 'CreatePage 必须为问询请求设置 timeoutMs 客户端兜底');
+  const clientMs = Number(clientMatch[1].replace('_', ''));
+
+  assert.ok(serverMs === 55_000, `服务端降级上限应为 55s,当前 ${serverMs}ms`);
+  assert.ok(clientMs > serverMs, `客户端兜底(${clientMs}ms)必须大于服务端降级上限(${serverMs}ms),保证拿到真实降级响应`);
+});

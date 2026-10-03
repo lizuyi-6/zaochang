@@ -27,7 +27,7 @@ export const SignIn: React.FC<PageProps> = () => {
         </span>
 
         <div className="si-form">
-          <h1 className="si-title">{t('auth.welcomeToHyperknow')}</h1>
+          <h1 className="si-title">{t('auth.welcome')}</h1>
           <p className="si-sub">{t('auth.signInSubtitle')}</p>
 
           <a className="si-google si-zc" href="/signin?via=lattice&return_to=%2Flattice%2F">

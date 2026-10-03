@@ -1,0 +1,183 @@
+{
+  "capturedAt": "2026-10-03T04:14:03.503Z",
+  "out": [
+    {
+      "key": "p-probe-discover",
+      "url": "https://aetherstudio.top/discover",
+      "status": 200,
+      "finalUrl": "/discover",
+      "textLen": 729,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 371,
+        "scrolledTo": 371,
+        "clicks": [
+          {
+            "sel": "[role=\"tab\"]:not([disabled])",
+            "text": "全部",
+            "before": 729,
+            "after": 729,
+            "changed": false
+          },
+          {
+            "sel": "[role=\"tab\"]:not([disabled])",
+            "text": "互动体验",
+            "before": 729,
+            "after": 729,
+            "changed": false
+          },
+          {
+            "sel": "[role=\"tab\"]:not([disabled])",
+            "text": "效率工具",
+            "before": 729,
+            "after": 729,
+            "changed": false
+          },
+          {
+            "sel": "[role=\"tab\"]:not([disabled])",
+            "text": "声音影像",
+            "before": 729,
+            "after": 729,
+            "changed": false
+          },
+          {
+            "sel": "[role=\"tab\"]:not([disabled])",
+            "text": "生活方式",
+            "before": 729,
+            "after": 729,
+            "changed": false
+          },
+          {
+            "sel": "[role=\"tab\"]:not([disabled])",
+            "text": "开发工具",
+            "before": 729,
+            "after": 729,
+            "changed": false
+          }
+        ],
+        "sticky": [
+          {
+            "at": 371,
+            "els": [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "visible": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "visible": true
+              }
+            ]
+          }
+        ],
+        "errors": [],
+        "container": "window (clientH=900)"
+      },
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "p-probe-doc",
+      "url": "https://aetherstudio.top/developers/docs",
+      "status": 200,
+      "finalUrl": "/developers/docs",
+      "textLen": 2406,
+      "walk": {
+        "scrolls": 3,
+        "maxScroll": 1174,
+        "scrolledTo": 1174,
+        "clicks": [
+          {
+            "sel": "button[aria-expanded]:not([disabled])",
+            "text": "造",
+            "before": 2406,
+            "after": 2443,
+            "changed": true
+          }
+        ],
+        "sticky": [
+          {
+            "at": 720,
+            "els": [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "visible": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "visible": true
+              }
+            ]
+          },
+          {
+            "at": 1174,
+            "els": [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "visible": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "visible": true
+              }
+            ]
+          }
+        ],
+        "errors": [],
+        "container": "window (clientH=900)"
+      },
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "p-probe-plans",
+      "url": "https://aetherstudio.top/lattice/#/plans",
+      "status": 200,
+      "finalUrl": "/lattice/#/plans",
+      "textLen": 2203,
+      "walk": {
+        "scrolls": 3,
+        "maxScroll": 895,
+        "scrolledTo": 895,
+        "clicks": [
+          {
+            "sel": "button[aria-expanded]:not([disabled])",
+            "text": "Switch language",
+            "before": 2203,
+            "after": 2266,
+            "changed": true
+          }
+        ],
+        "sticky": [
+          {
+            "at": 720,
+            "els": []
+          },
+          {
+            "at": 895,
+            "els": []
+          }
+        ],
+        "errors": [],
+        "container": "div.hk-activities (clientH=509)"
+      },
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    }
+  ]
+}

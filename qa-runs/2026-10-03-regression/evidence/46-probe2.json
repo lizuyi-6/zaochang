@@ -1,0 +1,275 @@
+{
+  "capturedAt": "2026-10-03T04:18:23.603Z",
+  "out": [
+    {
+      "key": "q-feed",
+      "url": "https://aetherstudio.top/feed",
+      "status": 200,
+      "finalUrl": "/feed",
+      "textLen": 397,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "q-feed-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 62,
+      "walk": {
+        "scrolls": 2,
+        "maxScroll": 62,
+        "scrolledTo": 62,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "button[aria-expanded]:not([disabled])",
+          "text": "造",
+          "before": 397,
+          "after": 434,
+          "changed": true
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "q-discover",
+      "url": "https://aetherstudio.top/discover",
+      "status": 200,
+      "finalUrl": "/discover",
+      "textLen": 729,
+      "containers": [
+        {
+          "kind": "window",
+          "maxScroll": 371,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1271,
+          "cls": ""
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "window",
+          "maxScroll": 371,
+          "clientH": 900,
+          "w": 1440,
+          "h": 1271,
+          "cls": "",
+          "scrolls": 2,
+          "scrolledTo": 371,
+          "shots": [
+            "q-discover-win-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        },
+        {
+          "kind": "inner",
+          "maxScroll": 62,
+          "clientH": 900,
+          "w": 232,
+          "h": 900,
+          "cls": "deep-sidebar",
+          "scrolls": 2,
+          "scrolledTo": 62,
+          "shots": [
+            "q-discover-c1-s30.png",
+            [
+              {
+                "sel": "header",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              },
+              {
+                "sel": "[class*=topbar]",
+                "top": 0,
+                "h": 70,
+                "pinned": true
+              }
+            ]
+          ]
+        }
+      ],
+      "maxScrollTotal": 433,
+      "walk": {
+        "scrolls": 4,
+        "maxScroll": 433,
+        "scrolledTo": 433,
+        "containerCount": 2,
+        "innerOnly": false
+      },
+      "clicks": [
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "全部",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "互动体验",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "效率工具",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "声音影像",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "生活方式",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        },
+        {
+          "sel": "[role=\"tab\"]:not([disabled])",
+          "text": "开发工具",
+          "before": 729,
+          "after": 729,
+          "changed": false
+        }
+      ],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "q-lattice-chat",
+      "url": "https://aetherstudio.top/lattice/#/chat",
+      "status": 200,
+      "finalUrl": "/lattice/#/chat",
+      "textLen": 1663,
+      "containers": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities"
+        }
+      ],
+      "walked": [
+        {
+          "kind": "inner",
+          "maxScroll": 895,
+          "clientH": 509,
+          "w": 212,
+          "h": 509,
+          "cls": "hk-activities",
+          "scrolls": 3,
+          "scrolledTo": 895,
+          "shots": [
+            "q-lattice-chat-win-s30.png",
+            [],
+            "q-lattice-chat-win-s60.png",
+            []
+          ]
+        }
+      ],
+      "maxScrollTotal": 895,
+      "walk": {
+        "scrolls": 3,
+        "maxScroll": 895,
+        "scrolledTo": 895,
+        "containerCount": 1,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    },
+    {
+      "key": "q-galaxy",
+      "url": "https://aetherstudio.top/galaxy",
+      "status": 200,
+      "finalUrl": "/galaxy",
+      "textLen": 1170,
+      "containers": [],
+      "walked": [],
+      "maxScrollTotal": 0,
+      "walk": {
+        "scrolls": 0,
+        "maxScroll": 0,
+        "scrolledTo": 0,
+        "containerCount": 0,
+        "innerOnly": false
+      },
+      "clicks": [],
+      "console": [],
+      "http4xx5xx": [],
+      "failedReq": []
+    }
+  ]
+}

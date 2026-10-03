@@ -1,0 +1,55 @@
+{
+  "steps": [
+    {
+      "y": 0,
+      "visibleCount": 10,
+      "missing": []
+    },
+    {
+      "y": 500,
+      "visibleCount": 9,
+      "missing": []
+    },
+    {
+      "y": 1000,
+      "visibleCount": 10,
+      "missing": []
+    },
+    {
+      "y": 1500,
+      "visibleCount": 10,
+      "missing": []
+    },
+    {
+      "y": 2000,
+      "visibleCount": 10,
+      "missing": []
+    },
+    {
+      "y": 2500,
+      "visibleCount": 9,
+      "missing": [
+        "/feed\"进入动态\" 30,583 107x44 可点=true"
+      ]
+    }
+  ],
+  "reached": {
+    "/feed": [
+      {
+        "y": 2500,
+        "text": "进入动态",
+        "rect": "30,583 107x44",
+        "hittable": true
+      }
+    ]
+  },
+  "note": "window maxScroll=2506px",
+  "neverReachable": [
+    "/challenges",
+    "/collections",
+    "/docs",
+    "/studio",
+    "/developers",
+    "/wallet"
+  ]
+}

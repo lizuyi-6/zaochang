@@ -24,6 +24,15 @@ test("未闭合尖括号段保持原样(不吞正文),空输入安全", () => {
   assert.equal(sanitizeNarration(undefined), "");
 });
 
+test("未配对角括号折掉:模型旁白实测孤立「(闭括号丢失,回归审计 R-003)", () => {
+  assert.equal(
+    sanitizeNarration("可见性的本质「而不是加锁的核心思维框架。"),
+    "可见性的本质而不是加锁的核心思维框架。",
+  );
+  assert.equal(sanitizeNarration("只有孤立闭括号〕的样子」"), "只有孤立闭括号〕的样子");
+  assert.equal(sanitizeNarration("配对的「似然」保持不动"), "配对的「似然」保持不动");
+});
+
 test("真实事故样本:贝叶斯术语步旁白", () => {
   const dirty = "看板子上的三个定义：<strong>先验概率</strong>是你拿到新证据之前，对事件发生的初始判断，比如普通人群的感染率就是先验；<strong>似然</strong>是假设事件成立的情况下，新证据出现的概率。";
   const clean = sanitizeNarration(dirty);
