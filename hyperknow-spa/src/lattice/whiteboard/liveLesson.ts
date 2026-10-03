@@ -9,6 +9,7 @@ import type { LiveLecturePlan } from '../backend';
 import type { BoardAnnot, BoardItem, BoardTable, LessonStep, Rich } from './lessonScript';
 import { VIOLET } from './lessonScript';
 import { diagramBox, renderDiagram } from './diagram';
+import { sanitizeNarration } from './sanitizeNarration';
 import { L } from '../i18n/content';
 
 export interface LessonScript {
@@ -185,10 +186,12 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
   plan.steps.forEach((step, idx) => {
     const id = idx + 1;
     const action = step.board_action;
+    /* 旁白净化(LLM 偶发漏 HTML 标签进 spoken_text):字幕/面板/TTS 同源,剥标签防朗读事故 */
+    const narrationText = sanitizeNarration(step.spoken_text);
     const chipText = L('Board note', '板书');
     const panel: LessonStep['panel'] = [
       { id: `chip-live-${id}`, kind: 'chip', chipIcon: 'pencil', chipText },
-      { id: `m-live-${id}`, kind: 'msg', text: plain(step.spoken_text) },
+      { id: `m-live-${id}`, kind: 'msg', text: plain(narrationText) },
     ];
     if (action.type === 'card') {
       const titleLines = action.title ? titleToLines(action.title) : [];
@@ -257,7 +260,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
       }
       const fallbackDisplayLines = naturalFallbackText.length
         ? naturalFallbackText.slice(0, 5).map(plain)
-        : [plain(action.title || step.spoken_text || 'Structured Concept Flow')];
+        : [plain(action.title || narrationText || 'Structured Concept Flow')];
 
       const rendered = renderDiagram(code);
       const diagH = rendered ? diagramBox(rendered, COL_W).h : fallbackDisplayLines.length * 14 * 1.24;
@@ -300,7 +303,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
         },
         lines: [
           plain(caption ? `[${caption}]` : '[Visual Note]'),
-          plain(prompt || step.spoken_text),
+          plain(prompt || narrationText),
         ],
         x: COL_X[cursor.col],
         y: cursor.y,
@@ -315,7 +318,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
     const lessonStep: LessonStep = {
       id,
       panel,
-      caption: plain(step.spoken_text),
+      caption: plain(narrationText),
       beat: 400,
       /* 服务端 step_id:举手插话把它作为答疑上下文(演示步没有) */
       sid: step.step_id,
@@ -323,13 +326,17 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
     };
 
     if (action.type === 'quick_check') {
-      const options = (action.options ?? []).length >= 2 ? (action.options as string[]) : [];
+      const rawOptions = (action.options ?? []).length >= 2 ? (action.options as string[]) : [];
+      /* 题面/选项/解析同样走净化——答错解析会被朗读并上屏 */
+      const options = rawOptions.map(sanitizeNarration).filter(Boolean);
       if (options.length >= 2) {
         lessonStep.awaitChoice = {
-          question: action.question ?? L('Quick check', '快速检查'),
+          question: sanitizeNarration(action.question ?? '') || L('Quick check', '快速检查'),
           options,
           answer: Math.min(Math.max(action.answer ?? 0, 0), options.length - 1),
-          explanation: (action as { explanation?: string }).explanation,
+          explanation: (action as { explanation?: string }).explanation
+            ? sanitizeNarration((action as { explanation?: string }).explanation!)
+            : undefined,
         };
       }
     }

@@ -14,6 +14,7 @@ const mod = { exports: {} };
 new Function('require', 'module', 'exports', compiled)((spec) => {
   if (spec === './diagram') return { diagramBox, renderDiagram };
   if (spec === './lessonScript') return { VIOLET: '#7654aa' };
+  if (spec === './sanitizeNarration') return { sanitizeNarration: (t) => t };
   if (spec === '../i18n/content') return { L: (_en, zh) => zh };
   throw new Error(`Unexpected dependency: ${spec}`);
 }, mod, mod.exports);

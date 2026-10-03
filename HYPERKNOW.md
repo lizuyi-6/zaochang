@@ -115,3 +115,12 @@ CI 不安装 hyperknow-spa 依赖、不参与主站 tsc/eslint(tsconfig/eslint �
 - **空正文/预算纪律**(反复出现的故障模式):混合推理模型链式思考计入 max_tokens——planLecture 8192 被思考耗尽→parse Unexpected end of JSON→静默降级 5 步模板课;现 16384+路由超时 130s(冷实例实测 92-100s)。诊断入口:wrangler tail 找 `lecture plan parse failed ... payload head:`(空 head=正文空)。
 - **计划管道解析契约**:`planLectureLive`(预热与直取共用解析器)必须透传 quick_check `explanation`(学员答错 UI 反馈的唯一来源)与顶层 `degraded`;预热缓存(planPrefetch)拒存 degraded 计划——开课取不到预热就走正常 POST 给后端重做机会,旁白/配图不为模板课烧配额。契约由 `tests/lattice-backend.test.mjs` 钉住。
 - **蓝图/单元螺旋课程**:COURSE_BLUEPRINT_PROMPT/UNIT_GENERATION_PROMPT 要求后续单元在新情境复用早前技能、项目跨单元累积、测验回捞旧单元内容(间隔提取)。
+
+## 2026-10-03 白板自由讲座 + 板书观感四修
+
+- **自由讲座(直进 `#/whiteboard`)**:无课程上下文时不再静默播录课复刻演示脚本(教学提示词在这条路径上零作用的根因)——IntroOverlay 命题(输入+芯片)→ `set activeTopic` → 与课程讲次同一 `planLectureLive` 链路;`?topic=` 深链解析/自由话题回写 hash;失败显式重试(planAttempt 点火),degraded 模板再挣一次真实生成;演示课仅作显式兜底(匿名/屡败),匿名学员给登录引导。无课程上下文时讲师提示注入 STANDALONE 独立讲次声明(禁幻影"上一讲")。
+- **字幕分句窗口**(`whiteboard/captionWindow.ts` 纯函数):字幕栏只渲染当前窗口——一次至多两句(短句成对 ≤66 字),长句独占(语义最大连贯一句);句终判定排除小数点/连用省略号,右引号随前句;CaptionBar 按揭示游标滑窗,字幕栏 max-height 4.5em 兜底;答错反馈框限高三行可滚动。回归:`tests/whiteboard-caption-window.test.mjs`。
+- **公式 KaTeX 排版**(`whiteboard/FormulaBlock.tsx`):formula 动作不再把 LaTeX 源码当等宽文本上板——懒加载 katex 异步 chunk(仅公式出现时下载)+display 排版,throwOnError:false+错误段标红,失败回退等宽源码;**Vite 资产管线原生处理 node_modules CSS 字体**(主站 vinext 需 postbuild 同步,SPA 不需要——两套管线差异别搞混);契约 `tests/build-assets.test.mjs` lattice 段。
+- **diagram CJK 测量与折行**:节点盒宽改 `measureText` 逐字真实测量(CJK 17px/拉丁 7.6px/宽窄符分档,此前一律 7.6 致 CJK 盒宽低估一半、文字溢出互压);标签按 `LABEL_MAX_W=158px` 折行(≤3 行,超出省略号),盒随内容;边标签同法。回归:`tests/hyperknow-diagram.test.mjs` CJK 用例。
+- **提示词**:禁 ASCII 摆阵(斜杠/管道表格)——矩阵走 formula(pmatrix/bmatrix/cases),流程树走 diagram,表格性文字改每行一条短要点;diagram 节点标签从"单行"放宽为"短语"(渲染器已会折行)。契约:回归 15。
+- **旁白净化**(`whiteboard/sanitizeNarration.ts`,观感第五修):模型偶发违反纯口语约定把 `<strong>` 漏进 spoken_text(字幕原样显示、TTS 念出标签名)——liveLesson 适配层一处净化,字幕/面板/TTS 预热/quick_check 题干选项解析全吃同源数据;正则必须窄匹配 `/<\/?[a-zA-Z][^>]*>/`(标签名起始才剥),宽匹配 `/<[^>]*>/` 会误吞数学比较"x < y 且 y > 0"(测试当场抓住)。同轮:`；`;` 计入断句符(实测三四个定义用分号串成一句占三行)。回归:`tests/whiteboard-narration-sanitize.test.mjs`+caption-window 分号用例;lattice-layout 手 mock 依赖白名单需登记新模块。

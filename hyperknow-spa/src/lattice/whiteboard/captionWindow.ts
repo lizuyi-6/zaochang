@@ -17,8 +17,10 @@ export interface CaptionWindow {
 /** 成对窗口的合并上限:两句合计超过此字符数就各自独占一窗(字幕栏约两行容量) */
 export const PAIR_MAX_CHARS = 66;
 
-const CJK_TERMINATORS = new Set(['。', '！', '？', '…']);
-const LATIN_TERMINATORS = new Set(['.', '!', '?']);
+/* 分号同为断句点:实测旁白用"；"串起三四个定义,一句占满三行——分号子句是
+ * 独立的语义拍,短子句仍会被成对逻辑重新两两合并,窗口不碎 */
+const CJK_TERMINATORS = new Set(['。', '！', '？', '…', '；']);
+const LATIN_TERMINATORS = new Set(['.', '!', '?', ';']);
 /** 句尾右引号/右括号:并入前一句,不作下一句开头 */
 const CLOSERS = new Set(['"', '’', '”', '「', '」', '『', '』', '）', ')', '】', ']']);
 
