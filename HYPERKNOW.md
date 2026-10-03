@@ -116,6 +116,12 @@ CI 不安装 hyperknow-spa 依赖、不参与主站 tsc/eslint(tsconfig/eslint �
 - **计划管道解析契约**:`planLectureLive`(预热与直取共用解析器)必须透传 quick_check `explanation`(学员答错 UI 反馈的唯一来源)与顶层 `degraded`;预热缓存(planPrefetch)拒存 degraded 计划——开课取不到预热就走正常 POST 给后端重做机会,旁白/配图不为模板课烧配额。契约由 `tests/lattice-backend.test.mjs` 钉住。
 - **蓝图/单元螺旋课程**:COURSE_BLUEPRINT_PROMPT/UNIT_GENERATION_PROMPT 要求后续单元在新情境复用早前技能、项目跨单元累积、测验回捞旧单元内容(间隔提取)。
 
+## 2026-10-03 回归审计修复(旧品牌清零/死邮箱/净化括号)
+
+- **品牌清零守卫**:更名时字典「值」与硬编码字面量是两个独立泄漏面,只查其一必漏——`lattice-brand` 现有全源扫(ts/tsx/json/css/html 禁 "Hyperknow"),小写内部标识符(包名/`/api/hyperknow/*` 路径/注释)不受限。字典值里的用户联系邮箱也是品牌面:`contact@/public-mail@hyperknow.io` 是指向外人域名的死通道,真实支持邮箱 `zaochang@aetherstudio.top`(actions.ts SUPPORT_EMAIL)。
+- **旁白净化新规**:未配对角括号(孤立「或」)整折——文本内只有一侧有括号即视为配对失败;两侧都在不做过深嵌套推断。模型随机错字(如"传导辑径")无确定性修法,不进净化层。
+- **en 简介模板**:`This session opens “{topic}” …`——自由命题话题可能是任意语言,嵌入英文句必须带引号,否则语法不成立且 TTS 逐字念出病句。
+
 ## 2026-10-03 白板自由讲座 + 板书观感四修
 
 - **自由讲座(直进 `#/whiteboard`)**:无课程上下文时不再静默播录课复刻演示脚本(教学提示词在这条路径上零作用的根因)——IntroOverlay 命题(输入+芯片)→ `set activeTopic` → 与课程讲次同一 `planLectureLive` 链路;`?topic=` 深链解析/自由话题回写 hash;失败显式重试(planAttempt 点火),degraded 模板再挣一次真实生成;演示课仅作显式兜底(匿名/屡败),匿名学员给登录引导。无课程上下文时讲师提示注入 STANDALONE 独立讲次声明(禁幻影"上一讲")。
