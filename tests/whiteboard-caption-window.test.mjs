@@ -81,3 +81,16 @@ test("边界:空文本与无终结符文本", () => {
   const wins = buildWindows("没有句读的一整段话");
   assert.deepEqual(wins, [{ start: 0, end: 9 }]);
 });
+
+test("分号断句:串行定义自动分窗(实测三定义串一句占三行),短子句两两合并", () => {
+  const text = "先验概率是拿到证据前的初始判断；似然是假设成立时证据出现的概率；后验概率是更新后的新判断。";
+  const sentences = splitSentences(text);
+  assert.equal(sentences.length, 3, "中文分号必须是断句点");
+  const wins = buildWindows(text);
+  assert.equal(wins.length, 2, "三子句 → 2+1 两窗,短子句成对");
+  for (const w of wins) {
+    const contained = sentences.filter((s) => s.start >= w.start && s.end <= w.end);
+    assert.ok(contained.length <= 2, "每窗至多两句的硬规则不变");
+  }
+  assert.equal(sliceAll(text, wins).join(""), text, "窗口无缝覆盖全文");
+});
