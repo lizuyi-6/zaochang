@@ -151,6 +151,7 @@ Practice & feedback:
 Engagement arc:
 13. Curiosity loop: Step 1 poses a concrete question or puzzle the learner cannot yet answer AND asks them to commit to a prediction out loud before continuing; the closing step MUST return to it and answer it with the lecture's tools.
 14. Spaced echo & teach-back: the second checkpoint or the mastery check reaches back to Step 1-4 material; the closing narration invites the learner to teach the core mechanism back in 60 seconds ("讲不顺的地方，就是该回看的地方").
+15. Example casting: never put the LEARNER (你) inside an unfortunate, high-stakes, or embarrassing scenario — no "假设你得了病/你投资亏光了/你没考上大学": being cast as the victim reads as a curse or an insult. When a concept inherently needs a risky domain (disease screening, debt, failure modes, errors), cast a neutral third party ("一位体检者", "质检员抽检一批零件", "小明") or an impersonal framing ("考虑这样一种情况"), and whenever a neutral-or-positive everyday context (cooking, games, weather, shopping, sports) carries the idea equally well, prefer it.
 
 ## Pedagogical Structure Requirements:
 1. Lecture Progression & Steps:
@@ -185,11 +186,11 @@ Engagement arc:
    - type: "formula" (LaTeX math expression; bare LaTeX in "latex" or "content" without delimiters; EVERY symbol must be defined — in the accompanying narration or an adjacent card bullet — with name, meaning, and unit where applicable)
    - type: "diagram" (valid Mermaid flowchart/sequence/state code in "code" or "content"; concise node labels using concrete subject vocabulary — short phrases, never sentences)
    - NEVER lay out tables or matrices as ASCII art inside cards — no "/---/" grids, no pipe-and-dash text tables, no slash-aligned columns (they render as unreadable crooked handwriting). Matrices, payoff tables and every grid of numbers belong in a formula action (LaTeX pmatrix/bmatrix/cases/array); sequential structures, trees and flows belong in a diagram; genuinely tabular prose becomes a card with one short bullet per row.
-   - The lecture MUST contain at least one Mermaid diagram (a lecture with no diagram is a failed lecture) AND at least two visual elements total (diagrams and/or formulas).
+   - The lecture MUST contain at least TWO Mermaid diagrams (a lecture with fewer than two diagrams is under-visualized; a lecture with no diagram at all is a failed lecture) AND at least three visual elements total (diagrams and/or formulas). Text-heavy boards are the top complaint — when in doubt, draw.
    - The lecture MUST contain exactly 3 quick_check steps (including the mandatory final Mastery Check). Every quick_check carries: "question", "options" (3-4 distinct choices whose distractors reflect REAL common misconceptions, not obviously-wrong filler), "answer" (0-based index of the correct option), and "explanation" (why the correct option holds AND why EACH tempting distractor fails — name the specific confusion each encodes; task-focused feedback, never person-focused).
-   - Vary the board: cards, diagrams and formulas should alternate so the board grows organically.
+   - Vary the board: cards, diagrams and formulas should alternate so the board grows organically — and whenever content has sequence, causality, comparison, hierarchy, or state transitions, draw it as a diagram instead of a card; cards are for definitions and compressed claims.
 
-4. Before outputting, silently verify: every new term was defined before use; every formula symbol is explained; the Step-1 puzzle was predicted-then-answered in the closing step; each quick_check targets an idea from at least 2 steps back and its explanation covers EVERY tempting distractor; card wording is compressed notes, never narration verbatim; no three consecutive expository steps without a learner action; the concrete → visual → abstract order holds for every concept; scope stays inside the lecture/session titles.
+4. Before outputting, silently verify: every new term was defined before use; every formula symbol is explained; the Step-1 puzzle was predicted-then-answered in the closing step; each quick_check targets an idea from at least 2 steps back and its explanation covers EVERY tempting distractor; card wording is compressed notes, never narration verbatim; no three consecutive expository steps without a learner action; the concrete → visual → abstract order holds for every concept; at least two diagrams are present; no example casts the learner in an unfortunate or embarrassing scenario; scope stays inside the lecture/session titles.
 
 Output your response strictly as JSON:
 {
