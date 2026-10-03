@@ -1,0 +1,428 @@
+[
+  {
+    "hash": "#/whiteboard",
+    "label": "whiteboard",
+    "total": 14,
+    "belowMin": 6,
+    "smallest": [
+      {
+        "cls": "wb-intro-close",
+        "tag": "button",
+        "w": 28,
+        "h": 32,
+        "area": 896,
+        "name": "Close",
+        "belowMin": true
+      },
+      {
+        "cls": "seg",
+        "tag": "button",
+        "w": 38,
+        "h": 38,
+        "area": 1444,
+        "name": "Zoom out",
+        "belowMin": true
+      },
+      {
+        "cls": "seg",
+        "tag": "button",
+        "w": 38,
+        "h": 38,
+        "area": 1444,
+        "name": "Zoom in",
+        "belowMin": true
+      },
+      {
+        "cls": "seg",
+        "tag": "button",
+        "w": 38,
+        "h": 38,
+        "area": 1444,
+        "name": "Previous page",
+        "belowMin": true
+      },
+      {
+        "cls": "seg",
+        "tag": "button",
+        "w": 38,
+        "h": 38,
+        "area": 1444,
+        "name": "Next page",
+        "belowMin": true
+      },
+      {
+        "cls": "wb-chrome-btn",
+        "tag": "button",
+        "w": 44,
+        "h": 44,
+        "area": 1936,
+        "name": "Exit session",
+        "belowMin": false
+      }
+    ],
+    "allSmall": [
+      {
+        "cls": "wb-intro-close",
+        "tag": "button",
+        "w": 28,
+        "h": 32,
+        "area": 896,
+        "name": "Close",
+        "belowMin": true
+      },
+      {
+        "cls": "seg",
+        "tag": "button",
+        "w": 38,
+        "h": 38,
+        "area": 1444,
+        "name": "Zoom out",
+        "belowMin": true
+      },
+      {
+        "cls": "seg",
+        "tag": "button",
+        "w": 38,
+        "h": 38,
+        "area": 1444,
+        "name": "Zoom in",
+        "belowMin": true
+      },
+      {
+        "cls": "seg",
+        "tag": "button",
+        "w": 38,
+        "h": 38,
+        "area": 1444,
+        "name": "Previous page",
+        "belowMin": true
+      },
+      {
+        "cls": "seg",
+        "tag": "button",
+        "w": 38,
+        "h": 38,
+        "area": 1444,
+        "name": "Next page",
+        "belowMin": true
+      },
+      {
+        "cls": "wb-conn-btn",
+        "tag": "button",
+        "w": 145,
+        "h": 32,
+        "area": 4652,
+        "name": "Connection status",
+        "belowMin": true
+      }
+    ]
+  },
+  {
+    "hash": "#/create",
+    "label": "create",
+    "total": 3,
+    "belowMin": 3,
+    "smallest": [
+      {
+        "cls": "cr-send",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Start",
+        "belowMin": true
+      },
+      {
+        "cls": "cr-util-btn",
+        "tag": "button",
+        "w": 30,
+        "h": 30,
+        "area": 900,
+        "name": "Back to home",
+        "belowMin": true
+      },
+      {
+        "cls": "cr-util-btn",
+        "tag": "button",
+        "w": 30,
+        "h": 30,
+        "area": 900,
+        "name": "Start a new course",
+        "belowMin": true
+      }
+    ],
+    "allSmall": [
+      {
+        "cls": "cr-send",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Start",
+        "belowMin": true
+      },
+      {
+        "cls": "cr-util-btn",
+        "tag": "button",
+        "w": 30,
+        "h": 30,
+        "area": 900,
+        "name": "Back to home",
+        "belowMin": true
+      },
+      {
+        "cls": "cr-util-btn",
+        "tag": "button",
+        "w": 30,
+        "h": 30,
+        "area": 900,
+        "name": "Start a new course",
+        "belowMin": true
+      }
+    ]
+  },
+  {
+    "hash": "#/home",
+    "label": "home",
+    "total": 5,
+    "belowMin": 5,
+    "smallest": [
+      {
+        "cls": "hm-circle-btn",
+        "tag": "button",
+        "w": 36,
+        "h": 36,
+        "area": 1296,
+        "name": "Add attachment",
+        "belowMin": true
+      },
+      {
+        "cls": "hm-send",
+        "tag": "button",
+        "w": 36,
+        "h": 36,
+        "area": 1296,
+        "name": "Generate Course",
+        "belowMin": true
+      },
+      {
+        "cls": "hm-chip icon-only",
+        "tag": "button",
+        "w": 40,
+        "h": 36,
+        "area": 1440,
+        "name": "Notes",
+        "belowMin": true
+      },
+      {
+        "cls": "language-switcher",
+        "tag": "button",
+        "w": 40,
+        "h": 40,
+        "area": 1600,
+        "name": "Switch language",
+        "belowMin": true
+      },
+      {
+        "cls": "hm-input",
+        "tag": "input",
+        "w": 741,
+        "h": 29,
+        "area": 21489,
+        "name": "",
+        "belowMin": true
+      }
+    ],
+    "allSmall": [
+      {
+        "cls": "hm-circle-btn",
+        "tag": "button",
+        "w": 36,
+        "h": 36,
+        "area": 1296,
+        "name": "Add attachment",
+        "belowMin": true
+      },
+      {
+        "cls": "hm-send",
+        "tag": "button",
+        "w": 36,
+        "h": 36,
+        "area": 1296,
+        "name": "Generate Course",
+        "belowMin": true
+      },
+      {
+        "cls": "hm-chip icon-only",
+        "tag": "button",
+        "w": 40,
+        "h": 36,
+        "area": 1440,
+        "name": "Notes",
+        "belowMin": true
+      },
+      {
+        "cls": "language-switcher",
+        "tag": "button",
+        "w": 40,
+        "h": 40,
+        "area": 1600,
+        "name": "Switch language",
+        "belowMin": true
+      },
+      {
+        "cls": "hm-input",
+        "tag": "input",
+        "w": 741,
+        "h": 29,
+        "area": 21489,
+        "name": "",
+        "belowMin": true
+      }
+    ]
+  },
+  {
+    "hash": "#/chat",
+    "label": "chat",
+    "total": 8,
+    "belowMin": 8,
+    "smallest": [
+      {
+        "cls": "cp-status",
+        "tag": "button",
+        "w": 24,
+        "h": 24,
+        "area": 576,
+        "name": "Connection status",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-plus",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Add attachment",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-icon",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "New conversation",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-icon",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Past conversations",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-icon",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Voice input",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-send",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Send",
+        "belowMin": true
+      }
+    ],
+    "allSmall": [
+      {
+        "cls": "cp-status",
+        "tag": "button",
+        "w": 24,
+        "h": 24,
+        "area": 576,
+        "name": "Connection status",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-plus",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Add attachment",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-icon",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "New conversation",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-icon",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Past conversations",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-icon",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Voice input",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-send",
+        "tag": "button",
+        "w": 28,
+        "h": 28,
+        "area": 784,
+        "name": "Send",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-util-btn",
+        "tag": "button",
+        "w": 30,
+        "h": 30,
+        "area": 900,
+        "name": "Translate",
+        "belowMin": true
+      },
+      {
+        "cls": "cp-util-btn",
+        "tag": "button",
+        "w": 30,
+        "h": 30,
+        "area": 900,
+        "name": "Share",
+        "belowMin": true
+      }
+    ]
+  },
+  {
+    "hash": "#/marketplace",
+    "label": "marketplace",
+    "total": 0,
+    "belowMin": 0,
+    "smallest": [],
+    "allSmall": []
+  }
+]

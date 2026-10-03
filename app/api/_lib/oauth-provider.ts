@@ -2,6 +2,7 @@ import { exportJWK, importJWK, SignJWT, type JWK } from "jose";
 import { env } from "cloudflare:workers";
 import { database } from "./community";
 import { hashToken, publicAppOrigin, randomToken } from "../../oauth-session";
+import { AuthRequiredError } from "./errors";
 
 export const OAUTH_SCOPES = {
   openid: { label: "识别你的造场账号", description: "向应用提供一个只属于该应用的匿名账号标识。" },
@@ -684,7 +685,13 @@ export async function requireBearer(request: Request, required: OAuthScope[]) {
 }
 
 export function oauthJsonError(error: unknown) {
-  const current = error instanceof OAuthProviderError ? error : new OAuthProviderError("server_error", 500);
+  let current = error instanceof OAuthProviderError ? error : null;
+  // requireMember 的未登录错误必须映射 401(与 /api/oauth/token 等一致),不能落
+  // server_error 500——否则每次匿名探测都被监控记成服务端故障(qa-runs P-005)。
+  if (!current && error instanceof AuthRequiredError) {
+    current = new OAuthProviderError("auth_required", 401);
+  }
+  if (!current) current = new OAuthProviderError("server_error", 500);
   return Response.json(
     { error: current.code, ...(current.description ? { error_description: current.description } : {}) },
     {

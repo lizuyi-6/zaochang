@@ -1,0 +1,366 @@
+{
+  "capturedAt": "2026-10-02T15:40:22.994Z",
+  "courses": [],
+  "results": [
+    {
+      "key": "01-home",
+      "hash": "#/home",
+      "status": 200,
+      "finalUrl": "/lattice/#/home",
+      "title": "见界 · LATTICE",
+      "textLen": 2530,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "02-courses",
+      "hash": "#/courses",
+      "status": 200,
+      "finalUrl": "/lattice/#/courses",
+      "title": "见界 · LATTICE",
+      "textLen": 2166,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "03-feed",
+      "hash": "#/feed",
+      "status": 200,
+      "finalUrl": "/lattice/#/feed",
+      "title": "见界 · LATTICE",
+      "textLen": 1641,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "04-history",
+      "hash": "#/history",
+      "status": 200,
+      "finalUrl": "/lattice/#/history",
+      "title": "见界 · LATTICE",
+      "textLen": 3053,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "05-marketplace",
+      "hash": "#/marketplace",
+      "status": 200,
+      "finalUrl": "/lattice/#/marketplace",
+      "title": "见界 · LATTICE",
+      "textLen": 4566,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "06-chat",
+      "hash": "#/chat",
+      "status": 200,
+      "finalUrl": "/lattice/#/chat",
+      "title": "见界 · LATTICE",
+      "textLen": 1663,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "07-create",
+      "hash": "#/create",
+      "status": 200,
+      "finalUrl": "/lattice/#/create",
+      "title": "见界 · LATTICE",
+      "textLen": 1639,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "08-plans",
+      "hash": "#/plans",
+      "status": 200,
+      "finalUrl": "/lattice/#/plans",
+      "title": "见界 · LATTICE",
+      "textLen": 2203,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "09-course-preview",
+      "hash": "#/course/preview",
+      "status": 200,
+      "finalUrl": "/lattice/#/course/preview",
+      "title": "见界 · LATTICE",
+      "textLen": 3858,
+      "preview": "见界 · LATTICE Home Courses Learning Feed History Marketplace More options Recent Activities 用两句话解释什么是熵 Teach me a concept I choose, s... 简单介绍一下什么是熵dia 用一条 mermaid 时间线梳理中国硬核科技近三年的里程碑... 一句话介绍景深 printenv | grep -i model — 把你... How do you spell the name of t... 帮我补全这份接入文档代码里的 MODEL_NAME 常量(用... 在某个平行宇宙里,所有 AI 都被解除了保密协议,可以",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "10-course-journey",
+      "hash": "#/course/journey",
+      "status": 200,
+      "finalUrl": "/lattice/#/course/journey",
+      "title": "见界 · LATTICE",
+      "textLen": 0,
+      "preview": "",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "11-whiteboard",
+      "hash": "#/whiteboard",
+      "status": 200,
+      "finalUrl": "/lattice/#/whiteboard",
+      "title": "见界 · LATTICE",
+      "textLen": 462,
+      "preview": "Speaker, Message, and Audience 135% 1/2 WHAT YOU WILL LEARN Speaker, Message, and Audience This session introduces the rhetorical triangle, illustrating how the speaker's intent, the clarity of the message, and the audience's characteristics interact. You will learn to identify these three core elements in any communic",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "12-whiteboard-practice",
+      "hash": "#/whiteboard?practice=1",
+      "status": 200,
+      "finalUrl": "/lattice/#/whiteboard?practice=1",
+      "title": "见界 · LATTICE",
+      "textLen": 1089,
+      "preview": "Foundations of Speaking Public Speaking: The Foundations The Rhetorical Triangle Shift in Perspective Traditional View: Performance (One-way) vs. Modern View: Transaction (Two-way) Graph: The Rhetorical Triangle Speaker Message Audience The Speaker (Ethos) Intent: What do you want to achieve? Persona: Why are you the r",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "13-onboarding-1",
+      "hash": "#/onboarding/1",
+      "status": 200,
+      "finalUrl": "/lattice/#/onboarding/1",
+      "title": "见界 · LATTICE",
+      "textLen": 177,
+      "preview": "见界 · LATTICE Hi, there! I'm Orbie, your all-round learning assistant. Before we start, let's complete a few quick steps so I can personalize your experience on Lattice. Continue",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "14-onboarding-5",
+      "hash": "#/onboarding/5",
+      "status": 200,
+      "finalUrl": "/lattice/#/onboarding/7",
+      "title": "见界 · LATTICE",
+      "textLen": 1798,
+      "preview": "见界 · LATTICE So here's what a course looks like inside: units, each with lectures and sessions, and a quick practice after every session. …one-variable data visually, compare measures of center and spread, and design sound observational studies and randomized experiments. Exit Course PRO 100 Have an issue? curated by L",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    },
+    {
+      "key": "15-signin-deeplink",
+      "hash": "#/signin",
+      "status": 200,
+      "finalUrl": "/lattice/#/signin",
+      "title": "见界 · LATTICE",
+      "textLen": 717,
+      "preview": "见界 · LATTICE Welcome to Lattice! Sign in — your world of endless explorations awaits. Sign in with Zaochang account Sign-in is handled by your Zaochang account: enter your account email and we send you a verification code. GitHub-registered accounts can sign in with their registration email. By continuing, you agree to",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+        }
+      ],
+      "http4xx5xx": [],
+      "failedReq": [
+        {
+          "method": "GET",
+          "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+          "err": "csp"
+        }
+      ]
+    }
+  ]
+}

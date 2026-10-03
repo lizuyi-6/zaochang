@@ -3,6 +3,7 @@ import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { resolveSearchConfig, searchWithOutcome } from "../../_lib/hyperknow/websearch";
 import { beijingDayKey, feedQueries, mergeFeedItems } from "../../_lib/hyperknow/feed";
 import type { FeedItem } from "../../_lib/hyperknow/feed";
+import { jsonError } from "../../_lib/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +33,15 @@ function cacheSet(key: string, items: FeedItem[]): void {
 }
 
 export async function GET(request: Request) {
+  // 鉴权与限流先于业务 try:未登录必须如实回 401 auth_required,限流回 429——
+  // 此前裸 catch 把两者都吞成 500 feed_failed,监控把"没登录"记成服务端故障(qa-runs P-004)。
   try {
     const member = await requireMember();
     await enforceRateLimit(await rateLimitKey("hyperknow-feed", member.email), 20, 60 * 60);
+  } catch (error) {
+    return jsonError(error);
+  }
+  try {
 
     const url = new URL(request.url);
     const rawRound = Number(url.searchParams.get("round") ?? "0");
@@ -63,7 +70,8 @@ export async function GET(request: Request) {
     }
     cacheSet(cacheKey, items);
     return Response.json({ success: true, data: { day: dayKey, round, items, cached: false } });
-  } catch {
+  } catch (error) {
+    console.warn("[hyperknow] feed failed:", error instanceof Error ? error.message : error);
     return Response.json({ error: "feed_failed" }, { status: 500 });
   }
 }

@@ -1,0 +1,325 @@
+{
+  "capturedAt": "2026-10-02T16:15:38.859Z",
+  "results": [
+    {
+      "key": "d01-book-hello-system",
+      "path": "/bookshelf/hello-system",
+      "status": 200,
+      "finalUrl": "/bookshelf/hello-system",
+      "textLen": 5796,
+      "fp": "跳到主要内容 造场 0 果 造 造场 LIVE COMMUNITY / 2026 书架 Hello System · 图解软件系统 序言: 还原软件系统的本来面目 序章: 一次点击 第一部分: 程序开始变大 (01~12) 第01章 从单行脚本到复杂系统：为什么我们需要架构？ 第02章 变量为什么开始失控？——从平铺变",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 ()"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 ()"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 ()"
+        }
+      ],
+      "http4xx5xx": [
+        {
+          "status": 404,
+          "url": "/assets/fonts/KaTeX_Main-Regular.woff2"
+        },
+        {
+          "status": 404,
+          "url": "/assets/fonts/KaTeX_Main-Regular.woff"
+        },
+        {
+          "status": 404,
+          "url": "/assets/fonts/KaTeX_Main-Regular.ttf"
+        }
+      ]
+    },
+    {
+      "key": "d02-book-hello-computer",
+      "path": "/bookshelf/hello-computer",
+      "status": 200,
+      "finalUrl": "/bookshelf/hello-computer",
+      "textLen": 3217,
+      "fp": "跳到主要内容 造场 0 果 造 造场 LIVE COMMUNITY / 2026 书架 Hello Computer · 图解计算机组成原理 序言: 为什么需要图解计组 第一部分 · 机器的骨架: 计算机系统全景 01 冯·诺依曼架构与一条指令的生命周期 02 性能指标拆解: CPI、IPC、MIPS 与主频的物理真相",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d03-book-hello-llm",
+      "path": "/bookshelf/hello-llm",
+      "status": 200,
+      "finalUrl": "/bookshelf/hello-llm",
+      "textLen": 3193,
+      "fp": "跳到主要内容 造场 0 果 造 造场 LIVE COMMUNITY / 2026 书架 Hello LLM · 图解大语言模型 序言 第一部分 · 一句话进入模型之后 01 为什么不能直接把文字喂给模型 02 分词器:把文字切成词元 03 嵌入:给词元一个坐标 04 顺序:为什么位置不能丢 第二部分 · 注意力:让信息",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d04-chapter-read",
+      "path": "/bookshelf/hello-system/part-1/01-why-architecture-matters",
+      "status": 200,
+      "finalUrl": "/bookshelf/hello-system/part-1/01-why-architecture-matters",
+      "textLen": 6170,
+      "fp": "跳到主要内容 造场 0 果 造 造场 LIVE COMMUNITY / 2026 书架 Hello System · 图解软件系统 序言: 还原软件系统的本来面目 序章: 一次点击 第一部分: 程序开始变大 (01~12) 第01章 从单行脚本到复杂系统：为什么我们需要架构？ 第02章 变量为什么开始失控？——从平铺变",
+      "err": null,
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 ()"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 ()"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 ()"
+        }
+      ],
+      "http4xx5xx": [
+        {
+          "status": 404,
+          "url": "/assets/fonts/KaTeX_Main-Regular.woff2"
+        },
+        {
+          "status": 404,
+          "url": "/assets/fonts/KaTeX_Main-Regular.woff"
+        },
+        {
+          "status": 404,
+          "url": "/assets/fonts/KaTeX_Main-Regular.ttf"
+        }
+      ]
+    },
+    {
+      "key": "d05-doc-trial",
+      "path": "/docs/trial-welcome",
+      "status": 200,
+      "finalUrl": "/docs/trial-welcome",
+      "textLen": 879,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d06-product-loops",
+      "path": "/product/loops",
+      "status": 200,
+      "finalUrl": "/product/loops",
+      "textLen": 473,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "err": null,
+      "console": [
+        {
+          "type": "warning",
+          "text": "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://galaxy.zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d07-product-minute",
+      "path": "/product/minute",
+      "status": 200,
+      "finalUrl": "/product/minute",
+      "textLen": 470,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "err": null,
+      "console": [
+        {
+          "type": "warning",
+          "text": "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://galaxy.zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d08-product-mori",
+      "path": "/product/mori",
+      "status": 200,
+      "finalUrl": "/product/mori",
+      "textLen": 472,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "err": null,
+      "console": [
+        {
+          "type": "warning",
+          "text": "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://galaxy.zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d09-product-sprout",
+      "path": "/product/sprout",
+      "status": 200,
+      "finalUrl": "/product/sprout",
+      "textLen": 397,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "err": null,
+      "console": [
+        {
+          "type": "warning",
+          "text": "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://galaxy.zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d10-product-typewave",
+      "path": "/product/typewave",
+      "status": 200,
+      "finalUrl": "/product/typewave",
+      "textLen": 485,
+      "fp": "跳到主要内容 造场 ZAOCHANG 造场官方项目 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期",
+      "err": null,
+      "console": [
+        {
+          "type": "warning",
+          "text": "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d11-product-wander",
+      "path": "/product/wander",
+      "status": 200,
+      "finalUrl": "/product/wander",
+      "textLen": 401,
+      "fp": "跳到主要内容 造场 ZAOCHANG 搜索作品、创作者和圈子 ⌘ K 0 果 发布作品 造 首页 探索 动态 1 圈子 挑战 收藏 书架 见界 AI 文档 创作台 开发者 果子钱包 正在发生 独立开发 0 声音实验 0 小型游戏 0 生活发明 0 造物挑战 为“等候” 做一件东西 开放命题 · 无截止日期 社区公约 创",
+      "err": null,
+      "console": [
+        {
+          "type": "warning",
+          "text": "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        },
+        {
+          "type": "warning",
+          "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://galaxy.zaochang.com') does not match the recipient window's origin ('https://aetherstudio.top')."
+        }
+      ],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d12-app-loops",
+      "path": "/product-apps/loops/",
+      "status": 200,
+      "finalUrl": "/product-apps/loops/",
+      "textLen": 195,
+      "fp": "LOOPS 循环声场 · 给你一段可复现的环境声波 撤销 重做 换一个 重置 保存 导出配方 导出 WAV 种子词 心境 平静 梦幻 紧张 明亮 主题 极光 黄昏 单色 声部 3 密度 0.50 节拍 80 BPM 明度 0.50 ▶ 播放 平静 3 声部 80 BPM 16 音符 A PRODUCT FROM ZAO",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d13-app-minute",
+      "path": "/product-apps/minute/",
+      "status": 200,
+      "finalUrl": "/product-apps/minute/",
+      "textLen": 184,
+      "fp": "MINUTE 一天一分钟,写下一句今天 撤销 重做 导出这天 导出全部 60 开始一分钟 ↺ 2026-10-03 · 今天 140 ○ 平静 ◐ 开心 ◑ 疲惫 ● 低落 ◆ 来劲 A PRODUCT FROM ZAOCHANG · 来自造场产品银河 0 连续天数 0 最长连续 0 总条数 主题 晨光 暮色 素墨 最",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d14-app-mori",
+      "path": "/product-apps/mori/",
+      "status": 200,
+      "finalUrl": "/product-apps/mori/",
+      "textLen": 197,
+      "fp": "MORI 文字种植物 · 每个字都长出独一无二的生命 撤销 重做 随机 重置 保存 导出 PNG 种子文字 主题 苔绿 夜森 水墨 层深 4 分枝数 5 展幅 0.70 倾斜 0.00 主干粗细 10 色相 130 饱和 60 叶片大小 6 生长进度 1.00 A PRODUCT FROM ZAOCHANG · 来自造",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d15-app-sprout",
+      "path": "/product-apps/sprout/",
+      "status": 200,
+      "finalUrl": "/product-apps/sprout/",
+      "textLen": 334,
+      "fp": "SPROUT 把模糊灵感,培育成可验证的产品种子 撤销 重做 重置 存入种子库 导出 Markdown 灵感 你脑子里那句还没成形的想法 1 为谁做? 具体的人比「所有人」更容易验证。 2 解决什么问题? 描述当下的痛,而不是你的方案。 3 最小可用形态是什么? 砍到只剩一个动作,也许一个周末就能做出来。 4 如何验证",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d16-app-typewave",
+      "path": "/product-apps/typewave/",
+      "status": 200,
+      "finalUrl": "/product-apps/typewave/",
+      "textLen": 248,
+      "fp": "TYPEWAVE 字浪排版实验室 · 让每句话拥有自己的引力 暂停 撤销 重做 随机 重置 保存 导出 PNG 文字内容 引力 轨道 碑文 风暴 潮汐 信号 光环 安静 布局 浪潮 环形 纵向 自由散布 主题 纸张 墨黑 印刷红 字号 72 字重 600 字距 2 行距 1.30 扰动 0.25 波动速度 0.80 密",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d17-app-wander",
+      "path": "/product-apps/wander/",
+      "status": 200,
+      "finalUrl": "/product-apps/wander/",
+      "textLen": 342,
+      "fp": "WANDER 城市漫游器 · 给你一条可复现的探索路线 撤销 重做 换一个 重置 保存 导出清单 导出地图 种子词 用我附近的位置 漫游情绪 好奇 放松 冒险 怀旧 主题 地图纸 黄昏 夜行 步数 7 节奏 0.50 弯曲度 0.50 A PRODUCT FROM ZAOCHANG · 来自造场产品银河 漫游清单 好奇",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    },
+    {
+      "key": "d18-oauth-payment-bogus",
+      "path": "/oauth/payment/00000000-0000-0000-0000-000000000000",
+      "status": 200,
+      "finalUrl": "/oauth/payment/00000000-0000-0000-0000-000000000000",
+      "textLen": 35,
+      "fp": "果子支付 无法确认订单 订单不存在，或它不属于当前账号。 返回造场",
+      "err": null,
+      "console": [],
+      "http4xx5xx": []
+    }
+  ]
+}

@@ -488,6 +488,14 @@ export interface PlanLectureParams {
 }
 
 /**
+ * 白板讲座计划的客户端整体预算。必须 **大于** 服务端路由超时(plan/route.ts 的
+ * AbortSignal.timeout(130_000)):冷实例推理链实测 92-100s,客户端若先掐死,服务端
+ * 130s 的预算就成了空话——学员拿到模板降级课,上游算力白烧。调用点一律引用本常量,
+ * 禁止内联数字(契约由 tests/whiteboard-plan-budget.test.mjs 锁定)。
+ */
+export const PLAN_CLIENT_TIMEOUT_MS = 135_000;
+
+/**
  * 真实白板讲座计划(原 WS whiteboard/ws 的无状态化端点,见 HYPERKNOW.md)。
  * 支持 courseUuid/unitId/lectureId/sessionId 严密锁定，拒绝默认第一讲。
  * 支持 language 字段供白板代理传入，默认 zh-CN。

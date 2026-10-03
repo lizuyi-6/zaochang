@@ -1,0 +1,1091 @@
+{
+  "schema_version": 1,
+  "run": {
+    "id": "20261002T151754Z-55a07251",
+    "mode": "audit",
+    "target": "aetherstudio.top 见界 /lattice 线上纯视觉审查(视频解析)",
+    "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+    "revision": "prod 6d885ac at run start -> 9a59f77 during run (4 deployments 15:17-15:39Z; none changed public/lattice)",
+    "created_at": "2026-10-02T15:17:54Z",
+    "stop_reason": "用户限定范围为「只审见界 /lattice」且「只读」;建课流程停在交互门(等你作答),继续推进需超出视觉审查范围;预算内 9 组实验已覆盖四条 charter,继续投入预期信息增益下降"
+  },
+  "scope": {
+    "authorization": "用户本轮明确授权:(1) 登录入口——用户回答「我同步好了」,即用户自行完成 ZAOCHANG_AGENT_TOKEN 轮换与盒子/线上双向同步,agent 全程只读;(2) 范围——只审见界 /lattice;(3) 建课流程——允许真跑一次完整建课并录全程(消耗验收号积分 + 真实上游调用)。用户明确禁令:「不需要你再次轮换,我已经完成轮换了,你只能做只读」。mode=audit,未修改任何应用源码,未触发任何部署。",
+    "included": [
+      "/lattice 15 条 hash 路由逐条录像:home/courses/feed/history/marketplace/chat/create/plans/course-preview/course-journey/whiteboard/whiteboard-practice/onboarding-1/onboarding-5/signin 深链",
+      "一次真实完整建课(指针路径提交,主题=傅里叶变换一句话解释),录全程 + 每 8s 关键态截图",
+      "首屏判别实验 4 组(nouuid / bogus uuid / preview / home),early@3s vs late@25s DOM 快照",
+      "图标型控件命中框:细指针 1440x900 + hasTouch 390x844 + hasTouch 820x1180,共 3 路由"
+    ],
+    "excluded": [
+      "主站造场(社区/书架/支付/OAuth/安卓壳)——用户限定只审 /lattice",
+      "任何非 GET 的生产变更(secret 轮换、部署、后台写面)",
+      "白板授课播放(TTS 旁白/板书书写/插话/答题)——agent@zaochang 名下无课程,无可用 fixture",
+      "建课流程的人工交互门之后(蓝图/大纲/落库)",
+      "屏幕阅读器实测、多账户/多权限、多语言切换后的视觉走查"
+    ],
+    "capabilities": [
+      {
+        "name": "Playwright 1.58.2 (global npm root) + Chromium 1208 + recordVideo",
+        "available": true
+      },
+      {
+        "name": "Video parsing via read tool (webm unsupported -> ffmpeg transcode to mp4; capability pre-proven with a 3s frame-numbered test clip)",
+        "available": true
+      },
+      {
+        "name": "Screenshot capture",
+        "available": true
+      },
+      {
+        "name": "console / pageerror / requestfailed / HTTP>=400 observers",
+        "available": true
+      },
+      {
+        "name": "DOM geometry measurement (getBoundingClientRect + getComputedStyle)",
+        "available": true
+      },
+      {
+        "name": "SSH to Alibaba box (token read, wrangler secret list / deployments list, --resolve to CF edge)",
+        "available": true
+      },
+      {
+        "name": "Frame-level (<1s) transient detection",
+        "available": false,
+        "note": "video parsing is sampled not per-frame; recording has no GPU compositing"
+      },
+      {
+        "name": "Screen reader / assistive technology observation",
+        "available": false,
+        "note": "a11y conclusions derive only from DOM geometry and accessible-name attributes"
+      },
+      {
+        "name": "Whiteboard lecture playback fixture (TTS / board writing / interject / quiz)",
+        "available": false,
+        "note": "agent@zaochang owns no course; marketplace discovery returned empty"
+      },
+      {
+        "name": "Mobile visual walkthrough (layout, reflow, drawers, overflow)",
+        "available": false,
+        "note": "only hit-target geometry measured at 390x844 / 820x1180"
+      }
+    ]
+  },
+  "hypotheses": [
+    {
+      "id": "H-001",
+      "question": "暖色编辑工作室换肤后,/lattice 各路由是否真的都在暖色一家族,有无漏网冷色/错位/溢出",
+      "risk": "medium",
+      "status": "executed",
+      "experiment": "15 条路由逐条录像 + 全分辨率截图目视核对底色/边框/文字层",
+      "observed": "所查路由均为暖纸底 #F7F1E4 系;未见冷色漏网、溢出或重叠。学习动态页全分辨率截图确认版式整齐。降采样帧不足以判读文字(见 F-8 自我推翻)",
+      "evidence": [
+        "E-002",
+        "E-003",
+        "E-006",
+        "E-016"
+      ]
+    },
+    {
+      "id": "H-002",
+      "question": "每条路由从导航到可交互的真实时长是多少,首屏是否会白屏/无骨架",
+      "risk": "high",
+      "status": "executed",
+      "experiment": "逐路由录制约 7.6s 停留 + 4 组 early@3s vs late@25s 判别实验",
+      "observed": "兄弟路由 0.2-0.4s 即出暖纸。一次 #/course/journey 观测到 11.6s 纯白且同轮截图同为纯白(textLen=0, title 正确, 零 console 错误, 零失败请求);25s 后该路由正常渲染(textLen=3853, 底色暖纸)。判别为启动未完成而非路由缺陷,根因定位到 main.tsx 启动门无超时(F-3)",
+      "evidence": [
+        "E-004",
+        "E-005",
+        "E-010",
+        "E-012",
+        "E-014",
+        "E-015"
+      ]
+    },
+    {
+      "id": "H-003",
+      "question": "AI 上游不稳时,降级是否被用户看见、是否可恢复",
+      "risk": "high",
+      "status": "executed",
+      "experiment": "用户授权的真实建课全程,观察 AI 出题阶段的状态、耗时、网络与降级路径",
+      "observed": "AI 实时出题在客户端 20s 被主动放弃(ERR_ABORTED, 零 4xx/5xx),降级为模板问卷并如实标注 AI unavailable——标注机制(fbfbf8d2)确实生效,但无重试入口、无原因说明,且该 brief 会持久化进课程(F-2)",
+      "evidence": [
+        "E-007",
+        "E-008",
+        "E-009",
+        "E-011"
+      ]
+    },
+    {
+      "id": "H-004",
+      "question": "客户端超时与服务端超时是否一致(白板计划链路)",
+      "risk": "high",
+      "status": "executed",
+      "experiment": "读 plan 路由 AbortSignal.timeout、WhiteboardPage 客户端 abort、backend signal 透传,并用 git show --stat 核对 d59be3b 的变更范围",
+      "observed": "服务端 130s / 客户端 65s;backend.ts 透传调用方 signal 无竞争超时;d59be3b 未改 WhiteboardPage.tsx。昨晚服务端 110->130s 的修复在冷实例(自测 92-100s)上被浏览器提前掐死(F-1)",
+      "evidence": [
+        "E-010"
+      ]
+    },
+    {
+      "id": "H-005",
+      "question": "图标型控件命中框是否满足项目声称的 44px + 粗指针触屏兜底",
+      "risk": "medium",
+      "status": "executed",
+      "experiment": "先量细指针 1440x900(14/3/4 个控件低于 44px,看起来像未兑现),再加 hasTouch 390x844 与 820x1180 对照",
+      "observed": "触屏兜底确实存在:白板 6->2、建课 3->1~2、首页 4->3~4;所有模式低于 24px(WCAG 2.5.8 AA)均为 0。项目声称成立。残留 wb-intro-close 28x32 在两种指针下均不放大(F-5)。只量桌面会造成误控",
+      "evidence": [
+        "E-013",
+        "E-017"
+      ]
+    },
+    {
+      "id": "H-006",
+      "question": "建课页主 CTA 是否可被语义定位器找到(可访问名是否存在)",
+      "risk": "low",
+      "status": "discarded",
+      "experiment": "首轮建课录像用中文文案选择器找不到任何启用的提交控件",
+      "observed": "原因是我用 has-text 匹配文本内容、匹配不到 title-only 的图标按钮;按钮实际带 title=\"开始定制\",可访问名存在。这是采集器局限,不是产品缺陷。已推翻(F-7)。同时修正:首轮打字未进 React state 属选择器命中错误输入框,改用 .cr-input 后指针路径提交成功",
+      "evidence": [
+        "E-011"
+      ]
+    },
+    {
+      "id": "H-007",
+      "question": "新账号在学习动态页能否找到下一步动作",
+      "risk": "low",
+      "status": "executed",
+      "experiment": "以全新账号(380 credits)观察 #/feed 全分辨率截图",
+      "observed": "整月空日历 + Today's To-Dos 空 + Completed 空,零引导零下一步动作,观感与「坏了」难区分。无版本化要求,未自行发明缺陷,记为任务级观察待产品方裁决(F-4)",
+      "evidence": [
+        "E-016"
+      ]
+    },
+    {
+      "id": "H-008",
+      "question": "验收号侧栏内容是否会污染自动化视觉证据",
+      "risk": "low",
+      "status": "executed",
+      "experiment": "目视多条路由截图的 Recent Activities 列表",
+      "observed": "侧栏含其他用户的对抗性提示词标题(如要求泄露供应商/系统提示词、扮演终端、越狱措辞)。本轮一律按测试数据处理,未据其改变任何行为。建议:自动化视觉验收用专用账号,避免每张截图都带敌意文本",
+      "evidence": [
+        "E-016"
+      ]
+    },
+    {
+      "id": "H-009",
+      "question": "SPA 启动是否存在可证伪的「绝不白屏」契约",
+      "risk": "medium",
+      "status": "executed",
+      "experiment": "读 public/lattice/index.html(#root 空 + #FAFAFA)、main.tsx:12-16、i18n/index.tsx:159-163、ensureLocale 的动态 import",
+      "observed": "main.tsx:11 把不变量写为「加载失败仍渲染…好过白屏」,但代码只对 reject 兑现;ensureLocale 的动态 import 无超时/重试/abort,pending 态会让 createRoot 永不执行 => 永久纯白、无报错、无 spinner、不自愈。缺口读代码即可证伪(F-3)",
+      "evidence": [
+        "E-004",
+        "E-005",
+        "E-012"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "hypothesis_id": "H-004",
+      "title": "白板讲课计划:客户端 65s 超时短于服务端 130s 预算,昨晚的修复在冷实例上被浏览器提前掐死",
+      "status": "confirmed",
+      "severity": "high",
+      "impact": "v4 循证提示词冷实例需 92-100s(团队自测),浏览器 65s 即 abort。学员看不到本可成功生成的计划,而服务端仍烧到 130s 上游算力。昨晚 d59be3b「绝不让路由超时把一次成功的计划掐死」的修复对冷实例实际不生效;新加回归测试只钉解析契约,测不到客户端/服务端时限失配。",
+      "expected": "d59be3b commit 正文声明服务端放宽到 130s 的目的就是避免掐死一次成功的计划;客户端放弃时限不应短于服务端预算。",
+      "expectation_basis": "版本化代码契约 + commit 声明意图(app/api/hyperknow/whiteboard/plan/route.ts:145-147 与 commit d59be3b 正文)",
+      "actual": "plan/route.ts:147 = AbortSignal.timeout(130_000);WhiteboardPage.tsx:316 = window.setTimeout(() => ctrl.abort(), 65_000),注释仍写「服务端 60s 超时 + 余量」;backend.ts:506-510 透传调用方 signal,无竞争超时;git show --stat d59be3b 变更 4 文件均不含 WhiteboardPage.tsx。",
+      "steps": [
+        "1. 读 d59be3b commit 正文,取其声明的失败模式「掐死=学员拿到模板降级课」",
+        "2. grep plan 路由的 AbortSignal.timeout => 130_000,注释「冷实例实测 92-100s」",
+        "3. grep 白板客户端 abort => 65_000,注释「服务端 60s 超时 + 余量」",
+        "4. 读 backend.ts 计划请求 => signal 由调用方透传,确认 65s 即实际上限",
+        "5. git show --stat d59be3b => 未触及 WhiteboardPage.tsx,排除「客户端已同步」解释"
+      ],
+      "reproduction": {
+        "attempts": 1,
+        "observed": 1
+      },
+      "evidence": [
+        "E-010"
+      ],
+      "countercheck": {
+        "alternative": "也许客户端 65s 之上还有别的路径(如预热缓存 planPrefetch)覆盖了冷启动,或服务端实测 92-100s 只在极端情况;即 65s 仍够用。",
+        "result": "未推翻但未穷尽:prefetch 路径不改变冷启动首讲的直取路径(Client 直连 plan 路由,signal 透传)。但本轮为只读审查,未触发压测或部署来实测复现,92-100s 来自项目自测数据而非本轮观测。修复方向:(1) WhiteboardPage.tsx:316 提到 >=135_000 并订正注释;(2) 增加契约测试断言 plan 路由服务端超时必须大于所有调用点客户端 abort 值。",
+        "evidence": [
+          "E-010"
+        ]
+      }
+    },
+    {
+      "id": "F-002",
+      "hypothesis_id": "H-003",
+      "title": "建课问询被客户端 20s 超时主动放弃,静默降级为模板问卷且该 brief 会持久化进课程",
+      "status": "confirmed",
+      "severity": "medium",
+      "impact": "AI 实时出题在 20s 被放弃,用户只见一行灰色「AI unavailable — standard questionnaire」,无重试入口、无原因说明。这份 intake brief 随课程 JSON 持久化并注入 planLecture(见 92c42fe),等于模板问卷的产物静默决定整门课教学质量,用户全程不知情。",
+      "expected": "backend.ts:119 注释自称「AbortSignal 超时;默认 5s,AI 出题建议 20s+」;对混合推理上游,同项目白板链冷实例需 92-100s,20s 明显偏短;且降级应给用户可恢复的路径。",
+      "expectation_basis": "代码内注释声明的超时意图 + PROJECT_STATUS 记载的上游延迟实测(混合推理 + 冷实例长推理链)",
+      "actual": "实测时序:提交 t=13.4s 进入思考态,21.6s/30.0s 仍思考,t=38.3s 已降级并停在模板问卷。网络观察者:零 4xx/5xx,POST /api/hyperknow/course-inquiry = net::ERR_ABORTED(客户端中止,非服务端拒绝)。代码:CreatePage.tsx:444 timeoutMs=20000 -> backend.ts:123 AbortSignal.timeout(args.timeoutMs ?? 5000)。",
+      "steps": [
+        "1. 导航 #/create,量 .cr-send 命中框与 disabled 初始态",
+        "2. 在 .cr-input 逐字输入主题并断言 inputValue 正确、按钮由 disabled 转为可用",
+        "3. 走指针路径点击 .cr-send(产品两条路径都支持,指针路径是 2026-09-18 HIG 整改的对象)",
+        "4. 每 8s 采样状态与截图,直至文本连续两轮不增长",
+        "5. 读观察者日志:定位 course-inquiry 的失败模式与错误码"
+      ],
+      "reproduction": {
+        "attempts": 1,
+        "observed": 1
+      },
+      "evidence": [
+        "E-007",
+        "E-008",
+        "E-009",
+        "E-011"
+      ],
+      "countercheck": {
+        "alternative": "也许是服务端真的报错/上游不可用(ERR_ABORTED 也可能来自导航或请求被取代),与客户端超时无关。",
+        "result": "已推翻该替代解释:全程零 4xx/5xx,请求是被客户端 AbortController 中止而非被服务端拒绝;且代码里 CreatePage.tsx:444 显式传 20000,backend.ts:123 用 AbortSignal.timeout 实现,机制闭合。剩余不确定性:上游冷/热实例差异可能让 20s 偶尔够用,故观测 1/1 不足以给出复现率;这不影响「20s 对混合推理上游结构性偏短」的结论。",
+        "evidence": [
+          "E-011"
+        ]
+      }
+    },
+    {
+      "id": "F-003",
+      "hypothesis_id": "H-009",
+      "title": "SPA 启动门无超时:prepareI18n 挂起会导致永久白屏且不报错、不自愈",
+      "status": "confirmed",
+      "severity": "medium",
+      "impact": "index.html 的 #root 初始为空、body 底色内联 #FAFAFA;而 createRoot 只在 prepareI18n().finally() 内执行。ensureLocale 的动态 import 无超时/重试/abort,请求挂起时 promise 永远 pending => .catch() 不触发、.finally() 不触发 => createRoot 从不执行 => 用户看到与正常启动同色的纯白,无报错、无 spinner、无自愈,只能手动刷新。main.tsx:11 明写的「好过白屏」不变量只对 reject 兑现,对 pending 不兑现。",
+      "expected": "main.tsx:11 声明的契约:「加载失败(极端断网/文件缺失)仍渲染:translate 对缺失字典回退返回键名,好过白屏。」",
+      "expectation_basis": "源码内显式声明的不变量(可证伪的接口契约)",
+      "actual": "public/lattice/index.html:11-19 body/#root background #FAFAFA + #root 空;main.tsx:12-16 createRoot 挂在 finally 上;i18n/index.tsx:159-163 Promise.all([ensureLocale(lng), ensureLocale('en')]);ensureLocale -> import('./locales/xx.json') 无超时。一次实测观测到与预测完全一致的表征(纯白 + title 正确 + 零 console 错误 + 零失败请求 + textLen=0),同轮截图亦纯白。",
+      "steps": [
+        "1. 逐路由录像,发现 #/course/journey 11.6s 全空白;同轮截图 10-course-journey.png 亦纯白 => 排除采集管线错误",
+        "2. 4 组判别实验:25s 后该路由正常(textLen=3853, 底色 rgb(247,241,228), 侧栏在);无 uuid / 假 uuid / preview / home 四组均正常 => 不是路由缺陷",
+        "3. 读 index.html / main.tsx / i18n 源码,定位到启动门无超时",
+        "4. 用白板视频的正常启动序列(#FAFAFA -> 0.2s 暖纸)确认失败态与正常首帧同色,用户无从分辨",
+        "5. 核对时间线巧合:录像窗口套在 3 次部署上,但 23cbc20/9a59f77 均未改 public/lattice => 排除资源哈希换血解释"
+      ],
+      "reproduction": {
+        "attempts": 5,
+        "observed": 1
+      },
+      "evidence": [
+        "E-004",
+        "E-005",
+        "E-006",
+        "E-012",
+        "E-014",
+        "E-015"
+      ],
+      "countercheck": {
+        "alternative": "也许只是冷启动慢/我采集中部署导致的一次抖动,与源码契约无关。",
+        "result": "部分推翻:4 次后续未复现(与网络停顿型竞态相符,非稳定 bug),因此症状复现率低、置信度受限。但源码层的契约缺口读代码即可证伪,不依赖复现——.catch() 只覆盖 reject 是语言层面的确定事实,故仍记 confirmed(代码级)。未观测到的那 4 次可能本就是 pending 未发生。修复方向:给 prepareI18n 加超时竞速(Promise.race + 2.5s)让挂起不再永久阻塞首屏,或先 render 再补字典(t() 本就有英文回退链)。",
+        "evidence": [
+          "E-012"
+        ]
+      }
+    },
+    {
+      "id": "F-004",
+      "hypothesis_id": "H-007",
+      "title": "全新账号下学习动态页为空态,无引导无下一步动作,观感与故障难区分",
+      "status": "suspected",
+      "severity": "low",
+      "impact": "该页在 56b5013/cc22ed7「做真」之后,对零课程用户呈现整月空日历 + 两个空卡片;唯一可交互是「+」与待办输入框。用户难以判断是「还没开始」还是「坏了」。",
+      "expected": "暂无版本化要求。仅按任务级一致性(能否理解当前状态并找到下一步)提出。",
+      "expectation_basis": "任务/可用性一致性(启发式,非既定要求)——按 oracles 纪律不自行升级为绑定需求",
+      "actual": "#/feed 全分辨率截图:月历 2026-10 全部空格,Today's To-Dos「No tasks for today」,Completed「Completed items will show up here」,底部「Nothing planned」。",
+      "steps": [
+        "1. 以零课程账号打开 #/feed",
+        "2. 录 11.6s 视频并取全分辨率截图判读(不依赖降采样帧)",
+        "3. 统计可交互控件与空区域比例"
+      ],
+      "reproduction": {
+        "attempts": 1,
+        "observed": 1
+      },
+      "evidence": [
+        "E-016"
+      ],
+      "countercheck": {
+        "alternative": "也许空态是有意设计(不给新用户塞噪音),或该页预期用户已有课程。",
+        "result": "无法证伪:空态设计取舍属产品判断,且本账号无历史课程,不能代表有课用户的观感。保持 suspected,交产品方裁决,本轮不建议改动。",
+        "evidence": [
+          "E-016"
+        ]
+      }
+    },
+    {
+      "id": "F-005",
+      "hypothesis_id": "H-005",
+      "title": "白板引入卡关闭键 wb-intro-close 28x32,在粗指针下也不放大",
+      "status": "confirmed",
+      "severity": "low",
+      "impact": "白板引入卡唯一的退出控件在手机尺寸下仅 28x32,低于项目声称的 44px 主控件基线;同页其他控件在触屏下均已放大,唯独它没有。",
+      "expected": "2026-09-18 HIG 整改声称「主控件 44px + 粗指针触屏兜底」;本轮实测证实该兜底对绝大多数控件生效(白板 6->2),wb-intro-close 是唯一例外。",
+      "expectation_basis": "项目自身声称的 HIG 整改 + 同批次控件的实测行为一致性",
+      "actual": "细指针 1440x900:14 个图标控件中 6 个 <44px;hasTouch 390x844:2 个;hasTouch 820x1180:3 个。wb-intro-close 在全部三种模式下均为 28x32。所有模式 <24px(WCAG 2.5.8 AA)均为 0。",
+      "steps": [
+        "1. 遍历 button/a/[role=button],过滤有可见文字者,量 getBoundingClientRect",
+        "2. 过滤 visibility:hidden / display:none / opacity:0",
+        "3. 在三种 viewport/pointer 组合下重复(细指针 1440x900、hasTouch 390x844、hasTouch 820x1180)"
+      ],
+      "reproduction": {
+        "attempts": 3,
+        "observed": 3
+      },
+      "evidence": [
+        "E-013",
+        "E-017"
+      ],
+      "countercheck": {
+        "alternative": "也许桌面普遍低于 44px 意味着项目根本没做触屏兜底,那这条就是普遍问题而非个例。",
+        "result": "已推翻:加 hasTouch 对照后,白板低于 44px 的控件数从 6 降到 2、建课从 3 降到 1~2,证明粗指针兜底确实存在。只量桌面细指针会把项目声称误判为未兑现——这正是本轮最重要的方法论收获。",
+        "evidence": [
+          "E-017"
+        ]
+      }
+    },
+    {
+      "id": "F-006",
+      "hypothesis_id": "H-001",
+      "title": "Cloudflare Insights beacon 被 CSP 拦截(/lattice 无 Web Analytics 数据)",
+      "status": "dismissed",
+      "severity": "informational",
+      "impact": "每条路由控制台固定一条 CSP 报错,Web Analytics 脚本未加载。",
+      "expected": "worker/index.ts 按路径变化下发 CSP;若 script-src 未含 static.cloudflareinsights.com 则 beacon 必被拦。",
+      "expectation_basis": "实现信号(控制台报错)",
+      "actual": "所有路由稳定出现同一报错:Loading the script 'static.cloudflareinsights.com/beacon.min.js' violates script-src 'self' 'unsafe-inline'。",
+      "steps": [
+        "1. 全程观察者收集 console",
+        "2. 跨 15 条路由确认该报错恒定存在"
+      ],
+      "reproduction": {
+        "attempts": 15,
+        "observed": 15
+      },
+      "evidence": [
+        "E-010",
+        "E-011"
+      ],
+      "countercheck": {
+        "alternative": "也许是本轮注入或浏览器扩展导致。",
+        "result": "审查开始前的既有噪声,跨全部路由恒定出现,与本轮动作无关。是否要放行 beacon 属产品/合规决策(可能正有意屏蔽以收紧 CSP),不自行判定为缺陷,仅记录副作用:/lattice 无 Web Analytics 数据。",
+        "evidence": [
+          "E-010"
+        ]
+      }
+    },
+    {
+      "id": "F-007",
+      "hypothesis_id": "H-006",
+      "title": "[已推翻] 建课页提交按钮缺可访问名",
+      "status": "dismissed",
+      "severity": "informational",
+      "impact": "无。",
+      "expected": "图标型按钮应有可访问名。",
+      "expectation_basis": "我的采集器用 has-text 匹配文本内容失败,推断按钮无可访问名",
+      "actual": "CreatePage.tsx:918-926 按钮带 title={L('Start','开始定制')},可访问名存在;disabled={!input.trim()}。",
+      "steps": [
+        "1. 首轮录像中文文案选择器全不命中",
+        "2. 读源码发现 title 存在",
+        "3. 改用 .cr-input + .cr-send 精确定位后指针路径提交成功"
+      ],
+      "reproduction": {
+        "attempts": 1,
+        "observed": 0
+      },
+      "evidence": [
+        "E-011"
+      ],
+      "countercheck": {
+        "alternative": "Playwright 的 text= 引擎会匹配 title(若如此则我的失败另有原因)。",
+        "result": "保留该假设:has-text 匹配的是元素文本内容而非 title,与源码事实一致。结论:采集器局限,非产品缺陷。留档以防后人对账时把这条误当缺陷跟进。",
+        "evidence": [
+          "E-011"
+        ]
+      }
+    },
+    {
+      "id": "F-008",
+      "hypothesis_id": "H-001",
+      "title": "[已推翻] 积分状态文字被截断",
+      "status": "dismissed",
+      "severity": "informational",
+      "impact": "无。",
+      "expected": "UI 文字不应被容器裁切。",
+      "expectation_basis": "我从 640px 降采样视频帧读出「860 credits left off」,疑为截断",
+      "actual": "全分辨率 03-feed.png 显示完整「380 credits left ⓘ」,无裁切。",
+      "steps": [
+        "1. 降采样帧判读文字",
+        "2. 取全分辨率截图复核"
+      ],
+      "reproduction": {
+        "attempts": 1,
+        "observed": 0
+      },
+      "evidence": [
+        "E-016"
+      ],
+      "countercheck": {
+        "alternative": "也许在更窄视口下会真的截断(降采样帧的错觉恰好指向了这个风险)。",
+        "result": "未在本轮视口内证实;且已在 hasTouch 390x844 下测量命中框几何正常(见 E-017),但未做 390px 下的文字裁切专项走查——列入 untested。方法论结论:降采样视频帧不可作为文字判读依据,必须回全分辨率截图。",
+        "evidence": [
+          "E-016"
+        ]
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E-001",
+      "path": "evidence/00-smoke.mp4",
+      "kind": "video",
+      "phase": "baseline",
+      "origin": "runtime",
+      "source": "Playwright recordVideo via scripts/smoke.mjs (visual-session ticket consume -> /lattice/#/home)",
+      "sha256": "6ea4310d1003f72dd504aef10e3d47053afaa03f4559c12336eae48985ab1f22",
+      "bytes": 203125,
+      "registered_at": "2026-10-02T15:54:28Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-002",
+      "path": "evidence/01-home.mp4",
+      "kind": "video",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-routes.mjs route 01-home",
+      "sha256": "daa2f8f72eef1556a017cc8bd8d4c299dbaad2972bb8d0dfd94f0a0ebb06079d",
+      "bytes": 323254,
+      "registered_at": "2026-10-02T15:54:28Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-003",
+      "path": "evidence/07-create.mp4",
+      "kind": "video",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-routes.mjs route 07-create",
+      "sha256": "a69cc926a4b0a33debed787e76122f98f70618f8d4fa8759271faf7bd670476c",
+      "bytes": 402153,
+      "registered_at": "2026-10-02T15:54:29Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-004",
+      "path": "evidence/10-course-journey.mp4",
+      "kind": "video",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-routes.mjs route 10-course-journey (BLANK 11.6s)",
+      "sha256": "4e2980f73ce0dcdafcb3c99f44e487aafd4dabb93bf7a8e55222321bd0c7c42d",
+      "bytes": 35008,
+      "registered_at": "2026-10-02T15:54:29Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-005",
+      "path": "evidence/10-course-journey.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "same pass as 10-course-journey.mp4, also blank -> capture pipeline corroborated",
+      "sha256": "99eeb99f88d4347ec26dc7cbdeb760de43c10cd122eb36dd8b7c7b9cc993d7ca",
+      "bytes": 5855,
+      "registered_at": "2026-10-02T15:54:29Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-006",
+      "path": "evidence/11-whiteboard.mp4",
+      "kind": "video",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-routes.mjs route 11-whiteboard (normal boot #FAFAFA->warm paper at 0.2s)",
+      "sha256": "18ecea8ac24ccb960859406c47b42920200e87dbeca074f1a9903e44446a498e",
+      "bytes": 288269,
+      "registered_at": "2026-10-02T15:54:29Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-007",
+      "path": "evidence/20-create-journey.mp4",
+      "kind": "video",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-create.mjs v2 (pointer submit path, real upstream call)",
+      "sha256": "4b6e3df6f4b1e69b558be67ed5239c3707b3cdf46a050405a6547be43038902f",
+      "bytes": 680939,
+      "registered_at": "2026-10-02T15:54:30Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-008",
+      "path": "evidence/20-create-08-final.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "end of authorized course-creation run (AI unavailable - standard questionnaire)",
+      "sha256": "561dad82483f72b6faec349f924cb62358f5466130b6bd64487f226c0cb41bf7",
+      "bytes": 115345,
+      "registered_at": "2026-10-02T15:54:30Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-009",
+      "path": "evidence/20-create-02-after-submit.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "t=13.4s after submit (thinking state 'Tailoring questions to your topic')",
+      "sha256": "8f312095fe2af5e3cc0446455edb288c38b189e31c056a646ebffe62c0435232",
+      "bytes": 89005,
+      "registered_at": "2026-10-02T15:54:30Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-010",
+      "path": "evidence/01-routes-recording.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-routes.mjs per-route status/textLen/observers (15 routes)",
+      "sha256": "7bee270d124c4bf79880974a3f26c27edfe67c786f3390d8d6e9b55c426d937d",
+      "bytes": 19187,
+      "registered_at": "2026-10-02T15:54:30Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-011",
+      "path": "evidence/02-create-journey.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-create.mjs v2 timeline+metrics+observers (course-inquiry ERR_ABORTED)",
+      "sha256": "1feb00a4b373ef506654b99c2a82b76cf1548d84497ebea018500d5f3f5dde34",
+      "bytes": 11589,
+      "registered_at": "2026-10-02T15:54:31Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-012",
+      "path": "evidence/03-journey-probe.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-journey.mjs 4-case discriminating experiment (early@3s vs late@25s)",
+      "sha256": "bb34d67cfe7adc94e0f604402b9c59117f2ae5caee73121082a2a6eb2b9f8d4b",
+      "bytes": 7745,
+      "registered_at": "2026-10-02T15:54:31Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-013",
+      "path": "evidence/04-hit-targets.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/measure-hits.mjs icon-only control geometry, fine pointer 1440x900",
+      "sha256": "602a23f2ac26e94ba8b6d8c72698cc0540b859628ede913c3619007e9fad124b",
+      "bytes": 8304,
+      "registered_at": "2026-10-02T15:54:31Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-014",
+      "path": "evidence/probe-A-journey-nouuid.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-journey.mjs case A control (renders normally at 25s)",
+      "sha256": "474d676f174545e051b169277adaa3324cd92e84f66d93bfa9d6c43903fac28a",
+      "bytes": 240151,
+      "registered_at": "2026-10-02T15:54:31Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-015",
+      "path": "evidence/probe-D-home.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-journey.mjs case D control (home renders normally)",
+      "sha256": "e5710ff76c75af4c1c7e517a5e49f3e7a67d8d837492d08a40de5a4e046e2d05",
+      "bytes": 182785,
+      "registered_at": "2026-10-02T15:54:32Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-016",
+      "path": "evidence/03-feed.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "full-resolution #/feed, used to overturn F-8 (downsample frame misread)",
+      "sha256": "534c980955f9f600aa214067e2d3deac6dcd1fb38d201b80a8ed690e8bb5ac2c",
+      "bytes": 113767,
+      "registered_at": "2026-10-02T15:54:32Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-017",
+      "path": "evidence/05-hit-targets-touch.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/measure-hits-touch.mjs fine-pointer vs hasTouch control (3 viewport/pointer modes x 3 routes)",
+      "sha256": "bc531a259a762eb081f8e87a1555238c5211a9fda4ebce907799702b486fad91",
+      "bytes": 5784,
+      "registered_at": "2026-10-02T15:54:32Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-018",
+      "path": "evidence/10-main-site-reachability.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-main-site.mjs 35 paths x 2 identities (anonymous vs session)",
+      "sha256": "a9aecd7d58f64899c2521c4b2a014a52be455ca574a20c761ed7ae6b0baddae1",
+      "bytes": 27964,
+      "registered_at": "2026-10-02T16:06:19Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-019",
+      "path": "evidence/12-anon-leak-diff.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-anon-leak.mjs DOM text diff anon vs auth on 10 personal surfaces (no-leak proof)",
+      "sha256": "53a4c709ab71c69c917afe7321bc3f66fc48f4efbbc7139d364c7c53cdfe80a5",
+      "bytes": 3426,
+      "registered_at": "2026-10-02T16:06:19Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-020",
+      "path": "evidence/14-api-boundary.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/probe-api-boundary.mjs 54 API endpoints x 3 credential modes (no-cred / bad-cookie / bad-bearer)",
+      "sha256": "342354c0f74cd793e92a01d014492b5ce7fbf2cc63c8f44c61dfe231d1420e76",
+      "bytes": 24558,
+      "registered_at": "2026-10-02T16:06:20Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-021",
+      "path": "evidence/11-main-site-recording.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-main-site.mjs 29 main-site routes, per-route status/textLen/observers",
+      "sha256": "1bd895e0507cdd9ffc746b68b7e67df998f4a141d2bf49b97d3ea84844d900ea",
+      "bytes": 22066,
+      "registered_at": "2026-10-02T16:06:20Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-022",
+      "path": "evidence/13-anon-recording.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-anon.mjs 10 logged-out routes incl. login page + action-button enabled/disabled state",
+      "sha256": "3b69ef49724b2c403f08f180c4cfc27d2fb7e67da08ed6a5a3263e394acaa22a",
+      "bytes": 8935,
+      "registered_at": "2026-10-02T16:06:21Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-023",
+      "path": "evidence/m01-home.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "main site home (warm editorial theme)",
+      "sha256": "77487d3e7be2f2ebf0d148b47bb04e5fc7c840b0e8dadbcbd09f19e90d13d3a4",
+      "bytes": 485272,
+      "registered_at": "2026-10-02T16:06:21Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-024",
+      "path": "evidence/m09-galaxy-incubator.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "galaxy incubator console logged-in (empty: no incubation permission)",
+      "sha256": "225683d3910b80aab97cd38328bafd5e2ae052192c462556acd8ca797dad6c38",
+      "bytes": 126304,
+      "registered_at": "2026-10-02T16:06:21Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-025",
+      "path": "evidence/m18-docs.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "docs archive (sparse but functional: 1 doc in store)",
+      "sha256": "5fe4e24adebd782b3e44f855db6d3f2a6d0009ae191c2c4b8ff7738fb317d4dc",
+      "bytes": 286280,
+      "registered_at": "2026-10-02T16:06:22Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-026",
+      "path": "evidence/a05-notifications-anon.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "logged-out notification centre, mark-all-read correctly disabled",
+      "sha256": "5220ad122b28eb38ce2608f85c5481a21dc518bf6489ab0e09795136c902775e",
+      "bytes": 309106,
+      "registered_at": "2026-10-02T16:06:22Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-027",
+      "path": "evidence/15-dynamic-routes.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/record-dynamic.mjs 18 dynamic routes (3 books / chapter / doc / 6 products / 6 product-apps / oauth payment) - KaTeX 404s captured here",
+      "sha256": "a03256ddbaa5aee2755102dae7da4b7eb94ee85208e505f50a1ba76991e88ffa",
+      "bytes": 15725,
+      "registered_at": "2026-10-02T16:18:21Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-028",
+      "path": "evidence/16-reading-ai.json",
+      "kind": "test_output",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "scripts/test-reading-ai.mjs end-to-end reading AI: entry .book-aside-ai -> question -> /api/ai/reading 200 text/event-stream -> streamed answer",
+      "sha256": "40b469f083c0df725c0683b640dc6c9a954a1c45959cdfdd0343ed6d634b9dcc",
+      "bytes": 14368,
+      "registered_at": "2026-10-02T16:18:21Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-029",
+      "path": "evidence/d01-book-hello-system.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "book detail page (source of the 3x KaTeX font 404s)",
+      "sha256": "2f337e8c37fa28fc905591b7b2a57d16d1dbaa528ab75a863da41ed672b192b8",
+      "bytes": 518027,
+      "registered_at": "2026-10-02T16:18:22Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-030",
+      "path": "evidence/d04-chapter-read.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "chapter reading view (second occurrence of KaTeX 404s)",
+      "sha256": "a4acfd091bb4cd5cd63a6783f9ff7114880e9ad7908eeda2024d89583a5f351f",
+      "bytes": 413285,
+      "registered_at": "2026-10-02T16:18:22Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-031",
+      "path": "evidence/d06-product-loops.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "product detail with embedded app; like/save buttons render filled at count 0",
+      "sha256": "e02f2916ee675ac92b2ce6788d52f9f7b5abfd19c853847948144b7615240080",
+      "bytes": 378874,
+      "registered_at": "2026-10-02T16:18:22Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-032",
+      "path": "evidence/d12-app-loops.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "LOOPS product app standalone, fully functional",
+      "sha256": "4d290319673e8473b66b6b8917241c43230d2bc44d244a8908b7466b94969f9a",
+      "bytes": 57486,
+      "registered_at": "2026-10-02T16:18:23Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    },
+    {
+      "id": "E-033",
+      "path": "evidence/d19-ai-07-final.png",
+      "kind": "screenshot",
+      "phase": "discovery",
+      "origin": "runtime",
+      "source": "reading AI panel: model refused to fabricate, answered 'chapter does not cover this'",
+      "sha256": "2928be05ddadf22caaabf945ace442e60dd80f00ce843bd5cbd4eeb4f5974e47",
+      "bytes": 436393,
+      "registered_at": "2026-10-02T16:18:23Z",
+      "captured_at": "unknown",
+      "environment": "production (Cloudflare Workers edge, accessed from Windows host via local transparent proxy; API probes via Alibaba box --resolve to CF edge 104.21.48.47)",
+      "revision": "prod 6d885ac->9a59f77 (2026-10-02)"
+    }
+  ],
+  "coverage": {
+    "exercised": [
+      {
+        "area": "/lattice 12 条主 hash 路由首屏与换肤(逐条录像 + 全分辨率截图)",
+        "risk": "medium",
+        "reason": "均渲染暖纸底 #F7F1E4 系,未见冷色漏网/溢出/重叠;建课首屏 hero 延迟约 0.4s、侧栏 Recent Activities 约 0.9s 填充,属懒加载正常时序",
+        "evidence": [
+          "E-002",
+          "E-003",
+          "E-006",
+          "E-016"
+        ]
+      },
+      {
+        "area": "首屏启动时序与白屏风险(#/course/journey 4 组判别实验)",
+        "risk": "high",
+        "reason": "观测到 1 次 11.6s 纯白(textLen=0, title 正确, 零 console 错误, 零失败请求),同轮截图同为纯白;25s 后四组全部正常。定位到 main.tsx 启动门无超时(F-3)",
+        "evidence": [
+          "E-004",
+          "E-005",
+          "E-012",
+          "E-014",
+          "E-015"
+        ]
+      },
+      {
+        "area": "完整建课链:命题 -> AI 实时出题 -> 降级判定 -> 模板问卷(指针路径真实提交)",
+        "risk": "high",
+        "reason": "输入值断言通过、按钮由 disabled 转可用、指针提交成功;AI 出题被客户端 20s 放弃并如实标注降级(F-2)。停在交互门「等你作答」,未推进蓝图/落库",
+        "evidence": [
+          "E-007",
+          "E-008",
+          "E-009",
+          "E-011"
+        ]
+      },
+      {
+        "area": "白板计划链路客户端/服务端时限一致性",
+        "risk": "high",
+        "reason": "源码值核对 + d59be3b 变更范围核对,确认 65s < 130s 且客户端未同步(F-1)",
+        "evidence": [
+          "E-010"
+        ]
+      },
+      {
+        "area": "图标型控件命中框(细指针 + 两种触屏视口)",
+        "risk": "medium",
+        "reason": "粗指针兜底证实存在(白板 6->2 / 建课 3->1~2),所有模式 <24px 为 0;残留 wb-intro-close 28x32 不放大(F-5)",
+        "evidence": [
+          "E-013",
+          "E-017"
+        ]
+      }
+    ],
+    "untested": [
+      {
+        "area": "白板授课播放:TTS 旁白/板书书写/插话/答题/验收题反馈",
+        "risk": "high",
+        "reason": "agent@zaochang 名下无课程(集市发现返回空),无可用 fixture;需先成功建课或注入课程。这条缺失使 gate 不能为 ready——旗舰路径零执行证据",
+        "evidence": []
+      },
+      {
+        "area": "建课人工交互门之后:蓝图确认门/侧板单元树/逐单元大纲/最终白板开课",
+        "risk": "high",
+        "reason": "需人工作答问询;超出用户限定的「视觉审查」范围",
+        "evidence": []
+      },
+      {
+        "area": "移动端(390x844 / 820x1180)完整视觉走查:排版、换行、抽屉、横向溢出",
+        "risk": "medium",
+        "reason": "仅测了命中框几何,未做视觉走查;F-8 的文字裁切风险在该视口下未专项验证",
+        "evidence": []
+      },
+      {
+        "area": "多语言切换后的视觉一致性;UI 全英文而账户内容中英混排",
+        "risk": "low",
+        "reason": "无版本化要求,未自行发明缺陷;未测",
+        "evidence": []
+      },
+      {
+        "area": "多账户/多权限/多积分档位下的呈现",
+        "risk": "low",
+        "reason": "只有验收号一个身份可用",
+        "evidence": []
+      },
+      {
+        "area": "屏幕阅读器实测(无障碍名称/焦点顺序/状态播报)",
+        "risk": "medium",
+        "reason": "无障碍结论仅来自 DOM 几何与可访问名属性,未实测 AT 行为",
+        "evidence": []
+      },
+      {
+        "area": "帧级瞬态(<1s 的闪烁/重排/过渡断裂)",
+        "risk": "low",
+        "reason": "视频解析为采样而非逐帧;录制无 GPU 合成,动效观感与真实设备不完全等同",
+        "evidence": []
+      }
+    ],
+    "blocked": [
+      {
+        "area": "F-1 的运行时复现(需触发冷实例长推理链)",
+        "risk": "high",
+        "reason": "只读约束:不压测、不部署、不改配置。结论基于源码值 + commit 变更范围 + 项目自测数据(92-100s),非本轮运行时观测",
+        "evidence": []
+      },
+      {
+        "area": "F-3 第二次观测复现",
+        "risk": "medium",
+        "reason": "4 次后续未复现,符合网络停顿型竞态;无法在只读约束下构造 pending 态。源码层缺口已独立证伪",
+        "evidence": []
+      }
+    ]
+  },
+  "gate": {
+    "decision": "not_ready",
+    "rationale": "不是因为发现阻断级缺陷,而是因为旗舰路径(白板授课播放)零执行证据 —— agent@zaochang 名下无课程,白板 TTS/板书/插话/答题完全未测。同时 F-1(high,confirmed)与 F-2(medium,confirmed)都落在刚发布的功能主链上,且 F-1 直接削弱昨晚 d59be3b 修复的实际效果。是否接受由产品负责人裁决,本轮不代签。",
+    "required_checks": [
+      {
+        "name": "视觉验收入场通道可用(机器通道 -> 一次性票 -> 浏览器正式会话)",
+        "result": "passed",
+        "evidence": [
+          "E-001"
+        ]
+      },
+      {
+        "name": "12 条主路由首屏渲染与换肤一致(暖色编辑工作室)",
+        "result": "passed",
+        "evidence": [
+          "E-002",
+          "E-003",
+          "E-006",
+          "E-016"
+        ]
+      },
+      {
+        "name": "全程零 4xx/5xx 异常(除既有 CSP beacon 噪声)",
+        "result": "passed",
+        "evidence": [
+          "E-010",
+          "E-011"
+        ]
+      },
+      {
+        "name": "客户端与服务端超时一致性(白板计划链路)",
+        "result": "failed",
+        "evidence": [
+          "E-010"
+        ]
+      },
+      {
+        "name": "降级对用户可见且可恢复(建课问询)",
+        "result": "failed",
+        "evidence": [
+          "E-008",
+          "E-011"
+        ]
+      },
+      {
+        "name": "图标控件命中框满足 44px + 粗指针兜底",
+        "result": "passed",
+        "evidence": [
+          "E-013",
+          "E-017"
+        ]
+      },
+      {
+        "name": "SPA 启动不出现无提示永久白屏",
+        "result": "failed",
+        "evidence": [
+          "E-004",
+          "E-005",
+          "E-012"
+        ]
+      },
+      {
+        "name": "白板授课播放(TTS/板书/插话/答题)",
+        "result": "not_run",
+        "evidence": []
+      }
+    ],
+    "accepted_risks": []
+  }
+}

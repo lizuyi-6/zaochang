@@ -140,6 +140,27 @@
   font-size: 12px;
   color: var(--ink-500, #8A7B66);
 }
+/* AI 出题降级行:模板兜底说明 + 可见的重试入口(不再只有一行灰字) */
+.cr-fallback {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cr-retry {
+  border: 1px solid var(--coral-500, #C24A2E);
+  color: var(--coral-600, #A63E26);
+  background: transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.cr-retry:hover { background: rgba(194, 74, 46, 0.08); }
+@media (pointer: coarse) {
+  .cr-retry { min-height: 44px; padding: 8px 16px; }
+}
 
 /* ---------------- 检索来源组 ---------------- */
 .cr-sources {

@@ -1,0 +1,289 @@
+[
+  {
+    "key": "A-journey-nouuid",
+    "hash": "#/course/journey",
+    "waitMs": 25000,
+    "early": {
+      "rootExists": true,
+      "rootChildren": 1,
+      "rootHtmlLen": 48763,
+      "htmlLen": 50486,
+      "innerTextLen": 2672,
+      "bodyBg": "rgb(247, 241, 228)",
+      "bodyOpacity": "1",
+      "bodyVisibility": "visible",
+      "navPresent": true,
+      "veil": [
+        {
+          "cls": "cj-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        },
+        {
+          "cls": "cj-cover-actions",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        }
+      ]
+    },
+    "late": {
+      "rootExists": true,
+      "rootChildren": 1,
+      "rootHtmlLen": 52651,
+      "htmlLen": 54374,
+      "innerTextLen": 3853,
+      "bodyBg": "rgb(247, 241, 228)",
+      "bodyOpacity": "1",
+      "bodyVisibility": "visible",
+      "navPresent": true,
+      "veil": [
+        {
+          "cls": "cj-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        },
+        {
+          "cls": "cj-cover-actions",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        }
+      ]
+    },
+    "finalUrl": "/lattice/#/course/journey",
+    "console": [
+      {
+        "type": "error",
+        "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+      }
+    ],
+    "http": [],
+    "failed": [
+      {
+        "method": "GET",
+        "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+        "err": "csp"
+      }
+    ]
+  },
+  {
+    "key": "B-journey-bogusuuid",
+    "hash": "#/course/journey?uuid=00000000-0000-0000-0000-000000000000",
+    "waitMs": 25000,
+    "early": {
+      "rootExists": true,
+      "rootChildren": 1,
+      "rootHtmlLen": 10252,
+      "htmlLen": 11975,
+      "innerTextLen": 141,
+      "bodyBg": "rgb(247, 241, 228)",
+      "bodyOpacity": "1",
+      "bodyVisibility": "visible",
+      "navPresent": true,
+      "veil": []
+    },
+    "late": {
+      "rootExists": true,
+      "rootChildren": 1,
+      "rootHtmlLen": 60119,
+      "htmlLen": 62320,
+      "innerTextLen": 2205,
+      "bodyBg": "rgb(247, 241, 228)",
+      "bodyOpacity": "1",
+      "bodyVisibility": "visible",
+      "navPresent": true,
+      "veil": [
+        {
+          "cls": "cs-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        },
+        {
+          "cls": "cs-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        },
+        {
+          "cls": "cs-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        }
+      ]
+    },
+    "finalUrl": "/lattice/#/courses",
+    "console": [
+      {
+        "type": "error",
+        "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+      },
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 ()"
+      }
+    ],
+    "http": [
+      {
+        "status": 404,
+        "url": "/api/hyperknow/courses/00000000-0000-0000-0000-000000000000"
+      }
+    ],
+    "failed": [
+      {
+        "method": "GET",
+        "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+        "err": "csp"
+      },
+      {
+        "method": "GET",
+        "url": "/api/hyperknow/courses/00000000-0000-0000-0000-000000000000",
+        "err": "net::ERR_ABORTED"
+      }
+    ]
+  },
+  {
+    "key": "C-preview-nouuid",
+    "hash": "#/course/preview",
+    "waitMs": 12000,
+    "early": {
+      "rootExists": true,
+      "rootChildren": 1,
+      "rootHtmlLen": 47403,
+      "htmlLen": 49126,
+      "innerTextLen": 2677,
+      "bodyBg": "rgb(247, 241, 228)",
+      "bodyOpacity": "1",
+      "bodyVisibility": "visible",
+      "navPresent": true,
+      "veil": [
+        {
+          "cls": "cj-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        }
+      ]
+    },
+    "late": {
+      "rootExists": true,
+      "rootChildren": 1,
+      "rootHtmlLen": 51291,
+      "htmlLen": 53014,
+      "innerTextLen": 3858,
+      "bodyBg": "rgb(247, 241, 228)",
+      "bodyOpacity": "1",
+      "bodyVisibility": "visible",
+      "navPresent": true,
+      "veil": [
+        {
+          "cls": "cj-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        }
+      ]
+    },
+    "finalUrl": "/lattice/#/course/preview",
+    "console": [
+      {
+        "type": "error",
+        "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+      }
+    ],
+    "http": [],
+    "failed": [
+      {
+        "method": "GET",
+        "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+        "err": "csp"
+      }
+    ]
+  },
+  {
+    "key": "D-home",
+    "hash": "#/home",
+    "waitMs": 12000,
+    "early": {
+      "rootExists": true,
+      "rootChildren": 1,
+      "rootHtmlLen": 38057,
+      "htmlLen": 39296,
+      "innerTextLen": 1123,
+      "bodyBg": "rgb(247, 241, 228)",
+      "bodyOpacity": "1",
+      "bodyVisibility": "visible",
+      "navPresent": true,
+      "veil": [
+        {
+          "cls": "hm-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        },
+        {
+          "cls": "hm-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        },
+        {
+          "cls": "hm-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        }
+      ]
+    },
+    "late": {
+      "rootExists": true,
+      "rootChildren": 1,
+      "rootHtmlLen": 43431,
+      "htmlLen": 44670,
+      "innerTextLen": 2521,
+      "bodyBg": "rgb(247, 241, 228)",
+      "bodyOpacity": "1",
+      "bodyVisibility": "visible",
+      "navPresent": true,
+      "veil": [
+        {
+          "cls": "hm-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        },
+        {
+          "cls": "hm-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        },
+        {
+          "cls": "hm-course-cover",
+          "opacity": "1",
+          "vis": "visible",
+          "z": "auto"
+        }
+      ]
+    },
+    "finalUrl": "/lattice/#/home",
+    "console": [
+      {
+        "type": "error",
+        "text": "Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline'\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fall"
+      }
+    ],
+    "http": [],
+    "failed": [
+      {
+        "method": "GET",
+        "url": "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+        "err": "csp"
+      }
+    ]
+  }
+]
