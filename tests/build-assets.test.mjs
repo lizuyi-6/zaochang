@@ -43,3 +43,34 @@ test('build assets: KaTeX woff2 主字体已随产物分发', () => {
   );
   assert.ok(fonts.filter((f) => f.startsWith('KaTeX_')).length >= 10, 'KaTeX 字体族应整组同步');
 });
+
+/* ---- 见界 SPA(public/lattice,入库产物):白板公式 KaTeX 同一纪律 ----
+ * 白板公式动作此前直接把 LaTeX 源码当等宽文本上板;改 KaTeX 渲染后,Vite 资产
+ * 管线把 node_modules CSS 的 url(fonts/…) 重写成 /lattice/assets/<hash>.woff2
+ * 并随产物发出——契约:产物 CSS 引用的每个 /lattice/assets/ 字体都必须真实入库。 */
+
+const latticeAssetsDir = join(process.cwd(), 'public', 'lattice', 'assets');
+
+test('lattice assets: 白板产物 CSS 引用的 /lattice/assets/ 字体全部真实存在', () => {
+  assert.ok(existsSync(latticeAssetsDir), 'public/lattice/assets 必须存在(SPA 产物入库)');
+  const cssFiles = readdirSync(latticeAssetsDir).filter((f) => f.endsWith('.css'));
+  const missing = [];
+  let checked = 0;
+  for (const cssFile of cssFiles) {
+    const css = readFileSync(join(latticeAssetsDir, cssFile), 'utf8');
+    for (const match of css.matchAll(/url\((?:'|")?\/lattice\/assets\/([^)'"]+?\.(?:woff2?|ttf))(?:'|")?\)/g)) {
+      checked += 1;
+      if (!existsSync(join(latticeAssetsDir, match[1]))) {
+        missing.push(`${cssFile} -> ${match[1]}`);
+      }
+    }
+  }
+  assert.ok(checked > 0, '白板产物应包含 KaTeX 字体引用(katex 异步 css chunk);一个都没有说明公式样式链断了');
+  assert.deepEqual(missing, [], `白板产物 CSS 引用了未入库的字体文件: ${missing.join(', ')}`);
+});
+
+test('lattice assets: KaTeX 字体组已随白板产物分发', () => {
+  const fonts = readdirSync(latticeAssetsDir).filter((f) => f.startsWith('KaTeX_'));
+  assert.ok(fonts.some((f) => f.endsWith('.woff2')), 'KaTeX woff2 必须存在');
+  assert.ok(fonts.length >= 10, `KaTeX 字体族应整组发出(当前 ${fonts.length} 个)`);
+});

@@ -46,3 +46,14 @@ test("演示课不消灭:只作明确选择的兜底出口(匿名体验/备课�
   assert.match(popups, /freeTopic\.onDemo/, "intro 必须保留显式'看演示课'出口");
   assert.match(popups, /onSignIn/, "匿名学员必须给登录引导(plan 端点要会员)");
 });
+
+const agents = readFileSync(new URL("../app/api/_lib/hyperknow/agents.ts", import.meta.url), "utf8");
+
+test("幻影承接:无课程上下文时讲师提示显式声明独立讲次(没有上一讲)", () => {
+  assert.match(agents, /STANDALONE lecture/, "自由讲座必须有 STANDALONE 上下文声明");
+  assert.match(agents, /NO previous lecture and NO next lecture/, "必须明令禁止引用前后讲次");
+});
+
+test("备课页文案:介绍正文跟话题走,不落回演示课修辞三角文案", () => {
+  assert.match(page, /genIntroBody = targetTopic\s*\?/, "genIntroBody 必须以 targetTopic 为条件(覆盖自由命题)");
+});

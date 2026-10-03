@@ -273,10 +273,12 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const targetTopic = state.activeTopic || targetLecture?.title || (GEN ? GEN.topic : null);
   const genLectureTitle = targetTopic ?? undefined;
-  const genIntroBody = GEN
+  /* 介绍正文跟着话题走(课程讲次/自由命题同式)——缺省会落回演示课的修辞三角文案,
+   * 自由讲座命题后备课页正文与话题对不上,就是这里漏了 freeTopicMode 的情形。 */
+  const genIntroBody = targetTopic
     ? L(
-        `This session opens ${targetTopic ?? GEN.topic} the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today.`,
-        `本节课用 Hyperknow 的标准方式开启「${targetTopic ?? GEN.topic}」：看板书逐步成形，回答一次快速检查，带着一个马上能用的想法离开。`,
+        `This session opens ${targetTopic} the way every Hyperknow lesson does: watch the board take shape, answer a quick check, and leave with one idea you can use today.`,
+        `本节课用 Hyperknow 的标准方式开启「${targetTopic}」：看板书逐步成形，回答一次快速检查，带着一个马上能用的想法离开。`,
       )
     : undefined;
 

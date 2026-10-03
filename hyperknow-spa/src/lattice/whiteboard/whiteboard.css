@@ -90,6 +90,13 @@
 .wb-board.wb-standard { font-family: var(--font-sans); }
 
 .wb-item { position: absolute; white-space: pre-wrap; }
+.wb-item .wb-code-content { margin: 0; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px; white-space: pre-wrap; word-break: break-word; }
+
+/* KaTeX 公式块(display 模式;字体随 katex.min.css 异步 chunk 注入) */
+.wb-formula-item { white-space: normal; }
+.wb-formula { color: #1F2937; font-size: 15px; line-height: 1.4; }
+.wb-formula .katex-display { margin: 0; padding: 2px 0; }
+.wb-formula-fallback { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; color: #374151; }
 .wb-item .wb-line { display: block; }
 .wb-item b, .wb-item .b { font-weight: 700; }
 .wb-item .i { font-style: italic; }
@@ -684,6 +691,10 @@
 .wb-caption {
   position: relative;
   max-width: 620px;
+  /* 分句窗口(captionWindow.ts)已把内容限在 1-2 句;max-height 是兜底保险,
+   * 极端长句裁到三行,绝不再溢出屏幕下缘(全文始终在对答面板消息里) */
+  max-height: 4.5em;
+  overflow: hidden;
   text-align: center;
   font-family: var(--font-display), "EB Garamond", serif;
   font-size: 16px;
@@ -696,9 +707,6 @@
   border-radius: 20px;
   border: 1px solid rgba(229, 231, 235, 0.7);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-}
-.wb-caption.raised {
-  /* Naturally elevated in flex column order */
 }
 .wb-caption .i { font-style: italic; }
 .wb-caption .ghost { color: #9CA3AF; }
@@ -760,13 +768,15 @@
   font-size: 13px;
   font-weight: 500;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   gap: 6px;
   padding: 8px 14px;
   border-radius: 10px;
   line-height: 1.4;
 }
+/* 逐干扰项解析很长(v4 教学法要求):可视区限高三行、可滚动,朗读与面板全文不受影响 */
+.wb-quickcheck .wb-qc-feedback span { display: block; max-height: 3.9em; overflow-y: auto; text-align: left; scrollbar-width: thin; }
 .wb-quickcheck .wb-qc-feedback.correct { color: #065F46; background: #ECFDF5; border: 1px solid #A7F3D0; }
 .wb-quickcheck .wb-qc-feedback.incorrect { color: #991B1B; background: #FEF2F2; border: 1px solid #FECACA; }
 .wb-quickcheck .wb-qc-actions { margin-top: 12px; display: flex; gap: 10px; justify-content: center; align-items: center; }
