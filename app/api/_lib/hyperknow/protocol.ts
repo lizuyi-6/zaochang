@@ -235,6 +235,65 @@ export function resolveStepfunSearchUrl(aiBaseUrl: string): string {
 }
 
 /**
+ * StepFun MCP web_search 端点(2026-10-03 实测 step_plan 套餐同 key 可用):
+ * 在 AI base 后拼 /mcp/web_search/mcp。Streamable HTTP 无状态,tools/call 一跳
+ * 即搜,无需 initialize 握手。与 /v1/search 是同一条搜索管道(同 query 同结果),
+ * 但额外带 content 全文与 n/category 参数。官方 /v1 key 是否开放该路径未承诺,
+ * 端点不可用时由调用方回退 /v1/search。
+ */
+export function resolveStepfunMcpUrl(aiBaseUrl: string): string {
+  return `${aiBaseUrl.trim().replace(/\/+$/, "")}/mcp/web_search/mcp`;
+}
+
+/**
+ * 从 MCP tools/call 响应信封提取命中。真实返回双通道同构(2026-10-03 实测):
+ * result.content[0].text 内嵌 JSON 与 result.structuredContent 都是
+ * {query, category, results:[{url,title,snippet,content,time}]},优先 text,
+ * 缺失/损坏时兜底 structuredContent。行内 content 是长正文:有 snippet 时严格用
+ * snippet(content 不占位),snippet 缺失才回退 content;JSON-RPC error / isError /
+ * 两通道都解析不出 results 一律返回 null(区别于 results 为空的合法无结果)。
+ */
+export function extractStepfunMcpHits(envelope: unknown): WebSearchHit[] | null {
+  if (!envelope || typeof envelope !== "object") return null;
+  if ((envelope as { error?: unknown }).error !== undefined) return null;
+  const result = (envelope as { result?: unknown }).result;
+  if (!result || typeof result !== "object") return null;
+  if ((result as { isError?: unknown }).isError === true) return null;
+  const content = (result as { content?: unknown }).content;
+  let payload: unknown = null;
+  if (Array.isArray(content) && content.length > 0) {
+    const text = (content[0] as { text?: unknown })?.text;
+    if (typeof text === "string") {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+    }
+  }
+  if (!payload || typeof payload !== "object" || !Array.isArray((payload as { results?: unknown }).results)) {
+    payload = (result as { structuredContent?: unknown }).structuredContent;
+  }
+  const rows = (payload as { results?: unknown } | null)?.results;
+  if (!Array.isArray(rows)) return null;
+  const hits: WebSearchHit[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as Record<string, unknown>;
+    const url = typeof rec.url === "string" ? rec.url.trim() : "";
+    if (!/^https?:\/\//i.test(url)) continue;
+    const title = String(rec.title ?? "").trim().slice(0, 160) || url;
+    const rawSnippet = [rec.snippet, rec.content].find(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    ) as string | undefined;
+    const snippet = (rawSnippet ?? "").trim().slice(0, 320);
+    const time = typeof rec.time === "string" ? rec.time.trim() : "";
+    hits.push({ title, url, snippet, ...(time ? { time } : {}) });
+  }
+  return hits;
+}
+
+/**
  * 解析 StepFun choices[0].message.tool_calls[].function.results 的
  * index, url, title, summary 映射为 snippet;
  * 只承认真实工具来源; 限制长度与数量; 校验 HTTP(S) 并去重。

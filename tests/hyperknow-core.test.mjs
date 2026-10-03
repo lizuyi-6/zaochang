@@ -12,6 +12,8 @@ import {
   asciiSafeJson,
   resolveStepfunChatCompletionsUrl,
   resolveStepfunSearchUrl,
+  resolveStepfunMcpUrl,
+  extractStepfunMcpHits,
   decodeRequestBodyJson,
   extractStepfunHits,
   resolveStepfunImagesUrl,
@@ -193,6 +195,68 @@ test("resolveStepfunSearchUrl: 从 AI base origin 派生独立搜索终端,忽�
   assert.equal(resolveStepfunSearchUrl("https://api.stepfun.ai/v1"), "https://api.stepfun.ai/v1/search");
   assert.equal(resolveStepfunSearchUrl("http://127.0.0.1:8787"), "http://127.0.0.1:8787/v1/search");
   assert.equal(resolveStepfunSearchUrl("https://my-proxy.internal/ai/custom"), "https://my-proxy.internal/v1/search");
+});
+
+test("resolveStepfunMcpUrl: AI base 直拼 MCP web_search 终端,保留套餐路径", () => {
+  assert.equal(resolveStepfunMcpUrl("https://api.stepfun.com/step_plan/v1"), "https://api.stepfun.com/step_plan/v1/mcp/web_search/mcp");
+  assert.equal(resolveStepfunMcpUrl("https://api.stepfun.com/step_plan/v1/"), "https://api.stepfun.com/step_plan/v1/mcp/web_search/mcp");
+  assert.equal(resolveStepfunMcpUrl("https://api.stepfun.com/v1"), "https://api.stepfun.com/v1/mcp/web_search/mcp");
+  assert.equal(resolveStepfunMcpUrl("http://127.0.0.1:8787"), "http://127.0.0.1:8787/mcp/web_search/mcp");
+});
+
+test("extractStepfunMcpHits: 信封拆包对齐 WebSearchHit,有 snippet 用 snippet,缺失才回退 content", () => {
+  const envelope = {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          query: "q",
+          results: [
+            { url: "https://a.example/x", title: "标题甲", snippet: "短摘要", content: "长正文".repeat(200), time: "2026-10-03T10:00:00" },
+            { url: "https://b.example/y", title: "", snippet: "", content: "只有正文没有标题", position: 2 },
+            { url: "ftp://bad/not-http", title: "非 HTTP 应被过滤" },
+            { title: "无 URL 应被过滤" },
+          ],
+        }),
+      }],
+    },
+  };
+  const hits = extractStepfunMcpHits(envelope);
+  assert.ok(hits, "正常信封必须可解析");
+  assert.equal(hits.length, 2);
+  assert.deepEqual(hits[0], { title: "标题甲", url: "https://a.example/x", snippet: "短摘要", time: "2026-10-03T10:00:00" });
+  assert.ok(!hits[0].snippet.includes("长正文"), "有 snippet 时 content 不得占位");
+  assert.equal(hits[1].title, "https://b.example/y", "空标题回退为 url");
+  assert.equal(hits[1].snippet, "只有正文没有标题", "snippet 缺失时回退 content 文案");
+});
+
+test("extractStepfunMcpHits: JSON-RPC error/isError/坏信封一律 null,空 results 返回 []", () => {
+  assert.equal(extractStepfunMcpHits({ error: { code: -32601, message: "method not found" } }), null);
+  assert.equal(extractStepfunMcpHits({ result: { isError: true, content: [{ type: "text", text: "boom" }] } }), null);
+  assert.equal(extractStepfunMcpHits({ result: { content: [{ type: "text", text: "不是 JSON" }] } }), null);
+  assert.equal(extractStepfunMcpHits({ result: { content: [{ type: "text", text: JSON.stringify({ nope: 1 }) }] } }), null);
+  assert.equal(extractStepfunMcpHits({ result: { content: [] } }), null);
+  assert.equal(extractStepfunMcpHits({ result: null }), null);
+  assert.equal(extractStepfunMcpHits("garbage"), null);
+  assert.deepEqual(extractStepfunMcpHits({ result: { content: [{ type: "text", text: JSON.stringify({ results: [] }) }] } }), []);
+});
+
+test("extractStepfunMcpHits: text 损坏时兜底 structuredContent 双通道同构", () => {
+  const results = [{ url: "https://a.example/x", title: "标题甲", snippet: "短摘要", time: "2026-10-03" }];
+  const hits = extractStepfunMcpHits({
+    result: {
+      content: [{ type: "text", text: "not-json" }],
+      structuredContent: { query: "q", category: "", results },
+    },
+  });
+  assert.ok(hits);
+  assert.deepEqual(hits, [{ title: "标题甲", url: "https://a.example/x", snippet: "短摘要", time: "2026-10-03" }]);
+  // content 缺失但 structuredContent 在,同样可解析
+  const hits2 = extractStepfunMcpHits({ result: { structuredContent: { results } } });
+  assert.ok(hits2);
+  assert.equal(hits2.length, 1);
 });
 
 test("decodeRequestBodyJson: UTF-8 直通,GBK 字节兜底还原,双失败返回 null", () => {

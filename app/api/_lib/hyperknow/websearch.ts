@@ -4,9 +4,12 @@
 // - 供应商可插拔(stepfun/tavily/brave/cloudflare),按 env 现有配置与密钥自动选择;
 //   HK_WEB_SEARCH_PROVIDER 可显式指定或 "off" 关闭。默认优先现有 AI 渠道 (stepfun)。
 // - stepfun 供应商复用 resolveHyperknowAiConfig 的 API Key,绝不硬编码官方
-//   地址或回退;搜索走官方推荐的独立网页搜索 API(origin 派生 /v1/search,
-//   与模型解耦)——chat 内置 web_search 工具在套餐通道恒不触发(2026-10-01 实测),
-//   不改变其他 LLM;stepfun 忽略独立搜索 base override。
+//   地址或回退;优先走 step_plan 套餐的 MCP web_search 端点(base 派生
+//   /mcp/web_search/mcp,无状态 tools/call 一跳即搜,2026-10-03 实测同 key 可用、
+//   与 /v1/search 同管道同结果),端点不可用/协议层失败自动回退独立搜索 API
+//   /v1/search——chat 内置 web_search 工具在套餐通道恒不触发(2026-10-01 实测),
+//   不改变其他 LLM;HK_WEB_SEARCH_STEPFUN_MCP=off 可退回纯 /v1/search,
+//   HK_WEB_SEARCH_MCP_URL 可显式覆盖 MCP 端点。stepfun 忽略独立搜索 base override。
 // - 未配置/上游失败/超时一律降级为"无研学上下文",课程照常生成——搜索是增强,
 //   不是门槛,绝不因搜索不可用把建课打死,也绝不虚报搜到了东西。
 // - HK_WEB_SEARCH_BASE_URL 覆盖外部搜索(tavily/brave/cloudflare)基地址,供测试注入假上游。
@@ -15,12 +18,14 @@ import { env } from "cloudflare:workers";
 import { resolveHyperknowAiConfig } from "./config";
 import {
   extractStepfunHits,
+  extractStepfunMcpHits,
   resolveStepfunChatCompletionsUrl,
+  resolveStepfunMcpUrl,
   resolveStepfunSearchUrl,
   type WebSearchHit,
 } from "./protocol";
 
-export { extractStepfunHits, resolveStepfunChatCompletionsUrl, resolveStepfunSearchUrl, type WebSearchHit };
+export { extractStepfunHits, extractStepfunMcpHits, resolveStepfunChatCompletionsUrl, resolveStepfunMcpUrl, resolveStepfunSearchUrl, type WebSearchHit };
 
 export type ProviderId = "stepfun" | "tavily" | "brave" | "cloudflare";
 
@@ -49,6 +54,8 @@ export type SearchConfig = {
   baseUrl: string;
   accountId?: string;
   model?: string;
+  // stepfun 专用:MCP web_search 端点(优先传输);缺省/显式 off 时为空走纯 /v1/search。
+  mcpUrl?: string;
 };
 
 const DEFAULT_BASES: Record<Exclude<ProviderId, "stepfun">, string> = {
@@ -135,11 +142,14 @@ export function resolveSearchConfig(overrideProvider?: string): SearchConfig | n
 
   if (provider === "stepfun") {
     // stepfun 忽略独立搜索 base override，绝不硬编码官方地址或回退:
-    // 独立搜索 API 与 chat 套餐同 key 同源,从 AI base 的 origin 派生 /v1/search。
+    // 独立搜索 API 与 chat 套餐同 key 同源,从 AI base 的 origin 派生 /v1/search;
+    // MCP 端点从 base 直拼,off 开关只关 MCP,/v1/search 始终保留为兜底。
+    const mcpEnabled = values.HK_WEB_SEARCH_STEPFUN_MCP?.trim().toLowerCase() !== "off";
     return {
       provider: "stepfun",
       apiKey: aiConfig!.apiKey,
       baseUrl: resolveStepfunSearchUrl(aiConfig!.baseUrl),
+      ...(mcpEnabled ? { mcpUrl: values.HK_WEB_SEARCH_MCP_URL?.trim() || resolveStepfunMcpUrl(aiConfig!.baseUrl) } : {}),
       model: values.HK_WEB_SEARCH_MODEL?.trim() || "step-3.7-flash",
     };
   }
@@ -156,6 +166,72 @@ export function resolveSearchConfig(overrideProvider?: string): SearchConfig | n
 // 派生研学查询:供传统外部搜索供应商使用
 export function researchQueriesFor(query: string): string[] {
   return [`${query} curriculum`, `${query} core foundations`, `${query} beginner guide`];
+}
+
+/**
+ * StepFun MCP 优先传输:无状态 tools/call 一跳完成,信封解析在 extractStepfunMcpHits。
+ * 终态直接返回:success / auth_failed / rate_limited(同 key 打 /v1/search 必然同样
+ * 结果,429 回退只会放大限流)/ timeout(共享同一超时预算,回退无意义)。
+ * 其余一切——HTTP 非鉴权限流状态码、JSON-RPC error、isError、信封解析不出
+ * results、网络错误——返回 null,由调用方落回 /v1/search 原路径,绝不因新通道
+ * 降级搜索质量。外部取消信号原样上抛(契约与 REST 路径一致)。
+ */
+async function stepfunMcpSearch(
+  query: string,
+  config: SearchConfig,
+  signal: AbortSignal | undefined,
+  perCallSignal: AbortSignal,
+  timeout: AbortSignal,
+): Promise<SearchOutcome | null> {
+  try {
+    const response = await fetch(config.mcpUrl!, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "web_search", arguments: { query } },
+      }),
+      signal: perCallSignal,
+    });
+    if (response.status === 401 || response.status === 403) {
+      await response.body?.cancel().catch(() => {});
+      return { status: "auth_failed", hits: [], provider: "stepfun", reason: "Search upstream authentication failed" };
+    }
+    if (response.status === 429) {
+      await response.body?.cancel().catch(() => {});
+      return { status: "rate_limited", hits: [], provider: "stepfun", reason: "Search upstream rate limit exceeded" };
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      return null;
+    }
+    let envelope: unknown;
+    try {
+      envelope = await response.json();
+    } catch {
+      return null;
+    }
+    const hits = extractStepfunMcpHits(envelope);
+    if (!hits || hits.length === 0) {
+      // 空结果也回退:MCP 与 /v1/search 是否永远同源无契约承诺,保守让 REST 复核。
+      return null;
+    }
+    return { status: "success", hits, provider: "stepfun", query };
+  } catch (error: unknown) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    if (timeout.aborted) {
+      return { status: "timeout", hits: [], provider: "stepfun", reason: "Search request timed out" };
+    }
+    return null;
+  }
 }
 
 /**
@@ -178,11 +254,18 @@ export async function searchWithOutcome(query: string, signal?: AbortSignal, ove
   const perCallSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
 
   try {
+    if (config.provider === "stepfun" && config.mcpUrl) {
+      // MCP 优先:终态直接返回,null 落回下方 /v1/search 原路径(同 key 同源兜底)。
+      const viaMcp = await stepfunMcpSearch(query, config, signal, perCallSignal, timeout);
+      if (viaMcp) return viaMcp;
+      console.info("[websearch] stepfun mcp unavailable, falling back to /v1/search");
+    }
+
     let response: Response;
     if (config.provider === "stepfun") {
-      // StepFun 独立网页搜索 API(官方推荐,与模型解耦):POST /v1/search。
-      // 弃用 chat 内置 web_search 工具——套餐通道实测恒不触发(模型自述未开放检索,
-      // 官方 v1 也只编造旧闻),独立端点同 key 即用,结果自带 url/title/snippet/time。
+      // StepFun 独立网页搜索 API(POST /v1/search),现作为 MCP 端点的回退路径:
+      // MCP 不可用/协议层失败时落回这里,同 key 同源。chat 内置 web_search 工具
+      // 套餐通道实测恒不触发(模型自述未开放检索,官方 v1 也只编造旧闻),保持弃用。
       response = await fetch(config.baseUrl, {
         method: "POST",
         headers: {
