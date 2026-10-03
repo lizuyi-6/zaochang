@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "prompt_required" }, { status: 400 });
     }
 
-    const caption = typeof input.caption === "string" ? input.caption.trim() : undefined;
+    const caption = typeof input.caption === "string" ? input.caption.trim().slice(0, 512) : undefined;
     const courseUuid = typeof input.courseUuid === "string" && input.courseUuid.trim() ? input.courseUuid.trim() : undefined;
     const unitId = typeof input.unitId === "string" && input.unitId.trim() ? input.unitId.trim() : undefined;
     const lectureId = typeof input.lectureId === "string" && input.lectureId.trim() ? input.lectureId.trim() : undefined;

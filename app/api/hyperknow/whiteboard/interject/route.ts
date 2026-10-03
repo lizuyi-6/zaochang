@@ -3,7 +3,6 @@ import { jsonError } from "../../../_lib/errors";
 import { assertSameOrigin } from "../../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../../_lib/rate-limit";
 import { answerInterjection } from "../../../_lib/hyperknow/agents";
-import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../../_lib/hyperknow/llm";
 import { getWhiteboardSession } from "../../../_lib/hyperknow/store";
 
 export const dynamic = "force-dynamic";
@@ -32,19 +31,10 @@ export async function POST(request: Request) {
 
     const currentStep = session.plan.steps.find((step) => step.step_id === stepId) ?? null;
 
+    /* answerInterjection 内部对上游故障兜底为可读的"联系不上导师"话术,不在路由层
+     * 再分流(旧 upstream-error 分支因内部全捕获而永不可达,已删)。 */
     const signal = AbortSignal.timeout(60_000);
-    let answer;
-    try {
-      answer = await answerInterjection(question, currentStep, signal, member.displayName, session.plan.language);
-    } catch (error) {
-      if (error instanceof HyperknowNotConfiguredError) {
-        return Response.json({ error: error.code }, { status: error.status });
-      }
-      if (error instanceof HyperknowUpstreamError) {
-        return Response.json({ error: error.code }, { status: error.status });
-      }
-      throw error;
-    }
+    const answer = await answerInterjection(question, currentStep, signal, member.displayName, session.plan.language);
 
     return Response.json({
       answer_text: answer.answer_text,

@@ -8,20 +8,16 @@ import {
   CONTENT_GENERATOR_SYSTEM_PROMPT,
   COURSE_INQUIRY_PROMPT,
   chatIdentityPrompt,
-  COURSE_ARCHITECT_PROMPT,
   COURSE_BLUEPRINT_PROMPT,
-  DIRECTOR_SYSTEM_PROMPT,
   INTERJECTION_ANSWER_PROMPT,
   UNIT_GENERATION_PROMPT,
   UNIT_REPAIR_PROMPT,
   WHITEBOARD_INSTRUCTOR_PROMPT,
-  buildDirectorUserPrompt,
   buildNextStepsPrompt,
   fallbackInterjectionAnswer,
   fallbackUnit,
   formatUntrustedResearchNote,
   parseCourseBlueprint,
-  parseCourseStructure,
   parseInquiryQuestions,
   type InquiryQuestionDraft,
   parseInterjectionAnswer,
@@ -32,7 +28,6 @@ import {
   refineCourseTitle,
   type CourseBlueprint,
   type CourseBlueprintUnit,
-  type CourseStructure,
   type CourseUnit,
   type InterjectionAnswer,
   type LecturePlan,
@@ -50,20 +45,6 @@ import {
 import type { WebSearchHit } from "./websearch";
 
 export type ConversationHistory = Array<{ role: string; content: string }>;
-
-// ── Director Agent(调度中枢)──────────────────────────────────────────────
-export async function directorAnalyzeIntent(
-  userQuery: string,
-  history: ConversationHistory = [],
-  signal?: AbortSignal,
-): Promise<string> {
-  const messages: LlmMessage[] = [
-    { role: "system", content: DIRECTOR_SYSTEM_PROMPT },
-    ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-    { role: "user", content: buildDirectorUserPrompt(userQuery) },
-  ];
-  return chat(messages, { signal, maxTokens: 512 });
-}
 
 // ── Content Generator(内容流)─────────────────────────────────────────────
 
@@ -119,8 +100,8 @@ const CONTINUE_INSTRUCTION =
 /**
  * 内容流(带断流自愈)。step_plan 上游对长生成会在 60-90 秒量级掐断流
  * (2026-10-01 实测,thinking 期静默触发超时),策略:
- * - 一字未出(含只在 thinking 期断):整体静默重试,至多 2 次;
- * - 正文已出:assistant 预填 partial + 接续指令接着流,至多 2 次;
+ * - 一字未出(含只在 thinking 期断):整体静默重试,至多 3 次;
+ * - 正文已出:assistant 预填 partial + 接续指令接着流,至多 3 次;
  * - 客户端断开(signal aborted)永不重试,原样抛出。
  * 重试不重复扣费:积分按用户消息扣一次,与流内重试无关。
  */
@@ -173,11 +154,12 @@ export async function* contentGenerateStream(
 }
 
 // 主动回想:生成 3 个 next steps(JSON,解析失败走确定性 fallback)。
+// responseText 以摘录进 prompt:推荐步骤衔接刚讲完的内容,而不是复述问题。
 export async function generateNextSteps(userQuery: string, responseText: string, signal?: AbortSignal): Promise<NextStepsData> {
   const jsonStr = await chat(
     [
       { role: "system", content: "You are an educational assistant that outputs strict JSON." },
-      { role: "user", content: buildNextStepsPrompt(userQuery) },
+      { role: "user", content: buildNextStepsPrompt(userQuery, responseText) },
     ],
     { jsonMode: true, signal },
   ).catch(() => "");
@@ -301,27 +283,8 @@ export async function answerInterjection(
   return jsonStr ? parseInterjectionAnswer(jsonStr, effLang) : fallbackInterjectionAnswer(effLang);
 }
 
-// ── Course Architect(三级课程大纲)────────────────────────────────────────
+// ── Course Architect(单元生成与修复)───────────────────────────────────────
 export { formatUntrustedResearchNote, formatCourseBrief };
-
-export async function generateCourse(
-  query: string,
-  signal?: AbortSignal,
-  research: WebSearchHit[] = [],
-  brief?: CourseBrief,
-): Promise<CourseStructure> {
-  const researchNote = formatUntrustedResearchNote(research);
-  const briefNote = formatCourseBrief(brief);
-  const jsonStr = await chat(
-    [
-      { role: "system", content: COURSE_ARCHITECT_PROMPT },
-      { role: "user", content: `Design a comprehensive, structured course for: "${query}"${briefNote}${researchNote}` },
-    ],
-    { jsonMode: true, signal, maxTokens: 8192 },
-  ).catch(() => "");
-  return parseCourseStructure(jsonStr, query);
-}
-
 /**
  * 校验失败单元一次性修复：绝不使用静态模板冒充成功，调用一次 LLM 修复
  */
@@ -425,7 +388,9 @@ export async function generateCourseBlueprint(
 
 /**
  * 独立有界单元生成：为单一单元真实调用 LLM 生成具体讲次、节数、时间与认知深度。
- * 严格拒绝静态模板冒充成功。如果生成不合格，最多进行 1 次 bounded repair。若仍失败显式抛错。
+ * 优先真实生成,不合格先做最多 1 次 bounded repair;repair 后仍不合格则落
+ * fallbackUnit 结构化兜底单元(保证课程树完整可学,不再向上抛错)——兜底是显式
+ * 设计取舍:完整课程优先于部分失败。
  */
 export async function generateUnitDetails(
   courseTitle: string,

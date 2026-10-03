@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { toast } from '../toast';
 
 /* 1:1 复刻原站 i18next 体系:7 语言单 translation 树(locales/ 目录由原站 locales.json 按语言拆分,
    存储键/规范化/复数后缀/插值均与原站一致)。
@@ -56,9 +57,16 @@ export function ensureLocale(lng: string): Promise<void> {
   const code = SUPPORTED_CODES.includes(lng) ? lng : DEFAULT_LNG;
   if (TREES[code]) return Promise.resolve();
   if (!localePending[code]) {
-    localePending[code] = localeLoaders[code]().then((tree) => {
-      TREES[code] = tree;
-    });
+    localePending[code] = localeLoaders[code]()
+      .then((tree) => {
+        TREES[code] = tree;
+      })
+      .catch((err) => {
+        /* 失败清挂起记录:下次 ensureLocale/setLng 可重试——缓存 rejected promise
+         * 会让"切语言遇一次网络抖动"永久卡死在该语言,且无任何用户反馈。 */
+        delete localePending[code];
+        throw err;
+      });
   }
   return localePending[code];
 }
@@ -143,15 +151,6 @@ export function translate(lng: string, path: string, vars?: TVars): string {
 }
 
 /* 原站 Gy:本地化字段回退链(课程标题等 {zh-CN:…, en:…} 结构)。 */
-export function localizedField<T>(obj: Record<string, T> | null | undefined, field: string, lng: string): T | undefined {
-  const chain = [field, ...(lng === 'zh' ? ['zh-CN', 'zh-TW', 'zh'] : []), lng, 'en'];
-  for (const key of chain) {
-    const v = obj?.[key];
-    if (v != null && v !== '') return v;
-  }
-  return undefined;
-}
-
 const initialLng = readStoredLng();
 let activeLng = initialLng;
 
@@ -204,7 +203,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   const setLng = useCallback((code: string) => {
     const next = normalizeLng(code);
-    /* 字典已按语言拆 chunk:先确保加载完成再切换,期间保持旧语言渲染,避免键名裸奔 */
+    /* 字典已按语言拆 chunk:先确保加载完成再切换,期间保持旧语言渲染,避免键名裸奔。
+     * 加载失败 toast 提示(不切走、可重点):此前静默吞掉,用户点语言没有任何反馈。 */
     void ensureLocale(next)
       .then(() => ensureLocale(DEFAULT_LNG))
       .then(() => {
@@ -216,6 +216,9 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
         } catch {
           /* ignore */
         }
+      })
+      .catch(() => {
+        toast(next === 'zh-CN' || next === 'zh-TW' ? '语言包加载失败，请再试一次' : 'Failed to load the language pack — please try again.');
       });
   }, []);
 

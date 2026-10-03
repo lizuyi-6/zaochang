@@ -168,21 +168,24 @@ export const App: React.FC = () => {
     const next = { ...prev, ...patch };
     const crossingBoard =
       !!patch.screen && patch.screen !== prev.screen && (patch.screen === 'whiteboard' || prev.screen === 'whiteboard');
-    const apply = () => {
-      stateRef.current = next;
-      setState(next);
-      const h = hashFor(next);
+    const applyState = (s: AppState) => {
+      stateRef.current = s;
+      setState(s);
+      const h = hashFor(s);
       if (window.location.hash !== h) history.pushState(null, '', h);
     };
     if (crossingBoard) {
       // white wipe when entering or leaving the classroom
       setVeil('cover');
       window.setTimeout(() => {
-        apply();
+        /* 280ms 窗口内其它 set() 已直接落到 stateRef:以最新 state 为底、仅重放
+         * 本 patch——用旧快照整体覆盖会把窗口期内的身份解析/记忆回填等并发更新
+         * 静默回滚,且没有机制再补。 */
+        applyState({ ...stateRef.current, ...patch });
         requestAnimationFrame(() => requestAnimationFrame(() => setVeil('fade')));
       }, 280);
     } else {
-      apply();
+      applyState(next);
     }
   }, []);
 
@@ -246,7 +249,9 @@ export const App: React.FC = () => {
   /* 历史会话按身份重拉:启动装载只跑一次,浏览器会话在页面存活期间被换掉时
    * (多账户切换/验收通道写 cookie)不重拉就会把上一账户的会话留在 state 里
    * 展示——"聊天记录串号"的观感来源。身份邮箱一变即重拉,并回填真实账户列表。 */
-  const convLoadedEmailRef = useRef<string | null | undefined>(undefined);
+  /* 初值 null 与"身份未定(email=null)"相等:启动 boot 的 Promise.all 已拉过一次
+   * null 相位列表,这里不再为同一相位重复发第二次请求(此前 undefined≠null 必跑)。 */
+  const convLoadedEmailRef = useRef<string | null | undefined>(null);
   useEffect(() => {
     const email = state.identity?.email ?? null;
     if (convLoadedEmailRef.current === email) return;

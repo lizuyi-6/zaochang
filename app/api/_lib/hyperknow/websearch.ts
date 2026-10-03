@@ -214,12 +214,15 @@ export async function searchWithOutcome(query: string, signal?: AbortSignal, ove
     }
 
     if (response.status === 401 || response.status === 403) {
+      await response.body?.cancel().catch(() => {});
       return { status: "auth_failed", hits: [], provider: config.provider, reason: "Search upstream authentication failed" };
     }
     if (response.status === 429) {
+      await response.body?.cancel().catch(() => {});
       return { status: "rate_limited", hits: [], provider: config.provider, reason: "Search upstream rate limit exceeded" };
     }
     if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
       return { status: "upstream_error", hits: [], provider: config.provider, reason: `Search upstream returned status ${response.status}` };
     }
 

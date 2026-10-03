@@ -21,36 +21,6 @@ export interface GenerateImageResult {
 }
 
 /**
- * 确保图像会话缓存与跨实例排他租约表存在
- */
-async function ensureImageCacheTable(): Promise<void> {
-  try {
-    await database()
-      .prepare(
-        `CREATE TABLE IF NOT EXISTS hk_lecture_images (
-          cache_key TEXT PRIMARY KEY,
-          session_id TEXT NOT NULL,
-          user_email TEXT NOT NULL,
-          model TEXT NOT NULL,
-          params TEXT NOT NULL,
-          version TEXT NOT NULL,
-          url TEXT NOT NULL DEFAULT '',
-          caption TEXT,
-          prompt TEXT,
-          status TEXT NOT NULL DEFAULT 'completed',
-          lease_token TEXT,
-          lease_expires_at TEXT,
-          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )`,
-      )
-      .run();
-  } catch (err) {
-    console.warn("[hyperknow-image] cache table creation warning:", err);
-  }
-}
-
-/**
  * 阶跃星辰图像生成 API 接入：
  * - 总开关控制: HK_IMAGE_ENABLED / HYPERKNOW_IMAGE_ENABLED (默认 true)
  * - 复用 resolveHyperknowAiConfig 的自定义 URL / API Key，不擅自回退官方地址
@@ -79,6 +49,8 @@ export async function generateLectureImage(args: {
   }
 
   const cleanPrompt = prompt.trim().slice(0, 512);
+  /* caption 同样入库存上限:它每次缓存命中都回传,不设限会把任意长文本钉进表里 */
+  const cleanCaption = caption?.trim().slice(0, 512) || undefined;
   if (!cleanPrompt) {
     throw new Error("prompt_required");
   }
@@ -87,7 +59,7 @@ export async function generateLectureImage(args: {
   const sessionKey = scopeKey;
   const cacheKey = `${userEmail}:${sessionKey}:${imageModel}:${IMAGE_PARAMS_SIGNATURE}:${IMAGE_CACHE_VERSION}`;
 
-  await ensureImageCacheTable();
+  // 表结构由迁移 drizzle/0022 提供,不在请求热路径里 CREATE TABLE
 
   // 1. 缓存与每节最多 1 图去重检查
   try {
@@ -102,7 +74,7 @@ export async function generateLectureImage(args: {
     if (cached && cached.url) {
       return {
         url: cached.url,
-        caption: cached.caption ?? caption,
+        caption: cached.caption ?? cleanCaption,
         width: 340,
         height: 240,
         cached: true,
@@ -131,7 +103,7 @@ export async function generateLectureImage(args: {
         imageModel,
         IMAGE_PARAMS_SIGNATURE,
         IMAGE_CACHE_VERSION,
-        caption ?? cleanPrompt,
+        cleanCaption ?? cleanPrompt,
         cleanPrompt,
         leaseToken,
         leaseExpiresAt,

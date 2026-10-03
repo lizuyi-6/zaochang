@@ -6,7 +6,7 @@ import { contentGenerateStream, generateNextSteps, resolveChatModel } from "../.
 import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/hyperknow/llm";
 import { FALLBACK_GUIDELINE } from "../../_lib/hyperknow/prompts";
 import { saveConversation, getConversation } from "../../_lib/hyperknow/store";
-import { consumeCredits, currentCredits, HK_CHAT_COST, HK_DAILY_CREDITS } from "../../_lib/hyperknow/credits";
+import { consumeCredits, currentCredits, dailyCreditsFor, HK_CHAT_COST } from "../../_lib/hyperknow/credits";
 import { decodeRequestBodyJson, type StreamChunk } from "../../_lib/hyperknow/protocol";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +62,9 @@ export async function POST(request: Request) {
       conversationId = existing.id;
       history = existing.history;
     }
+    /* 发给模型的历史窗口:长会话线性膨胀会撑爆上下文并放大每次请求的 token——
+     * 只带最近 40 条(模型实际能消化的窗口),完整历史仍按落库上限保存。 */
+    const modelHistory = history.slice(-40);
 
     // 客户端断开与总时长兜底合并(白板/课程同类;生成型课程实测 ~60s 量级,120s 足够)。
     const signal =
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
     // thinking_delta 增量实时映射)。模型二选一:见界 Flash=step-3.7-flash /
     // 见界 Pro=step-5-preview,白名单外的值一律回落 Flash。
     const model = resolveChatModel(input.model);
-    const generator = contentGenerateStream(message, FALLBACK_GUIDELINE, history, signal, model);
+    const generator = contentGenerateStream(message, FALLBACK_GUIDELINE, modelHistory, signal, model);
     let firstChunk: StreamChunk | null = null;
     let generatorDone = false;
     try {
@@ -98,9 +101,10 @@ export async function POST(request: Request) {
     // 返回,不扣费;流开始后的中途失败不退费。条件 UPDATE 原子扣减,不透支。
     const remainingCredits = await consumeCredits(member.email, HK_CHAT_COST);
     if (remainingCredits === null) {
-      const { remaining } = await currentCredits(member.email);
+      void generator.return(undefined as never).catch(() => {}); // 收掉已启的上游流
+      const { remaining, max } = await currentCredits(member.email);
       return Response.json(
-        { error: "insufficient_credits", credit_info: { remaining, max: HK_DAILY_CREDITS } },
+        { error: "insufficient_credits", credit_info: { remaining, max } },
         { status: 402 },
       );
     }
@@ -119,7 +123,7 @@ export async function POST(request: Request) {
           };
           try {
             push({ type: "conversation_created", data: { conversation_id: conversationId }, conversation_id: conversationId });
-            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: HK_DAILY_CREDITS } });
+            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member.email) } });
             push({
               type: "tool_execution",
               tool_name: "directorAgent",
@@ -182,7 +186,8 @@ export async function POST(request: Request) {
               id: conversationId,
               userEmail: member.email,
               title,
-              history: [...history, { role: "user", content: message }, { role: "assistant", content: fullResponse }],
+              /* 落库上限 200 条:无界增长会推高每次读写与列表接口的负载,超限丢最旧 */
+              history: [...history, { role: "user", content: message }, { role: "assistant", content: fullResponse }].slice(-200),
             });
 
             push({ type: "complete", conversation_id: conversationId });

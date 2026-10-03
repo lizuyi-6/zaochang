@@ -42,8 +42,9 @@ export function resolveUserTier(userEmail: string): SubscriptionTier {
   const maxUsers = (values.HK_MAX_USERS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   if (maxUsers.includes(normEmail)) return "MAX";
 
-  // 3. 创始人号天然默认享有 MAX 尊享套餐
-  if (isFounderEmail(normEmail) || normEmail === "2251213429@qq.com") {
+  // 3. 创始人号天然默认享有 MAX 尊享套餐(环境变量 ZAOCHANG_FOUNDER_EMAIL,线上已配置;
+  //    不在代码里硬编码账号——仓库里的硬编码邮箱是事实上的永久后门)
+  if (isFounderEmail(normEmail)) {
     return "MAX";
   }
 
@@ -109,28 +110,6 @@ export async function consumeCredits(userEmail: string, cost: number): Promise<n
   return row?.balance ?? null;
 }
 
-// 确保幂等计费锁表存在
-async function ensureCreditChargesTable(): Promise<void> {
-  try {
-    await database()
-      .prepare(
-        `CREATE TABLE IF NOT EXISTS hk_credit_charges (
-          key TEXT PRIMARY KEY,
-          user_email TEXT NOT NULL,
-          cost INTEGER NOT NULL,
-          status TEXT NOT NULL DEFAULT 'pending',
-          lease_token TEXT,
-          lease_expires_at TEXT,
-          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )`,
-      )
-      .run();
-  } catch (err) {
-    console.warn("[hyperknow-credits] ensureCreditChargesTable failed:", err);
-  }
-}
-
 export interface ConsumeCreditsResult {
   remaining: number | null;
   charged: boolean;
@@ -144,15 +123,15 @@ export function parseTimestampMs(val: string | null | undefined): number {
   return Number.isNaN(t) ? 0 : t;
 }
 
-// 幂等扣减与原子任务租约: 严格保持 10 积分定价不擅改，支持任务恢复/并发竞争时 409 拦截与 D1 batch 事务一致
+// 幂等扣减与原子任务租约: 幂等计费面只有建课一条(恒 10 积分,不接受参数改价——
+// 此前 cost 参数被三元表达式无视,是个一踩就炸的陷阱),支持任务恢复/并发竞争时
+// 409 拦截与 D1 batch 事务一致
 export async function consumeCreditsIdempotent(
   userEmail: string,
-  cost: number = HK_COURSE_COST,
   idempotencyKey?: string,
   leaseDurationMs: number = 60_000,
 ): Promise<ConsumeCreditsResult> {
-  // 严格严守 10 积分定价
-  const fixedCost = cost === HK_COURSE_COST ? HK_COURSE_COST : HK_COURSE_COST;
+  const fixedCost = HK_COURSE_COST;
   const key = idempotencyKey?.trim();
 
   if (!key) {
@@ -160,8 +139,7 @@ export async function consumeCreditsIdempotent(
     return { remaining, charged: remaining !== null, conflict: false };
   }
 
-  await ensureCreditChargesTable();
-
+  // 表结构由迁移 drizzle/0022 提供,请求热路径不做任何建表语句
   const now = Date.now();
   const leaseExpiresAt = new Date(now + leaseDurationMs).toISOString();
   const leaseToken = crypto.randomUUID();
@@ -193,6 +171,22 @@ export async function consumeCreditsIdempotent(
             `UPDATE hk_credit_charges
              SET lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
              WHERE key = ? AND user_email = ?`,
+          )
+          .bind(leaseToken, leaseExpiresAt, key, userEmail)
+          .run();
+
+        const { remaining } = await currentCredits(userEmail);
+        return { remaining, charged: false, conflict: false };
+      }
+
+      if (existing.status === "refunded") {
+        // 已退款的任务重试(失败后退费,同 key 再来):免费接管租约重做——
+        // "恢复不重复扣费"的承诺对失败重试同样成立,退过的钱不再收一遍。
+        await database()
+          .prepare(
+            `UPDATE hk_credit_charges
+             SET status = 'pending', lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE key = ? AND user_email = ? AND status = 'refunded'`,
           )
           .bind(leaseToken, leaseExpiresAt, key, userEmail)
           .run();
@@ -255,6 +249,29 @@ export async function consumeCreditsIdempotent(
           // 409 冲突：不放行并发重复任务！
           return { remaining: null, charged: false, conflict: true };
         }
+        // 过期租约接管,不重复扣费
+        await database()
+          .prepare(
+            `UPDATE hk_credit_charges
+             SET lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE key = ? AND user_email = ? AND status = 'pending'`,
+          )
+          .bind(leaseToken, leaseExpiresAt, key, userEmail)
+          .run();
+        const { remaining } = await currentCredits(userEmail);
+        return { remaining, charged: false, conflict: false };
+      }
+      if (check.status === "refunded") {
+        await database()
+          .prepare(
+            `UPDATE hk_credit_charges
+             SET status = 'pending', lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE key = ? AND user_email = ? AND status = 'refunded'`,
+          )
+          .bind(leaseToken, leaseExpiresAt, key, userEmail)
+          .run();
+        const { remaining } = await currentCredits(userEmail);
+        return { remaining, charged: false, conflict: false };
       }
     }
     throw err;
@@ -276,13 +293,39 @@ export async function markCreditChargeCompleted(key: string, userEmail: string):
   }
 }
 
-export async function releaseCreditCharge(key: string, userEmail: string): Promise<void> {
+/**
+ * 生成失败退费:把本次实际扣掉的积分退回当日余额;有计费行(key)时把 pending 行标成
+ * refunded——行保留下来既作审计,也让同 key 的失败重试走免费接管(refunded 分支),
+ * 兑现"恢复/重试不重复扣费"。跨日退费放弃(新的一天已整额续满,退回反而超上限)。
+ */
+export async function refundCreditCharge(
+  key: string | null | undefined,
+  userEmail: string,
+  cost: number = HK_COURSE_COST,
+): Promise<void> {
+  const today = beijingToday();
   try {
     await database()
-      .prepare(`DELETE FROM hk_credit_charges WHERE key = ? AND user_email = ? AND status = 'pending'`)
+      .prepare(
+        `UPDATE hk_credits SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+         WHERE user_email = ? AND reset_date = ?`,
+      )
+      .bind(cost, userEmail, today)
+      .run();
+  } catch (err) {
+    console.warn("[hyperknow-credits] refund balance failed:", err);
+  }
+  if (!key) return;
+  try {
+    await database()
+      .prepare(
+        `UPDATE hk_credit_charges
+         SET status = 'refunded', lease_token = NULL, lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+         WHERE key = ? AND user_email = ? AND status = 'pending'`,
+      )
       .bind(key, userEmail)
       .run();
   } catch (err) {
-    console.warn("[hyperknow-credits] releaseCreditCharge failed:", err);
+    console.warn("[hyperknow-credits] refund charge row failed:", err);
   }
 }

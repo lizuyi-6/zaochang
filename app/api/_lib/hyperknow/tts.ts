@@ -109,7 +109,9 @@ export async function synthesize(text: string, voiceId = "warm", speed = 1.0): P
     }
 
     if (resp.status === 404 && i < candidateModels.length - 1) {
-      // 模型不存在(如 step_plan 路径下 stepaudio-3-tts 返回 404):尝试备用兼容模型
+      // 模型不存在(如 step_plan 路径下 stepaudio-3-tts 返回 404):尝试备用兼容模型;
+      // 丢弃前显式取消响应体,连接不等 GC
+      await resp.body?.cancel().catch(() => {});
       continue;
     }
     upstream = resp;

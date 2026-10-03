@@ -33,6 +33,7 @@ import {
 import { liveLessonFromPlan, type LessonScript } from './liveLesson';
 import { fetchLectureImageLive, interjectLive, planLectureLive, PLAN_CLIENT_TIMEOUT_MS } from '../backend';
 import { getBackendLang, getCurrentLng } from '../i18n';
+import { getCourseLang } from '../courseLang';
 import { L } from '../i18n/content';
 import { exportBoard, type ExportFormat, type ExportPage } from '../boardExport';
 import { uploadFile } from '../materials';
@@ -329,7 +330,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     let alive = true;
     setPlanPending(true); // 话题是进入页面后才选定的(自由讲座):收起"可开讲"态
     setPlanFailed(false);
-    const appLang = getBackendLang() || getCurrentLng() || 'en';
+    /* 每课语言偏好(加入弹窗的选择)优先,其次界面语言——课程讲次语言与界面解耦 */
+    const appLang = getCourseLang(state.activeCourseUuid) ?? (getBackendLang() || getCurrentLng() || 'en');
     const planParams = {
       topic: liveTopic,
       courseUuid: state.activeCourseUuid || (GEN as { courseUuid?: string } | null)?.courseUuid,
@@ -341,11 +343,11 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     // 旅程页预生成的 plan 直接复用(同 key、15min TTL);预热失败(null)补一次真实请求
     const prefetched = takePrefetchedEntry(planParams);
     let fromPrefetch = false;
-    void (prefetched?.plan ?? planLectureLive(planParams as any, ctrl.signal))
+    void (prefetched?.plan ?? planLectureLive(planParams, ctrl.signal))
       .then(async (plan) => {
         if (!alive) return;
         if (plan === null && prefetched && !ctrl.signal.aborted) {
-          plan = await planLectureLive(planParams as any, ctrl.signal);
+          plan = await planLectureLive(planParams, ctrl.signal);
           if (!alive) return;
         } else if (plan && prefetched) {
           fromPrefetch = true;
@@ -354,12 +356,15 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
          * 用它开讲等于辜负学员命题,再挣一次真实生成(此时实例多已预热);仍降级
          * 则接受——话题对得上的模板好过话题对不上的演示课。 */
         if (plan?.degraded && freeTopicMode && !ctrl.signal.aborted) {
-          const fresh = await planLectureLive(planParams as any, ctrl.signal);
+          const fresh = await planLectureLive(planParams, ctrl.signal);
           if (!alive) return;
           if (fresh) plan = fresh;
         }
         setPlanPending(false);
-        if (!plan && freeTopicMode && !ctrl.signal.aborted) setPlanFailed(true);
+        /* 自由讲座拿不到计划一律显式失败(alive 已排除卸载路径)——不得依赖
+         * !aborted:135s 客户端超时掐死时 aborted=true,若跳过置失败,简介页会放出
+         * "开始学习"并播话题对不上的演示课,正是自由讲座承诺绝不发生的事。 */
+        if (!plan && freeTopicMode) setPlanFailed(true);
         if (plan) {
           const script = liveLessonFromPlan(plan);
           setLiveScript(script);
@@ -410,7 +415,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       .catch(() => {
         if (alive) {
           setPlanPending(false);
-          if (freeTopicMode && !ctrl.signal.aborted) setPlanFailed(true);
+          /* 同上:超时/网络挂起也要显式失败,自由讲座绝不静默落到演示课 */
+          if (freeTopicMode) setPlanFailed(true);
         }
       });
     return () => {

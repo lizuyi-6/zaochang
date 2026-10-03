@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 // 实时音频流分发端点(原 routes/tts.js /stream)。GET 由 <audio>/<Audio> 元素直接
 // 拉流,同源 Cookie 随请求携带,requireMember 天然生效;白板每步旁白与试听都会
-// 调用,限流放宽到 120/h。缓存语义经 X-Cache 头暴露(HIT-MEMORY/HIT-R2/MISS)。
-// 未命中时整段合成后返回(与原版逐块 pipe 的差异见 tts.ts 模块注释)。
+// 调用,限流 360/h(旁白预热会成倍放大请求数)。缓存语义经 X-Cache 头暴露
+// (HIT-MEMORY/HIT-R2/MISS)。未命中时整段合成后返回(与原版逐块 pipe 的差异见 tts.ts 模块注释)。
 export async function GET(request: Request) {
   try {
     const member = await requireMember();

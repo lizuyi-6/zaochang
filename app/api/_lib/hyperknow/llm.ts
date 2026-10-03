@@ -125,6 +125,8 @@ async function postChatCompletions(
         signal: options.signal,
       });
       if (response.status === 404 && i < candidateModels.length - 1) {
+        // 丢弃前显式取消响应体:Workers 下不 cancel 的连接要等 GC 才释放
+        await response.body?.cancel().catch(() => {});
         continue;
       }
       lastResponse = response;
@@ -245,6 +247,7 @@ export async function chat(messages: LlmMessage[], options: ChatOptions & { json
     return postChatCompletions(messages, options);
   }
 
+  let textOut = "";
   try {
     const { systemPrompt, formatted } = formatMessagesForMessagesApi(messages);
     const response = await postMessages(
@@ -262,9 +265,11 @@ export async function chat(messages: LlmMessage[], options: ChatOptions & { json
       choices?: Array<{ message?: { content?: unknown } }>;
     };
     const textBlock = data.content?.find((block) => block.type === "text");
-    if (typeof textBlock?.text === "string") return textBlock.text;
-    const choiceContent = data.choices?.[0]?.message?.content;
-    if (typeof choiceContent === "string") return choiceContent;
+    if (typeof textBlock?.text === "string") textOut = textBlock.text;
+    else {
+      const choiceContent = data.choices?.[0]?.message?.content;
+      if (typeof choiceContent === "string") textOut = choiceContent;
+    }
   } catch (error) {
     if (options.signal?.aborted) throw error;
     if (error instanceof HyperknowUpstreamError && (error.code === "ai_auth_failed" || error.code === "ai_rate_limited")) {
@@ -277,7 +282,17 @@ export async function chat(messages: LlmMessage[], options: ChatOptions & { json
       throw error;
     }
   }
-  return "";
+  /* 空正文(混合推理把 max_tokens 全耗在思考上)不再静默返回 "":那会一路降级成
+   * 模板课/空蓝图,而用户已扣费。视为可重试失败,走一次 chat/completions 兼容通道。 */
+  if (!textOut.trim()) {
+    try {
+      const fallback = await postChatCompletions(messages, options);
+      if (fallback.trim()) return fallback;
+    } catch {
+      /* 回退通道也失败:维持旧的空串契约(调用方有显式降级/重试纪律) */
+    }
+  }
+  return textOut;
 }
 
 export { HyperknowNotConfiguredError };
