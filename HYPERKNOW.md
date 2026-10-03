@@ -116,6 +116,13 @@ CI 不安装 hyperknow-spa 依赖、不参与主站 tsc/eslint(tsconfig/eslint �
 - **计划管道解析契约**:`planLectureLive`(预热与直取共用解析器)必须透传 quick_check `explanation`(学员答错 UI 反馈的唯一来源)与顶层 `degraded`;预热缓存(planPrefetch)拒存 degraded 计划——开课取不到预热就走正常 POST 给后端重做机会,旁白/配图不为模板课烧配额。契约由 `tests/lattice-backend.test.mjs` 钉住。
 - **蓝图/单元螺旋课程**:COURSE_BLUEPRINT_PROMPT/UNIT_GENERATION_PROMPT 要求后续单元在新情境复用早前技能、项目跨单元累积、测验回捞旧单元内容(间隔提取)。
 
+## 2026-10-03 全库代码审查(P1 退费/语言分发/预热同键等)
+
+- **积分纪律**:扣费点必须"上游探活成功后"(chat 先 generator.next() 再扣;translate 曾反过来,上游故障白扣 2 分,已对齐)。建课失败退费走 `refundCreditCharge`:退当日余额+计费行标 `refunded`,同 key 重试免费接管——"恢复不重复扣费"对失败重试同样成立。退费只在 `charged=true`(本次真扣)时调,接管重跑不退(钱属最初那次扣费)。幂等计费恒 10 分,函数签名不再收 cost(曾有 cost 参数被两分支相同的三元无视的陷阱)。402 的 `max` 用 `dailyCreditsFor`,勿写死 HK_DAILY_CREDITS。
+- **空正文防线**:非流式 `chat()` 只回 thinking 块时,视为可重试失败走一次 chat/completions 回退,不静默 `""`(那是模板课降级/空蓝图的根因);chat-completions SSE 的 data 行必须 try/catch 跳过坏帧。
+- **预热与实播必须同键**:白板 TTS 预热文本 = `sanitizeNarration(spoken_text)`,与实播同形,否则含标签/实体的旁白永远 MISS。语言分发:`!startsWith('en')` ≠ 中文——精确判 zh-CN/zh-TW;每课授课语言经 `courseLang.ts` 按课程 UUID 持久化(加入弹窗选择/白板备课/旅程预热三处同源)。
+- **已删死链**:guards.ts 整文件、Director Agent 链、generateCourse→COURSE_ARCHITECT_PROMPT 链——复刻演进时留下的旧路径,零消费;plan/interject 路由的 upstream-error 分支永不可达(planLecture/answerInterjection 内部全捕获)。契约钉在 `tests/hyperknow-hardening.test.mjs`(11 条)。
+
 ## 2026-10-03 回归审计修复(旧品牌清零/死邮箱/净化括号)
 
 - **品牌清零守卫**:更名时字典「值」与硬编码字面量是两个独立泄漏面,只查其一必漏——`lattice-brand` 现有全源扫(ts/tsx/json/css/html 禁 "Hyperknow"),小写内部标识符(包名/`/api/hyperknow/*` 路径/注释)不受限。字典值里的用户联系邮箱也是品牌面:`contact@/public-mail@hyperknow.io` 是指向外人域名的死通道,真实支持邮箱 `zaochang@aetherstudio.top`(actions.ts SUPPORT_EMAIL)。

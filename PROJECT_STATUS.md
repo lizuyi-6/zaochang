@@ -1,5 +1,16 @@
 # 造场项目账本
 
+## 2026-10-03(六·四)全库代码审查修复:P1×7 + P2 批 + 死代码清簇(已上线,454 测试全绿)
+
+- **审查方式**:两个审查代理并行扫 API 侧/SPA 基础设施,白板管线本人精读;所有重大指控逐条抽验后才修(抓到一处误报:boardExport 的"注解画错位"实为空栈 no-op,降级为死行删除)。审计与审查材料只当线索,方案自定。
+- **P1 钱**(`e3ccc27`):①建课失败不退费——新增 `refundCreditCharge`(退当日余额+计费行标 refunded),失败 catch 只在 `charged=true`(本次真扣过费)时退,避免接管重跑双重退费;refunded 行同 key 重试**免费接管**(失败重试不再二次扣 10 分);死代码 `releaseCreditCharge` 删除。②翻译先扣费后探活——扣费移到 `generator.next()` 首帧成功后(对齐 /chat 真实语义),402 返回前 `generator.return()` 收掉已启上游流。
+- **P1 路径**:③建课「从检查点恢复生成」是死按钮——cancelToFeed 置 `finishedRef=true` 后恢复按钮守卫直接 return,onClick 先复位;④卸载检查点课程名恒空——空依赖 cleanup 捕获首渲染闭包,`topicRef` 逐渲染同步;⑤课程语言误分——`!startsWith('en')` 把西/韩/印地/乌尔都全当中文课,精确判 zh-CN/zh-TW;⑥**每课授课语言接真**——加入弹窗语言选择器是死 UI(选中文仍按界面语言讲课,与承诺相反),新增 `courseLang.ts` 按课程 UUID 持久化偏好,白板备课/旅程页预热/弹窗默认值三处同源;⑦自由讲座 135s 超时路径漏置失败态——`!aborted` 条件删除(超时 aborted=true 时跳过会放出"开始学习"播话题对不上的演示课),then/catch 两路都无条件置失败;⑧**TTS 预热键错位**——旅程页预热用原始 spoken_text,实播是净化文本,含标签旁白永远 miss(白烧配额+冷启动),预热同走 sanitizeNarration。
+- **P2 批**:credits `cost===HK_COURSE_COST?HK_COURSE_COST:HK_COURSE_COST` 陷阱(参数被无视,一律收 10)→ 恒定价签名;402/credit_status 的 `max` 恒 20 → `dailyCreditsFor`(PRO/MAX 看到真额度);`chat()` 思考耗尽空正文静默 `""` → 视为可重试失败走一次 chat/completions 回退(非流式路径的"模板课降级"根因之一);chat-completions SSE 裸 JSON.parse → 坏帧 try/catch 跳过(与 Messages 解析器纪律一致);三处丢弃 Response 不 `body.cancel()` → 显式取消(Workers 连接不泄漏);`CREATE TABLE IF NOT EXISTS` 移出请求热路径(生产 D1 已有表,迁移覆盖已核);idempotencyKey/caption 截 512;chat 模型历史窗口 40 条+落库 200 条上限;veil 280ms 延迟提交改"最新 state+重放 patch"(旧快照覆盖会回滚窗口期并发 set);i18n chunk 失败清 pending 可重试+setLng 失败 toast;Stage2 恢复完成补 `persisted=true`(集市立即失效重拉);startIntake 重置失败/取消/蓝图态(旧警报与新问询同屏互踩);DAG 环修复只修环上单元(10 单元课从 10 次 LLM 降到环上次数,多轮上限 4);nextSteps prompt 带回答摘录(推荐不再与刚讲内容脱节);session React key 用复合 id(重复标题不再撞 key);导航提示 localStorage 读取加 try(隐私模式白屏)。**缓办**:集市/历史列表整包 JSON(消费面真吃完整树,"点开再拉详情"是产品流程变更,单独排期)。
+- **安全/加固**:创始人邮箱硬编码 MAX 套餐删除(盒子 env ZAOCHANG_FOUNDER_EMAIL 已覆盖,核过值存在);**评估为健康**:diagram SVG 双层转义(XSS 排除)、限流/租约/扣费 batch 原子性、上传隔离管线、鉴权纪律全抽查通过。
+- **死代码清簇**(零消费已逐一 grep 核实):`guards.ts` 整文件、Director Agent 链(directorAnalyzeIntent+DIRECTOR_SYSTEM_PROMPT+buildDirectorUserPrompt)、generateCourse→parseCourseStructure→COURSE_ARCHITECT_PROMPT 链、localizedField、onStep 死参、plan/interject 路由不可达上游错误分支、drawTable 多余 restore、WhiteboardPage 三处 `as any`。保留:stepDurationMs/parseCourseStructure(有测试钉的参考实现对账纯函数)、rawCourse(CoursesPage 真实消费,代理误报)。
+- **测试**:+11 契约钉(`tests/hyperknow-hardening.test.mjs`:退费/接管/先探活/历史窗口/空正文回退/坏帧/预热同键/显式失败/恢复解锁/语言分发/每课偏好/veil 合并);free-topic 钉更新为无 `!aborted` 新契约;454/454 全绿;SPA 重建;IAB 冒烟四页(home/create/courses/history)渲染正常。
+- **未修遗留**(记录不掩盖):AI 侧性能——每字符 setState 全板重渲染(React.memo 按条目切分,待做)、image-gen 等待者 15s×300ms 轮询白烧(接管必 409,待做)、store 稀疏数组错位(当前不可达,存疑)、租约接管窄竞态(重复生成无重复扣费,可接受);旁白错字类模型随机瑕疵无确定性修法。
+
 ## 2026-10-03(六·三)回归审计修复:旧品牌清零(含死邮箱)/en 简介引号/旁白孤立括号/两族守卫(已上线,IAB 复验)
 
 - **分诊原则**:外部回归审计(`qa-runs/2026-10-03-regression`,gate not_ready)只当线索清单,修复方案自定。其 8 项旧账复核全部确认修复(P-001 三次冷实例 100-106s 实测存活);新报 R-001/R-002/R-003 采纳,R-004 判设计内不动(降级重试已有,披露待真降级观测)。其守卫覆盖缺口的建议按自家纪律落地。
