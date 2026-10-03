@@ -66,6 +66,27 @@ const Runner: React.FC = () => (
   </>
 );
 
+export interface FreeTopicIntro {
+  /** true = 尚未命题:渲染话题采集表单;false = 已命题:沿用标准 intro(备课中/就绪/失败重试) */
+  picking: boolean;
+  /** 备课失败(端点不可用/超时/重试仍空):CTA 变重试——绝不静默掉话题对不上的演示课 */
+  failed: boolean;
+  /** 未登录(plan 端点要会员):提示登录解锁 AI 命题,演示课仍作兜底出口 */
+  signedOut: boolean;
+  onCommit: (topic: string) => void;
+  onRetry: () => void;
+  onDemo: () => void;
+  onSignIn: () => void;
+}
+
+/* 自由讲座快捷命题芯片:一键提交,比手输少一步 */
+const FREE_TOPIC_SUGGESTIONS: Array<{ en: string; zh: string }> = [
+  { en: 'Game theory, from zero', zh: '博弈论入门' },
+  { en: 'The intuition of compound interest', zh: '复利与指数增长的直觉' },
+  { en: 'What quantum computing actually computes', zh: '量子计算到底在算什么' },
+  { en: 'Critical thinking: spotting bad arguments', zh: '批判性思维:识别坏论证' },
+];
+
 export const IntroOverlay: React.FC<{
   onStart: () => void;
   onClose: () => void;
@@ -76,8 +97,81 @@ export const IntroOverlay: React.FC<{
   preparing?: boolean;
   /** 本课唯一封面(种子=课程 UUID/话题):开始讲课页每课不同图 */
   cover?: { kind: CoverKind; seed?: string | number } | null;
-}> = ({ onStart, onClose, title, body, preparing, cover }) => {
+  /** 自由讲座(无课程上下文直进白板):先命题再 AI 实时备课;缺省保持旧行为 */
+  freeTopic?: FreeTopicIntro;
+}> = ({ onStart, onClose, title, body, preparing, cover, freeTopic }) => {
   const intro = { ...getIntroCopy(), ...(title ? { title } : {}), ...(body ? { body } : {}) };
+  const [draft, setDraft] = useState('');
+
+  if (freeTopic?.picking) {
+    return (
+      <div className="wb-intro">
+        <button className="wb-intro-close" onClick={onClose} aria-label="Close">
+          <X size={16} />
+        </button>
+        <div className="wb-intro-card">
+          <div className="wb-intro-art">
+            <Runner />
+          </div>
+          <div className="wb-intro-body">
+            <div className="wb-intro-eyebrow">{L('Live AI lecture', 'AI 实时讲座')}</div>
+            <h2 className="wb-intro-title">{L('What do you want to learn?', '今天想学什么?')}</h2>
+            <p className="wb-intro-text">
+              {L(
+                'Name any topic — the tutor plans a lesson for it right now and teaches it live on the board. Every lecture is generated, never canned.',
+                '说出一个话题——导师现在就为它现场备课,在板书上一步一步讲给你听。每一讲都是实时生成,没有录播套路。',
+              )}
+            </p>
+            <form
+              className="wb-topic-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                freeTopic.onCommit(draft);
+              }}
+            >
+              <input
+                className="wb-topic-input"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={L('e.g. Game theory for beginners', '例如:博弈论入门')}
+                maxLength={300}
+                autoFocus
+              />
+              <div className="wb-topic-chips">
+                {FREE_TOPIC_SUGGESTIONS.map((s) => {
+                  const label = L(s.en, s.zh);
+                  return (
+                    <button type="button" key={s.en} className="wb-topic-chip" onClick={() => freeTopic.onCommit(label)}>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button className="wb-intro-cta" type="submit" disabled={!draft.trim()}>
+                {L('Plan this lecture for me', '为我备这节课')}
+              </button>
+            </form>
+            <p className="wb-topic-foot">
+              {freeTopic.signedOut && (
+                <span>
+                  {L('Sign in to unlock AI lectures on any topic.', '登录后即可生成任意主题的 AI 讲座。')}
+                  <button type="button" className="wb-intro-link" onClick={freeTopic.onSignIn}>
+                    {L('Sign in', '去登录')}
+                  </button>
+                </span>
+              )}
+              <button type="button" className="wb-intro-link" onClick={freeTopic.onDemo}>
+                {L('Watch the scripted demo instead', '先看演示课')}
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const failed = freeTopic?.failed === true;
+  const onCta = failed && freeTopic ? freeTopic.onRetry : onStart;
   return (
     <div className="wb-intro">
       <button className="wb-intro-close" onClick={onClose} aria-label="Close">
@@ -100,12 +194,19 @@ export const IntroOverlay: React.FC<{
           <div className="wb-intro-eyebrow">{intro.eyebrow}</div>
           <h2 className="wb-intro-title">{intro.title}</h2>
           <p className="wb-intro-text">{intro.body}</p>
-          <button className="wb-intro-cta" onClick={onStart} disabled={preparing}>
+          {failed && (
+            <p className="wb-topic-error">
+              {L('Planning failed — the tutor service is busy right now.', '备课失败——导师服务繁忙,稍候重试。')}
+            </p>
+          )}
+          <button className="wb-intro-cta" onClick={onCta} disabled={preparing}>
             {preparing ? (
               <>
                 <Loader2 size={15} className="wb-spin" />
                 {L('Preparing this lecture…', '正在准备本讲板书…')}
               </>
+            ) : failed ? (
+              L('Retry planning', '重新备课')
             ) : (
               intro.cta
             )}

@@ -87,8 +87,16 @@ function stateFromHash(): Partial<AppState> | null {
       return { screen: 'chat', ...done, ...extras };
     case '/create':
       return { screen: 'create', ...done, ...extras };
-    case '/whiteboard':
-      return { screen: 'whiteboard', whiteboardMode: q.has('practice') ? 'practice' : 'lecture' };
+    case '/whiteboard': {
+      /* 自由讲座深链:?topic= 直接命题,进白板即 AI 实时备课(无课程上下文时
+       * 不再静默播录课演示)。长度上限与服务端 plan 路由一致(300)。 */
+      const topic = (q.get('topic') || '').trim().slice(0, 300);
+      return {
+        screen: 'whiteboard',
+        whiteboardMode: q.has('practice') ? 'practice' : 'lecture',
+        ...(topic ? { activeTopic: topic } : {}),
+      };
+    }
     default: {
       const ob = path.match(/^\/onboarding\/(\d+)/);
       if (ob) return { screen: 'onboarding', onboardingStep: Math.min(10, Math.max(1, parseInt(ob[1], 10))) };
@@ -109,8 +117,12 @@ function hashFor(s: AppState): string {
       const uuid = s.activeCourseUuid || (s.generated as { courseUuid?: string })?.courseUuid;
       return uuid ? `#/course/journey?uuid=${encodeURIComponent(uuid)}` : '#/course/journey';
     }
-    case 'whiteboard':
-      return s.whiteboardMode === 'practice' ? '#/whiteboard?practice=1' : '#/whiteboard';
+    case 'whiteboard': {
+      if (s.whiteboardMode === 'practice') return '#/whiteboard?practice=1';
+      /* 自由讲座话题回写 hash:刷新/分享不丢命题(课程讲次不带——身份由课程上下文锁定) */
+      const free = !s.activeCourseUuid && s.activeTopic ? `?topic=${encodeURIComponent(s.activeTopic)}` : '';
+      return `#/whiteboard${free}`;
+    }
     default:
       return `#/${s.screen}`;
   }

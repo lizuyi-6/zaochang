@@ -310,12 +310,23 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const [planPending, setPlanPending] = useState(liveTopic !== null);
   const imageWaitResolvers = useRef<Map<number, () => void>>(new Map());
 
+  /* 自由讲座模式:无课程上下文直进白板(#/whiteboard)。旧行为是静默播放录课复刻的
+   * 公开演讲演示课——教学提示词怎么改白板都不变,用户看到的"老套路"正是这条路径。
+   * 现在改为学员命题(intro 采集或 ?topic= 深链)→ 与课程讲次完全相同的
+   * planLectureLive 实时备课链路;备课失败显式给重试,绝不拿话题对不上的演示课冒充。
+   * planAttempt:同话题重试/失败后重试都靠它重新触发备课 effect。 */
+  const freeTopicMode = !GEN && !state.activeCourseUuid;
+  const [planFailed, setPlanFailed] = useState(false);
+  const [planAttempt, setPlanAttempt] = useState(0);
+
   useEffect(() => {
     if (!liveTopic) return;
     const ctrl = new AbortController();
     // 预算必须盖过服务端 130s 路由超时(冷实例 92-100s),否则浏览器提前掐死成功在望的计划
     const timer = window.setTimeout(() => ctrl.abort(), PLAN_CLIENT_TIMEOUT_MS);
     let alive = true;
+    setPlanPending(true); // 话题是进入页面后才选定的(自由讲座):收起"可开讲"态
+    setPlanFailed(false);
     const appLang = getBackendLang() || getCurrentLng() || 'en';
     const planParams = {
       topic: liveTopic,
@@ -337,7 +348,16 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         } else if (plan && prefetched) {
           fromPrefetch = true;
         }
+        /* 模板降级计划(上游故障 5 步兜底)就是"还是老套路"的观感来源:自由讲座
+         * 用它开讲等于辜负学员命题,再挣一次真实生成(此时实例多已预热);仍降级
+         * 则接受——话题对得上的模板好过话题对不上的演示课。 */
+        if (plan?.degraded && freeTopicMode && !ctrl.signal.aborted) {
+          const fresh = await planLectureLive(planParams as any, ctrl.signal);
+          if (!alive) return;
+          if (fresh) plan = fresh;
+        }
         setPlanPending(false);
+        if (!plan && freeTopicMode && !ctrl.signal.aborted) setPlanFailed(true);
         if (plan) {
           const script = liveLessonFromPlan(plan);
           setLiveScript(script);
@@ -386,7 +406,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         }
       })
       .catch(() => {
-        if (alive) setPlanPending(false);
+        if (alive) {
+          setPlanPending(false);
+          if (freeTopicMode && !ctrl.signal.aborted) setPlanFailed(true);
+        }
       });
     return () => {
       alive = false;
@@ -396,7 +419,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       imageWaitResolvers.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveTopic, state.activeCourseUuid, state.activeUnitId, state.activeLectureId, state.activeSessionId]);
+  }, [liveTopic, state.activeCourseUuid, state.activeUnitId, state.activeLectureId, state.activeSessionId, planAttempt, freeTopicMode]);
 
   const lesson = liveScript ?? DEMO_SCRIPT;
   const LESSON_STEPS = lesson.steps;
@@ -1157,6 +1180,23 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     });
   }, [finished, set, state.identity, state.energy]);
 
+  /* 自由讲座:学员命题提交。相同话题重试也必须重新触发备课 effect,故 planAttempt
+   * 递增——effect 依赖里的真正"点火器"。 */
+  const commitFreeTopic = useCallback(
+    (topic: string) => {
+      const t = topic.trim().slice(0, 300);
+      if (!t) return;
+      setPlanFailed(false);
+      setPlanAttempt((a) => a + 1);
+      set({ activeTopic: t });
+    },
+    [set],
+  );
+  const retryFreePlan = useCallback(() => {
+    setPlanFailed(false);
+    setPlanAttempt((a) => a + 1);
+  }, []);
+
   // play triangle whenever the tutor isn't actively explaining (await, popup, end)
   const idle = status !== 'explaining' || popup !== null;
   const placeholder = status === 'yourturn' ? L('Your answer here...', '在这里写下你的回答…') : L('Ask a question...', '问一个问题…');
@@ -1373,11 +1413,24 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       {stage === 'intro' && (
         <IntroOverlay
           onStart={() => setStage('talk')}
-          onClose={() => set({ screen: 'courseJourney' })}
+          onClose={() => set({ screen: freeTopicMode ? 'home' : 'courseJourney' })}
           title={genLectureTitle}
           body={genIntroBody}
           preparing={planPending}
           cover={GEN?.cover ? { kind: GEN.cover, seed: GEN.courseUuid ?? GEN.topic } : null}
+          freeTopic={
+            freeTopicMode
+              ? {
+                  picking: liveTopic === null,
+                  failed: planFailed,
+                  signedOut: state.bootReady && !state.identity,
+                  onCommit: commitFreeTopic,
+                  onRetry: retryFreePlan,
+                  onDemo: () => setStage('talk'),
+                  onSignIn: () => set({ screen: 'signin' }),
+                }
+              : undefined
+          }
         />
       )}
       {stage === 'talk' && <TalkModeOverlay onStart={() => setStage('play')} />}
