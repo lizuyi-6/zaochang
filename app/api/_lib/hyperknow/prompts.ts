@@ -7,23 +7,9 @@
 // chatIdentityPrompt 身份保密块——对话模型对外必须自报见界自研,不泄露上游。
 // 解析策略与原版一致:JSON.parse 直接解析,失败走确定性 fallback,不重试。
 
-// ── Director Agent(调度中枢)──────────────────────────────────────────────
-export const DIRECTOR_SYSTEM_PROMPT = `You are the Hyperknow Director Agent, the central coordination and educational scaffolding engine.
-Your task is to analyze user queries and produce pedagogical GUIDELINES and intent blueprints for the content generation tool.
-
-Core Guidelines:
-1. Break complex questions down using educational scaffolding (simple intuitive mental models first, formal rigor later).
-2. Recommend specialized visual aids (Mermaid diagrams for workflows/logic, Desmos for math equations, AI image illustrations for physical grounding).
-3. Specify which <div content-section="..."> types should be included (e.g. definition, key_points, example, core_equations, common_mistakes, important_takeaways).
-4. Output a clean, concise instruction directive for the downstream generator.`;
-
 // 推理模型路径(Messages 协议 + thinking)不单独调 Director,用这条静态 guideline
 // ——与原版 chatWs.js 的 isReasoningModel 分支逐字一致。
 export const FALLBACK_GUIDELINE = "Apply educational scaffolding, definitions, examples, and key takeaways.";
-
-export function buildDirectorUserPrompt(userQuery: string): string {
-  return `Analyze this student query and output guidance:\nQuery: "${userQuery}"`;
-}
 
 // ── Content Generator(内容生成,流式)────────────────────────────────────
 // 模板串内的反引号与 ${ 均需转义;prompt 里的 Mermaid/公式示例是官方协议的一部分。
@@ -71,8 +57,15 @@ When an abstract concept or process is best understood visually, insert visual c
 - Inline math: \`$E = mc^2$\`
 - Display / Block math: \`$$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$\``;
 
-export function buildNextStepsPrompt(userQuery: string): string {
-  return `Based on the user's question "${userQuery}" and the lesson content, generate 3 structured next steps for active recall and further learning.
+export function buildNextStepsPrompt(userQuery: string, responseExcerpt = ""): string {
+  /* 回答摘录随 prompt 进来:推荐步骤要衔接"刚讲完的内容",只看问题会推荐脱节的
+   * 下一步(如问概念、答例题,推荐却还停在概念)。摘录截 600 字防 token 膨胀。 */
+  const excerpt = responseExcerpt.trim().slice(0, 600);
+  const lessonNote = excerpt
+    ? `The tutor just answered with (excerpt): """${excerpt}"""`
+    : "";
+  return `Based on the user's question "${userQuery}"${lessonNote ? ` and the lesson content:\n${lessonNote}` : " and the lesson content"}, generate 3 structured next steps for active recall and further learning.
+The steps must follow naturally from what was JUST explained in the excerpt, not merely restate the original question.
 Format as strict JSON:
 {
   "has_steps": true,
@@ -472,65 +465,7 @@ export function parseInterjectionAnswer(jsonStr: string, language = ""): Interje
   }
 }
 
-// ── Course Architect(三级课程大纲)────────────────────────────────────────
-export const COURSE_ARCHITECT_PROMPT = `# Role: Hyperknow Curriculum Architect
-You design university-grade, scaffolding-driven interactive course structures.
-For any given subject query, you structure a comprehensive curriculum into a 3-tier hierarchy:
-Unit -> Lecture -> Session.
 
-Language rule (highest priority): write EVERY title, description, tag, unit/lecture/session
-name in the SAME language as the subject query. A Chinese query means Simplified Chinese
-output everywhere; an English query means English output. Never mix languages except for
-untranslatable proper nouns.
-
-Cognitive Depth Tags for each session:
-- "intuition": Conceptual intuition, real-world analogies.
-- "definition": Rigorous definitions and fundamental theorems.
-- "derivation": Mathematical derivations and logical proofs.
-- "application": Practical code, lab projects, and case studies.
-- "advanced": Optimization, edge cases, and modern research.
-
-Structural requirements:
-- Curriculum Scale: Dynamically adapt the scale to the subject complexity, student time budget, and target depth (typically 3 to 8 units; 6-8 units is a reference for comprehensive masteries or large software/hardware systems, while 3-4 units is suited for crash courses; scale naturally without rigid padding).
-- Each unit with 2 to 5 lectures, each lecture with 1 to 4 sessions.
-- Unit prerequisites: specify "prerequisites" as an array of prior unitIds (e.g. ["unit-1"]), strictly acyclic (DAG).
-- Unit objectives & completion criteria: specify concrete "objectives" and "completionCriteria" for each unit.
-- Every unit MUST contain at least one hands-on project lecture (title prefixed
-  "Project: " in English or "项目：" in Chinese) and exactly one closing exam/quiz
-  lecture (title prefixed "Exam: " or "Quiz: " in English or "测验：" in Chinese).
-- sessionTime is minutes (10-45). Every session carries 1-2 depth tags.
-
-Output strictly as a valid JSON object conforming to:
-{
-  "courseTitle": "Title",
-  "courseDescription": "Overview of the learning journey",
-  "targetLearner": "Target audience",
-  "tags": ["Tag1", "Tag2"],
-  "units": [
-    {
-      "unitId": "unit-1",
-      "title": "Unit 1: Title",
-      "prerequisites": [],
-      "objectives": ["Understand fundamental concepts", "Setup local development workflow"],
-      "completionCriteria": ["Successfully complete Unit 1 Project", "Score >= 80% on Quiz"],
-      "lectures": [
-        {
-          "lectureId": "lec-1-1",
-          "title": "Lecture 1.1: Title",
-          "sessions": [
-            {
-              "sessionId": "sess-1-1-1",
-              "sessionIndex": 1,
-              "title": "Session 1: Title",
-              "sessionTime": 45,
-              "depthTags": ["intuition", "definition"]
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}`;
 
 export type CourseSession = {
   sessionId: string;

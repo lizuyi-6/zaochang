@@ -5,7 +5,7 @@ import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { resolveConfigOrThrow } from "../../_lib/hyperknow/config";
 import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/hyperknow/llm";
 import { translateStream } from "../../_lib/hyperknow/agents";
-import { consumeCredits, currentCredits, HK_CHAT_COST, HK_DAILY_CREDITS } from "../../_lib/hyperknow/credits";
+import { consumeCredits, currentCredits, dailyCreditsFor, HK_CHAT_COST } from "../../_lib/hyperknow/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -53,16 +53,6 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    // 扣费点与 /chat 一致:配置校验之后、发流之前;流中失败不退费。
-    const remainingCredits = await consumeCredits(member.email, HK_CHAT_COST);
-    if (remainingCredits === null) {
-      const { remaining } = await currentCredits(member.email);
-      return Response.json(
-        { error: "insufficient_credits", credit_info: { remaining, max: HK_DAILY_CREDITS } },
-        { status: 402 },
-      );
-    }
-
     const generator = translateStream(
       text,
       TARGET_LANGUAGES[target],
@@ -83,6 +73,18 @@ export async function POST(request: Request) {
       throw error;
     }
 
+    // 扣费点与 /chat 真正一致:上游探活成功(拿到首帧)之后才扣——上游 503/超时
+    // 返回干净 JSON 时用户不白扣 2 分。流中失败不退费(与 /chat 同语义)。
+    const remainingCredits = await consumeCredits(member.email, HK_CHAT_COST);
+    if (remainingCredits === null) {
+      void generator.return(undefined as never).catch(() => {}); // 收掉已启的上游流
+      const { remaining, max } = await currentCredits(member.email);
+      return Response.json(
+        { error: "insufficient_credits", credit_info: { remaining, max } },
+        { status: 402 },
+      );
+    }
+
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         void (async () => {
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
               closed = true;
             }
           };
-          push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: HK_DAILY_CREDITS } });
+          push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member.email) } });
           try {
             for (let step = first; !step.done; step = await generator.next()) {
               const chunk = step.value;

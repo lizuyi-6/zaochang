@@ -6,12 +6,14 @@
  */
 
 const BASIC_ENTITIES: Array<[RegExp, string]> = [
-  [/&amp;/g, '&'],
+  // 注意顺序:&amp; 必须最后解——先解它会把 "&amp;lt;" 变成 "&lt;" 再被下一轮
+  // 解成 "<",双重解码凭空造出尖括号(单遍替换,语义一次到位)。
   [/&lt;/g, '<'],
   [/&gt;/g, '>'],
   [/&quot;/g, '"'],
   [/&#39;|&apos;/g, "'"],
   [/&nbsp;/g, ' '],
+  [/&amp;/g, '&'],
 ];
 
 export function sanitizeNarration(text: string): string {

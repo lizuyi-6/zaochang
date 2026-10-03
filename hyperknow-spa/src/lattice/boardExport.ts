@@ -169,7 +169,6 @@ function drawTable(ctx: CanvasRenderingContext2D, table: BoardTable, standardFon
       });
     });
   });
-  ctx.restore();
 }
 
 function wrapCell(ctx: CanvasRenderingContext2D, text: string, maxW: number, breakAnywhere: boolean): string[] {

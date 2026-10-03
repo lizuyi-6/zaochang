@@ -27,8 +27,9 @@ import {
 import {
   consumeCreditsIdempotent,
   currentCredits,
+  dailyCreditsFor,
   markCreditChargeCompleted,
-  HK_COURSE_COST,
+  refundCreditCharge,
   HK_DAILY_CREDITS,
 } from "../../_lib/hyperknow/credits";
 import {
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
         : null;
     const brief = input.brief && typeof input.brief === "object" ? input.brief : undefined;
     const explicitKey = typeof input.idempotencyKey === "string" && input.idempotencyKey.trim()
-      ? input.idempotencyKey.trim()
+      ? input.idempotencyKey.trim().slice(0, 128)
       : null;
     const idempotencyKey = explicitKey
       ? explicitKey
@@ -354,8 +355,14 @@ export async function POST(request: Request) {
       }
       if (existingTask.blueprintJson
         && ["blueprint_ready", "failed", "generating_units"].includes(existingTask.status)) {
-        // 蓝图已就绪，等待确认
-        const blueprint = JSON.parse(existingTask.blueprintJson);
+        // 蓝图已就绪，等待确认(库里 JSON 损坏时不裸抛 500:任务标记失败,给干净错误)
+        let blueprint: unknown;
+        try {
+          blueprint = JSON.parse(existingTask.blueprintJson);
+        } catch {
+          await markCourseTaskStatus(resumeUuid, member.email, "failed", "blueprint_json_corrupted");
+          return Response.json({ error: "course_task_corrupted" }, { status: 500 });
+        }
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
             controller.enqueue(frame({ type: "course_generation_started", course_uuid: resumeUuid, resumed: true }));
@@ -402,11 +409,18 @@ export async function POST(request: Request) {
           return Response.json({ error: "concurrent_operation_in_progress" }, { status: 409 });
         }
         if (task.blueprintJson && ["blueprint_ready", "failed", "generating_units"].includes(task.status)) {
+          let resumedBlueprint: unknown;
+          try {
+            resumedBlueprint = JSON.parse(task.blueprintJson);
+          } catch {
+            await markCourseTaskStatus(courseUuid, member.email, "failed", "blueprint_json_corrupted");
+            return Response.json({ error: "course_task_corrupted" }, { status: 500 });
+          }
           const stream = new ReadableStream<Uint8Array>({
             start(controller) {
               controller.enqueue(frame({ type: "course_generation_started", course_uuid: courseUuid, resumed: true }));
               controller.enqueue(frame({ type: "blueprint_ready", course_uuid: courseUuid,
-                blueprint: JSON.parse(task.blueprintJson!), requires_confirmation: true }));
+                blueprint: resumedBlueprint, requires_confirmation: true }));
               controller.close();
             },
           });
@@ -427,7 +441,6 @@ export async function POST(request: Request) {
     // DB 原子幂等扣费与任务租约冲突拦截 (409 不放行，故障恢复不重复扣款，D1 batch 一致)
     const { remaining: remainingCredits, conflict, charged } = await consumeCreditsIdempotent(
       member.email,
-      HK_COURSE_COST,
       idempotencyKey,
     );
 
@@ -444,9 +457,9 @@ export async function POST(request: Request) {
     }
 
     if (remainingCredits === null) {
-      const { remaining } = await currentCredits(member.email);
+      const { remaining, max } = await currentCredits(member.email);
       return Response.json(
-        { error: "insufficient_credits", credit_info: { remaining, max: HK_DAILY_CREDITS } },
+        { error: "insufficient_credits", credit_info: { remaining, max } },
         { status: 402 },
       );
     }
@@ -480,7 +493,7 @@ export async function POST(request: Request) {
           try {
             push({ type: "course_generation_step", step_id: "boot", status: "loading", title: "Starting course generation", placeholder: "Crafting Courses..." });
             push({ type: "course_generation_started", course_uuid: courseUuid, query });
-            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: HK_DAILY_CREDITS } });
+            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member.email) } });
 
             push({
               type: "course_generation_step",
@@ -791,6 +804,11 @@ export async function POST(request: Request) {
                 } catch (leaseError) {
                   console.error("[hyperknow-course-gen] failed to record auto-generation error:", leaseError);
                 }
+              }
+              /* 失败退费:只退本次真正扣过费(charged)的请求;接管/恢复重跑(charged=false)
+               * 不退——钱属于最初那次扣费,由它自己的失败路径退。 */
+              if (charged) {
+                await refundCreditCharge(idempotencyKey ?? null, member.email);
               }
               push({ type: "course_generation_error", message: "Course generation failed" });
             }

@@ -260,7 +260,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
       }
       const fallbackDisplayLines = naturalFallbackText.length
         ? naturalFallbackText.slice(0, 5).map(plain)
-        : [plain(action.title || narrationText || 'Structured Concept Flow')];
+        : [plain(sanitizeNarration(action.title ?? '') || narrationText || 'Structured Concept Flow')];
 
       const rendered = renderDiagram(code);
       const diagH = rendered ? diagramBox(rendered, COL_W).h : fallbackDisplayLines.length * 14 * 1.24;

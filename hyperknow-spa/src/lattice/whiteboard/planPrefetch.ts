@@ -19,6 +19,7 @@ import {
   type PlanLectureParams,
 } from '../backend';
 import { prefetchTts } from '../actions';
+import { sanitizeNarration } from './sanitizeNarration';
 
 const TTL_MS = 15 * 60 * 1000;
 /** 每次页面挂载允许的悬停意图预热次数(自动首讲预热不占额度) */
@@ -59,11 +60,13 @@ function sweep(): void {
   }
 }
 
-/** 旁白错峰预热:前两条立即,其余逐条错峰;失败静默(播放时自有真实请求兜底) */
+/** 旁白错峰预热:前两条立即,其余逐条错峰;失败静默(播放时自有真实请求兜底)。
+ *  文本必须与实播同源同形:实播走 liveLesson 的 sanitizeNarration 产物,预热用
+ *  原始 spoken_text 会在含标签/实体的旁白上永远打不中缓存(白烧 TTS 配额+冷启动)。 */
 function warmNarrations(plan: LiveLecturePlan, voice: string, speed: number): void {
   const texts = plan.steps
-    .map((s) => s.spoken_text)
-    .filter((t): t is string => typeof t === 'string' && !!t.trim())
+    .map((s) => sanitizeNarration(s.spoken_text))
+    .filter((t): t is string => !!t.trim())
     .slice(0, MAX_WARM_NARRATIONS);
   texts.forEach((text, i) => {
     if (i < 2) {

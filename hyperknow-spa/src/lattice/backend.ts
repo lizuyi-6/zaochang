@@ -58,7 +58,7 @@ export interface CourseUnitProgressData {
 }
 
 export interface GenHandlers {
-  onStep?: (stepId: GenStepId, status: 'loading' | 'completed', data?: Record<string, unknown>) => void;
+  onStep?: (stepId: GenStepId, status: 'loading' | 'completed') => void;
   onProgress?: (message: string, data?: CourseGenProgressData) => void;
   onBlueprint?: (blueprint: BlueprintData, requiresConfirmation?: boolean, courseUuid?: string) => void;
   onUnitProgress?: (data: CourseUnitProgressData) => void;

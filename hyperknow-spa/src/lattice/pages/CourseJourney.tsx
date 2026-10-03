@@ -29,6 +29,7 @@ import { downloadIcs, shareLink } from '../actions';
 import { toast } from '../toast';
 import { formatSize, loadMaterials, removeMaterial, uploadMaterial, type CourseMaterial } from '../materials';
 import { courseJoinKey, isCourseJoined, markCourseJoined } from '../courseJoinMemory';
+import { getCourseLang, setCourseLang } from '../courseLang';
 import { prefetchLecturePlan } from '../whiteboard/planPrefetch';
 import './CourseJourney.css';
 
@@ -146,8 +147,10 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
   const joined = state.courseJoined;
   const done = state.lectureDone;
   const [dialog, setDialog] = useState<'none' | 'join' | 'joined'>('none');
-  const [lang, setLang] = useState<'en' | 'zh'>('en');
   const closeDialogs = () => setDialog('none');
+  /* 课程 uuid 先于 lang 声明(默认值要从每课语言偏好读);未选择回退界面语言 */
+  const journeyUuid = (PS as { courseUuid?: string }).courseUuid;
+  const [lang, setLang] = useState<'en' | 'zh'>(() => getCourseLang(journeyUuid) ?? (getBackendLang() === 'zh' ? 'zh' : 'en'));
 
   /* ---------------- 交互状态:简介展开 / 面板标签 / 当前单元 / 材料 ---------------- */
   const [expanded, setExpanded] = useState(false);
@@ -170,7 +173,6 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
    * plan 到手立刻预热首两条旁白 TTS——用户点开课堂时 plan 与首音都已温,
    * intro/语音选择的停留期不再承担 LLM 冷启动。未加入不预热(点了也是先弹加入框)。
    * 目标讲次必须与主 CTA(openLesson 首讲首节)完全一致,否则 key 错位预热白费。 */
-  const journeyUuid = (PS as { courseUuid?: string }).courseUuid;
   useEffect(() => {
     if (!joined || !journeyUuid) return;
     const targetUnit = UNITS.find((u) => u.id === activeUnit) ?? UNITS[0];
@@ -181,7 +183,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
       unitId: String(activeUnit),
       lectureId: targetLecture?.id,
       sessionId: targetLecture?.sessions[0]?.sessionId,
-      language: getBackendLang() || getCurrentLng() || 'en',
+      language: getCourseLang(journeyUuid) ?? getBackendLang() ?? getCurrentLng() ?? 'en',
     });
     // 进入时的单元首讲即主 CTA 目标;切单元不重复预热,避免浏览即烧 LLM 配额
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,7 +211,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
             unitId: String(ctx.unitId),
             lectureId: ctx.lectureId,
             sessionId: ctx.sessionId,
-            language: getBackendLang() || getCurrentLng() || 'en',
+            language: getCourseLang(journeyUuid) ?? getBackendLang() ?? getCurrentLng() ?? 'en',
           },
           { voice: 'calm', speed: 1 },
           'hover',
@@ -658,7 +660,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                           const isFirst = lec.id === 'l1' && si === 0;
                           return (
                             <div
-                              key={s.title}
+                              key={`${unit.id}-${lec.id}-${s.sessionId ?? si}`}
                               className="cj-session"
                               role="button"
                               tabIndex={0}
@@ -859,6 +861,9 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                 type="button"
                 onClick={() => {
                   markCourseJoined(joinScope, joinKey);
+                  /* 语言选择落库到课程维度:白板备课与预热读同一偏好(此前是死 UI,
+                   * 选了中文仍按界面语言讲课,与弹窗承诺相反)。 */
+                  if (journeyUuid) setCourseLang(journeyUuid, lang);
                   set({ courseJoined: true });
                   setDialog('joined');
                 }}

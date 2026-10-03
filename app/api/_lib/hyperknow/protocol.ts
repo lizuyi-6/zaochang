@@ -117,10 +117,18 @@ export async function* consumeChatCompletionsSse(body: ReadableStream<Uint8Array
         const data = line.slice(5).trim();
         if (!data) continue;
         if (data === "[DONE]") { complete = true; return; }
-        const event = JSON.parse(data) as {
+        /* 坏帧跳过(keep-alive/半截行):与本文件头部声明的纪律和 Messages 解析器一致,
+         * 单个非法 JSON 行不得杀死整条流 */
+        interface ChatCompletionsEvent {
           error?: unknown;
           choices?: Array<{ index?: number; delta?: { content?: unknown; reasoning_content?: unknown }; finish_reason?: string | null }>;
-        };
+        }
+        let event: ChatCompletionsEvent | null = null;
+        try {
+          event = JSON.parse(data) as ChatCompletionsEvent;
+        } catch {
+          continue;
+        }
         if (event.error) throw new Error("ai_upstream_stream_error");
         if (complete) continue;
         const choice = event.choices?.find((entry) => entry.index === 0 || entry.index === undefined);

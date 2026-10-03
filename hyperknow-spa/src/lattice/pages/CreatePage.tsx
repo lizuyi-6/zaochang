@@ -92,10 +92,15 @@ const StepRow: React.FC<{ title: string; state: 'loading' | 'done'; sub?: React.
 
 export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const { lng } = useI18n();
-  const isZh = lng ? !lng.toLowerCase().startsWith('en') : true;
+  /* 界面语言→课程语言:只有中文界面(zh-CN/zh-TW)产中文课;西语/韩语等一律走
+   * 英文内容——此前"非英语前缀一律算中文"把西语/韩语等用户全部错分成中文课。 */
+  const zhCourse = lng === 'zh-CN' || lng === 'zh-TW';
 
   /* ---------- 会话与问询(intake) ---------- */
   const [topic, setTopic] = useState('');
+  /* 卸载 cleanup 捕获首渲染闭包,topicRef 是卸载时刻拿到最新命题的唯一通道 */
+  const topicRef = useRef('');
+  topicRef.current = topic;
   const [intakeLoading, setIntakeLoading] = useState(false);
   const [intakeSource, setIntakeSource] = useState<'ai' | 'template'>('ai');
   const [questions, setQuestions] = useState<InquiryQuestion[]>([]);
@@ -122,8 +127,13 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [tipIdx, setTipIdx] = useState(0);
   const [navHintOff, setNavHintOff] = useState(() => {
-    const at = Number(localStorage.getItem('hk_gen_nav_hint_at') ?? 0);
-    return Number.isFinite(at) && Date.now() - at < 7 * 24 * 3600 * 1000;
+    /* 隐私模式/禁 Cookie 下读 localStorage 属性即抛 SecurityError,渲染期抛=整页白屏 */
+    try {
+      const at = Number(localStorage.getItem('hk_gen_nav_hint_at') ?? 0);
+      return Number.isFinite(at) && Date.now() - at < 7 * 24 * 3600 * 1000;
+    } catch {
+      return false;
+    }
   });
 
   /* ---------- 蓝图侧板 / 杂项 ---------- */
@@ -235,7 +245,9 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   };
 
   const registerCheckpoint = () => {
-    if (blueprintUuidRef.current) set({ genResume: { uuid: blueprintUuidRef.current, query: topic } });
+    /* 经 topicRef 取值:本函数会被空依赖的卸载 cleanup 调用,直接读 state 闭包
+     * 只能拿到首渲染的 ''(检查点课程名变《》(未完成) 的根因)。 */
+    if (blueprintUuidRef.current) set({ genResume: { uuid: blueprintUuidRef.current, query: topicRef.current } });
   };
 
   /** 底部条「取消生成」:中断在途请求但保留对话 feed,就地给出检查点恢复/重新定制 */
@@ -339,7 +351,9 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     if (result.ok && 'course' in result) {
       setReady(true);
       const gen = courseFromBackend(result.course, topic);
-      finishTimerRef.current = window.setTimeout(() => finish(gen), 1000);
+      /* Stage2 产物已在服务端 D1 落库:persisted=true 让 App 置集市失效标记,
+       * 否则"我的课程/集市"看不到刚恢复生成的课(直出路径早已传 true)。 */
+      finishTimerRef.current = window.setTimeout(() => finish(gen, true), 1000);
     } else {
       registerCheckpoint();
       setGenFailed(true);
@@ -377,12 +391,9 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
       const result = await generateCourseLive(
         { query, brief, idempotencyKey: crypto.randomUUID(), requireConfirmation: true, model: state.chatModel },
         {
-          onStep: (id, status, data) => {
+          onStep: (id, status) => {
             if (runRef.current !== run) return;
             setStepStatus((s) => ({ ...s, [id]: status }));
-            if (id === 'researching_the_web' && data) {
-              setResearch((prev) => ({ ...prev, ...(data as CourseGenProgressData) }));
-            }
           },
           onProgress: (_message, data) => {
             if (runRef.current !== run) return;
@@ -427,6 +438,13 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   /* ---------- 问询(intake):AI 实时出题,逐题作答 ---------- */
   const startIntake = (prompt: string) => {
     const run = ++runRef.current;
+    /* 重新定制=全新会话:清上一轮的失败警报/取消态/蓝图绑定,旧检查点恢复入口
+     * 不得混进新问询流(此前旧警报与新问题同屏,恢复按钮还会拿旧 brief 开跑)。 */
+    setCancelled(false);
+    setGenFailed(false);
+    setInsufficient(false);
+    setReady(false);
+    blueprintUuidRef.current = '';
     setTopic(prompt);
     setQuestions([]);
     setQIdx(0);
@@ -438,7 +456,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     void (async () => {
       const res = await fetchCourseInquiry({
         topic: prompt,
-        brief: { version: 0, language: isZh ? 'zh-CN' : 'en-US' },
+        brief: { version: 0, language: zhCourse ? 'zh-CN' : 'en-US' },
         followUpRound: 0,
         model: state.chatModel,
         // 60s 客户端兜底:必须大于服务端 55s 上限(路由内先降级模板并如实标注 source),
@@ -450,7 +468,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
         setQuestions(res.questions);
         setIntakeSource(res.source ?? 'ai');
       } else {
-        setQuestions(buildDefaultInquiryQuestions(prompt, isZh));
+        setQuestions(buildDefaultInquiryQuestions(prompt, zhCourse));
         setIntakeSource('template');
         toast(L('AI intake is unavailable right now — using the standard questionnaire.', 'AI 实时出题暂时不可用，已改用标准问询。'));
       }
@@ -471,7 +489,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
       duration: merged.duration,
       depth: normalizeDepth(merged.depth),
       preference: merged.preference,
-      language: merged.language || (isZh ? 'zh-CN' : 'en-US'),
+      language: merged.language || (zhCourse ? 'zh-CN' : 'en-US'),
       visual: merged.visual || 'Hand-drawn whiteboard diagrams & cards',
     };
     setIntakeDone(true);
@@ -875,6 +893,11 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
                           type="button"
                           className="cr-primary2"
                           onClick={() => {
+                            /* 复位 finishedRef(cancelToFeed 置 true 是为掐断旧流,
+                             * 恢复=新一轮生成,与 startGeneration 同样从这里解锁)——
+                             * 不复位时 confirmAndStartStage2 的守卫直接 return,
+                             * 按钮变成"点了没反应、页面假装生成中"的死按钮。 */
+                            finishedRef.current = false;
                             setCancelled(false);
                             setGenFailed(false);
                             void confirmAndStartStage2();
