@@ -32,16 +32,6 @@ export class FruitError extends Error {
   }
 }
 
-type WalletRow = {
-  balance: number;
-  pendingBalance: number;
-  ledgerBalance: number;
-  ledgerPendingBalance: number;
-  lifetimeEarned: number;
-  lifetimeSpent: number;
-  status: string;
-};
-
 type ProductRow = {
   id: number;
   title: string;
