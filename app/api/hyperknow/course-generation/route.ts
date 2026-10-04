@@ -59,6 +59,87 @@ async function taskUuidForKey(userEmail: string, key: string): Promise<string> {
 }
 
 
+/** 单元生成循环的单一实现(2026-10 审计重构 #2):Stage1 自动级联与 Stage2 确认生成
+ * 共用——逐单元真实 LLM 调用 + 检查点 + 进度帧;C1 的超时判定只写这一处。
+ * 差异经参数表达:restoreCached(Stage2 检查点恢复)、researchHits 传入切片、
+ * onModelDowngrade 的帧上下文、saveCheckpoint 的租约令牌。 */
+async function runUnitGeneration(args: {
+  units: Array<CourseBlueprint["units"][number]>;
+  completed: CourseUnit[];
+  signal: AbortSignal;
+  requestSignal: AbortSignal;
+  courseTitle: string;
+  researchHits: WebSearchHit[];
+  language: string;
+  chatModel: string;
+  courseUuid: string;
+  onModelDowngrade: (fromModel: string, toModel: string) => void;
+  restoreCached: boolean;
+  saveCheckpoint: (unit: CourseUnit, index: number, total: number) => Promise<void>;
+  push: (data: Record<string, unknown>) => void;
+}): Promise<void> {
+  const { units, completed, signal, requestSignal, courseTitle, researchHits, language, chatModel, courseUuid, onModelDowngrade, restoreCached, saveCheckpoint, push } = args;
+  const totalUnits = units.length;
+  for (let i = 0; i < totalUnits; i++) {
+    // 客户端断开:静默收尾(任务可恢复)。服务端自身超时:抛出走失败路径——
+    // 退费 + course_generation_error(2026-10 审计 C1)。
+    if (requestSignal.aborted) return;
+    if (signal.aborted) throw new Error("course_generation_timeout");
+    const blueprintUnit = units[i];
+
+    // 检查点恢复(Stage2):该单元断点前已生成完成则直接复用
+    if (restoreCached) {
+      const cached = completed.find((u) => u && u.unitId === blueprintUnit.unitId);
+      if (cached && validateUnitStructure(cached).valid) {
+        push({
+          type: "course_unit_progress",
+          message: `Restored unit ${i + 1}/${totalUnits}: ${cached.title}`,
+          data: {
+            unit_index: i + 1,
+            total_units: totalUnits,
+            unit_id: cached.unitId,
+            title: cached.title,
+            cached: true,
+          },
+          course_uuid: courseUuid,
+        });
+        continue;
+      }
+    }
+
+    push({
+      type: "course_unit_progress",
+      message: `Refining unit ${i + 1}/${totalUnits}: ${blueprintUnit.title}`,
+      data: {
+        unit_index: i + 1,
+        total_units: totalUnits,
+        unit_id: blueprintUnit.unitId,
+        title: blueprintUnit.title,
+        loading: true,
+      },
+      course_uuid: courseUuid,
+    });
+
+    const unit = await generateUnitDetails(courseTitle, blueprintUnit, completed, signal, i, researchHits, language, chatModel, onModelDowngrade);
+
+    completed[i] = unit;
+    await saveCheckpoint(unit, i, totalUnits);
+
+    push({
+      type: "course_unit_progress",
+      message: `Completed unit ${i + 1}/${totalUnits}: ${unit.title}`,
+      data: {
+        unit_index: i + 1,
+        total_units: totalUnits,
+        unit_id: unit.unitId,
+        title: unit.title,
+        completed: true,
+      },
+      course_uuid: courseUuid,
+    });
+  }
+}
+
 /** 已完成课程的直接回放(2026-10 审计重构 #3):三个恢复分支(确认流/任务恢复/
  * 幂等键重放)共用同一对帧——started + structure_ready(resumed)。 */
 function replayCompletedCourse(courseUuid: string, course: unknown): Response {
@@ -218,83 +299,29 @@ export async function POST(request: Request) {
                 if (task.researchHitsJson) taskResearchHits = JSON.parse(task.researchHitsJson);
               } catch {}
 
-              // 独立有界单元请求真实调用 LLM 每单元保存检查点
-              for (let i = 0; i < totalUnits; i++) {
-                if (request.signal.aborted) return;
-                if (signal.aborted) throw new Error("course_generation_timeout");
-                const blueprintUnit = targetBlueprintUnits[i];
-
-                // 检查点恢复: 如果该单元在断点前已生成完成，直接复用
-                const cached = completedUnits.find((u) => u && u.unitId === blueprintUnit.unitId);
-                if (cached && validateUnitStructure(cached).valid) {
-                  push({
-                    type: "course_unit_progress",
-                    message: `Restored unit ${i + 1}/${totalUnits}: ${cached.title}`,
-                    data: {
-                      unit_index: i + 1,
-                      total_units: totalUnits,
-                      unit_id: cached.unitId,
-                      title: cached.title,
-                      cached: true,
-                    },
-                    course_uuid: resumeUuid,
-                  });
-                  continue;
-                }
-
+              const pushStage2ModelDegraded = (fromModel: string, toModel: string) => {
                 push({
-                  type: "course_unit_progress",
-                  message: `Refining unit ${i + 1}/${totalUnits}: ${blueprintUnit.title}`,
-                  data: {
-                    unit_index: i + 1,
-                    total_units: totalUnits,
-                    unit_id: blueprintUnit.unitId,
-                    title: blueprintUnit.title,
-                    loading: true,
-                  },
+                  type: "model_degraded",
+                  message: `Requested model ${fromModel} is unavailable; continuing with ${toModel}`,
+                  data: { from_model: fromModel, to_model: toModel },
                   course_uuid: resumeUuid,
                 });
-
-                // H3:Stage2 同样可见降级(不静默换模型)
-                const pushStage2ModelDegraded = (fromModel: string, toModel: string) => {
-                  push({
-                    type: "model_degraded",
-                    message: `Requested model ${fromModel} is unavailable; continuing with ${toModel}`,
-                    data: { from_model: fromModel, to_model: toModel },
-                    course_uuid: resumeUuid,
-                  });
-                };
-
-                // 真实调用 LLM (无模板假数据，失败显式报错)
-                const unit = await generateUnitDetails(
-                  blueprint.courseTitle,
-                  blueprintUnit,
-                  completedUnits,
-                  signal,
-                  i,
-                  taskResearchHits,
-                  taskLanguage,
-                  chatModel,
-                  pushStage2ModelDegraded,
-                );
-
-                completedUnits[i] = unit;
-                // 保存检查点
-                await saveCourseTaskUnitCheckpoint(resumeUuid, member.email, unit, i, totalUnits, taskLeaseToken);
-
-                push({
-                  type: "course_unit_progress",
-                  message: `Completed unit ${i + 1}/${totalUnits}: ${unit.title}`,
-                  data: {
-                    unit_index: i + 1,
-                    total_units: totalUnits,
-                    unit_id: unit.unitId,
-                    title: unit.title,
-                    completed: true,
-                  },
-                  course_uuid: resumeUuid,
-                });
-              }
+              };
+              await runUnitGeneration({
+                units: targetBlueprintUnits,
+                completed: completedUnits,
+                signal,
+                requestSignal: request.signal,
+                courseTitle: blueprint.courseTitle,
+                researchHits: taskResearchHits,
+                language: taskLanguage,
+                chatModel,
+                courseUuid: resumeUuid,
+                onModelDowngrade: pushStage2ModelDegraded,
+                restoreCached: true,
+                saveCheckpoint: (unit, index, total) => saveCourseTaskUnitCheckpoint(resumeUuid, member.email, unit, index, total, taskLeaseToken),
+                push,
+              });
 
               await finalizeCourseDependencies(completedUnits,
                 (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, taskLanguage, undefined, chatModel), signal);
@@ -739,57 +766,21 @@ export async function POST(request: Request) {
             // 旧 API / 自动级联兼容路径：不假成功，逐单元真实调用 LLM 并保存检查点
             const generatedUnits: CourseUnit[] = [];
             const blueprintLanguage = blueprint.language || "zh-CN";
-            for (let i = 0; i < blueprint.units.length; i++) {
-              // 客户端断开:静默收尾(任务可恢复)。服务端自身超时:抛出走失败路径——
-              // 退费 + course_generation_error,不能让用户被扣费却只看到流断开。
-              if (request.signal.aborted) return;
-              if (signal.aborted) throw new Error("course_generation_timeout");
-              const u = blueprint.units[i];
-
-              push({
-                type: "course_unit_progress",
-                message: `Refining unit ${i + 1}/${blueprint.units.length}: ${u.title}`,
-                data: {
-                  unit_index: i + 1,
-                  total_units: blueprint.units.length,
-                  unit_id: u.unitId,
-                  title: u.title,
-                  loading: true,
-                },
-                course_uuid: courseUuid,
-              });
-
-              // 真实 LLM 调用细化单元课节
-              const concreteUnit = await generateUnitDetails(
-                blueprint.courseTitle,
-                u,
-                generatedUnits,
-                signal,
-                i,
-                researchHits.slice(0, 8),
-                blueprintLanguage,
-                chatModel,
-                pushModelDegraded,
-              );
-              generatedUnits.push(concreteUnit);
-
-              // 检查点落库
-              await saveCourseTaskUnitCheckpoint(courseUuid, member.email, concreteUnit, i,
-                blueprint.units.length, autoLeaseToken!);
-
-              push({
-                type: "course_unit_progress",
-                message: `Completed unit ${i + 1}/${blueprint.units.length}: ${concreteUnit.title}`,
-                data: {
-                  unit_index: i + 1,
-                  total_units: blueprint.units.length,
-                  unit_id: concreteUnit.unitId,
-                  title: concreteUnit.title,
-                  completed: true,
-                },
-                course_uuid: courseUuid,
-              });
-            }
+            await runUnitGeneration({
+              units: blueprint.units,
+              completed: generatedUnits,
+              signal,
+              requestSignal: request.signal,
+              courseTitle: blueprint.courseTitle,
+              researchHits: researchHits.slice(0, 8),
+              language: blueprintLanguage,
+              chatModel,
+              courseUuid,
+              onModelDowngrade: pushModelDegraded,
+              restoreCached: false,
+              saveCheckpoint: (unit, index, total) => saveCourseTaskUnitCheckpoint(courseUuid, member.email, unit, index, total, autoLeaseToken!),
+              push,
+            });
 
             await finalizeCourseDependencies(generatedUnits,
               (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, blueprintLanguage, undefined, chatModel), signal);
