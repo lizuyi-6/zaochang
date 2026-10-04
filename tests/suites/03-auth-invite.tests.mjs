@@ -23,6 +23,7 @@ import {
   projectRoot,
   sentEmails,
   latestEmailCode,
+  emailPort,
   authHeaders,
   executeLocalD1,
   queryLocalD1,
@@ -614,6 +615,15 @@ test("logout deletes the server session so a copied cookie cannot be replayed", 
 
   const logout = await fetch(`${baseUrl}/api/auth/logout?return_to=%2Fsignin`, { headers: { cookie }, redirect: "manual" });
   assert.equal(logout.status, 307);
+  // A6:无 sec-fetch-site 的旧浏览器按 Origin/Referer 判定——外源 Origin 拒绝,
+  // 同源 Origin 与"两者皆缺"放行(登出影响小)。
+  const legacyForeign = await fetch(`${baseUrl}/api/auth/logout`, { headers: { cookie, origin: "https://evil.example" }, redirect: "manual" });
+  assert.equal(legacyForeign.status, 403, "缺 sec-fetch-site 时外源 Origin 必须拒绝");
+  assert.deepEqual(await legacyForeign.json(), { error: "cross_site_logout_blocked" });
+  const legacySameOrigin = await fetch(`${baseUrl}/api/auth/logout`, { headers: { cookie, origin: baseUrl }, redirect: "manual" });
+  assert.equal(legacySameOrigin.status, 307, "同源 Origin 放行");
+  const legacyNoEvidence = await fetch(`${baseUrl}/api/auth/logout`, { headers: { cookie }, redirect: "manual" });
+  assert.equal(legacyNoEvidence.status, 307, "Origin/Referer 皆缺放行(登出影响小)");
   assert.match(logout.headers.get("set-cookie") ?? "", /zaochang_session=;.*Max-Age=0/i);
   // return_to 的 query/hash 必须原样保留(旧实现赋给 url.pathname 会编码成 %3F/%23 → 404)
   const logoutWithQuery = await fetch(`${baseUrl}/api/auth/logout?return_to=${encodeURIComponent("/feed?x=1#h")}`, { redirect: "manual" });
@@ -647,6 +657,11 @@ test("production rejects forged workspace identity headers unless explicitly tru
     "--var", "PUBLIC_APP_ORIGIN:https://production.example",
     "--var", "GITHUB_OAUTH_CLIENT_ID:public-test-client",
     "--var", "GITHUB_OAUTH_CLIENT_SECRET:test-secret",
+    // A5:生产即便显式误配 EMAIL_SEND_* REST 三件套,也必须忽略(只认 EMAIL binding
+    // 或 503)——下方"邮件未配置 → 503"断言因此升级为生产行为证明。
+    "--var", `EMAIL_SEND_BASE_URL:http://127.0.0.1:${emailPort}`,
+    "--var", "EMAIL_SEND_ACCOUNT_ID:prod-misconfigured-account",
+    "--var", "EMAIL_SEND_API_TOKEN:test-email-key",
   ];
   const productionServer = spawn(process.execPath, productionArgs, {
     cwd: productionRoot,

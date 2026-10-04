@@ -46,11 +46,14 @@ function emailBinding(): SendEmailBinding | null {
 
 export function emailSendConfigured(): boolean {
   const values = workerEnv();
-  return Boolean(values.EMAIL_SEND_BASE_URL && values.EMAIL_SEND_ACCOUNT_ID && values.EMAIL_SEND_API_TOKEN)
-    || emailBinding() !== null;
+  return restConfigured(values) || emailBinding() !== null;
 }
 
+// 生产忽略 EMAIL_SEND_* REST 覆盖(2026-10 审计 A5):三 var 是测试 harness 的假上游
+// 入口且优先级高于 binding——生产误配会把验证码整封发到任意 URL。生产只认 EMAIL
+// binding(未配置即显式 503),REST 路径仅在非生产环境生效。
 function restConfigured(values: WorkerEnv): values is WorkerEnv & { EMAIL_SEND_BASE_URL: string; EMAIL_SEND_ACCOUNT_ID: string; EMAIL_SEND_API_TOKEN: string } {
+  if (values.APP_ENV === "production") return false;
   return Boolean(values.EMAIL_SEND_BASE_URL && values.EMAIL_SEND_ACCOUNT_ID && values.EMAIL_SEND_API_TOKEN);
 }
 

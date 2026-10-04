@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { isCrossSiteNavigation } from "../../_lib/request-origin";
 import {
   absoluteAppUrl,
   clearAuthCookie,
@@ -14,7 +15,8 @@ export async function GET(request: Request) {
   // logout CSRF 防御:跨站顶级导航(sec-fetch-site: cross-site)一律拒绝。
   // SameSite=Lax 允许跨站 <a> 点击携带 Cookie,若无此检查,攻击者链接可静默登出受害者。
   // 站内点击发送 none/same-origin/same-site,不受影响(与 dev-login 的守卫同一模式)。
-  if ((request.headers.get("sec-fetch-site") ?? "").toLowerCase() === "cross-site") {
+  // 缺 sec-fetch-site 的旧浏览器回退 Origin/Referer 比对;两者皆缺放行(登出影响小)。
+  if (isCrossSiteNavigation(request, "allow")) {
     return NextResponse.json({ error: "cross_site_logout_blocked" }, { status: 403 });
   }
   const secure = await requestSecure(request);

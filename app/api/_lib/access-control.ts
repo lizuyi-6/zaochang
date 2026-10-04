@@ -18,7 +18,6 @@
 import { optionalMember, requireMember, type MemberIdentity } from "./community";
 import { accessError } from "./errors";
 import { isFounderEmail, isAdminEmail } from "./admin";
-import { AGENT_EMAIL } from "./agent-auth";
 
 export { optionalMember, requireMember };
 export { isAdminEmail, isFounderEmail };
@@ -87,7 +86,10 @@ export function requireAdmin(): Promise<MemberIdentity> {
 // fail-closed)+ 本原语(路由层)共同圈定;requireAdmin 的语义保持零变化。
 export async function requireAdminOrAgent(): Promise<MemberIdentity> {
   const member = await requireMember();
-  if (member.email === AGENT_EMAIL) return member;
+  // A8(2026-10 审计):统一以 member.isAgent 判定(仅 agent Bearer token 路径置位)。
+  // 按 email 字符串匹配会让"恰好同邮箱"的会话(如 dev-login 自选 agent@zaochang)
+  // 平权获得管理通道——isAgent 只可能来自机器通道的 token 认证。
+  if (member.isAgent) return member;
   if (!isAdminEmail(member.email)) throw accessError("admin_forbidden", 403);
   return member;
 }

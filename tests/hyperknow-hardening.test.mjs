@@ -157,3 +157,21 @@ test('oauth: token family cascade and full PKCE charset (L2/L3/L4/L6)', () => {
   assert.match(provider, /RFC 7009/, '撤销 refresh 必须连带同族 access');
   assert.match(provider, /\[A-Za-z0-9\\-\._~\]\{43,128\}/, 'PKCE verifier 字符集必须含 . 与 ~(RFC 7636 unreserved)');
 });
+
+test('auth-hardening: email REST override is production-blind, agent identity is isAgent-only, origin failure is 503 (A5/A8/A9)', () => {
+  const email = read('app/api/_lib/email-send.ts');
+  assert.match(email, /if \(values\.APP_ENV === "production"\) return false;/, 'EMAIL_SEND_* REST 覆盖必须在生产忽略(误配不得把验证码发到任意 URL)');
+  const control = read('app/api/_lib/access-control.ts');
+  assert.doesNotMatch(control, /member\.email === AGENT_EMAIL/, 'agent 判定不得按 email 字符串匹配(同邮箱会话不得平权获得机器通道)');
+  assert.match(control, /if \(member\.isAgent\) return member;/, 'requireAdminOrAgent 必须以 isAgent(仅 Bearer 路径置位)判定');
+  const guards = read('app/api/_lib/route-guards.ts');
+  assert.match(guards, /options\.sameOrigin && !member\.isAgent/, '同源豁免同样以 isAgent 判定');
+  const worker = read('worker/index.ts');
+  assert.match(worker, /origin_not_configured" \}, \{ status: 503 \}/, '生产缺 PUBLIC_APP_ORIGIN 必须 503(与 oauth-session 设计对齐),不得裸 500');
+  const gate = read('app/api/_lib/dev-login-gate.ts');
+  assert.match(gate, /if \(email === "agent@zaochang"\) return null;/, 'dev-login 必须拒绝 agent 服务账户邮箱');
+  const agentAuth = read('app/api/_lib/agent-auth.ts');
+  assert.match(agentAuth, /export const AGENT_EMAIL = "agent@zaochang";/, 'agent 邮箱常量锚点');
+  assert.equal(agentAuth.includes('"agent@zaochang"'), gate.includes('"agent@zaochang"'), true, 'dev-login 拒绝字面量必须与 agent-auth 常量同值(零 import 副本,契约钉锁死漂移)');
+  assert.match(gate, /includes\("\."\)/, 'dev-login 必须要求域名含点(dot-less 域拒绝)');
+});

@@ -346,6 +346,16 @@ test("security: /api/auth/github/start 使用连接页专用 CSP", () => {
   assert.ok(!csp.includes("default-src 'self'"));
 });
 
+test("security: /api/auth/github/start/ 尾斜杠也必须拿到连接页专用 CSP (A7)", () => {
+  const secured = withSecurityHeaders(new Request(`${ORIGIN}/api/auth/github/start/`), htmlResponse(), ORIGIN);
+  assert.equal(secured.headers.get("referrer-policy"), "no-referrer", "尾斜杠不得让路径匹配脱靶");
+  const csp = secured.headers.get("content-security-policy") ?? "";
+  assert.ok(csp.includes("default-src 'none'"), "尾斜杠路径仍锁死连接页 CSP");
+  assert.ok(!csp.includes("default-src 'self'"), "不得回落到宽松默认 CSP");
+  const signinSlash = withSecurityHeaders(new Request(`${ORIGIN}/signin/`), htmlResponse(), ORIGIN);
+  assert.ok((signinSlash.headers.get("content-security-policy") ?? "").includes("challenges.cloudflare.com"), "/signin/ 尾斜杠仍放行 Turnstile 域");
+});
+
 test("security: /signin 放行 Turnstile 域名,其余页面不放行", () => {
   const signin = withSecurityHeaders(new Request(`${ORIGIN}/signin`), htmlResponse(), ORIGIN);
   const signinCsp = signin.headers.get("content-security-policy") ?? "";

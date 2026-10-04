@@ -35,3 +35,28 @@ export function assertSameOrigin(request: Request): Response | null {
   }
   return null;
 }
+
+// A6(2026-10 审计):旧浏览器不带 sec-fetch-site 头时的跨站导航判定——回退用
+// Origin(或 Referer)与应用源比对,缺失该头的客户端不再游离在 CSRF 防线之外。
+// 三者皆缺时按调用方语境决断:logout 影响小(清 cookie)放行;dev-login 签发会话,
+// fail-closed 拒绝。
+export function isCrossSiteNavigation(request: Request, onMissingEvidence: "allow" | "block"): boolean {
+  const site = (request.headers.get("sec-fetch-site") ?? "").toLowerCase();
+  if (site) return site === "cross-site";
+  const evidence = request.headers.get("origin") ?? request.headers.get("referer");
+  if (!evidence) return onMissingEvidence === "block";
+  try {
+    const evidenceOrigin = new URL(evidence).origin;
+    // 与 assertSameOrigin 同基准:请求自身 host + 配置的公开源(生产 apex/www 双挂)。
+    const allowed = new Set([new URL(request.url).origin]);
+    try {
+      const values = env as unknown as Record<string, string | undefined>;
+      allowed.add(resolvePublicAppOrigin(request.url, values.APP_ENV, values.PUBLIC_APP_ORIGIN));
+    } catch {
+      // 公开源未配置(非生产):URL origin 基准已足够。
+    }
+    return !allowed.has(evidenceOrigin);
+  } catch {
+    return true; // 畸形 Origin/Referer 一律视为跨站
+  }
+}

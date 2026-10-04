@@ -57,7 +57,14 @@ const worker = {
   },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    const origin = resolvePublicAppOrigin(url.href, env.APP_ENV, env.PUBLIC_APP_ORIGIN);
+    // A9(2026-10 审计):生产缺 PUBLIC_APP_ORIGIN 时与 oauth-session 的 503 设计对齐
+    // (public_app_origin_required),不再以裸 500 每请求打挂监控——仍 fail-closed。
+    let origin: string;
+    try {
+      origin = resolvePublicAppOrigin(url.href, env.APP_ENV, env.PUBLIC_APP_ORIGIN);
+    } catch {
+      return Response.json({ error: "origin_not_configured" }, { status: 503 });
+    }
     // Agent 服务账户 scope 闸:agent 非 GET 请求必须命中能力表,否则 fail-closed 403。
     // 在所有路由之前,单一 chokepoint;token 未配置时整段不生效(零行为变化)。
     if (request.method !== "GET" && env.ZAOCHANG_AGENT_TOKEN) {

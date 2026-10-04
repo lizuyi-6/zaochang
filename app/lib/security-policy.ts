@@ -14,8 +14,12 @@ export const GITHUB_CONNECTION_CSP = [
 // 升级路径:vinext 支持 nonce 透传后改为 'nonce-xxx' 并删除 'unsafe-inline'。
 export function withSecurityHeaders(request: Request, response: Response, publicOrigin: string): Response {
   const url = new URL(request.url);
-  const sameOriginEmbed = url.pathname.startsWith("/product-apps/");
-  const githubConnection = url.pathname === "/api/auth/github/start";
+  // A7(2026-10 审计):尾斜杠归一——/api/auth/github/start/ 若被路由层放行,
+  // 精确比较会错过连接页专用 CSP,回落到宽松默认头。
+  const pathname = url.pathname.replace(/\/+$/, "") || "/";
+  const sameOriginEmbed = pathname.startsWith("/product-apps/");
+  const githubConnection = pathname === "/api/auth/github/start";
+  const signin = pathname === "/signin";
   const headers = new Headers(response.headers);
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", sameOriginEmbed ? "SAMEORIGIN" : "DENY");
@@ -27,7 +31,6 @@ export function withSecurityHeaders(request: Request, response: Response, public
   if (new URL(publicOrigin).protocol === "https:") {
     headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
   }
-  const signin = url.pathname === "/signin";
   if ((headers.get("content-type") ?? "").startsWith("text/html")) {
     const frameAncestors = sameOriginEmbed ? "'self'" : "'none'";
     const turnstileOrigins = signin ? " https://challenges.cloudflare.com" : "";

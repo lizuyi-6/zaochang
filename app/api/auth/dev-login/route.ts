@@ -9,6 +9,7 @@ import {
   safeReturnPath,
   setAuthCookies,
 } from "../../../oauth-session";
+import { isCrossSiteNavigation } from "../../_lib/request-origin";
 import { localDevLoginEnabled, normalizeDevLoginEmail, type RawDevLoginEnv } from "../../_lib/dev-login-gate";
 
 // 本地开发模拟登录:GET /api/auth/dev-login[?email=…&return_to=/path]
@@ -22,7 +23,9 @@ export async function GET(request: Request) {
   if (!localDevLoginEnabled(env as unknown as RawDevLoginEnv)) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  if (request.headers.get("sec-fetch-site") === "cross-site") {
+  // 缺 sec-fetch-site 的旧浏览器回退 Origin/Referer 比对;两者皆缺 fail-closed 拒绝
+  // (本路由签发会话,证据不足不得放行)。
+  if (isCrossSiteNavigation(request, "block")) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const query = new URL(request.url).searchParams;

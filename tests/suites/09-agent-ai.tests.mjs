@@ -488,6 +488,10 @@ test("dev-login: flag-gated simulated login issues a real working session", asyn
   assert.equal(normalizeDevLoginEmail("  Dev-1@Zaochang.Test "), "dev-1@zaochang.test");
   assert.equal(normalizeDevLoginEmail("no-at-sign"), null);
   assert.equal(normalizeDevLoginEmail("a b@x.test"), null);
+  // A8:agent 服务账户邮箱与 dot-less 域名必须被 dev-login 拒绝
+  assert.equal(normalizeDevLoginEmail("agent@zaochang"), null, "agent 服务账户邮箱不得被模拟登录认领");
+  assert.equal(normalizeDevLoginEmail("someone@zaochang"), null, "dot-less 域名拒绝(真实域名恒有 TLD)");
+  assert.equal(normalizeDevLoginEmail("agent@zaochang.top"), "agent@zaochang.top", "同名前缀的真实域名不受影响");
 
   // 遗留身份头门禁(审计 A4,与 dev-login 同一 APP_ENV 白名单):staging/未设置/typo
   // 一律拒绝;TRUST_OAI_IDENTITY_HEADERS 不再是开关——公网可达环境信任自报身份头
@@ -505,19 +509,29 @@ test("dev-login: flag-gated simulated login issues a real working session", asyn
   const csrf = await fetch(`${baseUrl}/api/auth/dev-login`, { headers: { "sec-fetch-site": "cross-site" }, redirect: "manual" });
   assert.equal(csrf.status, 404);
   assert.equal(csrf.headers.get("set-cookie"), null);
+  // A6:无 sec-fetch-site 的旧浏览器按 Origin/Referer 判定;证据皆缺 fail-closed 拒绝
+  const legacyForeign = await fetch(`${baseUrl}/api/auth/dev-login`, { headers: { origin: "https://evil.example" }, redirect: "manual" });
+  assert.equal(legacyForeign.status, 404, "缺 sec-fetch-site 时外源 Origin 必须拒绝");
+  assert.equal(legacyForeign.headers.get("set-cookie"), null);
+  const legacyRefererForeign = await fetch(`${baseUrl}/api/auth/dev-login`, { headers: { referer: "https://evil.example/x" }, redirect: "manual" });
+  assert.equal(legacyRefererForeign.status, 404, "Referer 兜底同样拒绝外源");
+  assert.equal(legacyRefererForeign.headers.get("set-cookie"), null);
+  const legacyNoEvidence = await fetch(`${baseUrl}/api/auth/dev-login`, { redirect: "manual" });
+  assert.equal(legacyNoEvidence.status, 404, "Origin/Referer 皆缺时 dev-login fail-closed");
+  assert.equal(legacyNoEvidence.headers.get("set-cookie"), null);
 
-  const badEmail = await fetch(`${baseUrl}/api/auth/dev-login?email=not-an-email`, { redirect: "manual" });
+  const badEmail = await fetch(`${baseUrl}/api/auth/dev-login?email=not-an-email`, { headers: { origin: baseUrl }, redirect: "manual" });
   assert.equal(badEmail.status, 400);
   assert.deepEqual(await badEmail.json(), { error: "invalid_email" });
 
   // 外站 return_to 回退到 /,不得开放重定向
-  const openRedirect = await fetch(`${baseUrl}/api/auth/dev-login?return_to=${encodeURIComponent("https://evil.example/x")}`, { redirect: "manual" });
+  const openRedirect = await fetch(`${baseUrl}/api/auth/dev-login?return_to=${encodeURIComponent("https://evil.example/x")}`, { headers: { origin: baseUrl }, redirect: "manual" });
   assert.equal(openRedirect.status, 307);
   assert.equal(new URL(openRedirect.headers.get("location")).pathname, "/");
 
   // 正常签发:307 + zaochang_session cookie(HttpOnly/SameSite=Lax)
   const devEmail = `dev-${runId}@zaochang.test`;
-  const issued = await fetch(`${baseUrl}/api/auth/dev-login?email=${encodeURIComponent(devEmail)}&return_to=%2Fbookshelf`, { redirect: "manual" });
+  const issued = await fetch(`${baseUrl}/api/auth/dev-login?email=${encodeURIComponent(devEmail)}&return_to=%2Fbookshelf`, { headers: { origin: baseUrl }, redirect: "manual" });
   assert.equal(issued.status, 307);
   assert.equal(new URL(issued.headers.get("location")).pathname, "/bookshelf");
   const setCookie = (typeof issued.headers.getSetCookie === "function" ? issued.headers.getSetCookie() : [issued.headers.get("set-cookie") ?? ""])
