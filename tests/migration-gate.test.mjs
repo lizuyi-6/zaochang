@@ -100,3 +100,37 @@ test("migration gate rejects tag-caliber downgrade outside the 0013-0018 whiteli
   assert.equal(firstResult.status, 1);
   assert.match(firstResult.output, /tag 降级:第 1 条/);
 });
+
+test("fruit policy dual-source: trigger literals must equal FRUIT_POLICY (2026-10 审计重构 #8)", () => {
+  // fruit.ts 传递依赖 cloudflare:workers,无法在 node 直载——从源文本抽 FRUIT_POLICY 数值。
+  const fruitSource = readFileSync(join(projectRoot, "app/api/_lib/fruit.ts"), "utf8");
+  const policyNumber = (key) => {
+    const match = fruitSource.match(new RegExp(`${key}:[ ]*([0-9]+)`));
+    assert.ok(match, `FRUIT_POLICY.${key} 应存在于 fruit.ts`);
+    return Number(match[1]);
+  };
+  const sandman = localSql("0003_strange_sandman");
+  const release = localSql("0006_release_readiness");
+
+  const triggerNumber = (sql, triggerName, pattern) => {
+    const start = sql.indexOf(`CREATE TRIGGER \`${triggerName}\``);
+    assert.ok(start > 0, `迁移里必须存在触发器 ${triggerName}`);
+    const body = sql.slice(start, sql.indexOf("END;", start));
+    const match = body.match(pattern);
+    assert.ok(match, `${triggerName} 内应存在 ${pattern}`);
+    return Number(match[1]);
+  };
+
+  assert.equal(triggerNumber(sandman, "fruit_reward_velocity_guard", /\) >= (\d+)/), policyNumber("likeVelocityLimit"),
+    "打赏限速窗口计数(6 次/60s)必须与 FRUIT_POLICY.likeVelocityLimit 同源同值");
+  assert.equal(triggerNumber(sandman, "fruit_reward_actor_daily_guard", /\) >= (\d+)/), policyNumber("likeActorDailyLimit"),
+    "打赏者日限(10)必须与 FRUIT_POLICY.likeActorDailyLimit 同值");
+  assert.equal(triggerNumber(sandman, "fruit_reward_recipient_daily_guard", /\) \+ NEW.`amount` > (\d+)/), policyNumber("likeRecipientDailyLimit"),
+    "收赞者日限(20)必须与 FRUIT_POLICY.likeRecipientDailyLimit 同值");
+  const ageHours = Number((sandman.match(/datetime\('now', '-(\d+) hours'\)/) ?? [])[1]);
+  assert.equal(ageHours, policyNumber("accountMinimumAgeHours"),
+    "账龄门槛(24h)必须与 FRUIT_POLICY.accountMinimumAgeHours 同值(0003/0006 多处硬编码)");
+  const releaseAge = Number((release.match(/datetime\('now', '-(\d+) hours'\)/) ?? [])[1]);
+  assert.equal(releaseAge, policyNumber("accountMinimumAgeHours"),
+    "0006 的结算侧账龄同样必须对齐;改 FRUIT_POLICY 数值时必须同步迁移并重审");
+});
