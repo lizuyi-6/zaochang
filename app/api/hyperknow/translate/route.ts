@@ -1,4 +1,5 @@
 import { requireMember } from "../../_lib/access-control";
+import { sseResponse } from "../../_lib/hyperknow/sse";
 import { frame } from "../../_lib/hyperknow/sse";
 import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
@@ -119,13 +120,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return new Response(stream, {
-      headers: {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-store",
-        connection: "keep-alive",
-      },
-    });
+    return sseResponse(stream);
   } catch (error) {
     return jsonError(error);
   }

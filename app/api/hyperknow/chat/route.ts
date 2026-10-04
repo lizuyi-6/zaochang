@@ -1,5 +1,5 @@
 import { requireMember } from "../../_lib/access-control";
-import { frame } from "../../_lib/hyperknow/sse";
+import { frame, sseResponse } from "../../_lib/hyperknow/sse";
 import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
@@ -206,13 +206,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return new Response(stream, {
-      headers: {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-store",
-        "x-accel-buffering": "no",
-      },
-    });
+    return sseResponse(stream);
   } catch (error) {
     return jsonError(error);
   }

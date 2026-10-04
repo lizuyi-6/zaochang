@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { frame } from "../../_lib/hyperknow/sse";
+import { frame, sseResponse } from "../../_lib/hyperknow/sse";
 import { requireMember } from "../../_lib/access-control";
 import { jsonError } from "../../_lib/errors";
 import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, CREDIT_LEASE_MARGIN_MS, resolveCourseGenBudgetMs } from "../../_lib/hyperknow/budgets";
@@ -58,6 +58,19 @@ async function taskUuidForKey(userEmail: string, key: string): Promise<string> {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+
+/** 已完成课程的直接回放(2026-10 审计重构 #3):三个恢复分支(确认流/任务恢复/
+ * 幂等键重放)共用同一对帧——started + structure_ready(resumed)。 */
+function replayCompletedCourse(courseUuid: string, course: unknown): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(frame({ type: "course_generation_started", course_uuid: courseUuid, resumed: true }));
+      controller.enqueue(frame({ type: "course_structure_ready", course_uuid: courseUuid, course, resumed: true }));
+      controller.close();
+    },
+  });
+  return sseResponse(stream);
+}
 
 export async function POST(request: Request) {
   try {
@@ -118,22 +131,7 @@ export async function POST(request: Request) {
 
       // 如果已存在且已完成落库，直接恢复返回
       const existingCourse = await getCourse(resumeUuid, member.email);
-      if (existingCourse) {
-        const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(frame({ type: "course_generation_started", course_uuid: resumeUuid, resumed: true }));
-            controller.enqueue(frame({ type: "course_structure_ready", course_uuid: resumeUuid, course: existingCourse.course, resumed: true }));
-            controller.close();
-          },
-        });
-        return new Response(stream, {
-          headers: {
-            "content-type": "text/event-stream; charset=utf-8",
-            "cache-control": "no-store",
-            "x-accel-buffering": "no",
-          },
-        });
-      }
+      if (existingCourse) return replayCompletedCourse(resumeUuid, existingCourse.course);
 
       // 解析蓝图
       let blueprint: CourseBlueprint;
@@ -344,34 +342,13 @@ export async function POST(request: Request) {
         },
       });
 
-      return new Response(stream, {
-        headers: {
-          "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "no-store",
-          "x-accel-buffering": "no",
-        },
-      });
+      return sseResponse(stream);
     }
 
     // ── 分支 2: 任务恢复检查 (已有完整课程或已有未完成任务) ──────────────────────
     if (resumeUuid) {
       const existingCourse = await getCourse(resumeUuid, member.email);
-      if (existingCourse) {
-        const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(frame({ type: "course_generation_started", course_uuid: resumeUuid, resumed: true }));
-            controller.enqueue(frame({ type: "course_structure_ready", course_uuid: resumeUuid, course: existingCourse.course, resumed: true }));
-            controller.close();
-          },
-        });
-        return new Response(stream, {
-          headers: {
-            "content-type": "text/event-stream; charset=utf-8",
-            "cache-control": "no-store",
-            "x-accel-buffering": "no",
-          },
-        });
-      }
+      if (existingCourse) return replayCompletedCourse(resumeUuid, existingCourse.course);
 
       const existingTask = await getCourseTask(resumeUuid, member.email);
       if (!existingTask) {
@@ -404,13 +381,7 @@ export async function POST(request: Request) {
             controller.close();
           },
         });
-        return new Response(stream, {
-          headers: {
-            "content-type": "text/event-stream; charset=utf-8",
-            "cache-control": "no-store",
-            "x-accel-buffering": "no",
-          },
-        });
+        return sseResponse(stream);
       }
     }
 
@@ -424,16 +395,7 @@ export async function POST(request: Request) {
           return Response.json({ error: "idempotency_key_reused" }, { status: 409 });
         }
         const course = await getCourse(courseUuid, member.email);
-        if (course) {
-          const stream = new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.enqueue(frame({ type: "course_generation_started", course_uuid: courseUuid, resumed: true }));
-              controller.enqueue(frame({ type: "course_structure_ready", course_uuid: courseUuid, course: course.course, resumed: true }));
-              controller.close();
-            },
-          });
-          return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" } });
-        }
+        if (course) return replayCompletedCourse(courseUuid, course.course);
         if (task.leaseToken && task.leaseExpiresAt && Date.parse(task.leaseExpiresAt) > Date.now()) {
           return Response.json({ error: "concurrent_operation_in_progress" }, { status: 409 });
         }
@@ -453,7 +415,7 @@ export async function POST(request: Request) {
               controller.close();
             },
           });
-          return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" } });
+          return sseResponse(stream);
         }
       }
     }
@@ -927,13 +889,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return new Response(stream, {
-      headers: {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-store",
-        "x-accel-buffering": "no",
-      },
-    });
+    return sseResponse(stream);
   } catch (error) {
     return jsonError(error);
   }

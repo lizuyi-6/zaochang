@@ -1,4 +1,5 @@
 import { requireMember } from "../../_lib/access-control";
+import { sseResponse } from "../../_lib/hyperknow/sse";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { jsonError } from "../../_lib/community";
 import { findInBook, getDocBody } from "../../_lib/docs";
@@ -193,14 +194,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return new Response(stream, {
-      headers: {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-store",
-        // 提示中间代理不要缓冲(生产经 CF 边缘;自托管反代场景同样受益)。
-        "x-accel-buffering": "no",
-      },
-    });
+    return sseResponse(stream);
   } catch (error) {
     return jsonError(error);
   }
