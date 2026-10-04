@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { frame } from "../../_lib/hyperknow/sse";
 import { requireMember } from "../../_lib/access-control";
 import { jsonError } from "../../_lib/errors";
 import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, CREDIT_LEASE_MARGIN_MS, resolveCourseGenBudgetMs } from "../../_lib/hyperknow/budgets";
@@ -57,9 +58,6 @@ async function taskUuidForKey(userEmail: string, key: string): Promise<string> {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function frame(data: Record<string, unknown>): Uint8Array {
-  return new TextEncoder().encode(`event: frame\ndata: ${JSON.stringify(data)}\n\n`);
-}
 
 export async function POST(request: Request) {
   try {

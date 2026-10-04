@@ -1,4 +1,5 @@
 import { requireMember } from "../../_lib/access-control";
+import { frame } from "../../_lib/hyperknow/sse";
 import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
@@ -35,9 +36,6 @@ type ChatRequestInput = {
 
 const MAX_MESSAGE_CHARS = 8000;
 
-function frame(data: Record<string, unknown>): Uint8Array {
-  return new TextEncoder().encode(`event: frame\ndata: ${JSON.stringify(data)}\n\n`);
-}
 
 export async function POST(request: Request) {
   try {

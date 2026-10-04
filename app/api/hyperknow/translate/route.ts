@@ -1,4 +1,5 @@
 import { requireMember } from "../../_lib/access-control";
+import { frame } from "../../_lib/hyperknow/sse";
 import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
@@ -26,9 +27,6 @@ const TARGET_LANGUAGES: Record<string, string> = {
 
 const MAX_TEXT_CHARS = 6000;
 
-function frame(data: Record<string, unknown>): Uint8Array {
-  return new TextEncoder().encode(`event: frame\ndata: ${JSON.stringify(data)}\n\n`);
-}
 
 export async function POST(request: Request) {
   try {
