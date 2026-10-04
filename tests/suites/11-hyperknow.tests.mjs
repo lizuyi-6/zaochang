@@ -602,6 +602,36 @@ export function register() {
     }
   });
 
+  test("hyperknow course-generation: 确认流 Stage2 带回 Stage1 检索命中(P1-R)", async () => {
+    resetAiUpstream();
+    const email = `hk-p1r-${runId}@example.com`;
+    const headers = authHeaders("P1R 用户", email);
+    // Stage1(确认流)→ 检索命中必须随任务落库 → Stage2 confirm 的单元请求注入命中。
+    // 原实现只把 researchHits 留在 Stage1 流内存里,确认后的单元生成永远没有检索上下文。
+    const stage1 = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: "Research Carryover Course", idempotencyKey: `hk-p1r-${runId}`, requireConfirmation: true }),
+    });
+    assert.equal(stage1.status, 200);
+    const blueprint = (await readHkFrames(stage1)).find((f) => f.type === "blueprint_ready");
+    assert.ok(blueprint, "Stage1 必须产出待确认蓝图");
+    const taskRow = await queryLocalD1(`SELECT research_hits_json AS researchHitsJson FROM hk_course_tasks WHERE id = '${blueprint.course_uuid}' AND user_email = '${email}'`);
+    assert.match(taskRow[0]?.researchHitsJson ?? "", /stepfun\.research\.test/, "Stage1 检索命中必须随任务落库(Stage2 只认任务行)");
+
+    const stage2 = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ resumeUuid: blueprint.course_uuid, action: "confirm_blueprint", selectedUnits: ["unit-1"] }),
+    });
+    assert.equal(stage2.status, 200);
+    const ready = (await readHkFrames(stage2)).find((f) => f.type === "course_structure_ready");
+    assert.ok(ready, "Stage2 必须完成课程生成");
+    assert.match(lastChatCompletion.user, /stepfun\.research\.test/, "Stage2 单元请求必须注入 Stage1 的检索命中");
+    assert.match(lastChatCompletion.user, /UNTRUSTED EXTERNAL WEB RESEARCH/, "注入必须带不可信数据声明");
+    resetAiUpstream();
+  });
+
   test("hyperknow course-inquiry: 鉴权、限流、3-5推荐问询、版本化 CourseBrief 与最多 2 次智能追问", async () => {
     const email = `hk-inquiry-${runId}@example.com`;
     const headers = authHeaders("问询用户", email);

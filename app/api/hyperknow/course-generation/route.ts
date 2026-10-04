@@ -17,6 +17,7 @@ import {
   saveCourse,
   saveCourseTaskUnitCheckpoint,
   updateCourseTaskBlueprint,
+  updateCourseTaskResearch,
 } from "../../_lib/hyperknow/store";
 import {
   researchQueriesFor,
@@ -665,6 +666,21 @@ export async function POST(request: Request) {
                 },
                 course_uuid: courseUuid,
               });
+            }
+
+            // 检索命中随任务落库(2026-10 审计 P1-R):确认流的 Stage2 只从任务行读
+            // researchHitsJson,不落库则蓝图确认后的单元生成永远没有检索上下文。
+            // 截断:最多 12 条(snippet 已各自截 320),JSON 总长上限 32KB,超出丢尾部条目。
+            if (researchHits.length > 0) {
+              const cappedResearchHits = researchHits.slice(0, 12);
+              let researchJson = JSON.stringify(cappedResearchHits);
+              while (researchJson.length > 32_768 && cappedResearchHits.length > 0) {
+                cappedResearchHits.pop();
+                researchJson = JSON.stringify(cappedResearchHits);
+              }
+              if (cappedResearchHits.length > 0) {
+                await updateCourseTaskResearch(courseUuid, member.email, researchJson);
+              }
             }
 
             push({

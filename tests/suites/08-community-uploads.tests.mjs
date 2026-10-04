@@ -9,6 +9,7 @@ import {
   onePixelPng,
   authHeaders,
   executeLocalD1,
+  queryLocalD1,
   reviewProduct,
 } from "../harness/preview.mjs";
 
@@ -295,5 +296,68 @@ test("generates account notifications and persists read state", async () => {
   assert.deepEqual((await mark.json()).read, [notification.id]);
   const refreshed = await fetch(`${baseUrl}/api/community`, { headers: ownerHeaders });
   assert.equal((await refreshed.json()).actions.some((item) => item.kind === "read_notification" && item.targetRef === notification.id), true);
+});
+
+test("upload finalize failure must not strand a clean R2 orphan (P1-U)", async () => {
+  const email = `p1u-uploader-${runId}@example.com`;
+  const headers = authHeaders("P1U 上传者", email);
+  const uploadHeaders = { ...headers };
+  delete uploadHeaders["content-type"];
+  // 让 finalize 的"DB 置 clean"语句抛错(区别于 changes=0 路径——那条已有就地回收):
+  // 此刻正式 key 已写入 R2 且带 clean 元数据,catch 必须把它一并删掉,不能只删隔离区。
+  await executeLocalD1(`
+    CREATE TRIGGER upload_finalize_fail_guard
+    BEFORE UPDATE ON uploaded_files WHEN NEW.scan_status = 'clean'
+    BEGIN SELECT RAISE(ABORT, 'finalize_boom'); END
+  `);
+  let upload;
+  try {
+    const form = new FormData();
+    form.set("file", new File(["p1u orphan probe"], "p1u-probe.txt", { type: "text/plain" }));
+    form.set("visibility", "private");
+    form.set("purpose", "incubation_material");
+    upload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: uploadHeaders, body: form });
+  } finally {
+    await executeLocalD1(`DROP TRIGGER upload_finalize_fail_guard`);
+  }
+  assert.equal(upload.status >= 500, true, `finalize 抛错必须显式失败(得到 ${upload.status})`);
+  await upload.body?.cancel();
+  const rows = await queryLocalD1(`SELECT key, scan_status AS scanStatus FROM uploaded_files WHERE owner_email = '${email}' AND original_name = 'p1u-probe.txt'`);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.scanStatus, "error", "失败上传的 DB 行必须收敛为 error,不得悬挂 pending");
+  const key = rows[0].key;
+  // 判别 R2 孤儿:临时摘下 scan 状态守卫(测毕按 0026 原文重建),把行翻回 clean 后用
+  // 读取路由探测——读取只认 DB clean + R2 对象存在:对象已回收 → 404;clean 孤儿 → 200。
+  await executeLocalD1(`
+    DROP TRIGGER uploaded_files_scan_transition_guard;
+    UPDATE uploaded_files SET scan_status = 'clean' WHERE key = '${key}';
+    CREATE TRIGGER uploaded_files_scan_transition_guard
+    BEFORE UPDATE ON uploaded_files
+    WHEN OLD.\`key\` <> NEW.\`key\`
+      OR OLD.\`owner_email\` <> NEW.\`owner_email\`
+      OR OLD.\`original_name\` <> NEW.\`original_name\`
+      OR OLD.\`media_type\` <> NEW.\`media_type\`
+      OR OLD.\`byte_size\` <> NEW.\`byte_size\`
+      OR OLD.\`visibility\` <> NEW.\`visibility\`
+      OR OLD.\`purpose\` <> NEW.\`purpose\`
+      OR OLD.\`sha256\` <> NEW.\`sha256\`
+      OR OLD.\`created_at\` <> NEW.\`created_at\`
+      OR OLD.\`hyperknow_image\` <> NEW.\`hyperknow_image\`
+      OR NOT (
+        (OLD.\`scan_status\` = 'pending'
+          AND NEW.\`scan_status\` IN ('clean', 'infected', 'error')
+          AND OLD.\`hyperknow_image_cleanup_token\` IS NEW.\`hyperknow_image_cleanup_token\`
+          AND OLD.\`hyperknow_image_cleanup_expires_at\` IS NEW.\`hyperknow_image_cleanup_expires_at\`)
+        OR (OLD.\`scan_status\` IS NEW.\`scan_status\`
+          AND OLD.\`scan_engine\` IS NEW.\`scan_engine\`
+          AND OLD.\`scan_signature\` IS NEW.\`scan_signature\`
+          AND OLD.\`quarantine_key\` IS NEW.\`quarantine_key\`
+          AND OLD.\`scanned_at\` IS NEW.\`scanned_at\`)
+      )
+    BEGIN SELECT RAISE(ABORT, 'uploaded_file_scan_state_immutable'); END
+  `);
+  const probe = await fetch(`${baseUrl}/api/uploads/${encodeURIComponent(key)}`, { headers });
+  assert.equal(probe.status, 404, "finalize 失败后正式 key 必须已从 R2 回收,不得遗留 clean 孤儿对象");
+  await probe.body?.cancel();
 });
 }

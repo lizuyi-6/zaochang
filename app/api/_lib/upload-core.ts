@@ -114,7 +114,14 @@ export async function storeScannedUpload(args: {
       throw new UploadSecurityError("upload_scan_state_conflict", 503);
     }
   } catch (error) {
+    // 失败路径必须把已提升的正式 key 一并回收(2026-10 审计 P1-U):若 put(key) 已执行
+    // 而 finalize(隔离区删除/DB 置 clean)抛错,旧 catch 只删 quarantine——正式对象以
+    // clean 元数据留在 R2 成为孤儿。读取侧虽有 DB clean 守卫不致泄露,但占存储且无日志。
+    await bucket.delete(key).catch(() => undefined);
     await bucket.delete(quarantineKey).catch(() => undefined);
+    console.error("[upload] finalize failed", { key, error: error instanceof Error ? error.message : String(error) });
+    // DB 行收敛为 error(uploaded_files_scan_transition_guard 只允许 pending→clean/infected/error),
+    // 不得悬挂 pending。
     await db.prepare(failScannedUploadSql).bind(key).run().catch(() => undefined);
     throw error;
   }

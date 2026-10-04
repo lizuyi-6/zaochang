@@ -310,6 +310,25 @@ export async function getCourseTask(id: string, userEmail: string): Promise<Stor
   };
 }
 
+// 检索命中随任务落库(2026-10 审计 P1-R):确认流的 Stage2 从任务行读 researchHitsJson,
+// 不落库则蓝图确认后的单元生成永远拿不到检索上下文。createCourseTask 时检索尚未执行,
+// 只能在检索定稿后补写。
+export async function updateCourseTaskResearch(
+  id: string,
+  userEmail: string,
+  researchHitsJson: string,
+): Promise<void> {
+  const result = await database()
+    .prepare(
+      `UPDATE hk_course_tasks
+       SET research_hits_json = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_email = ?`,
+    )
+    .bind(researchHitsJson, id, userEmail)
+    .run();
+  if (Number(result.meta.changes ?? 0) !== 1) throw new Error("course_task_not_found");
+}
+
 export async function updateCourseTaskBlueprint(
   id: string,
   userEmail: string,
