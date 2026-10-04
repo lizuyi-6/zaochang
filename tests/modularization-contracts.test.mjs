@@ -185,10 +185,10 @@ test("docs-cache: 全部 docs 写入口必须失效 isolate 文档缓存", async
   // 封面/横幅 UPDATE 曾在 41702d2 绕过失效,导致上传成功后当前 isolate 继续展示旧图。
   const cover = readFileSync(new URL("../app/api/docs/cover/route.ts", import.meta.url), "utf8");
   assert.ok(cover.includes("invalidateDocDataCache"), "/api/docs/cover 写回 docs 后必须失效文档缓存");
-  // createDoc/updateDoc/deleteDoc 三处写路径各调用一次失效。
-  const docs = readFileSync(new URL("../app/api/_lib/docs.ts", import.meta.url), "utf8");
-  const calls = docs.match(/invalidateDocDataCache\(\);/g) ?? [];
-  assert.equal(calls.length, 3, `docs.ts 应有 3 处写后失效调用,实际 ${calls.length}`);
+  // createDoc/updateDoc/deleteDoc 三处写路径各调用一次失效(2026-10 重构 #11 写侧拆到 docs-write.ts)。
+  const docsWrite = readFileSync(new URL("../app/api/_lib/docs-write.ts", import.meta.url), "utf8");
+  const calls = docsWrite.match(/invalidateDocDataCache\(\);/g) ?? [];
+  assert.equal(calls.length, 3, `docs-write.ts 应有 3 处写后失效调用,实际 ${calls.length}`);
 });
 
 // ---- 站壳状态同步契约 ----
