@@ -200,10 +200,11 @@ test('community-hardening: storage/db failures are 503, docs images whitelisted,
   assert.match(products, /storage_unavailable" \}, \{ status: 503 \}/, 'M2:bucket 缺失必须 503,不得混同对象不属主的 403');
   const community = read('app/api/_lib/community.ts');
   assert.match(community, /accessError\("database_unavailable", 503\)/, 'M2:DB binding 缺失必须 503(不得裸 500)');
-  const docs = read('app/api/_lib/docs.ts');
-  assert.match(docs, /export function validDocImageUrl/, 'M3:文档图片 URL 白名单必须是显式函数');
-  assert.match(docs, /images\.unsplash\.com/, 'M3:白名单只含产品配图域');
-  assert.doesNotMatch(docs, /coverImage[\s\S]{0,80}https\?:\/\//, 'M3:封面字段不得接受任意外链');
+  // #11 拆分后写侧在 docs-write.ts;docs.ts re-export 保持路由 import 面。
+  const docsWrite = read('app/api/_lib/docs-write.ts');
+  assert.match(docsWrite, /export function validDocImageUrl/, 'M3:文档图片 URL 白名单必须是显式函数');
+  assert.match(docsWrite, /images\.unsplash\.com/, 'M3:白名单只含产品配图域');
+  assert.doesNotMatch(docsWrite, /coverImage[\s\S]{0,80}https\?:\/\//, 'M3:封面字段不得接受任意外链');
   const incubation = read('app/api/incubation/route.ts');
   assert.match(incubation, /db\.batch\(\[\s*[\s\S]*?INSERT INTO project_materials[\s\S]*?UPDATE incubation_projects/, 'M4:资料插入与项目状态推进必须同批原子');
 });

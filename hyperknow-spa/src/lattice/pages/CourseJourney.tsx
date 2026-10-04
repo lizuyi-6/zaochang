@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { LatticeCube } from '../illustrations';
 import {
   X,
   Play,
@@ -36,13 +37,8 @@ import './CourseJourney.css';
 /* ------------------------------------------------------------------ */
 /* Local illustration: Lattice open book and knowledge node            */
 /* ------------------------------------------------------------------ */
-export const KnotMark: React.FC<{ size?: number; color?: string }> = ({ size = 14, color = '#C24A2E' }) => (
-  <svg width={size} height={size * 0.9} viewBox="0 0 32 32" fill="none" aria-hidden="true" style={{ display: 'block' }}>
-    <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke={color} strokeWidth="2" strokeLinejoin="round" />
-    <path d="M16 10v18M16 6v4" stroke={color} strokeWidth="2" />
-    <circle cx="16" cy="4" r="2" fill="#D9A441" />
-  </svg>
-);
+/* KnotMark 收敛为 illustrations 的 LatticeCube(2026-10 审计重构 #12);别名保持既有 import 面。 */
+export const KnotMark = LatticeCube;
 
 /* Original editorial knowledge-symphony plate (Kandinsky-inspired Bauhaus geometric composition). */
 export const KandinskyCover: React.FC<{ size?: number; radius?: number }> = ({ size = 248, radius = 14 }) => (
@@ -953,4 +949,3 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
 };
 
 export default CourseJourney;
-export { CourseJourney };

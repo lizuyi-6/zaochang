@@ -57,7 +57,7 @@ export interface CourseUnitProgressData {
   cached?: boolean;
 }
 
-export interface GenHandlers {
+interface GenHandlers {
   onStep?: (stepId: GenStepId, status: 'loading' | 'completed') => void;
   onProgress?: (message: string, data?: CourseGenProgressData) => void;
   onBlueprint?: (blueprint: BlueprintData, requiresConfirmation?: boolean, courseUuid?: string) => void;
@@ -68,7 +68,7 @@ export interface GenHandlers {
   onModelDegraded?: (info: { fromModel: string; toModel: string }) => void;
 }
 
-export type CourseDepth = 'overview' | 'systematic' | 'deep';
+type CourseDepth = 'overview' | 'systematic' | 'deep';
 
 export function normalizeDepth(depth?: string): CourseDepth {
   if (!depth) return 'systematic';
@@ -101,7 +101,7 @@ export interface InquiryQuestion {
   options: string[];
 }
 
-export interface InquiryResult {
+interface InquiryResult {
   brief: CourseBriefParams;
   questions: InquiryQuestion[];
   followUpAllowed: boolean;
@@ -136,7 +136,7 @@ export async function fetchCourseInquiry(args: {
   }
 }
 
-export interface CourseGenParams {
+interface CourseGenParams {
   query?: string;
   brief?: CourseBriefParams;
   idempotencyKey?: string;
@@ -149,7 +149,7 @@ export interface CourseGenParams {
 }
 
 /** 在线调用失败原因:offline=静态托管/断网(可伪生成兜底);insufficient=积分不足(绝不可兜底);error=后端/上游故障;aborted=调用方主动取消(同 idx 换语言重译/切会话,不算失败,不弹 toast)。 */
-export type LiveFailureReason = 'offline' | 'insufficient' | 'error' | 'aborted';
+type LiveFailureReason = 'offline' | 'insufficient' | 'error' | 'aborted';
 
 export interface BlueprintData {
   courseTitle?: string;
@@ -173,7 +173,7 @@ export interface BlueprintData {
   }>;
 }
 
-export type CourseGenResult =
+type CourseGenResult =
   | { ok: true; course: BackendCourse }
   | { ok: true; blueprint: BlueprintData; courseUuid: string; requiresConfirmation: true }
   | { ok: false; reason: LiveFailureReason };
@@ -316,7 +316,7 @@ export async function generateCourseLive(
   }
 }
 
-export interface ChatHandlers {
+interface ChatHandlers {
   onChunk?: (text: string) => void;
   /** conversation_created 帧:后端为本条消息落库的会话 ID(续聊/历史列表回填用)。 */
   onConversationId?: (id: string) => void;
@@ -324,9 +324,9 @@ export interface ChatHandlers {
   onRemaining?: (remaining: number, max: number) => void;
 }
 
-export type ChatResult = { ok: true; text: string } | { ok: false; reason: LiveFailureReason };
+type ChatResult = { ok: true; text: string } | { ok: false; reason: LiveFailureReason };
 
-export interface ChatSendOptions {
+interface ChatSendOptions {
   signal?: AbortSignal;
   /** 续聊的会话 ID(缺省开新会话) */
   conversationId?: string;
@@ -337,6 +337,42 @@ export interface ChatSendOptions {
 }
 
 /** 真实主对话。传 conversationId 则续聊同一会话;失败按 reason 二分(见 LiveFailureReason)。 */
+function signalAborted(signal?: AbortSignal): ChatResult {
+  return signal?.aborted ? { ok: false, reason: 'aborted' } : { ok: false, reason: 'error' };
+}
+
+/** 纯文本增量 SSE 的共享消费循环(2026-10 审计重构 #12):chatLive 与 translateLive
+ * 共用——error 帧不被前后帧掩盖,complete 后忽略残余,非 chunk 帧交回调。 */
+async function consumeTextStream(
+  body: ReadableStream<Uint8Array>,
+  on: { chunk?: (text: string) => void; frame?: (data: Record<string, unknown>) => void },
+): Promise<{ complete: boolean; failed: boolean; acc: string }> {
+  let acc = '';
+  let complete = false;
+  let failed = false;
+  await consumeSse(body, (data) => {
+    const type = data.type;
+    // 服务端 error 不得被之前的正文或之后的 complete 掩盖。
+    if (type === 'error') {
+      failed = true;
+      return;
+    }
+    if (failed) return;
+    if (type === 'complete') {
+      complete = true;
+      return;
+    }
+    if (complete) return;
+    if (type === 'content_chunk' && typeof data.chunk === 'string' && data.chunk) {
+      acc += data.chunk;
+      on.chunk?.(data.chunk);
+    } else {
+      on.frame?.(data);
+    }
+  });
+  return { complete, failed, acc };
+}
+
 export async function chatLive(message: string, handlers: ChatHandlers, options: ChatSendOptions = {}): Promise<ChatResult> {
   let res: Response;
   try {
@@ -363,39 +399,24 @@ export async function chatLive(message: string, handlers: ChatHandlers, options:
   }
 
   try {
-    let acc = '';
-    let complete = false;
-    let failed = false;
-    await consumeSse(res.body, (data) => {
-      const type = data.type;
-      // 服务端 error 不得被之前的正文或之后的 complete 掩盖。
-      if (type === 'error') {
-        failed = true;
-        return;
-      }
-      if (failed) return;
-      if (type === 'complete') {
-        complete = true;
-        return;
-      }
-      if (complete) return;
-      if (type === 'content_chunk' && typeof data.chunk === 'string' && data.chunk) {
-        acc += data.chunk;
-        handlers.onChunk?.(data.chunk);
-      } else if (type === 'conversation_created' && typeof data.conversation_id === 'string') {
-        handlers.onConversationId?.(data.conversation_id);
-      } else {
+    const { complete, failed, acc } = await consumeTextStream(res.body, {
+      chunk: (text) => handlers.onChunk?.(text),
+      frame: (data) => {
+        if (data.type === 'conversation_created' && typeof data.conversation_id === 'string') {
+          handlers.onConversationId?.(data.conversation_id);
+          return;
+        }
         const info = creditInfoOf(data);
         if (info) handlers.onRemaining?.(info.remaining, info.max);
-      }
+      },
     });
     return complete && !failed && acc.length ? { ok: true, text: acc } : { ok: false, reason: 'error' };
   } catch {
-    return { ok: false, reason: 'error' };
+    return signalAborted(options.signal);
   }
 }
 
-export interface TranslateHandlers {
+interface TranslateHandlers {
   onChunk?: (text: string) => void;
   onRemaining?: (remaining: number, max: number) => void;
 }
@@ -430,34 +451,17 @@ export async function translateLive(
   }
 
   try {
-    let acc = '';
-    let complete = false;
-    let failed = false;
-    await consumeSse(res.body, (data) => {
-      const type = data.type;
-      // 服务端 error 不得被之前的正文或之后的 complete 掩盖。
-      if (type === 'error') {
-        failed = true;
-        return;
-      }
-      if (failed) return;
-      if (type === 'complete') {
-        complete = true;
-        return;
-      }
-      if (complete) return;
-      if (type === 'content_chunk' && typeof data.chunk === 'string' && data.chunk) {
-        acc += data.chunk;
-        handlers.onChunk?.(data.chunk);
-      } else {
+    const { complete, failed, acc } = await consumeTextStream(res.body, {
+      chunk: (text) => handlers.onChunk?.(text),
+      frame: (data) => {
         const info = creditInfoOf(data);
         if (info) handlers.onRemaining?.(info.remaining, info.max);
-      }
+      },
     });
     return complete && !failed && acc.length ? { ok: true, text: acc } : { ok: false, reason: 'error' };
   } catch {
     /* 中途取消(同一条消息换语言重译/切会话)不是失败:不落错误态、不弹 toast */
-    return signal?.aborted ? { ok: false, reason: 'aborted' } : { ok: false, reason: 'error' };
+    return signalAborted(signal);
   }
 }
 
@@ -465,7 +469,7 @@ export async function translateLive(
 
 const ACTION_TYPES = ['card', 'formula', 'diagram', 'image', 'quick_check'] as const;
 
-export interface LiveBoardAction {
+interface LiveBoardAction {
   type: (typeof ACTION_TYPES)[number];
   title?: string;
   content?: string;
@@ -480,11 +484,9 @@ export interface LiveBoardAction {
   options?: string[];
   answer?: number;
   explanation?: string;
-  nodes?: Array<{ id: string; label: string }>;
-  edges?: Array<{ from: string; to: string; label?: string }>;
 }
 
-export interface LiveLectureStep {
+interface LiveLectureStep {
   step_id: string;
   spoken_text: string;
   board_action: LiveBoardAction;
@@ -585,7 +587,7 @@ export async function planLectureLive(
 
 /* ---------------- 白板课堂按需生图(阶跃生图接入) ---------------- */
 
-export interface FetchImageParams {
+interface FetchImageParams {
   prompt: string;
   caption?: string;
   courseUuid?: string;
@@ -632,7 +634,7 @@ export async function fetchLectureImageLive(
 
 /* ---------------- 白板举手插话(讲座进行中的自由提问) ---------------- */
 
-export interface InterjectAnswer {
+interface InterjectAnswer {
   answerText: string;
   /** 答疑结束、主线恢复前的过渡句(原 WS interject 的 resume 事件) */
   resumeTransition: string;
@@ -767,7 +769,7 @@ export async function pingBackend(): Promise<number | null> {
 
 /* ---------------- 模型探针(白板连接面板"检查模型状态") ---------------- */
 
-export type ModelCheckResult =
+type ModelCheckResult =
   | { ok: true; latencyMs: number }
   | { ok: false; reason: 'model_down' | 'probe_failed' | 'unauthorized' };
 
@@ -826,7 +828,7 @@ export async function fetchMe(): Promise<MeInfo | null> {
   }
 }
 
-export interface ConvMessage {
+interface ConvMessage {
   role: 'user' | 'assistant';
   text: string;
 }

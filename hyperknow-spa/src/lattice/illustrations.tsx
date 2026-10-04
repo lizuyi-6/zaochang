@@ -1029,3 +1029,13 @@ export const BoardPencil: React.FC<{ size?: number }> = ({ size = 20 }) => (
     <rect x="7.6" y="1.5" width="4.8" height="2.6" rx="1" fill="#ED93B1" stroke="#8A6D1A" strokeWidth="0.8" />
   </svg>
 );
+
+/** 见界"绳结书"标记(2026-10 审计重构 #12):此前 CourseJourney 的 KnotMark 与
+ * Onboarding 的 MiniCube 是两份同款 SVG,合并为单一实现。 */
+export const LatticeCube: React.FC<{ size?: number; color?: string }> = ({ size = 14, color = '#C24A2E' }) => (
+  <svg width={size} height={size * 0.9} viewBox="0 0 32 32" fill="none" aria-hidden="true" style={{ display: 'block' }}>
+    <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+    <path d="M16 10v18M16 6v4" stroke={color} strokeWidth="2" />
+    <circle cx="16" cy="4" r="2" fill="#D9A441" />
+  </svg>
+);

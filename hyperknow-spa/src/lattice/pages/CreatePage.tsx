@@ -256,12 +256,9 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     if (blueprintUuidRef.current) set({ genResume: { uuid: blueprintUuidRef.current, query: topicRef.current } });
   };
 
-  /** 底部条「取消生成」:中断在途请求但保留对话 feed,就地给出检查点恢复/重新定制 */
-  const cancelToFeed = () => {
-    if (phase !== 'generating' || ready || genFailed || insufficient || cancelled) {
-      abandonAll();
-      return;
-    }
+  /** 中断在途生成(2026-10 审计重构 #12):abort 双阶段流/清计时器/登记检查点,
+   * 取消与整页放弃共用一份实现,不再各写一段。 */
+  const stopInFlight = () => {
     finishedRef.current = true;
     inGenRef.current = false;
     stage1CtrlRef.current?.abort();
@@ -272,19 +269,22 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     }
     set({ generating: false });
     registerCheckpoint();
+  };
+
+  /** 底部条「取消生成」:中断在途请求但保留对话 feed,就地给出检查点恢复/重新定制 */
+  const cancelToFeed = () => {
+    if (phase !== 'generating' || ready || genFailed || insufficient || cancelled) {
+      abandonAll();
+      return;
+    }
+    stopInFlight();
     setCancelled(true);
   };
 
   /** 整页放弃:问询中=直接回空态;生成中=先中断再回空态 */
   const abandonAll = () => {
     if (phase === 'generating' && !ready && !genFailed && !insufficient && !cancelled) {
-      finishedRef.current = true;
-      inGenRef.current = false;
-      stage1CtrlRef.current?.abort();
-      stage2CtrlRef.current?.abort();
-      if (finishTimerRef.current !== null) window.clearTimeout(finishTimerRef.current);
-      set({ generating: false });
-      registerCheckpoint();
+      stopInFlight();
     }
     runRef.current += 1;
     setTopic('');

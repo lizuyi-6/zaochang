@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { LatticeCube } from '../illustrations';
 import {
   Check, Menu, Sparkles, Headphones, Gift, Plus, FileText, ArrowUp, Info, Store,
   ArrowUpRight, GraduationCap, Star, X, Flag, Share2, LayoutGrid, ClipboardList,
@@ -18,14 +19,8 @@ import './Onboarding.css';
 
 /* ================= shared bits ================= */
 
-/** Compact open-book/node mark beside course providers. */
-const MiniCube: React.FC = () => (
-  <svg width="10" height="10" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-    <path d="M16 10C12 7 7 7 3 8v17c5-1 9 0 13 3 4-3 8-4 13-3V8c-4-1-9-1-13 2Z" stroke="#C24A2E" strokeWidth="2" strokeLinejoin="round" />
-    <path d="M16 10v18M16 6v4" stroke="#C24A2E" strokeWidth="2" />
-    <circle cx="16" cy="4" r="2" fill="#D9A441" />
-  </svg>
-);
+/* MiniCube 收敛为 illustrations 的 LatticeCube(同一 SVG 的两份拷贝) */
+const MiniCube: React.FC = () => <LatticeCube size={10} />;
 
 const VoiceBars: React.FC = () => (
   <svg width="12" height="12" viewBox="0 0 12 12">
