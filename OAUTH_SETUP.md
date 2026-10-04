@@ -105,6 +105,10 @@ APP_ENV=development   # 或 test;仅本地/测试联调
 - OAuth state 使用独立的 10 分钟 HttpOnly Cookie，并与具体 provider 绑定。
 - 首次注册的邀请码 Cookie 只保存 SHA-256，不保存明文，并在登录成功或任何回调错误后清除。
 
+## 资金语义:退款权优先于卖家风控(设计确认)
+
+外部支付与作品订单的一次解锁退款**不检查卖家钱包状态**(`frozen`/`review` 均不阻断)。这是有意设计:买家在退款窗口(10 分钟)内的退款权优先于卖家侧风控——若退款被卖家钱包状态拦截,卖家被风控会顺带冻结所有买家的正当退款,资金卡死在 `pending`。卖家侧风控由下架/结算拦截兜底(`settleDueExternalFruit` 只结算 `active` 商户钱包)。该语义由 `tests/suites/07-oidc-external.tests.mjs` 钉住:商户钱包置 `frozen` 后退款仍须 200、买家余额回补、待结算归零。(2026-10 全库审查 L1 降级为设计确认)
+
 ## 迁移
 
 发布版本必须按顺序应用 `drizzle/0000` 至 journal 当前水位 `drizzle/0019_community_counter_triggers.sql`（共 20 条，forward-only）。与登录/审核直接相关的后段迁移：

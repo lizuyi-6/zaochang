@@ -140,3 +140,20 @@ test('journey: inner button keys are not swallowed by the outer row handler (P1-
   const page = read('hyperknow-spa/src/lattice/pages/CourseJourney.tsx');
   assert.match(page, /if \(e\.target !== e\.currentTarget\) return;/, '外层行按键处理必须放行内层真实按钮的 keydown——否则回车进练习而非按钮本意');
 });
+
+test('oauth: grant errors pass through typed errors, unknown failures surface as 500 (L5)', () => {
+  const provider = read('app/api/_lib/oauth-provider.ts');
+  const passthroughs = [...provider.matchAll(/if \(error instanceof OAuthProviderError\) throw error;/g)];
+  assert.ok(passthroughs.length >= 2, '两个 grant 分支都必须放行 OAuthProviderError 自身状态码(403 unauthorized_client/500 server_error 不得改写成 400 invalid_grant)');
+  const logged = [...provider.matchAll(/\[oauth-provider\] (?:authorization_code|refresh_token) issuance failed:/g)];
+  assert.ok(logged.length >= 2, '未知异常必须落日志再映射 server_error——签名密钥配置错误不得被静默降级');
+});
+
+test('oauth: token family cascade and full PKCE charset (L2/L3/L4/L6)', () => {
+  const provider = read('app/api/_lib/oauth-provider.ts');
+  assert.match(provider, /INSERT INTO oauth_provider_access_tokens\s*\([\s\S]*?family_id/, 'access 签发必须携带家族谱系(迁移 0027)');
+  assert.match(provider, /WHERE family_id = \?/, '谱系吊销必须按 family_id 直查(授权码直出的首枚 parent 为 NULL,反查会漏)');
+  assert.match(provider, /RFC 6749 §4\.1\.2/, '授权码重放必须连坐吊销令牌族');
+  assert.match(provider, /RFC 7009/, '撤销 refresh 必须连带同族 access');
+  assert.match(provider, /\[A-Za-z0-9\\-\._~\]\{43,128\}/, 'PKCE verifier 字符集必须含 . 与 ~(RFC 7636 unreserved)');
+});

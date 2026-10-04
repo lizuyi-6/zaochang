@@ -448,6 +448,8 @@ export const oauthProviderAccessTokens = sqliteTable(
     scope: text("scope").notNull(),
     authorizationCodeHash: text("authorization_code_hash").references(() => oauthProviderAuthorizationCodes.codeHash),
     refreshParentHash: text("refresh_parent_hash"),
+    // 令牌家族(2026-10 审计 L2-L4):授权码直出与 refresh 轮换同族,谱系吊销按族连坐
+    familyId: text("family_id"),
     expiresAt: text("expires_at").notNull(),
     revokedAt: text("revoked_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -456,6 +458,7 @@ export const oauthProviderAccessTokens = sqliteTable(
     uniqueIndex("oauth_provider_access_code_once_idx").on(table.authorizationCodeHash),
     uniqueIndex("oauth_provider_access_refresh_once_idx").on(table.refreshParentHash),
     index("oauth_provider_access_lookup_idx").on(table.clientId, table.userEmail, table.expiresAt),
+    index("oauth_provider_access_family_idx").on(table.familyId),
   ],
 );
 

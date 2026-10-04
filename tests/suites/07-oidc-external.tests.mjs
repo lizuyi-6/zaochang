@@ -104,7 +104,7 @@ test("OIDC login and delegated fruit API require PKCE, scopes, and per-payment c
   const tokenRequestBody = new URLSearchParams({ grant_type: "authorization_code", code: authorizationCode, redirect_uri: "https://client.example/oauth/callback", code_verifier: verifier });
   const tokenResponse = await fetch(`${baseUrl}/api/oauth/token`, { method: "POST", headers: { authorization: basic, "content-type": "application/x-www-form-urlencoded" }, body: tokenRequestBody });
   assert.equal(tokenResponse.status, 200);
-  const tokens = await tokenResponse.json();
+  let tokens = await tokenResponse.json();
   assert.match(tokens.access_token, /^zca_/);
   assert.match(tokens.refresh_token, /^zcr_/);
   assert.equal(tokens.scope, "openid profile email fruit:balance fruit:pay fruit:refund");
@@ -118,6 +118,31 @@ test("OIDC login and delegated fruit API require PKCE, scopes, and per-payment c
   const codeReplay = await fetch(`${baseUrl}/api/oauth/token`, { method: "POST", headers: { authorization: basic, "content-type": "application/x-www-form-urlencoded" }, body: tokenRequestBody });
   assert.equal(codeReplay.status, 400);
   assert.equal((await codeReplay.json()).error, "invalid_grant");
+  // 审计 L3(RFC 6749 §4.1.2 SHOULD):授权码重放=码可能被窃,该码换出的令牌族
+  // 必须连坐吊销——原实现只回 invalid_grant,已签发令牌继续可用。
+  const stolenAccess = await fetch(`${baseUrl}/api/oauth/userinfo`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+  assert.equal(stolenAccess.status, 401, "授权码重放后该码签发的 access token 必须作废");
+  assert.equal((await stolenAccess.json()).error, "invalid_token");
+  // 重放已烧掉本轮令牌族:再走一轮授权(consent 已在)换新令牌,供后续断言续用
+  const reconsent = await fetch(authorizeUrl, { headers: payerHeaders });
+  assert.equal(reconsent.status, 200);
+  const reconsentToken = (await reconsent.text()).match(/name="request_token" value="([^"]+)"/)?.[1];
+  assert.equal(typeof reconsentToken, "string");
+  const reapprove = await fetch(`${baseUrl}/api/oauth/authorize`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { ...payerHeaders, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ request_token: reconsentToken, decision: "allow" }),
+  });
+  assert.equal(reapprove.status, 303);
+  const reauthorizationCode = new URL(reapprove.headers.get("location")).searchParams.get("code");
+  const retokenResponse = await fetch(`${baseUrl}/api/oauth/token`, {
+    method: "POST",
+    headers: { authorization: basic, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "authorization_code", code: reauthorizationCode, redirect_uri: "https://client.example/oauth/callback", code_verifier: verifier }),
+  });
+  assert.equal(retokenResponse.status, 200);
+  tokens = await retokenResponse.json();
 
   const bearerHeaders = { authorization: `Bearer ${tokens.access_token}` };
   const userInfo = await fetch(`${baseUrl}/api/oauth/userinfo`, { headers: bearerHeaders });
@@ -308,6 +333,11 @@ test("OIDC login and delegated fruit API require PKCE, scopes, and per-payment c
   const replayRevokedDescendant = await fetch(`${baseUrl}/api/oauth/userinfo`, { headers: { authorization: `Bearer ${refreshedTokens.access_token}` } });
   assert.equal(replayRevokedDescendant.status, 401);
   assert.equal((await replayRevokedDescendant.json()).error, "invalid_token");
+  // 审计 L2:refresh 重放的谱系吊销必须覆盖授权码直出的首枚 access(family_id 直查;
+  // 原实现按 refresh_parent_hash 反查,首枚 parent 为 NULL 漏网)。
+  const firstAccessAfterRefreshReplay = await fetch(`${baseUrl}/api/oauth/userinfo`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+  assert.equal(firstAccessAfterRefreshReplay.status, 401, "refresh 重放连坐必须吊销同族授权码直出的 access");
+  assert.equal((await firstAccessAfterRefreshReplay.json()).error, "invalid_token");
 
   const consents = await fetch(`${baseUrl}/api/oauth/consents`, { headers: payerHeaders });
   assert.equal((await consents.json()).consents.some((consent) => consent.clientId === registered.clientId), true);
@@ -566,5 +596,79 @@ test("external payment approval challenge: stale challenge rejected, mid-window 
   assert.equal(finalPayer.balance, finalPayer.ledgerBalance, "买家钱包与账本一致(钱没有凭空消失)");
   assert.equal(finalMerchant.pendingBalance, 10);
   assert.equal(finalMerchant.pendingBalance, finalMerchant.ledgerPendingBalance, "商户待结算与账本一致");
+});
+
+test("oauth token revocation cascades by family and PKCE accepts full unreserved charset (L4/L6)", async () => {
+  const merchantEmail = `l4-merchant-${runId}@example.com`;
+  const merchantHeaders = authHeaders("L4 商户", merchantEmail);
+  await fetch(`${baseUrl}/api/community`, { headers: merchantHeaders });
+  const register = await fetch(`${baseUrl}/api/developer/clients`, {
+    method: "POST",
+    headers: merchantHeaders,
+    body: JSON.stringify({
+      name: `L4 外部平台 ${runId}`,
+      description: "验证令牌族连坐吊销与 PKCE 字符集。",
+      websiteUrl: "https://l4.example/app",
+      clientType: "confidential",
+      redirectUris: ["https://l4.example/callback"],
+      allowedScopes: "openid profile email fruit:balance",
+    }),
+  });
+  assert.equal(register.status, 201);
+  const client = (await register.json()).client;
+  await executeLocalD1(`UPDATE oauth_provider_clients SET review_status = 'verified', write_access_approved = 1 WHERE client_id = '${client.clientId}'`);
+  const basic = `Basic ${Buffer.from(`${client.clientId}:${client.clientSecret}`).toString("base64")}`;
+
+  const payerEmail = `l4-payer-${runId}@example.com`;
+  const payerHeaders = authHeaders("L4 用户", payerEmail);
+  await fetch(`${baseUrl}/api/community`, { headers: payerHeaders });
+  // L6:verifier 含 RFC 7636 unreserved 字符 `.` 与 `~`,原正则会误拒合法客户端
+  const verifier = `${"a.b~c-".repeat(11)}x`;
+  assert.ok(verifier.length >= 43 && /^[A-Za-z0-9\-._~]{43,128}$/.test(verifier));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  const challenge = Buffer.from(digest).toString("base64url");
+  const authorizeUrl = new URL(`${baseUrl}/oauth/authorize`);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("client_id", client.clientId);
+  authorizeUrl.searchParams.set("redirect_uri", "https://l4.example/callback");
+  authorizeUrl.searchParams.set("scope", "openid profile email fruit:balance");
+  authorizeUrl.searchParams.set("state", `l4_${runId}`.replaceAll("@", "_"));
+  authorizeUrl.searchParams.set("code_challenge", challenge);
+  authorizeUrl.searchParams.set("code_challenge_method", "S256");
+
+  const consentPage = await fetch(authorizeUrl, { headers: payerHeaders });
+  assert.equal(consentPage.status, 200, "含 . 与 ~ 的 PKCE verifier 必须被接受(L6)");
+  const requestToken = (await consentPage.text()).match(/name="request_token" value="([^"]+)"/)?.[1];
+  assert.equal(typeof requestToken, "string");
+  const approve = await fetch(`${baseUrl}/api/oauth/authorize`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { ...payerHeaders, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ request_token: requestToken, decision: "allow" }),
+  });
+  assert.equal(approve.status, 303);
+  const code = new URL(approve.headers.get("location")).searchParams.get("code");
+  const tokenResponse = await fetch(`${baseUrl}/api/oauth/token`, {
+    method: "POST",
+    headers: { authorization: basic, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: "https://l4.example/callback", code_verifier: verifier }),
+  });
+  assert.equal(tokenResponse.status, 200);
+  const tokens = await tokenResponse.json();
+
+  const accessOk = await fetch(`${baseUrl}/api/oauth/userinfo`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+  assert.equal(accessOk.status, 200, "兑换后的 access 应可用");
+
+  // L4(RFC 7009):撤销 refresh token 必须连带吊销同族 access——原实现只按精确
+  // hash 命中,refresh 被撤后族内 access 仍可用到自然过期。
+  const revoke = await fetch(`${baseUrl}/api/oauth/revoke`, {
+    method: "POST",
+    headers: { authorization: basic, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token: tokens.refresh_token }),
+  });
+  assert.equal(revoke.status, 200);
+  const accessAfterRevoke = await fetch(`${baseUrl}/api/oauth/userinfo`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+  assert.equal(accessAfterRevoke.status, 401, "撤销 refresh 后同族 access 必须一并作废");
+  assert.equal((await accessAfterRevoke.json()).error, "invalid_token");
 });
 }

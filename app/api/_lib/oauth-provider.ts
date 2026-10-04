@@ -118,7 +118,9 @@ function isValidState(value: string) {
 }
 
 function isValidPkce(value: string) {
-  return /^[A-Za-z0-9_-]{43,128}$/.test(value);
+  // RFC 7636 §4.1:verifier 字符集含 unreserved(.-_~)——原正则漏了 `.` 与 `~`,
+  // 合法客户端会被误拒(L6)。
+  return /^[A-Za-z0-9\-._~]{43,128}$/.test(value);
 }
 
 function validClientText(value: unknown, min: number, max: number) {
@@ -553,9 +555,9 @@ async function issueTokens(origin: string, client: ClientRow, userEmail: string,
   const statements = [
     db.prepare(
       `INSERT INTO oauth_provider_access_tokens
-       (token_hash, client_id, user_email, scope, authorization_code_hash, refresh_parent_hash, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(accessHash, client.clientId, userEmail, scope, source.codeHash ?? null, source.refreshHash ?? null, expiresIn(ACCESS_TOKEN_SECONDS)),
+       (token_hash, client_id, user_email, scope, authorization_code_hash, refresh_parent_hash, family_id, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(accessHash, client.clientId, userEmail, scope, source.codeHash ?? null, source.refreshHash ?? null, refreshFamilyId, expiresIn(ACCESS_TOKEN_SECONDS)),
     db.prepare(
       `INSERT INTO oauth_provider_refresh_tokens
        (token_hash, client_id, user_email, scope, family_id, expires_at)
@@ -601,15 +603,34 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
               expires_at AS expiresAt, used_at AS usedAt
        FROM oauth_provider_authorization_codes WHERE code_hash = ?`,
     ).bind(codeHash).first<AuthorizationCodeRow>();
-    if (!row || row.clientId !== client.clientId || row.redirectUri !== redirectUri || row.usedAt || Date.parse(`${row.expiresAt}Z`) <= Date.now()) {
+    if (!row || row.clientId !== client.clientId || row.redirectUri !== redirectUri || Date.parse(`${row.expiresAt}Z`) <= Date.now()) {
+      throw new OAuthProviderError("invalid_grant", 400);
+    }
+    if (row.usedAt) {
+      /* RFC 6749 §4.1.2(SHOULD,审计 L3):授权码重放说明码可能被窃,该码换出的
+       * 令牌族(access+refresh)必须连坐吊销——原实现只回 invalid_grant,已签发
+       * 令牌继续可用。 */
+      const family = await database().prepare(
+        `SELECT family_id AS familyId FROM oauth_provider_access_tokens
+         WHERE authorization_code_hash = ? AND family_id IS NOT NULL LIMIT 1`,
+      ).bind(codeHash).first<{ familyId: string }>();
+      if (family) {
+        const db = database();
+        await db.batch([
+          db.prepare(`UPDATE oauth_provider_access_tokens SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE family_id = ?`).bind(family.familyId),
+          db.prepare(`UPDATE oauth_provider_refresh_tokens SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE family_id = ?`).bind(family.familyId),
+        ]);
+      }
       throw new OAuthProviderError("invalid_grant", 400);
     }
     if (!clientAllowsScopes(client, parseScopes(row.scope))) throw new OAuthProviderError("unauthorized_client", 403);
     if (await pkceChallenge(verifier) !== row.codeChallenge) throw new OAuthProviderError("invalid_grant", 400);
     try {
       return await issueTokens(origin, client, row.userEmail, row.scope, row.nonce, { codeHash });
-    } catch {
-      throw new OAuthProviderError("invalid_grant", 400);
+    } catch (error) {
+      if (error instanceof OAuthProviderError) throw error;
+      console.error("[oauth-provider] authorization_code issuance failed:", error);
+      throw new OAuthProviderError("server_error", 500);
     }
   }
   if (grantType === "refresh_token") {
@@ -624,9 +645,12 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
       const db = database();
       await db.batch([
         db.prepare(`UPDATE oauth_provider_refresh_tokens SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE family_id = ?`).bind(row.familyId),
+        /* 谱系吊销按 family_id 直查(审计 L2):授权码直出的首枚 access token
+         * refresh_parent_hash 为 NULL,按父 hash 反查会漏掉它——重放检测触发时
+         * 全族 access 必须一起作废。 */
         db.prepare(
           `UPDATE oauth_provider_access_tokens SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
-           WHERE refresh_parent_hash IN (SELECT token_hash FROM oauth_provider_refresh_tokens WHERE family_id = ?)`,
+           WHERE family_id = ?`,
         ).bind(row.familyId),
       ]);
       throw new OAuthProviderError("invalid_grant", 400);
@@ -643,8 +667,10 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
     if (!clientAllowsScopes(client, parseScopes(scope))) throw new OAuthProviderError("unauthorized_client", 403);
     try {
       return await issueTokens(origin, client, row.userEmail, scope, null, { refreshHash, refreshFamilyId: row.familyId });
-    } catch {
-      throw new OAuthProviderError("invalid_grant", 400);
+    } catch (error) {
+      if (error instanceof OAuthProviderError) throw error;
+      console.error("[oauth-provider] refresh_token issuance failed:", error);
+      throw new OAuthProviderError("server_error", 500);
     }
   }
   throw new OAuthProviderError("unsupported_grant_type", 400);
@@ -654,10 +680,22 @@ export async function revokeOAuthToken(request: Request, params: URLSearchParams
   const client = await authenticateTokenClient(request, params);
   const tokenHash = await hashToken(params.get("token") ?? "");
   const db = database();
-  await db.batch([
+  /* RFC 7009(审计 L4):撤销 refresh token 时,同家族的 access token 一并吊销——
+   * 原实现只按精确 hash 命中,refresh 被撤后其族内 access 仍可继续用到过期。 */
+  const refresh = await db.prepare(
+    `SELECT family_id AS familyId FROM oauth_provider_refresh_tokens WHERE token_hash = ? AND client_id = ?`,
+  ).bind(tokenHash, client.clientId).first<{ familyId: string }>();
+  const statements = [
     db.prepare(`UPDATE oauth_provider_access_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE token_hash = ? AND client_id = ?`).bind(tokenHash, client.clientId),
     db.prepare(`UPDATE oauth_provider_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE token_hash = ? AND client_id = ?`).bind(tokenHash, client.clientId),
-  ]);
+  ];
+  if (refresh?.familyId) {
+    statements.push(
+      db.prepare(`UPDATE oauth_provider_access_tokens SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE family_id = ?`).bind(refresh.familyId),
+      db.prepare(`UPDATE oauth_provider_refresh_tokens SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE family_id = ?`).bind(refresh.familyId),
+    );
+  }
+  await db.batch(statements);
 }
 
 export async function requireBearer(request: Request, required: OAuthScope[]) {
