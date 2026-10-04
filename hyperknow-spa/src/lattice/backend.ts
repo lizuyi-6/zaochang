@@ -6,8 +6,6 @@
  */
 
 import { normalizeBackendCourse } from './backend-course.ts';
-import { L } from './i18n/content';
-import { toast } from './toast';
 
 export interface BackendCourseSession {
   sessionId?: string;
@@ -66,6 +64,8 @@ export interface GenHandlers {
   onUnitProgress?: (data: CourseUnitProgressData) => void;
   /** credit_status 帧:后端扣费后的真实余额(每日 20,课程 10/次) */
   onRemaining?: (remaining: number, max: number) => void;
+  /** H3:model_degraded 帧——主模型 404 降级到候选模型,调用方负责用户提示 */
+  onModelDegraded?: (info: { fromModel: string; toModel: string }) => void;
 }
 
 export type CourseDepth = 'overview' | 'systematic' | 'deep';
@@ -293,12 +293,10 @@ export async function generateCourseLive(
         found.course = normalizeBackendCourse(data.course);
         if (!found.course) found.failed = true;
       } else if (type === 'model_degraded') {
-        // H3:主模型 404 降级必须让用户看见(Pro→Flash),不再静默换模型
+        // H3:主模型 404 降级必须让用户看见(Pro→Flash)——本模块保持零 UI 依赖,
+        // 提示交给调用方(CreatePage 的 onModelDegraded)。
         const info = (data.data as { from_model?: string; to_model?: string } | undefined) ?? {};
-        toast(L(
-          `Requested model ${info.from_model ?? ''} is unavailable — continuing with ${info.to_model ?? 'fallback'}.`,
-          `所选模型 ${info.from_model ?? ''} 暂不可用，已用 ${info.to_model ?? '备选模型'} 继续。`,
-        ));
+        handlers.onModelDegraded?.({ fromModel: String(info.from_model ?? ''), toModel: String(info.to_model ?? '') });
       } else if (type === 'course_generation_error' || type === 'error') {
         found.failed = true;
       } else {

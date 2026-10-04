@@ -40,7 +40,7 @@ test("失败诚实:备课失败显式重试,绝不拿话题对不上的演示课
 });
 
 test("降级再挣:模板降级计划(老套路观感来源)在自由讲座里必须重取一次真实生成", () => {
-  assert.match(page, /plan\?\.degraded && freeTopicMode[\s\S]*?planLectureLive/,
+  assert.match(page, /plan\?\.degraded && freeTopicMode[\s\S]*?requestWithBudget/,
     "degraded 计划在自由讲座里必须再调一次 planLectureLive");
 });
 

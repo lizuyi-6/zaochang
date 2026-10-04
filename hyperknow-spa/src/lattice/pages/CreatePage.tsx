@@ -334,6 +334,10 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
       result = await generateCourseLive(
         { resumeUuid: blueprintUuid, action: 'confirm_blueprint', selectedUnits: unitsToGenerate, model: state.chatModel },
         {
+          onModelDegraded: ({ fromModel, toModel }) => {
+            if (finishedRef.current) return;
+            toast(L(`Requested model is unavailable — continuing with ${toModel}.`, `所选模型 ${fromModel} 暂不可用，已用 ${toModel} 继续。`));
+          },
           onUnitProgress: (data: CourseUnitProgressData) => {
             if (finishedRef.current) return;
             setUnit((cur) => ({ cur: Math.max(cur.cur, data.unit_index), total: Math.max(cur.total, data.total_units), title: data.title || cur.title }));
