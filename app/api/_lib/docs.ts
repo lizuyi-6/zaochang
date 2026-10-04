@@ -570,8 +570,17 @@ export function normalizeVisibility(input: string): DocVisibility {
 // ---- 写侧(create/update/delete):此前内联在 api/docs 路由里,与读侧同住一域。----
 // 错误码(slug_taken/doc_cycle/parent_not_found...)与防环语义逐字不变。
 
+// M3(2026-10 审计):文档封面/横幅图片 URL 白名单——只允许站内上传键(经扫描管道)
+// 或既定的产品配图域。任意外链会把读者 IP/Referer 泄露给外站(agent 也能写入)。
+export function validDocImageUrl(value: string): boolean {
+  if (!value) return true;
+  return /^\/api\/uploads\/[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(value)
+    || value.startsWith("https://images.unsplash.com/");
+}
+
 export async function createDoc(editor: MemberIdentity, input: Record<string, unknown>): Promise<Response> {
   const title = String(input.title ?? "").trim().slice(0, 120);
+
   const slug = normalizeSlug(String(input.slug ?? title));
   const visibility = normalizeVisibility(String(input.visibility ?? "private"));
   const parentId = input.parentId ? String(input.parentId) : null;
@@ -582,6 +591,9 @@ export async function createDoc(editor: MemberIdentity, input: Record<string, un
   const summary = String(input.summary ?? "").trim().slice(0, 240);
   const coverImage = String(input.coverImage ?? "").trim().slice(0, 400);
   const bannerImage = String(input.bannerImage ?? "").trim().slice(0, 400);
+  if (!validDocImageUrl(coverImage) || !validDocImageUrl(bannerImage)) {
+    return Response.json({ error: "invalid_doc_image" }, { status: 400 });
+  }
   if (title.length < 1 || !slug) {
     return Response.json({ error: "invalid_doc" }, { status: 400 });
   }
@@ -649,8 +661,17 @@ export async function updateDoc(input: Record<string, unknown>): Promise<Respons
   if (input.isBook !== undefined) { sets.push("is_book = ?"); values.push(input.isBook === true ? 1 : 0); }
   if (input.coverHue !== undefined) { sets.push("cover_hue = ?"); values.push(Math.max(0, Math.min(360, Math.floor(Number(input.coverHue)) || 0))); }
   if (input.summary !== undefined) { sets.push("summary = ?"); values.push(String(input.summary).trim().slice(0, 240)); }
-  if (input.coverImage !== undefined) { sets.push("cover_image = ?"); values.push(String(input.coverImage).trim().slice(0, 400)); }
-  if (input.bannerImage !== undefined) { sets.push("banner_image = ?"); values.push(String(input.bannerImage).trim().slice(0, 400)); }
+  // M3(2026-10 审计):封面/横幅只允许站内上传键或白名单域,建书/改书同规。
+  if (input.coverImage !== undefined) {
+    const coverValue = String(input.coverImage).trim().slice(0, 400);
+    if (!validDocImageUrl(coverValue)) return Response.json({ error: "invalid_doc_image" }, { status: 400 });
+    sets.push("cover_image = ?"); values.push(coverValue);
+  }
+  if (input.bannerImage !== undefined) {
+    const bannerValue = String(input.bannerImage).trim().slice(0, 400);
+    if (!validDocImageUrl(bannerValue)) return Response.json({ error: "invalid_doc_image" }, { status: 400 });
+    sets.push("banner_image = ?"); values.push(bannerValue);
+  }
   if (sets.length === 0) return Response.json({ error: "nothing_to_update" }, { status: 400 });
   sets.push("updated_at = CURRENT_TIMESTAMP");
   values.push(id);

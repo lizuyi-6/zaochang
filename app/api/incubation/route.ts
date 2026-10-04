@@ -52,20 +52,25 @@ export async function POST(request: Request) {
       if (check.verdict === "not_scanned") return Response.json({ error: "material_not_scanned" }, { status: 409 });
       const project = await database().prepare("SELECT id FROM incubation_projects WHERE id = ? AND user_email = ?").bind(projectId, member.email).first();
       if (!project) return Response.json({ error: "project_not_found" }, { status: 404 });
-      const material = await database().prepare(
-        `INSERT INTO project_materials (project_id, user_email, name, url, kind)
-         VALUES (?, ?, ?, ?, ?)
-         RETURNING id, name, url, kind, created_at AS createdAt`,
-      ).bind(projectId, member.email, name, url, kind).first();
-      await database().prepare(
-        `UPDATE incubation_projects
-         SET current_task = '等待造场核对新增资料',
-             next_action = '造场确认资料是否满足当前阶段要求',
-             waiting_reason = '新增资料已进入资料审核队列',
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND user_email = ?`,
-      ).bind(projectId, member.email).run();
-      return Response.json({ material }, { status: 201 });
+      // M4(2026-10 审计):资料插入与项目状态推进必须同批原子——分两次 run 时,
+      // INSERT 成功而 UPDATE 失败会留下"资料已进队列但项目状态未动"的中间态。
+      const db = database();
+      const [materialResult] = await db.batch([
+        db.prepare(
+          `INSERT INTO project_materials (project_id, user_email, name, url, kind)
+           VALUES (?, ?, ?, ?, ?)
+           RETURNING id, name, url, kind, created_at AS createdAt`,
+        ).bind(projectId, member.email, name, url, kind),
+        db.prepare(
+          `UPDATE incubation_projects
+           SET current_task = '等待造场核对新增资料',
+               next_action = '造场确认资料是否满足当前阶段要求',
+               waiting_reason = '新增资料已进入资料审核队列',
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND user_email = ?`,
+        ).bind(projectId, member.email),
+      ]);
+      return Response.json({ material: materialResult.results[0] }, { status: 201 });
     }
     const fields = {
       name: String(input.name ?? "").trim().slice(0, 32),

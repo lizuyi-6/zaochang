@@ -577,4 +577,31 @@ test("safeReturnPath sinks never emit a protocol-relative escape", async () => {
   const normal = await fetch(`${baseUrl}/signin?return_to=${encodeURIComponent("/feed?x=1#h")}`, { headers: { accept: "text/html" } });
   assert.equal((await normal.text()).match(/<a href="([^"]*)" class="auth-back"/)?.[1], "/feed?x=1#h");
 });
+
+test("docs image URL whitelist blocks arbitrary external links from agent writes (M3)", async () => {
+  const agentAuth = { authorization: "Bearer test-agent-key", "content-type": "application/json" };
+  // agent 是最强写入方:任意外链会把读者 IP/Referer 泄露给外站
+  const evil = await fetch(`${baseUrl}/api/docs`, {
+    method: "POST",
+    headers: agentAuth,
+    body: JSON.stringify({ title: `M3 外链封面 ${runId}`, slug: `m3-evil-${runId}`, visibility: "public", bodyMd: "x", coverImage: "http://evil.example/pixel.png" }),
+  });
+  assert.equal(evil.status, 400);
+  assert.deepEqual(await evil.json(), { error: "invalid_doc_image" });
+  const ok = await fetch(`${baseUrl}/api/docs`, {
+    method: "POST",
+    headers: agentAuth,
+    body: JSON.stringify({ title: `M3 白名单封面 ${runId}`, slug: `m3-ok-${runId}`, visibility: "public", bodyMd: "x", coverImage: "https://images.unsplash.com/photo-1?w=100" }),
+  });
+  assert.equal(ok.status, 201, "白名单域(产品配图)与站内上传键不受影响");
+  const okId = (await ok.json()).doc.id;
+  const evilPatch = await fetch(`${baseUrl}/api/docs`, {
+    method: "PATCH",
+    headers: agentAuth,
+    body: JSON.stringify({ id: okId, bannerImage: "https://tracker.example/x.png" }),
+  });
+  assert.equal(evilPatch.status, 400, "PATCH 路径同规");
+  assert.deepEqual(await evilPatch.json(), { error: "invalid_doc_image" });
+});
+
 }

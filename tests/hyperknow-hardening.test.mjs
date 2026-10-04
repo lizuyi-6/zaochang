@@ -194,3 +194,16 @@ test('hyperknow-hardening: H1 task brief / H4 fixed search copy / H7 reading sam
   assert.match(probe, /maxTokens: 512/, 'H6:探针 maxTokens ≥ 512(> 思考预算 256)');
   assert.match(probe, /if \(!answer\.trim\(\)\)/, 'H6:空正文不得报健康');
 });
+
+test('community-hardening: storage/db failures are 503, docs images whitelisted, incubation add_material atomic (M2/M3/M4)', () => {
+  const products = read('app/api/products/route.ts');
+  assert.match(products, /storage_unavailable" \}, \{ status: 503 \}/, 'M2:bucket 缺失必须 503,不得混同对象不属主的 403');
+  const community = read('app/api/_lib/community.ts');
+  assert.match(community, /accessError\("database_unavailable", 503\)/, 'M2:DB binding 缺失必须 503(不得裸 500)');
+  const docs = read('app/api/_lib/docs.ts');
+  assert.match(docs, /export function validDocImageUrl/, 'M3:文档图片 URL 白名单必须是显式函数');
+  assert.match(docs, /images\.unsplash\.com/, 'M3:白名单只含产品配图域');
+  assert.doesNotMatch(docs, /coverImage[\s\S]{0,80}https\?:\/\//, 'M3:封面字段不得接受任意外链');
+  const incubation = read('app/api/incubation/route.ts');
+  assert.match(incubation, /db\.batch\(\[\s*[\s\S]*?INSERT INTO project_materials[\s\S]*?UPDATE incubation_projects/, 'M4:资料插入与项目状态推进必须同批原子');
+});

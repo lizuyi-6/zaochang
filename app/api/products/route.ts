@@ -33,8 +33,11 @@ export async function POST(request: Request) {
     if (imageUrl?.startsWith("/api/uploads/")) {
       const key = decodeURIComponent(imageUrl.slice("/api/uploads/".length));
       const check = await verifyScannedUpload({ key, ownerEmail: member.email, expectedPurpose: "product_cover" });
-      // 历史:bucket 不可用与对象缺失同归 not_owned(403),不区分 503。
-      if (check.bucketMissing || check.verdict === "not_owned") {
+      // M2(2026-10 审计):bucket 缺失是平台侧故障(503),不得与对象不属主(403)混同。
+      if (check.bucketMissing) {
+        return Response.json({ error: "storage_unavailable" }, { status: 503 });
+      }
+      if (check.verdict === "not_owned") {
         return Response.json({ error: "product_cover_not_owned" }, { status: 403 });
       }
       if (check.verdict === "not_scanned") {

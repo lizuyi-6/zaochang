@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { getChatGPTUser, type ChatGPTUser } from "../../chatgpt-auth";
 // 错误语义(jsonError/AuthRequiredError)的事实来源在 errors.ts;此处 re-export
 // 让既有调用方 `import { jsonError } from "./community"` 继续可用,新代码请直引 errors.ts。
-import { AuthRequiredError, jsonError } from "./errors";
+import { accessError, AuthRequiredError, jsonError } from "./errors";
 import { AGENT_DISPLAY_NAME, AGENT_EMAIL } from "./agent-auth";
 
 export { jsonError };
@@ -10,7 +10,9 @@ export { jsonError };
 export type MemberIdentity = ChatGPTUser & { initial: string };
 
 export function database() {
-  if (!env.DB) throw new Error("Community database is unavailable");
+  // M2(2026-10 审计):DB binding 缺失是平台侧故障,503 database_unavailable
+  // (accessError 形状由 jsonError 统一映射),不再落成裸 500。
+  if (!env.DB) throw accessError("database_unavailable", 503);
   return env.DB;
 }
 

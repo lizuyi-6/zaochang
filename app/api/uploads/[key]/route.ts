@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { isAdminEmail, optionalMember } from "../../_lib/access-control";
 import { database } from "../../_lib/community";
-import { isCurrentApprovedProduct } from "../../../lib/product-policy";
+import { PUBLISHED_PRODUCT_SQL } from "../../../lib/product-policy";
 
 export async function GET(_request: Request, context: { params: Promise<{ key: string }> }) {
   const { key } = await context.params;
@@ -37,22 +37,16 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
     // 不依赖登录态;只有 reviewer 才需要 member。member 为 null 时 reviewer 恒 false。
     if (!owner && record.purpose === "product_cover") {
       const imageUrl = `/api/uploads/${encodeURIComponent(key)}`;
-      const product = await database().prepare(
-        `SELECT status, moderation_status AS moderationStatus,
-                review_status AS reviewStatus,
-                approved_version AS approvedVersion, review_version AS reviewVersion
-         FROM products WHERE image_url = ?`,
-      ).bind(imageUrl).first<{
-        status: string;
-        moderationStatus: string;
-        reviewStatus: string;
-        approvedVersion: number;
-        reviewVersion: number;
-      }>();
-      reviewer = member !== null && isAdminEmail(member.email) && product?.reviewStatus === "pending_review";
-      approvedProductCover = product?.status === "published"
-        && product.moderationStatus === "visible"
-        && isCurrentApprovedProduct(product);
+      // M1(2026-10 审计):封面可被多个产品共用——"是否已批准产品的当前封面"必须
+      // 用 EXISTS 全量判定;.first() 命中待审产品会把已批准产品共用的封面错判 403。
+      if (member !== null && isAdminEmail(member.email)) {
+        reviewer = Boolean(await database().prepare(
+          `SELECT 1 AS pending FROM products WHERE image_url = ? AND review_status = 'pending_review'`,
+        ).bind(imageUrl).first());
+      }
+      approvedProductCover = Boolean(await database().prepare(
+        `SELECT 1 AS published FROM products WHERE image_url = ? AND ${PUBLISHED_PRODUCT_SQL} LIMIT 1`,
+      ).bind(imageUrl).first());
     }
     if (!owner && !reviewer && !approvedProductCover) {
       return new Response("Forbidden", { status: 403 });

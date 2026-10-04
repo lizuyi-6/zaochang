@@ -360,4 +360,37 @@ test("upload finalize failure must not strand a clean R2 orphan (P1-U)", async (
   assert.equal(probe.status, 404, "finalize 失败后正式 key 必须已从 R2 回收,不得遗留 clean 孤儿对象");
   await probe.body?.cancel();
 });
+
+test("shared product cover stays public when another pending product references it (M1)", async () => {
+  const ownerEmail = `m1-owner-${runId}@example.com`;
+  const ownerHeaders = { ...authHeaders("M1 封面作者", ownerEmail), "x-hk-web-search-provider": "off" };
+  delete ownerHeaders["x-hk-web-search-provider"];
+  const uploadHeaders = { ...ownerHeaders };
+  delete uploadHeaders["content-type"];
+  const form = new FormData();
+  form.set("file", new File([onePixelPng], "m1-cover.png", { type: "image/png" }));
+  form.set("visibility", "private");
+  form.set("purpose", "product_cover");
+  const upload = await fetch(`${baseUrl}/api/uploads`, { method: "POST", headers: uploadHeaders, body: form });
+  assert.equal(upload.status, 201);
+  const coverUrl = (await upload.json()).url;
+
+  // 先建"待审"产品再建"已批准"产品:旧行 .first() 无排序命中先插入的待审行,
+  // 会把已批准产品共用的封面错判为私有(匿名 403)——M1 用 EXISTS 全量判定。
+  const create = (title) => fetch(`${baseUrl}/api/products`, {
+    method: "POST",
+    headers: { ...ownerHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ title, description: "验证共用封面可见性判定。", category: "开发工具", coverTheme: "ink", imageUrl: coverUrl, price: 0 }),
+  });
+  const pendingFirst = await create(`M1 待审共用封面 ${runId}`);
+  assert.equal(pendingFirst.status, 201);
+  const approvedSecond = await create(`M1 已批准共用封面 ${runId}`);
+  assert.equal(approvedSecond.status, 201);
+  const approvedId = (await approvedSecond.json()).product.id;
+  await reviewProduct(approvedId);
+
+  const anonymous = await fetch(`${baseUrl}${coverUrl}`);
+  assert.equal(anonymous.status, 200, "存在任一已批准产品引用封面即公开,待审共用者不得拖累");
+  await anonymous.body?.cancel();
+});
 }
