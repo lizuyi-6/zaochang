@@ -20,6 +20,16 @@ export class HyperknowUpstreamError extends Error {
   }
 }
 
+/** 上游非 2xx 的统一映射(2026-10 审计重构 #5):401/403 → ai_auth_failed,
+ * 429 → ai_rate_limited,其余 → ai_upstream_error;原文截断进日志,不外泄。 */
+async function throwForStatus(scope: string, endpoint: string, response: Response): Promise<never> {
+  const errText = await response.text().catch(() => "");
+  console.warn(`[hyperknow-llm] ${scope} ${endpoint} returned status ${response.status}: ${errText.slice(0, 300)}`);
+  if (response.status === 401 || response.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
+  if (response.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
+  throw new HyperknowUpstreamError("ai_upstream_error", 503);
+}
+
 export type LlmMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export type ChatOptions = {
@@ -79,13 +89,7 @@ async function postMessages(
     if (signal?.aborted) throw error;
     throw new HyperknowUpstreamError("ai_upstream_error", 503);
   }
-  if (!response.ok || !response.body) {
-    const errText = await response.text().catch(() => "");
-    console.warn(`[hyperknow-llm] messages returned status ${response.status}: ${errText.slice(0, 300)}`);
-    if (response.status === 401 || response.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
-    if (response.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
-    throw new HyperknowUpstreamError("ai_upstream_error", 503);
-  }
+  if (!response.ok || !response.body) throw await throwForStatus("messages", messagesEndpoint(config.baseUrl), response);
   return response;
 }
 
@@ -147,11 +151,7 @@ async function postChatCompletions(
 
   if (!lastResponse || !lastResponse.ok) {
     if (!lastResponse) throw new HyperknowUpstreamError("ai_upstream_error", 503);
-    const errText = await lastResponse.text().catch(() => "");
-    console.warn(`[hyperknow-llm] chat/completions ${endpoint} returned status ${lastResponse.status}: ${errText.slice(0, 300)}`);
-    if (lastResponse.status === 401 || lastResponse.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
-    if (lastResponse.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
-    throw new HyperknowUpstreamError("ai_upstream_error", 503);
+    throw await throwForStatus("chat/completions", endpoint, lastResponse);
   }
   const data = (await lastResponse.json()) as {
     choices?: Array<{ message?: { content?: unknown } }>;
@@ -205,9 +205,7 @@ export async function* streamChat(messages: LlmMessage[], options: ChatOptions =
   }
   if (!response.ok || !response.body) {
     await response.body?.cancel().catch(() => {});
-    if (response.status === 401 || response.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
-    if (response.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
-    throw new HyperknowUpstreamError("ai_upstream_error", 503);
+    throw await throwForStatus("stream", chatCompletionsEndpoint(config.baseUrl), response);
   }
   yield* consumeChatCompletionsSse(response.body, options.signal);
 }
@@ -237,9 +235,7 @@ export async function* streamChatOpenAI(messages: LlmMessage[], options: ChatOpt
   }
   if (!response.ok || !response.body) {
     await response.body?.cancel().catch(() => {});
-    if (response.status === 401 || response.status === 403) throw new HyperknowUpstreamError("ai_auth_failed", 503);
-    if (response.status === 429) throw new HyperknowUpstreamError("ai_rate_limited", 429);
-    throw new HyperknowUpstreamError("ai_upstream_error", 503);
+    throw await throwForStatus("stream", chatCompletionsEndpoint(config.baseUrl), response);
   }
   yield* consumeChatCompletionsSse(response.body, options.signal);
 }
