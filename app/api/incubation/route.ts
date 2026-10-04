@@ -1,4 +1,5 @@
 import { requireMember } from "../_lib/access-control";
+import { UPLOAD_KEY_PATTERN } from "../_lib/upload-core";
 import { database, jsonError } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { verifyScannedUpload } from "../_lib/upload-core";
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
       const kind = String(input.kind ?? "FILE").trim().slice(0, 12) || "FILE";
       if (!Number.isInteger(projectId) || !name || !url.startsWith("/api/uploads/")) return Response.json({ error: "invalid_material" }, { status: 400 });
       const key = decodeURIComponent(url.slice("/api/uploads/".length));
-      if (!/^[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(key)) return Response.json({ error: "invalid_material" }, { status: 400 });
+      if (!UPLOAD_KEY_PATTERN.test(key)) return Response.json({ error: "invalid_material" }, { status: 400 });
       const check = await verifyScannedUpload({ key, ownerEmail: member.email, expectedPurpose: "incubation_material" });
       if (check.bucketMissing) return Response.json({ error: "uploads_unavailable" }, { status: 503 });
       if (check.verdict === "not_owned") return Response.json({ error: "material_not_owned" }, { status: 403 });

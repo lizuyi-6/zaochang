@@ -433,7 +433,7 @@ export async function refundProductOrder(userEmail: string, orderId: string, ide
   if (!refundable) throw new FruitError("refund_window_closed", 409);
 
   // 与购买路径同政策:钱包/账本漂移是高危事件,必须阻断并留痕,而不是静默改写。
-  // (reconcileWalletFromLedger 只保留给确实需要修复的显式运维场景,不再出现在资金路径上。)
+  // (钱包/账本漂移一律阻断留痕,不做任何"按账本改写钱包"的静默修复。)
   // 设计确认(2026-10 审计 L1):退款不检查卖家钱包状态——买家在退款窗口内的退款权
   // 优先于卖家侧风控(frozen/review),否则卖家被风控会顺带冻结买家的正当退款。
   // 07-oidc-external 的"商户钱包 frozen 下退款仍 200"断言钉住该语义。

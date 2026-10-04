@@ -1,4 +1,5 @@
 import sanitizeHtml from "sanitize-html";
+import { UPLOAD_KEY_URL_PATTERN } from "./upload-core";
 import { cache } from "react";
 import { env } from "cloudflare:workers";
 import { renderMarkdownKatexHtml } from "@/app/lib/markdown-katex";
@@ -574,7 +575,7 @@ export function normalizeVisibility(input: string): DocVisibility {
 // 或既定的产品配图域。任意外链会把读者 IP/Referer 泄露给外站(agent 也能写入)。
 export function validDocImageUrl(value: string): boolean {
   if (!value) return true;
-  return /^\/api\/uploads\/[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(value)
+  return UPLOAD_KEY_URL_PATTERN.test(value)
     || value.startsWith("https://images.unsplash.com/");
 }
 

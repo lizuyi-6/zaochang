@@ -1,4 +1,5 @@
 import { requireMember } from "../_lib/access-control";
+import { UPLOAD_KEY_URL_PATTERN } from "../_lib/upload-core";
 import { database, jsonError } from "../_lib/community";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { verifyScannedUpload } from "../_lib/upload-core";
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     if (demoUrl && !/^https:\/\//i.test(demoUrl)) {
       return Response.json({ error: "invalid_demo_url" }, { status: 400 });
     }
-    if (imageUrl && !(/^https?:\/\//i.test(imageUrl) || /^\/api\/uploads\/[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(imageUrl))) {
+    if (imageUrl && !(/^https?:\/\//i.test(imageUrl) || UPLOAD_KEY_URL_PATTERN.test(imageUrl))) {
       return Response.json({ error: "invalid_image_url" }, { status: 400 });
     }
     if (imageUrl?.startsWith("/api/uploads/")) {

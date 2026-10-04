@@ -8,6 +8,11 @@ import { completeScannedUploadSql, failScannedUploadSql } from "./hyperknow/imag
 // 提升到正式 key;infected/error 一律 fail-closed,绝不落为可读的 clean。
 // 该函数不做任何鉴权/限流——调用方必须先自行鉴权(成员/创始人),并按需限流。
 
+// 上传对象 key 的合法形状(2026-10 审计重构 #9):uuid[.ext]。此前 uploads/incubation/
+// products/docs 四处各抄一份正则——key 校验是读取/引用安全边界,收敛为单一事实来源。
+export const UPLOAD_KEY_PATTERN = /^[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/;
+export const UPLOAD_KEY_URL_PATTERN = /^\/api\/uploads\/[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/;
+
 export type StoredUpload = {
   key: string;
   name: string;

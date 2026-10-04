@@ -1,11 +1,12 @@
 import { env } from "cloudflare:workers";
+import { UPLOAD_KEY_PATTERN } from "../../_lib/upload-core";
 import { isAdminEmail, optionalMember } from "../../_lib/access-control";
 import { database } from "../../_lib/community";
 import { PUBLISHED_PRODUCT_SQL } from "../../../lib/product-policy";
 
 export async function GET(_request: Request, context: { params: Promise<{ key: string }> }) {
   const { key } = await context.params;
-  if (!/^[a-f0-9-]+(?:\.[a-zA-Z0-9]{1,8})?$/.test(key)) return new Response("Not found", { status: 404 });
+  if (!UPLOAD_KEY_PATTERN.test(key)) return new Response("Not found", { status: 404 });
   const record = await database().prepare(
     `SELECT owner_email AS owner, original_name AS originalName,
             media_type AS mediaType, visibility, purpose, sha256, scan_status AS scanStatus
