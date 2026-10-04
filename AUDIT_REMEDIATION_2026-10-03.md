@@ -10,6 +10,7 @@
 
 ## 0. 工作区现状(决策前必读)
 
+> **2026-10-04 完工更新**:全部 5 批 + C2 已实施完毕(第 1 批补测→C2→第 2 批→第 3 批 L/A/H/M/W→第 4 批重构 #1-13→第 5 批卫生),npm test **486/486 全绿**(基线 458),lint 0 error 0 warning(--max-warnings=0),tsc/db:generate/diff-check 干净;均提交本地 main(未推送,推 main 触发生产部署)。第 4 批注:#12 的 postJson 未做(各调用点错误形状不一,统一会改行为);C2 的 >60s 真实窗口复现因共享预览 5s 测试预算不可行,以行为测试+租约公式契约钉等效覆盖。此前记录:
 > **2026-10-04 更新**:用户已决定采用①(保留并补齐测试后提交)。F1/C1/A4 的缺失测试已补,第 1 批连同本文档一并提交(本地 main,**未推送**;其下还有未推送的 `92b6eb9`,见 `git log`);npm test 464/464(+6)。后续入口:§8 第 2 步起(C2 先复现再修)。
 > - F1:`tests/suites/07-oidc-external.tests.mjs` 新增两条(旧挑战码 403 / 校验后换 hash 批次仍 paid),`tests/hyperknow-hardening.test.mjs` 钉"paid UPDATE 的 WHERE 不得依赖 challenge";
 > - C1:新增零依赖 `app/api/_lib/hyperknow/budgets.ts`(导出两阶段预算常量 + `resolveCourseGenBudgetMs`,`HK_COURSE_GEN_TIMEOUT_MS` 仅 `APP_ENV=test` 采纳);route Stage1 经门禁解析、Stage2 用常量;`tests/harness/preview.mjs` 以 `HK_COURSE_GEN_TIMEOUT_MS:5000` 起预览;`tests/suites/11-hyperknow.tests.mjs` 新增超时退费集成测试与纯函数单测;契约钉禁止超时内联数字;

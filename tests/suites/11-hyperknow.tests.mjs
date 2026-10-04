@@ -374,6 +374,8 @@ export function register() {
 
   test("hyperknow course-generation: 默认优先 StepFun provider, 单轮一次真搜, web_search 工具协议与提示词防注入", async () => {
     resetAiUpstream();
+    // MCP 现为 stepfun 主通道;本用例钉 /v1/search 回退通道契约,置 MCP 401 使其服务
+    setMcpMockOutcome("auth_failed");
     const email = `hk-stepfun-${runId}@example.com`;
     const query = "Distributed Systems Consensus";
     // 不传 x-hk-web-search-provider 头，证明默认走现有 AI 渠道 (stepfun)
@@ -418,6 +420,8 @@ export function register() {
 
   test("hyperknow course-generation: StepFun 搜索失败明确降级继续生成, 积分不重复扣减", async () => {
     resetAiUpstream();
+    // 同上:让回退通道 /v1/search 服务,其 upstream_error 降级语义才是本用例主题
+    setMcpMockOutcome("auth_failed");
     setStepfunSearchMockOutcome("upstream_error");
     const email = `hk-stepfun-fail-${runId}@example.com`;
     const query = "Fault Tolerant Storage";
@@ -606,6 +610,8 @@ export function register() {
 
   test("hyperknow course-generation: 确认流 Stage2 带回 Stage1 检索命中(P1-R)", async () => {
     resetAiUpstream();
+    // 经 /v1/search 回退通道取命中(与既有断言的 stepfun.research.test 域一致)
+    setMcpMockOutcome("auth_failed");
     const email = `hk-p1r-${runId}@example.com`;
     const headers = authHeaders("P1R 用户", email);
     // Stage1(确认流)→ 检索命中必须随任务落库 → Stage2 confirm 的单元请求注入命中。
