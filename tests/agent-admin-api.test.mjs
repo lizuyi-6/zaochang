@@ -81,12 +81,15 @@ test("三个 admin 路由接入 adminOrAgent(读 requireAdminOrAgent,写 guardWr
 
 test("同源豁免必须限定 agent 身份(cookie 会话照常校验同源)", () => {
   const src = readFileSync(new URL("../app/api/_lib/route-guards.ts", import.meta.url), "utf8");
-  assert.match(src, /options\.sameOrigin && member\.email !== AGENT_EMAIL/);
+  // A8(2026-10 审计):豁免按 isAgent 判定(仅 Bearer 通道置位),不再按 email 字符串
+  // 匹配——dev-login 自选 agent@zaochang 不得借此豁免同源校验。
+  assert.match(src, /options\.sameOrigin && !member\.isAgent/);
 });
 
 test("requireAdminOrAgent:agent 直通,人类仍走邮箱白名单(admin_forbidden 语义不变)", () => {
   const src = readFileSync(new URL("../app/api/_lib/access-control.ts", import.meta.url), "utf8");
-  assert.match(src, /member\.email === AGENT_EMAIL\) return member/);
+  // A8:agent 直通按 isAgent 判定(仅 agent Bearer token 路径置位)
+  assert.match(src, /if \(member\.isAgent\) return member;/);
   assert.match(src, /accessError\("admin_forbidden", 403\)/);
   // requireAdmin 原语必须保持零变化(历史语义别名)
   assert.match(src, /export function requireAdmin\(\): Promise<MemberIdentity> \{\s*return requireRole\("admin"\);/);
