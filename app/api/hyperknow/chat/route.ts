@@ -3,6 +3,7 @@ import { jsonError } from "../../_lib/errors";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { contentGenerateStream, generateNextSteps, resolveChatModel } from "../../_lib/hyperknow/agents";
+import { CHAT_TOTAL_BUDGET_MS } from "../../_lib/hyperknow/budgets";
 import { HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/hyperknow/llm";
 import { FALLBACK_GUIDELINE } from "../../_lib/hyperknow/prompts";
 import { saveConversation, getConversation } from "../../_lib/hyperknow/store";
@@ -66,11 +67,10 @@ export async function POST(request: Request) {
      * 只带最近 40 条(模型实际能消化的窗口),完整历史仍按落库上限保存。 */
     const modelHistory = history.slice(-40);
 
-    // 客户端断开与总时长兜底合并(白板/课程同类;生成型课程实测 ~60s 量级,120s 足够)。
-    const signal =
-      typeof AbortSignal.any === "function"
-        ? AbortSignal.any([request.signal, AbortSignal.timeout(120_000)])
-        : AbortSignal.timeout(360_000);
+    // H8(2026-10 审计):Workers 运行时恒有 AbortSignal.any,typeof 分支是死代码
+    // (360s 兜底不可达);总预算提为导出常量,与重试层级(llm 候选 ≤2 + chat 回退 1 次)
+    // 的耗时上限可核算——契约钉在 hyperknow-hardening。
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(CHAT_TOTAL_BUDGET_MS)]);
 
     // 预取首个 LLM 增量(推理模型路径:guideline 用静态兜底,与原 chatWs.js 的
     // isReasoningModel 分支一致——Director Agent 不单独调用,其思考过程由

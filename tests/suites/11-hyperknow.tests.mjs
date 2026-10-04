@@ -22,6 +22,7 @@ import {
   setAiUpstreamForceFail,
   setAiUpstreamJsonResponse,
   setAiUpstreamUnitDelay,
+  setAiUpstreamMissingModel,
   setImageUpstreamDelay,
   authHeaders,
   executeD1Sql,
@@ -432,7 +433,7 @@ export function register() {
     assert.equal(progress.data.provider, "stepfun");
     assert.equal(progress.data.status, "upstream_error");
     assert.equal(progress.data.sources, 0);
-    assert.match(progress.data.reason, /500/);
+    assert.equal(progress.data.reason, "search_upstream_failed", "H4:错误细节只进日志,客户端固定文案");
 
     const researchDone = frames.find(
       (frame) => frame.type === "course_generation_step" && frame.step_id === "researching_the_web" && frame.status === "completed",
@@ -611,7 +612,7 @@ export function register() {
     const stage1 = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ query: "Research Carryover Course", idempotencyKey: `hk-p1r-${runId}`, requireConfirmation: true }),
+      body: JSON.stringify({ query: "Research Carryover Course", idempotencyKey: `hk-p1r-${runId}`, requireConfirmation: true, brief: { language: "zh-CN", depth: "systematic" } }),
     });
     assert.equal(stage1.status, 200);
     const blueprint = (await readHkFrames(stage1)).find((f) => f.type === "blueprint_ready");
@@ -622,14 +623,87 @@ export function register() {
     const stage2 = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ resumeUuid: blueprint.course_uuid, action: "confirm_blueprint", selectedUnits: ["unit-1"] }),
+      body: JSON.stringify({ resumeUuid: blueprint.course_uuid, action: "confirm_blueprint", selectedUnits: ["unit-1"], brief: { language: "ja-JP" } }),
     });
     assert.equal(stage2.status, 200);
     const ready = (await readHkFrames(stage2)).find((f) => f.type === "course_structure_ready");
     assert.ok(ready, "Stage2 必须完成课程生成");
     assert.match(lastChatCompletion.user, /stepfun\.research\.test/, "Stage2 单元请求必须注入 Stage1 的检索命中");
     assert.match(lastChatCompletion.user, /UNTRUSTED EXTERNAL WEB RESEARCH/, "注入必须带不可信数据声明");
+    // H1:确认请求体夹带的 brief 不得覆盖任务行——持久化课程的 brief 仍取 Stage1 落库值。
+    const persisted = await queryLocalD1(`SELECT course_json FROM hk_courses WHERE uuid = '${blueprint.course_uuid}' AND user_email = '${email}'`);
+    const persistedBrief = JSON.parse(persisted[0]?.course_json ?? "{}").brief;
+    assert.equal(persistedBrief?.language, "zh-CN", "H1:课程持久化的 brief 必须来自任务行,不是确认请求体");
     resetAiUpstream();
+  });
+
+  test("hyperknow course-generation: 上游整体故障在扣费前 503,不产生扣退往返(H2)", async () => {
+    resetAiUpstream();
+    const email = `hk-h2-${runId}@example.com`;
+    const headers = authHeaders("H2 用户", email);
+    setAiUpstreamForceFail(true);
+    try {
+      const response = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+        method: "POST",
+        headers: { ...headers, "x-hk-web-search-provider": "off" },
+        body: JSON.stringify({ query: "Probe Blocked Course", idempotencyKey: `hk-h2-${runId}` }),
+      });
+      assert.equal(response.status, 503, "探活失败必须显式 503");
+      assert.equal((await response.json()).error, "ai_upstream_error");
+      const info = (await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json()).data.subscription;
+      assert.equal(info.remaining_credits, 20, "扣费前拦截:积分分毫未动");
+    } finally {
+      setAiUpstreamForceFail(false);
+      resetAiUpstream();
+    }
+  });
+
+  test("hyperknow course-generation: 主模型 404 降级必须显式发帧,不再静默换 Flash(H3)", async () => {
+    resetAiUpstream();
+    setAiUpstreamMissingModel("step-5-preview");
+    const email = `hk-h3-${runId}@example.com`;
+    try {
+      const response = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+        method: "POST",
+        headers: { ...authHeaders("H3 用户", email), "x-hk-web-search-provider": "off" },
+        body: JSON.stringify({ query: "Model Downgrade Course", model: "pro" }),
+      });
+      assert.equal(response.status, 200);
+      const frames = await readHkFrames(response);
+      const degraded = frames.find((f) => f.type === "model_degraded");
+      assert.ok(degraded, "Pro 404 降级到 Flash 必须下发 model_degraded 帧");
+      assert.equal(degraded.data.from_model, "step-5-preview");
+      assert.equal(degraded.data.to_model, "step-3.7-flash");
+      assert.ok(frames.find((f) => f.type === "course_structure_ready"), "降级后课程仍要完成");
+    } finally {
+      setAiUpstreamMissingModel(null);
+      resetAiUpstream();
+    }
+  });
+
+  test("hyperknow course-generation: 回放已完成课程不吃新建课限流(H5)", async () => {
+    resetAiUpstream();
+    const email = `hk-h5-${runId}@example.com`;
+    const headers = { ...authHeaders("H5 用户", email), "x-hk-web-search-provider": "off" };
+    const chargeKey = `hk-h5-${runId}`;
+    const created = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: "Replay Quota Course", idempotencyKey: chargeKey }),
+    });
+    assert.equal(created.status, 200);
+    const ready = (await readHkFrames(created)).find((f) => f.type === "course_structure_ready");
+    assert.ok(ready);
+    // 6 次同 key 回放(> 新建课 5/小时):读自家数据不得被限流拦
+    for (let i = 0; i < 6; i += 1) {
+      const replay = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query: "Replay Quota Course", idempotencyKey: chargeKey }),
+      });
+      assert.equal(replay.status, 200, `第 ${i + 1} 次回放不得 429`);
+      await readHkFrames(replay);
+    }
   });
 
   test("hyperknow course-inquiry: 鉴权、限流、3-5推荐问询、版本化 CourseBrief 与最多 2 次智能追问", async () => {
@@ -1270,7 +1344,7 @@ export function register() {
     assert.equal(body.ok, true);
     assert.equal(typeof body.latency_ms, "number", "探针必须回报往返耗时");
     assert.equal(lastChatCompletion.transport, "messages");
-    assert.equal(lastChatCompletion.max_tokens, 16, "探针必须是最小代价调用");
+    assert.equal(lastChatCompletion.max_tokens, 512, "H6:探针 maxTokens 必须 > 思考预算(16 时空正文恒不 ok)");
     assert.equal(lastChatCompletion.messageCount, 1, "system 抽到顶层,消息体只剩 user 一条");
     assert.match(lastChatCompletion.system, /health probe/i);
     assert.equal(lastChatCompletion.user, "ping");

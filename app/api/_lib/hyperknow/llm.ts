@@ -27,6 +27,9 @@ export type ChatOptions = {
   maxTokens?: number;
   budgetTokens?: number;
   signal?: AbortSignal;
+  /** H3(2026-10 审计):主模型 404 降级到候选模型时回调——调用方可推帧/提示,
+   * 不再对用户静默换模型(Pro 付费感知)。 */
+  onModelDowngrade?: (fromModel: string, toModel: string) => void;
 };
 
 // Messages API 要求首条必须是 user;system 抽出合并为顶层字段(原 _formatMessagesForAnthropic 逐字语义)。
@@ -127,6 +130,9 @@ async function postChatCompletions(
       if (response.status === 404 && i < candidateModels.length - 1) {
         // 丢弃前显式取消响应体:Workers 下不 cancel 的连接要等 GC 才释放
         await response.body?.cancel().catch(() => {});
+        // H3:降级必须可见——日志 + 回调(调用方推 model_degraded 帧),不再静默换模型。
+        console.warn(`[hyperknow-llm] model ${currentModel} unavailable (404), downgrading to ${candidateModels[i + 1]}`);
+        options.onModelDowngrade?.(currentModel, candidateModels[i + 1]);
         continue;
       }
       lastResponse = response;

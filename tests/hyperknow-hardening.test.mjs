@@ -175,3 +175,22 @@ test('auth-hardening: email REST override is production-blind, agent identity is
   assert.equal(agentAuth.includes('"agent@zaochang"'), gate.includes('"agent@zaochang"'), true, 'dev-login 拒绝字面量必须与 agent-auth 常量同值(零 import 副本,契约钉锁死漂移)');
   assert.match(gate, /includes\("\."\)/, 'dev-login 必须要求域名含点(dot-less 域拒绝)');
 });
+
+test('hyperknow-hardening: H1 task brief / H4 fixed search copy / H7 reading same-origin / H8 chat budget', () => {
+  const route = read('app/api/hyperknow/course-generation/route.ts');
+  assert.match(route, /taskBrief = task\.briefJson \? \(JSON\.parse\(task\.briefJson\) as CourseBrief\) : undefined;/, 'H1:Stage2 的 brief 必须来自任务行,请求体 brief 不得覆写');
+  assert.doesNotMatch(route, /reason: err instanceof Error \? err\.message/, 'H4:检索错误原文不得推给客户端(固定文案 + 日志)');
+  assert.match(route, /reason: "search_upstream_failed"/, 'H4:检索失败固定文案');
+  assert.match(route, /hyperknow-course-confirm/, 'H5:蓝图确认必须与新建课分桶限流;回放不计数');
+  assert.match(route, /type: "model_degraded"/, 'H3:主模型 404 降级必须推帧可见');
+  const llm = read('app/api/_lib/hyperknow/llm.ts');
+  assert.match(llm, /onModelDowngrade\?\.\(currentModel, candidateModels\[i \+ 1\]\);/, 'H3:llm 降级必须回调 + 日志');
+  const reading = read('app/api/ai/reading/route.ts');
+  assert.match(reading, /assertSameOrigin\(request\)/, 'H7:阅读 AI 路由必须与其余 hyperknow 写路由同源断言');
+  const chat = read('app/api/hyperknow/chat/route.ts');
+  assert.match(chat, /AbortSignal\.timeout\(CHAT_TOTAL_BUDGET_MS\)/, 'H8:chat 总预算用导出常量');
+  assert.doesNotMatch(chat, /typeof AbortSignal\.any/, 'H8:Workers 恒有 AbortSignal.any,typeof 死分支不得回归');
+  const probe = read('app/api/hyperknow/model-check/route.ts');
+  assert.match(probe, /maxTokens: 512/, 'H6:探针 maxTokens ≥ 512(> 思考预算 256)');
+  assert.match(probe, /if \(!answer\.trim\(\)\)/, 'H6:空正文不得报健康');
+});

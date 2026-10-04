@@ -329,6 +329,7 @@ export async function generateCourseBlueprint(
   research: WebSearchHit[] = [],
   brief?: CourseBrief,
   model?: string,
+  onModelDowngrade?: (fromModel: string, toModel: string) => void,
 ): Promise<CourseBlueprint> {
   const researchNote = formatUntrustedResearchNote(research);
   const briefNote = formatCourseBrief(brief);
@@ -352,7 +353,7 @@ export async function generateCourseBlueprint(
             content: `Design a structured course blueprint for: "${query}" (Target Depth: ${normDepth}, reference unit scale: ${scale.refUnits} units, Language: ${effLang})${briefNote}${researchNote}`,
           },
         ],
-        { jsonMode: true, signal, maxTokens: 8192, model },
+        { jsonMode: true, signal, maxTokens: 8192, model, onModelDowngrade },
       );
       blueprint = parseCourseBlueprint(jsonStr);
       break;
@@ -401,6 +402,7 @@ export async function generateUnitDetails(
   research: WebSearchHit[] = [],
   language = "zh-CN",
   model?: string,
+  onModelDowngrade?: (fromModel: string, toModel: string) => void,
 ): Promise<CourseUnit> {
   const researchNote = formatUntrustedResearchNote(research);
   const effLang = resolveEffectiveLanguage(language);
@@ -419,7 +421,7 @@ export async function generateUnitDetails(
         content: `Course Context: "${courseTitle}"${prevSummary}${researchNote}\nTarget Language: ${effLang}\nUnit: "${blueprintUnit.unitId}" - "${blueprintUnit.title}"\nRequirements: generate EXACTLY ${expectedLectures} lectures and total ${expectedSessions} sessions.\nPrerequisites: ${JSON.stringify(blueprintUnit.prerequisites ?? [])}\nObjectives: ${JSON.stringify(blueprintUnit.objectives ?? [])}\nCompletion Criteria: ${JSON.stringify(blueprintUnit.completionCriteria ?? [])}\nGenerate concrete lectures and sessions for this unit in ${effLang}.`,
       },
     ],
-    { jsonMode: true, signal, maxTokens: 4096, model },
+    { jsonMode: true, signal, maxTokens: 4096, model, onModelDowngrade },
   );
 
   let unit = parseUnitDetails(jsonStr);

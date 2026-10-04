@@ -26,8 +26,13 @@ export async function POST(request: Request) {
           { role: "system", content: "You are a health probe. Reply with exactly one word: ok" },
           { role: "user", content: "ping" },
         ],
-        { maxTokens: 16, signal: AbortSignal.any([request.signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)]) },
+        { maxTokens: 512, signal: AbortSignal.any([request.signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)]) },
       );
+      /* H6(2026-10 审计):maxTokens 必须 > 思考预算(混合推理会把预算耗在思维链上,
+       * 16 时空正文几乎必然)且正文非空才算 ok——否则探针永远报健康。 */
+      if (!answer.trim()) {
+        return Response.json({ ok: false, error: "no_answer" }, { status: 200 });
+      }
       return Response.json({ ok: true, latency_ms: Date.now() - startedAt, answer: answer.trim().slice(0, 40) });
     } catch (error) {
       if (error instanceof HyperknowNotConfiguredError) {

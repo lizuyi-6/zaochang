@@ -1,4 +1,5 @@
 import { requireMember } from "../../_lib/access-control";
+import { assertSameOrigin } from "../../_lib/request-origin";
 import { jsonError } from "../../_lib/community";
 import { findInBook, getDocBody } from "../../_lib/docs";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
@@ -46,6 +47,9 @@ function sseFrame(event: string, data: Record<string, unknown>): Uint8Array {
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
+    // H7(2026-10 审计):补齐与其余 hyperknow 写路由一致的同源断言(CSRF 纵深)。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     const input = (await request.json().catch(() => ({}))) as ReadingAiRequestInput;
 
     const action = String(input.action ?? "") as ReadingAiAction;

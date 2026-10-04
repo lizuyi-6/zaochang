@@ -27,6 +27,7 @@ import {
   type SearchOutcome,
   type SearchOutcomeStatus,
 } from "../../_lib/hyperknow/websearch";
+import { chat as llmChat, HyperknowNotConfiguredError, HyperknowUpstreamError } from "../../_lib/hyperknow/llm";
 import {
   consumeCreditsIdempotent,
   currentCredits,
@@ -41,6 +42,9 @@ import {
 import type { CourseBlueprint, CourseUnit } from "../../_lib/hyperknow/prompts";
 
 export const dynamic = "force-dynamic";
+
+// H2 扣费前探活的超时:只判"上游是否活着",10s 足够;超时按上游不可用处理。
+const UPSTREAM_PROBE_TIMEOUT_MS = 10_000;
 
 // A client retry key always names the same server-owned task UUID for this member.
 async function taskUuidForKey(userEmail: string, key: string): Promise<string> {
@@ -99,10 +103,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "query_required" }, { status: 400 });
     }
 
-    await enforceRateLimit(await rateLimitKey("hyperknow-course-gen", member.email), 5, 60 * 60);
+    // ── H5:限流只拦"新工作"。回放已完成课程/恢复蓝图不计数(读自家数据不是
+    // 生成配额的消耗);蓝图确认(Stage2)单独计数,不与新建课抢同一个 5/小时桶。
+    const enforceCourseGenQuota = async () => {
+      await enforceRateLimit(await rateLimitKey("hyperknow-course-gen", member.email), 5, 60 * 60);
+    };
 
     // ── 分支 1: 蓝图确认与生成具体课节 (Stage 2: 独立有界单元真实生成与检查点) ──────────
     if (action === "confirm_blueprint" && resumeUuid) {
+      await enforceRateLimit(await rateLimitKey("hyperknow-course-confirm", member.email), 5, 60 * 60);
       const task = await getCourseTask(resumeUuid, member.email);
       if (!task) {
         // 任务不存在或越权
@@ -198,7 +207,15 @@ export async function POST(request: Request) {
               }
 
               const totalUnits = targetBlueprintUnits.length;
-              const taskLanguage = blueprint.language || (brief?.language ? String(brief.language) : "zh-CN");
+              // ── H1:brief 一律以任务行落库的为准(briefJson),请求体携带的 brief
+              // 可能与任务不一致,且会被持久化进讲师 prompt 与课程记录。
+              let taskBrief: CourseBrief | undefined;
+              try {
+                taskBrief = task.briefJson ? (JSON.parse(task.briefJson) as CourseBrief) : undefined;
+              } catch {
+                taskBrief = undefined;
+              }
+              const taskLanguage = blueprint.language || taskBrief?.language || "zh-CN";
 
               let taskResearchHits: WebSearchHit[] = [];
               try {
@@ -242,6 +259,16 @@ export async function POST(request: Request) {
                   course_uuid: resumeUuid,
                 });
 
+                // H3:Stage2 同样可见降级(不静默换模型)
+                const pushStage2ModelDegraded = (fromModel: string, toModel: string) => {
+                  push({
+                    type: "model_degraded",
+                    message: `Requested model ${fromModel} is unavailable; continuing with ${toModel}`,
+                    data: { from_model: fromModel, to_model: toModel },
+                    course_uuid: resumeUuid,
+                  });
+                };
+
                 // 真实调用 LLM (无模板假数据，失败显式报错)
                 const unit = await generateUnitDetails(
                   blueprint.courseTitle,
@@ -252,6 +279,7 @@ export async function POST(request: Request) {
                   taskResearchHits,
                   taskLanguage,
                   chatModel,
+                  pushStage2ModelDegraded,
                 );
 
                 completedUnits[i] = unit;
@@ -282,8 +310,8 @@ export async function POST(request: Request) {
                 targetLearner: blueprint.targetLearner,
                 tags: blueprint.tags,
                 units: completedUnits,
-                // brief 随课程持久化:白板讲师据此做深度校准与个性化举例
-                ...(brief ? { brief } : {}),
+                // brief 随课程持久化:白板讲师据此做深度校准与个性化举例(H1:取任务行)
+                ...(taskBrief ? { brief: taskBrief } : {}),
               };
 
               // 落库持久化完整课程
@@ -441,6 +469,26 @@ export async function POST(request: Request) {
       return Response.json({ error: (error as { code?: string }).code ?? "ai_not_configured" }, { status });
     }
 
+    // 新建课配额(回放/恢复在上方分支已提前返回,不会走到这里)。
+    await enforceCourseGenQuota();
+
+    // ── H2:扣费前轻量探活。上游整体不可用时在扣费前显式 503,用户不经历
+    // "扣了又退"的账目往返(失败退费由 C1 超时/失败路径兜底,这里是前置防线)。
+    try {
+      await llmChat(
+        [
+          { role: "system", content: "You are a health probe. Reply with exactly one word: ok" },
+          { role: "user", content: "ping" },
+        ],
+        { maxTokens: 512, signal: AbortSignal.timeout(UPSTREAM_PROBE_TIMEOUT_MS) },
+      );
+    } catch (error) {
+      if (error instanceof HyperknowUpstreamError || error instanceof HyperknowNotConfiguredError) {
+        return Response.json({ error: error.code }, { status: 503 });
+      }
+      throw error;
+    }
+
     // 服务端总预算走 budgets 模块;HK_COURSE_GEN_TIMEOUT_MS 覆盖仅在 APP_ENV=test 生效
     // (集成测试压缩 Stage1 预算触发真实超时路径,线上误配不得缩短预算)。
     const envValues = env as unknown as Record<string, string | undefined>;
@@ -552,11 +600,13 @@ export async function POST(request: Request) {
                 outcome = await searchWithOutcome(query, signal, searchConfig.provider);
               } catch (err) {
                 if (signal.aborted || request.signal.aborted) throw err;
+                // ── H4:上游错误原文(可含内部 URL/细节)只进日志;客户端拿到固定文案。
+                console.warn("[hyperknow-course-gen] stepfun search failed:", err instanceof Error ? err.message : err);
                 outcome = {
                   status: "upstream_error",
                   hits: [],
                   provider: "stepfun",
-                  reason: err instanceof Error ? err.message : "Search error",
+                  reason: "search_upstream_failed",
                 };
               }
 
@@ -568,7 +618,10 @@ export async function POST(request: Request) {
               }
 
               const status = outcome.status;
-              const reason = status !== "success" ? (outcome.reason || "Degraded without search context") : undefined;
+              // H4:客户端只认稳定令牌;上游错误细节(即使 websearch 层的固定串)不透传。
+              const reason = status === "upstream_error" ? "search_upstream_failed"
+                : status !== "success" ? (outcome.reason || "Degraded without search context")
+                : undefined;
 
               push({
                 type: "course_generation_progress",
@@ -613,16 +666,20 @@ export async function POST(request: Request) {
                   outcome = await searchWithOutcome(researchQueries[round - 1], signal, searchConfig.provider);
                 } catch (err) {
                   if (signal.aborted || request.signal.aborted) throw err;
+                  // ── H4:同上,错误细节只留日志,客户端固定文案。
+                  console.warn("[hyperknow-course-gen] research search failed:", err instanceof Error ? err.message : err);
                   outcome = {
                     status: "upstream_error",
                     hits: [],
                     provider: searchConfig.provider,
-                    reason: err instanceof Error ? err.message : "Search error",
+                    reason: "search_upstream_failed",
                   };
                 }
 
                 lastOutcomeStatus = outcome.status;
-                if (outcome.status !== "success") {
+                if (outcome.status === "upstream_error") {
+                  lastReason = "search_upstream_failed";
+                } else if (outcome.status !== "success") {
                   lastReason = outcome.reason;
                 }
 
@@ -692,8 +749,18 @@ export async function POST(request: Request) {
               course_uuid: courseUuid,
             });
 
+            // H3:主模型 404 降级必须让用户看见(Pro→Flash),不再静默换模型。
+            const pushModelDegraded = (fromModel: string, toModel: string) => {
+              push({
+                type: "model_degraded",
+                message: `Requested model ${fromModel} is unavailable; continuing with ${toModel}`,
+                data: { from_model: fromModel, to_model: toModel },
+                course_uuid: courseUuid,
+              });
+            };
+
             // 真实蓝图生成
-            const blueprint = await generateCourseBlueprint(query, signal, researchHits.slice(0, 8), brief, chatModel);
+            const blueprint = await generateCourseBlueprint(query, signal, researchHits.slice(0, 8), brief, chatModel, pushModelDegraded);
 
             // 更新任务状态与蓝图落库
             await updateCourseTaskBlueprint(
@@ -784,6 +851,7 @@ export async function POST(request: Request) {
                 researchHits.slice(0, 8),
                 blueprintLanguage,
                 chatModel,
+                pushModelDegraded,
               );
               generatedUnits.push(concreteUnit);
 

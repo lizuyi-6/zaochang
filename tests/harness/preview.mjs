@@ -105,12 +105,19 @@ export function setStepfunSearchMockOutcome(outcome) {
 }
 /** 置 true 后假上游一律 500(测"上游故障"分支);resetAiUpstream 会复位。 */
 export let aiUpstreamForceFail = false;
+/** 置模型名后,该模型的 /v1/messages 与 /v1/chat/completions 调用一律 404
+ * (测 H3 主模型降级:llm.ts 404 候选回退 + model_degraded 帧)。 */
+export let aiUpstreamMissingModel = null;
 /** 置对象后,非流式 Messages 调用(llm.chat)以该对象的 JSON 串作为回复文本
  * (白板讲座计划 quick_check/diagram 透传断言用);resetAiUpstream 会复位。 */
 export let aiUpstreamJsonOverride = null;
 
 export function setAiUpstreamForceFail(value) {
   aiUpstreamForceFail = Boolean(value);
+}
+
+export function setAiUpstreamMissingModel(model) {
+  aiUpstreamMissingModel = model || null;
 }
 
 export function setAiUpstreamJsonResponse(value) {
@@ -139,6 +146,7 @@ export function resetAiUpstream() {
   stepfunSearchRequests.length = 0;
   stepfunSearchMockOutcome = "success";
   aiUpstreamForceFail = false;
+  aiUpstreamMissingModel = null;
   aiUpstreamJsonOverride = null;
   unitResponseDelayMs = 0;
   imageResponseDelayMs = 0;
@@ -181,6 +189,13 @@ export async function startFakeAiUpstream() {
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
     const rawBody = Buffer.concat(chunks).toString("utf8");
     const body = JSON.parse(rawBody);
+    // H3 旋钮:指定模型 404(messages 与 chat/completions 双通道),驱动 llm.ts 降级路径
+    if (aiUpstreamMissingModel && (isMessages || request.url === "/v1/chat/completions")
+      && body.model === aiUpstreamMissingModel) {
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "model_not_found" }));
+      return;
+    }
     if (isSearch) {
       // 假 Tavily:记录查询供课程研学断言;回 1 条确定性命中(URL 含查询词,可证
       // 提示词注入与 sources 计数)。
@@ -252,9 +267,9 @@ export async function startFakeAiUpstream() {
       response.end(JSON.stringify({ error: "boom" }));
       return;
     }
-    // 非流式 Messages 调用(llm.chat,模型探针/讲座规划/蓝图与单元生成用):回 Anthropic 非流式
-    // JSON 形状;aiUpstreamJsonOverride 置值时以该 JSON 串作正文(计划透传断言)。
-    if (isMessages && body.stream !== true) {
+    // 非流式调用的正文计算(llm.chat 走 Messages 或 404 降级回退到 chat/completions
+    // 时共用同一套确定性生成:蓝图/单元形状识别 + aiUpstreamJsonOverride 透传)。
+    const computeNonStreamText = async () => {
       let text = aiUpstreamJsonOverride;
       if (!text) {
         const sys = String(lastChatCompletion.system || "");
@@ -346,6 +361,13 @@ export async function startFakeAiUpstream() {
           text = "ok";
         }
       }
+      return text;
+    };
+
+    // 非流式 Messages 调用(llm.chat,模型探针/讲座规划/蓝图与单元生成用):回 Anthropic 非流式
+    // JSON 形状;aiUpstreamJsonOverride 置值时以该 JSON 串作正文(计划透传断言)。
+    if (isMessages && body.stream !== true) {
+      const text = await computeNonStreamText();
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ id: "msg_fake", type: "message", role: "assistant", content: [{ type: "text", text }], stop_reason: "end_turn" }));
       return;
@@ -389,6 +411,14 @@ export async function startFakeAiUpstream() {
           },
         ],
       }));
+      return;
+    }
+    // 非流式 chat/completions(llm.ts 的 Messages 失败/404 降级回退通道):OpenAI JSON 形状,
+    // 与 Messages 非流式共用同一套确定性正文。
+    if (request.url === "/v1/chat/completions" && body.stream !== true) {
+      const text = await computeNonStreamText();
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ id: "chatcmpl_fake", object: "chat.completion", choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }] }));
       return;
     }
     response.writeHead(200, { "content-type": "text/event-stream" });

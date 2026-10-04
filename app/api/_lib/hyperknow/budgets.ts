@@ -10,6 +10,10 @@ export const COURSE_STAGE2_BUDGET_MS = 900_000;
 // (markCompleted)都会显式清租约,余量只兜"abort 触发到收尾落库"的窗口。
 export const CREDIT_LEASE_MARGIN_MS = 60_000;
 
+// 对话(chat)总预算(H8):首帧预取 + 流式生成 + llm 降级候选(≤2 次 404 换模)
+// + chat() 空正文回退 1 次的最坏路径必须在此预算内可完成。
+export const CHAT_TOTAL_BUDGET_MS = 120_000;
+
 // HK_COURSE_GEN_TIMEOUT_MS 仅在 APP_ENV=test 生效:集成测试用它把 Stage1 预算压到
 // 秒级,以真实触发"超时→失败→退费"路径。生产/预发/未设置/拼写错误的 APP_ENV 一律
 // 忽略——它不是生产旋钮,线上误配不得缩短真实预算。下限 1000ms 防止误配成 0/负数
