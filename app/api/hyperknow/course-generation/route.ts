@@ -554,79 +554,23 @@ export async function POST(request: Request) {
                 data: { sources: 0, status: "disabled", provider: "none" },
                 course_uuid: courseUuid,
               });
-            } else if (searchConfig.provider === "stepfun") {
-              let outcome: SearchOutcome;
-              try {
-                outcome = await searchWithOutcome(query, signal, searchConfig.provider);
-              } catch (err) {
-                if (signal.aborted || request.signal.aborted) throw err;
-                // ── H4:上游错误原文(可含内部 URL/细节)只进日志;客户端拿到固定文案。
-                console.warn("[hyperknow-course-gen] stepfun search failed:", err instanceof Error ? err.message : err);
-                outcome = {
-                  status: "upstream_error",
-                  hits: [],
-                  provider: "stepfun",
-                  reason: "search_upstream_failed",
-                };
-              }
-
-              for (const hit of outcome.hits) {
-                const dedupeKey = hit.url.replace(/[#?].*$/, "");
-                if (seenUrls.has(dedupeKey)) continue;
-                seenUrls.add(dedupeKey);
-                researchHits.push(hit);
-              }
-
-              const status = outcome.status;
-              // H4:客户端只认稳定令牌;上游错误细节(即使 websearch 层的固定串)不透传。
-              const reason = status === "upstream_error" ? "search_upstream_failed"
-                : status !== "success" ? (outcome.reason || "Degraded without search context")
-                : undefined;
-
-              push({
-                type: "course_generation_progress",
-                message: status === "success"
-                  ? "Researching the web (round 1/1)"
-                  : `Researching the web degraded (${reason ?? status})`,
-                data: {
-                  round: 1,
-                  total_rounds: 1,
-                  keywords: [query],
-                  sources: researchHits.length,
-                  status,
-                  provider: "stepfun",
-                  titles: researchHits.map((h) => h.title),
-                  links: researchHits.map((h) => h.url),
-                  ...(reason ? { reason } : {}),
-                },
-                course_uuid: courseUuid,
-              });
-              push({
-                type: "course_generation_step",
-                step_id: "researching_the_web",
-                status: "completed",
-                data: {
-                  sources: researchHits.length,
-                  status,
-                  provider: "stepfun",
-                  titles: researchHits.map((h) => h.title),
-                  links: researchHits.map((h) => h.url),
-                  ...(reason ? { reason } : {}),
-                },
-                course_uuid: courseUuid,
-              });
             } else {
-              const researchQueries = researchQueriesFor(query);
+              /* ── 重构 #1:stepfun 单轮与多轮派生查询共用一段循环。差异只有三处:
+               * 查询集、stepfun 的 reason 归一化(客户端只认 search_upstream_failed)、
+               * 与收尾状态规则(stepfun 单轮直接取该轮状态;多轮有命中即 success,
+               * 否则末轮状态)。帧契约与 11-hyperknow 断言逐字保持。 */
+              const isStepfun = searchConfig.provider === "stepfun";
+              const queries = isStepfun ? [query] : researchQueriesFor(query);
               let lastOutcomeStatus: SearchOutcomeStatus = "success";
               let lastReason: string | undefined = undefined;
 
-              for (let round = 1; round <= researchQueries.length && researchHits.length < 12; round += 1) {
+              for (let round = 1; round <= queries.length && researchHits.length < 12; round += 1) {
                 let outcome: SearchOutcome;
                 try {
-                  outcome = await searchWithOutcome(researchQueries[round - 1], signal, searchConfig.provider);
+                  outcome = await searchWithOutcome(queries[round - 1], signal, searchConfig.provider);
                 } catch (err) {
                   if (signal.aborted || request.signal.aborted) throw err;
-                  // ── H4:同上,错误细节只留日志,客户端固定文案。
+                  // ── H4:上游错误原文(可含内部 URL/细节)只进日志;客户端拿到固定文案。
                   console.warn("[hyperknow-course-gen] research search failed:", err instanceof Error ? err.message : err);
                   outcome = {
                     status: "upstream_error",
@@ -650,25 +594,39 @@ export async function POST(request: Request) {
                   researchHits.push(hit);
                 }
 
+                /* stepfun 的 reason 归一化(H4);多轮保持原始 outcome.reason 透传 */
+                const stepfunReason = outcome.status === "upstream_error"
+                  ? "search_upstream_failed"
+                  : outcome.status !== "success" ? (outcome.reason || "Degraded without search context")
+                  : undefined;
+                const frameReason = isStepfun ? stepfunReason : outcome.reason;
+
                 push({
                   type: "course_generation_progress",
-                  message: `Researching the web (round ${round}/${researchQueries.length})`,
+                  message: isStepfun
+                    ? (outcome.status === "success"
+                      ? "Researching the web (round 1/1)"
+                      : `Researching the web degraded (${stepfunReason ?? outcome.status})`)
+                    : `Researching the web (round ${round}/${queries.length})`,
                   data: {
                     round,
-                    total_rounds: researchQueries.length,
-                    keywords: researchQueries,
+                    total_rounds: queries.length,
+                    keywords: queries,
                     sources: researchHits.length,
                     status: outcome.status,
                     provider: searchConfig.provider,
                     titles: researchHits.map((h) => h.title),
                     links: researchHits.map((h) => h.url),
-                    ...(outcome.reason ? { reason: outcome.reason } : {}),
+                    ...(frameReason ? { reason: frameReason } : {}),
                   },
                   course_uuid: courseUuid,
                 });
               }
 
-              const finalStatus = researchHits.length > 0 ? "success" : lastOutcomeStatus;
+              const finalStatus = isStepfun ? lastOutcomeStatus : (researchHits.length > 0 ? "success" : lastOutcomeStatus);
+              const finalReason = isStepfun
+                ? (finalStatus !== "success" ? (lastOutcomeStatus === "upstream_error" ? "search_upstream_failed" : (lastReason || "Degraded without search context")) : undefined)
+                : (lastReason && researchHits.length === 0 ? lastReason : undefined);
               push({
                 type: "course_generation_step",
                 step_id: "researching_the_web",
@@ -679,7 +637,7 @@ export async function POST(request: Request) {
                   provider: searchConfig.provider,
                   titles: researchHits.map((h) => h.title),
                   links: researchHits.map((h) => h.url),
-                  ...(lastReason && researchHits.length === 0 ? { reason: lastReason } : {}),
+                  ...(finalReason ? { reason: finalReason } : {}),
                 },
                 course_uuid: courseUuid,
               });
