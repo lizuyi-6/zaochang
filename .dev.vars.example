@@ -15,10 +15,11 @@ AI_CHAT_MODEL=step-explore
 #
 # 课程生成联网研学配置(可选):
 # 供应商 HK_WEB_SEARCH_PROVIDER 可选 stepfun / tavily / brave / cloudflare / off。
-# 默认优先现有 AI 渠道 (stepfun),复用 AI_CHAT_BASE_URL/API_KEY,使用独立 HK_WEB_SEARCH_MODEL,
+# 默认优先现有 AI 渠道 (stepfun),复用 AI_CHAT_BASE_URL/API_KEY(MCP web_search 优先,异常回退 /v1/search),
 # 绝不硬编码官方地址或回退,且 stepfun 忽略 HK_WEB_SEARCH_BASE_URL。
 # HK_WEB_SEARCH_PROVIDER=stepfun
-# HK_WEB_SEARCH_MODEL=step-3.7-flash
+# HK_WEB_SEARCH_STEPFUN_MCP=off   # 只走 /v1/search
+# HK_WEB_SEARCH_MCP_URL=          # 显式覆盖 MCP 端点
 # 外部传统搜索供应商密钥(保留显式配置):
 # HK_TAVILY_API_KEY=
 # HK_BRAVE_SEARCH_API_KEY=

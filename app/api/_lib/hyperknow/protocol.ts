@@ -204,6 +204,61 @@ export function decodeRequestBodyJson<T = Record<string, unknown>>(bytes: Uint8A
 
 export type WebSearchHit = { title: string; url: string; snippet: string; time?: string };
 
+// 单条搜索结果行 → WebSearchHit(三类解析器共用):url 必须 http(s);空标题回退 url;
+// snippet 按 snippetKeys 顺序取第一个非空白字符串,截 320;time 可选。不合格行返回 null。
+function normalizeSearchRow(row: unknown, snippetKeys: readonly string[]): WebSearchHit | null {
+  if (!row || typeof row !== "object") return null;
+  const rec = row as Record<string, unknown>;
+  const url = typeof rec.url === "string" ? rec.url.trim() : "";
+  if (!/^https?:\/\//i.test(url)) return null;
+  const title = String(rec.title ?? "").trim().slice(0, 160) || url;
+  const rawSnippet = snippetKeys
+    .map((key) => rec[key])
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  const time = typeof rec.time === "string" ? rec.time.trim() : "";
+  return { title, url, snippet: (rawSnippet ?? "").trim().slice(0, 320), ...(time ? { time } : {}) };
+}
+
+function normalizeSearchRows(rows: unknown[], snippetKeys: readonly string[]): WebSearchHit[] {
+  const hits: WebSearchHit[] = [];
+  for (const row of rows) {
+    const hit = normalizeSearchRow(row, snippetKeys);
+    if (hit) hits.push(hit);
+  }
+  return hits;
+}
+
+// 传统供应商(tavily/brave/cloudflare)与 StepFun /v1/search 的通配解析:
+// 顶层数组 / {results} / {web:{results}} 三种形状;snippet 容忍多种键名。
+const GENERIC_SNIPPET_KEYS = ["content", "description", "snippet", "text"] as const;
+// MCP 行内 content 是长正文:snippet 优先,缺失才回退 content。
+const MCP_SNIPPET_KEYS = ["snippet", "content"] as const;
+
+export function extractHits(payload: unknown): WebSearchHit[] {
+  const rows: unknown[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray((payload as { results?: unknown[] })?.results)
+      ? (payload as { results: unknown[] }).results
+      : Array.isArray((payload as { web?: { results?: unknown[] } })?.web?.results)
+        ? (payload as { web: { results: unknown[] } }).web.results
+        : [];
+  return normalizeSearchRows(rows, GENERIC_SNIPPET_KEYS);
+}
+
+// cloudflare 的搜索正文可能是 JSON 串包着 {results:[...]}——再剥一层。
+export function extractCloudflareHits(envelope: unknown): WebSearchHit[] {
+  const result = (envelope as { result?: unknown })?.result ?? envelope;
+  const direct = extractHits(result);
+  if (direct.length > 0) return direct;
+  const content = (result as { content?: unknown })?.content;
+  if (typeof content !== "string") return [];
+  try {
+    return extractHits(JSON.parse(content));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * 将 AI baseUrl 规整为 StepFun Chat Completions 终端地址:
  * 保留路径前缀,去尾斜杠,/messages 替换为 /chat/completions,
@@ -276,21 +331,7 @@ export function extractStepfunMcpHits(envelope: unknown): WebSearchHit[] | null 
   }
   const rows = (payload as { results?: unknown } | null)?.results;
   if (!Array.isArray(rows)) return null;
-  const hits: WebSearchHit[] = [];
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    const rec = row as Record<string, unknown>;
-    const url = typeof rec.url === "string" ? rec.url.trim() : "";
-    if (!/^https?:\/\//i.test(url)) continue;
-    const title = String(rec.title ?? "").trim().slice(0, 160) || url;
-    const rawSnippet = [rec.snippet, rec.content].find(
-      (value) => typeof value === "string" && value.trim().length > 0,
-    ) as string | undefined;
-    const snippet = (rawSnippet ?? "").trim().slice(0, 320);
-    const time = typeof rec.time === "string" ? rec.time.trim() : "";
-    hits.push({ title, url, snippet, ...(time ? { time } : {}) });
-  }
-  return hits;
+  return normalizeSearchRows(rows, MCP_SNIPPET_KEYS);
 }
 
 /**

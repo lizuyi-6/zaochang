@@ -30,7 +30,6 @@ import {
   dailyCreditsFor,
   markCreditChargeCompleted,
   refundCreditCharge,
-  HK_DAILY_CREDITS,
 } from "../../_lib/hyperknow/credits";
 import {
   validateUnitStructure,

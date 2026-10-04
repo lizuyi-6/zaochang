@@ -54,7 +54,8 @@ TTS 请求体必须纯 ASCII(`asciiSafeJson` 做 `\u` 转义):上游 WAF 对该�
 | `HYPERKNOW_AI_MODEL` | 可选 | 默认回退 `AI_CHAT_MODEL`,再默认 `step-explore` |
 | `HYPERKNOW_TTS_BASE_URL` / `HYPERKNOW_TTS_MODEL` | 可选 | 默认 `https://api.stepfun.com/v1` / `stepaudio-3-tts`(测试注入假上游用) |
 | `HK_WEB_SEARCH_PROVIDER` | 可选 | 课程研学供应商(`stepfun`/`tavily`/`brave`/`cloudflare`/`off`);未显式指定时默认优先现有 AI 渠道(`stepfun`),保留显式 Tavily/Brave;为 `off` 时跳过搜索 |
-| `HK_WEB_SEARCH_MODEL` | 可选 | 课程研学专用模型(默认 `step-3.7-flash`),仅用于 StepFun web_search 工具调用,不影响其他 LLM |
+| `HK_WEB_SEARCH_STEPFUN_MCP` | 可选 | StepFun 搜索默认优先 MCP web_search 端点(`{AI base}/mcp/web_search/mcp`),除 success/timeout 外任何异常回退 `/v1/search`;设 `off` 只走 `/v1/search` |
+| `HK_WEB_SEARCH_MCP_URL` | 可选 | 显式覆盖 StepFun MCP web_search 端点 |
 | `HK_TAVILY_API_KEY`(或 `TAVILY_API_KEY`) | 可选 | 课程生成联网研学:Tavily 供应商密钥 |
 | `HK_BRAVE_SEARCH_API_KEY`(或 `BRAVE_SEARCH_API_KEY`) | 可选 | 研学:Brave 供应商密钥 |
 | `HK_SEARCH_ACCOUNT_ID` + `HK_SEARCH_API_TOKEN`(或 `CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_API_TOKEN`) | 可选 | 研学:Cloudflare Web Search 供应商 |
