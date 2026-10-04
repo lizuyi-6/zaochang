@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { getOAuthSessionUser } from "./oauth-session";
 import { AGENT_DISPLAY_NAME, AGENT_EMAIL, isValidAgentToken, parseBearerToken } from "./api/_lib/agent-auth";
+import { legacyIdentityHeadersEnabled } from "./api/_lib/dev-login-gate";
 
 export type ChatGPTUser = {
   displayName: string;
@@ -16,9 +16,6 @@ const USER_FULL_NAME_HEADER = "oai-authenticated-user-full-name";
 const USER_FULL_NAME_ENCODING_HEADER =
   "oai-authenticated-user-full-name-encoding";
 const PERCENT_ENCODED_UTF8 = "percent-encoded-utf-8";
-const SIGN_IN_PATH = "/signin-with-chatgpt";
-const SIGN_OUT_PATH = "/signout-with-chatgpt";
-const CALLBACK_PATH = "/callback";
 
 async function agentFromRequest(): Promise<ChatGPTUser | null> {
   const secret = (env as unknown as Record<string, string | undefined>).ZAOCHANG_AGENT_TOKEN;
@@ -56,56 +53,11 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
 }
 
 export function oaiIdentityHeadersEnabled() {
-  const values = env as unknown as Record<string, string | undefined>;
-  // Fail-closed:生产环境(APP_ENV=production)无条件拒绝 oai-authenticated-user-* 遗留身份头。
-  // 一旦公网可达的 worker 信任这些头,任意客户端都能自封任意 email(含创始人/管理员),
-  // 造成整账户接管。生产拓扑(Cloudflare 直连)不存在可信的身份头注入边界,故不再提供
-  // TRUST_OAI_IDENTITY_HEADERS 逃逸门;该 flag 现仅作用于非生产环境(本地/测试联调)。
-  if (values.APP_ENV === "production") return false;
-  if (values.TRUST_OAI_IDENTITY_HEADERS === "true") return true;
-  return values.APP_ENV === "development" || values.APP_ENV === "test";
-}
-
-export async function requireChatGPTUser(
-  returnTo: string,
-): Promise<ChatGPTUser> {
-  const user = await getChatGPTUser();
-  if (user) return user;
-
-  redirect(chatGPTSignInPath(returnTo));
-}
-
-export function chatGPTSignInPath(returnTo: string): string {
-  const safeReturnTo = safeRelativeReturnPath(returnTo);
-  return `${SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
-}
-
-export function chatGPTSignOutPath(returnTo = "/"): string {
-  const safeReturnTo = safeRelativeReturnPath(returnTo);
-  return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
-}
-
-function safeRelativeReturnPath(value: string): string {
-  if (!value.startsWith("/") || value.startsWith("//")) return "/";
-
-  let url: URL;
-  try {
-    url = new URL(value, "https://app.local");
-  } catch {
-    return "/";
-  }
-  if (url.origin !== "https://app.local") return "/";
-  if (isReservedAuthPath(url.pathname)) return "/";
-
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
-function isReservedAuthPath(pathname: string): boolean {
-  return (
-    pathname === SIGN_IN_PATH ||
-    pathname === SIGN_OUT_PATH ||
-    pathname === CALLBACK_PATH
-  );
+  // 判定本体是 dev-login-gate 里的零 import 纯函数(可单测):oai-authenticated-user-*
+  // 遗留身份头只在 APP_ENV ∈ {development, test} 被信任,与 dev-login 同一口径。
+  // production / staging / 未设置 / 拼写错误一律拒绝。原 TRUST_OAI_IDENTITY_HEADERS
+  // 开关会在 staging 或 APP_ENV 未设置时打开该门,已移除(2026-10 全库审查 A4)。
+  return legacyIdentityHeadersEnabled(env as unknown as Record<string, string | undefined>);
 }
 
 function safeDecodeURIComponent(value: string): string | null {

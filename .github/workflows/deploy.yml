@@ -3,13 +3,24 @@ name: deploy-production
 # 仅在 release-gates(ci.yml)对 main 分支跑通后,才部署生产。
 # 手动 workflow_dispatch 仅应急使用:它同样跑通与 release-gates 等价的全部门禁
 # (tsc/lint/禁用测试检查/npm test/diff/schema 漂移/环境隔离/依赖审计),不允许
-# "能构建就上线"。checkout 始终锁定触发 CI 的 exact SHA(自动)或所选 ref(手动)。
+# "能构建就上线"。checkout 始终锁定 exact SHA:自动=触发 CI 的 head_sha,手动=必填
+# inputs.sha(且必须已在 origin/main 上),两种路径都校验 HEAD 与期望 SHA 一致。
 on:
   workflow_run:
     workflows: [release-gates]
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      sha:
+        description: "要部署的 exact commit SHA(40 位,必须已在 main 上)"
+        required: true
+      reason:
+        description: "应急原因(必填,留痕)"
+        required: true
+      owner:
+        description: "负责人(必填,留痕)"
+        required: true
 
 permissions:
   contents: read
@@ -21,17 +32,53 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # 自动触发:仅当触发的 ci 成功;手动触发:总是跑(应急,但下方等价门禁一项不过即中止)
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # 自动触发:仅当触发的 ci 是本仓库 main 的 push 且成功。ci.yml 对 pull_request
+    # 也会跑,fork 的同名 main 分支 PR 跑通后同样产生 workflow_run(branches 过滤按
+    # head_branch 名匹配,挡不住),故必须同时校验 event 与 head_repository——否则会
+    # 检出 fork 代码并带着生产 token 部署。
+    # 手动触发:应急,必须给 exact SHA + reason + owner,下方校验 SHA 已在 main 上。
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) }}
     timeout-minutes: 20
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # 账户 ID 非机密,job 级可见;CLOUDFLARE_API_TOKEN 只在需要它的两个 step 注入,
+      # 不让 npm ci 的 install 脚本 / npm test 等第三方代码读到生产 token。
       CLOUDFLARE_ACCOUNT_ID: 65ebf2011c45b578d745221c646434fc
     steps:
       - uses: actions/checkout@v7
         with:
-          # 部署触发 ci 的那个 commit,保证与通过测试的代码一致
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          # 自动:部署触发 ci 的那个 commit;手动:输入的 exact SHA(不再回落分支 HEAD)
+          ref: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+          fetch-depth: 0
+      - name: Pin and record deploy SHA
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+          DEPLOY_REASON: ${{ inputs.reason }}
+          DEPLOY_OWNER: ${{ inputs.owner }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Deploy SHA must be a full 40-char lowercase hex commit id"; exit 1
+          fi
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SHA" ]; then
+            echo "Checked-out HEAD $actual != expected $EXPECTED_SHA"; exit 1
+          fi
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$EXPECTED_SHA" origin/main; then
+            echo "SHA $EXPECTED_SHA is not on origin/main; refusing to deploy"; exit 1
+          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -z "${DEPLOY_REASON// }" ] || [ -z "${DEPLOY_OWNER// }" ]; then
+              echo "Manual deploy requires non-empty reason and owner"; exit 1
+            fi
+            echo "MANUAL DEPLOY sha=$EXPECTED_SHA owner=$DEPLOY_OWNER reason=$DEPLOY_REASON" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/setup-node@v7
         with:
           node-version: 22.13.0
@@ -56,10 +103,14 @@ jobs:
       - name: Require staging/prod database separation
         run: node scripts/check-env-split.mjs
       - name: Block high and critical production dependency findings
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=high --prefer-online
       # ---- 部署专用门禁 ----
       - run: npm run build
       - name: Verify migrations applied (fail-closed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/check-migrations.mjs
       - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: npx wrangler deploy --config wrangler.prod.jsonc

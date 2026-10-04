@@ -615,6 +615,12 @@ test("logout deletes the server session so a copied cookie cannot be replayed", 
   const logout = await fetch(`${baseUrl}/api/auth/logout?return_to=%2Fsignin`, { headers: { cookie }, redirect: "manual" });
   assert.equal(logout.status, 307);
   assert.match(logout.headers.get("set-cookie") ?? "", /zaochang_session=;.*Max-Age=0/i);
+  // return_to 的 query/hash 必须原样保留(旧实现赋给 url.pathname 会编码成 %3F/%23 → 404)
+  const logoutWithQuery = await fetch(`${baseUrl}/api/auth/logout?return_to=${encodeURIComponent("/feed?x=1#h")}`, { redirect: "manual" });
+  assert.equal(logoutWithQuery.status, 307);
+  assert.equal(new URL(logoutWithQuery.headers.get("location") ?? "", baseUrl).pathname, "/feed");
+  assert.equal(new URL(logoutWithQuery.headers.get("location") ?? "", baseUrl).search, "?x=1");
+  assert.doesNotMatch(logoutWithQuery.headers.get("location") ?? "", /%3F|%23/i);
   const replay = await fetch(`${baseUrl}/api/products`, {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json", cookie },
@@ -705,6 +711,19 @@ test("production rejects forged workspace identity headers unless explicitly tru
     assert.ok(cookieState);
     assert.ok(pageState);
     assert.equal(decodeURIComponent(pageState), cookieState);
+
+    // 邀请码只走 POST:GET 带 invitation_code 必须被忽略——不校验(旧实现对不存在的码
+    // 307 到 invitation_invalid)、不写邀请 cookie,照常给出纯登录连接页。
+    const getWithInvite = await fetch(`http://127.0.0.1:${productionPort}/api/auth/github/start?return_to=%2Fwallet&invitation_code=ZC-NOT-A-REAL-CODE`, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(getWithInvite.status, 200, "GET 上的邀请码不得被消费/校验");
+    const getInviteCookies = typeof getWithInvite.headers.getSetCookie === "function"
+      ? getWithInvite.headers.getSetCookie()
+      : [getWithInvite.headers.get("set-cookie") ?? ""];
+    assert.equal(getInviteCookies.filter((value) => value.startsWith("zaochang_oauth_invite=") && !/Max-Age=0/i.test(value)).length, 0, "GET 不得写入邀请 cookie");
+    await getWithInvite.body?.cancel();
 
     // dev-login 在生产即使显式 LOCAL_DEV_LOGIN=1 也必须 404 且不落任何 cookie(fail-closed 第一道门)
     const prodDevLogin = await fetch(`http://127.0.0.1:${productionPort}/api/auth/dev-login`, { redirect: "manual", signal: AbortSignal.timeout(5000) });

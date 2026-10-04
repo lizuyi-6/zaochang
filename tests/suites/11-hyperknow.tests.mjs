@@ -30,6 +30,7 @@ import {
   stepfunSearchRequests,
   setStepfunSearchMockOutcome,
 } from "../harness/preview.mjs";
+import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, resolveCourseGenBudgetMs } from "../../app/api/_lib/hyperknow/budgets.ts";
 
 // Hyperknow SSE 帧(`event: frame\ndata: {...}\n\n`)→ 按序解析出原始事件对象
 // (与原 WS 版 ws.send(JSON) 的帧形状一致,断言才能逐帧对齐)。
@@ -495,6 +496,53 @@ export function register() {
       await reader.read();
     } catch {
       /* abort 预期抛错 */
+    }
+  });
+
+  test("hyperknow budgets: HK_COURSE_GEN_TIMEOUT_MS 覆盖仅在测试环境生效(纯函数)", () => {
+    assert.equal(COURSE_STAGE1_BUDGET_MS, 300000, "Stage1 预算 5 分钟(自动级联全程)");
+    assert.equal(COURSE_STAGE2_BUDGET_MS, 900000, "Stage2 预算 15 分钟(确认后单元生成)");
+    assert.equal(resolveCourseGenBudgetMs("test", "5000", COURSE_STAGE1_BUDGET_MS), 5000, "test 环境采纳覆盖(集成测试压缩预算)");
+    assert.equal(resolveCourseGenBudgetMs("production", "5000", COURSE_STAGE1_BUDGET_MS), COURSE_STAGE1_BUDGET_MS, "生产必须忽略覆盖 var——它不是生产旋钮");
+    assert.equal(resolveCourseGenBudgetMs("staging", "5000", COURSE_STAGE2_BUDGET_MS), COURSE_STAGE2_BUDGET_MS, "预发同样忽略");
+    assert.equal(resolveCourseGenBudgetMs(undefined, "5000", COURSE_STAGE1_BUDGET_MS), COURSE_STAGE1_BUDGET_MS, "APP_ENV 未设置视为未知环境,忽略");
+    assert.equal(resolveCourseGenBudgetMs("Test", "5000", COURSE_STAGE1_BUDGET_MS), COURSE_STAGE1_BUDGET_MS, "大小写 typo 不开门");
+    assert.equal(resolveCourseGenBudgetMs("test", "not-a-number", COURSE_STAGE1_BUDGET_MS), COURSE_STAGE1_BUDGET_MS, "非数字回落默认");
+    assert.equal(resolveCourseGenBudgetMs("test", "100", COURSE_STAGE1_BUDGET_MS), COURSE_STAGE1_BUDGET_MS, "低于 1s 下限回落默认(防误配成立即失败)");
+  });
+
+  test("hyperknow course-generation: 服务端超时显式失败并退费,不静默断流白扣积分", async () => {
+    resetAiUpstream();
+    const email = `hk-timeout-${runId}@example.com`;
+    const headers = authHeaders("超时用户", email);
+    const chargeKey = `hk-timeout-${runId}`;
+    // 单元上游卡 12s;测试预览把 Stage1 服务端预算压到 5s(HK_COURSE_GEN_TIMEOUT_MS)。
+    // 超时 abort 掉首个单元调用 → catch 不得与"客户端断开"混淆:标 failed、退费、发
+    // course_generation_error。原实现两分支合并成静默 return,用户被扣 10 积分只看到断流。
+    setAiUpstreamUnitDelay(12000);
+    try {
+      const response = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+        method: "POST",
+        headers: { ...headers, "x-hk-web-search-provider": "off" },
+        body: JSON.stringify({ query: "Timeout Refund Course", idempotencyKey: chargeKey }),
+      });
+      assert.equal(response.status, 200);
+      const frames = await readHkFrames(response);
+      assert.equal(frames.some((f) => f.type === "course_generation_error"), true,
+        "服务端超时必须显式发错误帧");
+      assert.equal(frames.some((f) => f.type === "course_structure_ready"), false,
+        "超时绝不可假装课程已就绪");
+      const courseUuid = frames.find((f) => f.type === "course_generation_started")?.course_uuid;
+      assert.ok(courseUuid);
+      const taskRow = await queryLocalD1(`SELECT status FROM hk_course_tasks WHERE id = '${courseUuid}' AND user_email = '${email}'`);
+      assert.equal(taskRow[0]?.status, "failed", "超时任务必须标 failed(检查点供恢复)");
+      const chargeRow = await queryLocalD1(`SELECT status FROM hk_credit_charges WHERE key = '${chargeKey}' AND user_email = '${email}'`);
+      assert.equal(chargeRow[0]?.status, "refunded", "超时失败的计费行必须标 refunded");
+      const info = (await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json()).data.subscription;
+      assert.equal(info.remaining_credits, 20, "超时失败必须把 10 积分退回当日余额");
+    } finally {
+      setAiUpstreamUnitDelay(0);
+      resetAiUpstream();
     }
   });
 

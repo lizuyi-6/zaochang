@@ -1,6 +1,7 @@
 // 2026-10-03 代码审查修复的契约钉(P1 钱两项/路径三项/白板两项 + 关键 P2)。
-// 集成套件(suites/11)有活服务才能跑;这里用源码扫描锁住结构性不变量——
-// 与 whiteboard-plan-budget/lattice-brand 同一纪律:复发即红。
+// 2026-10-04 第 1 批补钉:外部支付确认竞态(F1)/建课超时退费门禁(C1)/遗留
+// 身份头门禁(A4)。集成套件(suites/11)有活服务才能跑;这里用源码扫描锁住
+// 结构性不变量——与 whiteboard-plan-budget/lattice-brand 同一纪律:复发即红。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -88,4 +89,30 @@ test('spa: veil snapshot merge + locale failure retry', () => {
   const i18n = read('hyperknow-spa/src/lattice/i18n/index.tsx');
   assert.match(i18n, /delete localePending\[code\];/, 'locale 加载失败必须清挂起记录(可重试)');
   assert.match(i18n, /\.catch\(\(\) => \{\s*toast\(/, 'setLng 失败必须给用户反馈');
+});
+
+test('payment: batch UPDATE that marks paid must not re-check the approval challenge (F1)', () => {
+  const source = read('app/api/_lib/external-fruit.ts');
+  const paid = source.match(/UPDATE external_fruit_payments SET status = 'paid'[\s\S]*?WHERE ([^`]*)`/);
+  assert.ok(paid, '必须存在把外部支付单置 paid 的批次 UPDATE');
+  assert.match(paid[1], /id = \? AND status = 'pending'/, "paid UPDATE 以 id+pending 为条件(同事务内触发器已要求 INSERT 时 pending,必命中 1 行)");
+  assert.doesNotMatch(paid[1], /approval_challenge_hash/, 'paid UPDATE 的 WHERE 不得依赖 challenge——校验与批次之间另一标签页可覆盖 hash,条件失配即扣款已提交而单子永悬 pending');
+  assert.match(source, /AND status = 'pending' AND approval_challenge_hash = \?/, '批次前的挑战码单点校验必须保留');
+});
+
+test('timeout: course-generation stage budgets resolve through the test-only override gate (C1)', () => {
+  const budgets = read('app/api/_lib/hyperknow/budgets.ts');
+  assert.match(budgets, /if \(appEnv !== "test"\) return defaultMs;/, 'HK_COURSE_GEN_TIMEOUT_MS 仅 APP_ENV=test 生效,生产/预发误配不得缩短真实预算');
+  const route = read('app/api/hyperknow/course-generation/route.ts');
+  assert.match(route, /resolveCourseGenBudgetMs\(envValues\.APP_ENV, envValues\.HK_COURSE_GEN_TIMEOUT_MS, COURSE_STAGE1_BUDGET_MS\)/, 'Stage1 预算必须经门禁解析');
+  assert.match(route, /AbortSignal\.timeout\(COURSE_STAGE2_BUDGET_MS\)/, 'Stage2 预算用导出常量');
+  assert.doesNotMatch(route, /AbortSignal\.timeout\(\d/, '服务端超时不得内联魔法数字(须走导出常量,契约可断言)');
+});
+
+test('auth: legacy identity headers gate delegates to the pure dev/test-only helper (A4)', () => {
+  const gate = read('app/api/_lib/dev-login-gate.ts');
+  assert.match(gate, /export function legacyIdentityHeadersEnabled/, '门禁判定必须是零 import 纯函数(可单测)');
+  const auth = read('app/chatgpt-auth.ts');
+  assert.match(auth, /legacyIdentityHeadersEnabled\(env as unknown as Record<string, string \| undefined>\)/, 'chatgpt-auth 必须经纯函数判定');
+  assert.doesNotMatch(auth, /(?:\.|\[['"])TRUST_OAI_IDENTITY_HEADERS/, '旧开关的读取必须彻底移除——staging/未设置 APP_ENV 误配不得重新打开自封身份的门(注释提及历史不算复发)');
 });

@@ -19,10 +19,11 @@ import { verifyTurnstile } from "../../../_lib/turnstile";
 type Params = { params: Promise<{ provider: string }> };
 
 export async function GET(request: Request, { params }: Params) {
+  // GET 只承载纯登录链接(return_to)。邀请码与 Turnstile token 一律只走 POST 表单:
+  // 进 query 就会落进 URL/访问日志/浏览器历史/Referer。GET 上的这两个参数被忽略
+  // (不消费、不写邀请 cookie),合法登录页本就从不经 GET 提交邀请码。
   const search = new URL(request.url).searchParams;
-  const invitationCode = String(search.get("invitation_code") ?? "").trim().slice(0, 64) || null;
-  const turnstileToken = search.get("cf-turnstile-response");
-  return startOAuth(request, await params, invitationCode, search.get("return_to"), turnstileToken);
+  return startOAuth(request, await params, null, search.get("return_to"), null);
 }
 
 export async function POST(request: Request, { params }: Params) {

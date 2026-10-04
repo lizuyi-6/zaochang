@@ -1,5 +1,7 @@
+import { env } from "cloudflare:workers";
 import { requireMember } from "../../_lib/access-control";
 import { jsonError } from "../../_lib/errors";
+import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, resolveCourseGenBudgetMs } from "../../_lib/hyperknow/budgets";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { generateCourseBlueprint, generateUnitDetails, repairUnit, CHAT_MODEL_MAP, resolveChatModel } from "../../_lib/hyperknow/agents";
@@ -169,7 +171,7 @@ export async function POST(request: Request) {
       /* Stage2 逐单元真实生成:每单元一次 LLM 调用(~30-60s),8+ 单元课程系统性超过
        * 300s 通用上限,会被服务端截断逼用户手动恢复——单元检查点已让恢复廉价,
        * 上限放宽到 15 分钟,让正常规模课程一次跑完;期间进度帧持续流出,流不会闲置。 */
-      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(900_000)]);
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(COURSE_STAGE2_BUDGET_MS)]);
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
           void (async () => {
@@ -204,7 +206,8 @@ export async function POST(request: Request) {
 
               // 独立有界单元请求真实调用 LLM 每单元保存检查点
               for (let i = 0; i < totalUnits; i++) {
-                if (signal.aborted || request.signal.aborted) return;
+                if (request.signal.aborted) return;
+                if (signal.aborted) throw new Error("course_generation_timeout");
                 const blueprintUnit = targetBlueprintUnits[i];
 
                 // 检查点恢复: 如果该单元在断点前已生成完成，直接复用
@@ -289,8 +292,8 @@ export async function POST(request: Request) {
 
               push({ type: "course_structure_ready", course_uuid: resumeUuid, course: completeCourse });
             } catch (error) {
-              if (signal.aborted || request.signal.aborted) {
-                /* 客户端断开/超时 */
+              if (request.signal.aborted) {
+                /* 仅客户端断开静默;服务端超时显式报错(Stage2 不扣费,无需退费) */
               } else {
                 console.error("[hyperknow-course-gen] stage 2 unit generation failure:", error);
                 try {
@@ -473,7 +476,12 @@ export async function POST(request: Request) {
       status: "pending",
     });
 
-    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(300_000)]);
+    // 服务端总预算走 budgets 模块;HK_COURSE_GEN_TIMEOUT_MS 覆盖仅在 APP_ENV=test 生效
+    // (集成测试压缩 Stage1 预算触发真实超时路径,线上误配不得缩短预算)。
+    const envValues = env as unknown as Record<string, string | undefined>;
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(
+      resolveCourseGenBudgetMs(envValues.APP_ENV, envValues.HK_COURSE_GEN_TIMEOUT_MS, COURSE_STAGE1_BUDGET_MS),
+    )]);
 
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -725,7 +733,10 @@ export async function POST(request: Request) {
             const generatedUnits: CourseUnit[] = [];
             const blueprintLanguage = blueprint.language || "zh-CN";
             for (let i = 0; i < blueprint.units.length; i++) {
-              if (signal.aborted || request.signal.aborted) return;
+              // 客户端断开:静默收尾(任务可恢复)。服务端自身超时:抛出走失败路径——
+              // 退费 + course_generation_error,不能让用户被扣费却只看到流断开。
+              if (request.signal.aborted) return;
+              if (signal.aborted) throw new Error("course_generation_timeout");
               const u = blueprint.units[i];
 
               push({
@@ -792,8 +803,9 @@ export async function POST(request: Request) {
 
             push({ type: "course_structure_ready", course_uuid: courseUuid, course });
           } catch (error) {
-            if (signal.aborted || request.signal.aborted) {
-              /* 客户端断开/超时 */
+            if (request.signal.aborted) {
+              /* 仅客户端断开静默;服务端 300s 超时(signal 由 timeout 触发)按失败处理,
+               * 走下方退费 + 错误帧(原实现把两者合并,超时白扣 10 积分)。 */
             } else {
               console.error("[hyperknow-course-gen] failure:", error instanceof Error ? error.message : error);
               if (autoLeaseToken) {

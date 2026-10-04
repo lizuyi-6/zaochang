@@ -1,7 +1,7 @@
 // 本地开发模拟登录(dev-login)的纯逻辑:零依赖(不引 cloudflare:workers),
 // 测试可像 reading-ai-prompts.ts 一样直接 import。
 //
-// 双 fail-closed 门禁,比 chatgpt-auth 的 TRUST_OAI_IDENTITY_HEADERS 更严:
+// 双 fail-closed 门禁(chatgpt-auth 的遗留身份头门禁与此同一 APP_ENV 白名单口径):
 // 1) APP_ENV=production 无条件拒绝(即便误配 LOCAL_DEV_LOGIN=1);
 // 2) 其余环境必须 APP_ENV 显式等于 development/test 且 LOCAL_DEV_LOGIN=1 才开启。
 //    APP_ENV 缺省/typo(如 "PRODUCTION"、未设置)一律视为关闭——生产不靠"忘配"兜底。
@@ -11,6 +11,16 @@ export type RawDevLoginEnv = Record<string, string | undefined>;
 export function localDevLoginEnabled(env: RawDevLoginEnv): boolean {
   if (env.APP_ENV === "production") return false;
   return (env.APP_ENV === "development" || env.APP_ENV === "test") && env.LOCAL_DEV_LOGIN === "1";
+}
+
+// chatgpt-auth 的 oai-authenticated-user-* 遗留身份头门禁(与上方 dev-login 同一
+// APP_ENV 白名单口径,抽到这里共用一份实现)。Fail-closed:仅 development/test 显式
+// 信任;staging / 未设置 / 拼写错误(如 "Production")一律拒绝——公网可达的 worker
+// 一旦信任这些头,任意客户端都能自封任意 email(含创始人/管理员),整账户接管。
+// 原 TRUST_OAI_IDENTITY_HEADERS=true 会在 staging 或 APP_ENV 未设置时打开该门,
+// 已随开关一并移除(2026-10 全库审查 A4),本函数不读它。
+export function legacyIdentityHeadersEnabled(env: RawDevLoginEnv): boolean {
+  return env.APP_ENV === "development" || env.APP_ENV === "test";
 }
 
 export const DEV_LOGIN_DEFAULT_EMAIL = "preview@zaochang.test";

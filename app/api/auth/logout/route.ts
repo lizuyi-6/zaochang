@@ -24,7 +24,8 @@ export async function GET(request: Request) {
   for (const name of [OAUTH_STATE_COOKIE, OAUTH_RETURN_COOKIE, OAUTH_INVITE_COOKIE]) {
     cookieStore.set(name, "", { httpOnly: true, secure, sameSite: "lax", path: "/", maxAge: 0 });
   }
-  const url = absoluteAppUrl(request, "/");
-  url.pathname = safeReturnPath(new URL(request.url).searchParams.get("return_to"));
+  // safeReturnPath 返回 path+search+hash;整段赋给 url.pathname 会把 ?/# 编码成
+  // %3F/%23 落到 404,故作为相对路径交给 absoluteAppUrl 解析。
+  const url = absoluteAppUrl(request, safeReturnPath(new URL(request.url).searchParams.get("return_to")));
   return NextResponse.redirect(url);
 }

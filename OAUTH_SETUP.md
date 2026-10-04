@@ -91,10 +91,10 @@ write_access_approved=0
 ZAOCHANG_ADMIN_EMAILS=admin1@example.com,admin2@example.com
 ```
 
-生产环境无条件拒绝客户端发送的 `oai-authenticated-user-email` 与相关姓名头（fail-closed）。`TRUST_OAI_IDENTITY_HEADERS` 仅在非生产环境（本地/测试联调）生效，不再作为生产逃逸门：
+客户端发送的 `oai-authenticated-user-email` 与相关姓名头只在 `APP_ENV` 显式为 `development` 或 `test` 时被信任（fail-closed 白名单，与 dev-login 同口径）；production、staging、未设置或拼写错误的 `APP_ENV` 一律拒绝。原 `TRUST_OAI_IDENTITY_HEADERS` 开关已移除（2026-10 全库审查），设置它不再有任何效果：
 
 ```text
-TRUST_OAI_IDENTITY_HEADERS=true   # 仅非生产环境生效
+APP_ENV=development   # 或 test;仅本地/测试联调
 ```
 
 ## 会话与退出

@@ -10,6 +10,7 @@ import {
   authHeaders,
   executeLocalD1,
   creditTestFruit,
+  queryLocalD1,
   reviewProduct,
 } from "../harness/preview.mjs";
 
@@ -442,5 +443,128 @@ test("reports require an administrator decision and hidden products leave public
   `);
   const reviewQueue = await (await fetch(`${baseUrl}/api/admin/moderation`, { headers: adminHeaders })).json();
   assert.equal(reviewQueue.risks.some((risk) => risk.userEmail === ownerEmail && risk.kind === "moderated_paid_product" && risk.status === "open"), true);
+});
+
+test("external payment approval challenge: stale challenge rejected, mid-window hash swap cannot strand funds", async () => {
+  // 审计 F1 的两条保障:①挑战码被第二标签页换发后,旧码提交必须 403 且不动账;
+  // ②"校验通过后、批次提交前"hash 被覆盖的窄窗口里,批次不得因此把钱扣了却把
+  // 单子留在 pending(原缺陷:UPDATE 带 challenge 条件命中 0 行,D1 不回滚同批扣款)。
+  const merchantEmail = `f1-merchant-${runId}@example.com`;
+  const merchantHeaders = authHeaders("F1 商户", merchantEmail);
+  await fetch(`${baseUrl}/api/community`, { headers: merchantHeaders });
+  const register = await fetch(`${baseUrl}/api/developer/clients`, {
+    method: "POST",
+    headers: merchantHeaders,
+    body: JSON.stringify({
+      name: `F1 外部平台 ${runId}`,
+      description: "验证支付确认挑战码的竞态语义。",
+      websiteUrl: "https://f1.example/app",
+      clientType: "confidential",
+      redirectUris: ["https://f1.example/callback"],
+      allowedScopes: "openid profile email fruit:balance fruit:pay fruit:refund",
+    }),
+  });
+  assert.equal(register.status, 201);
+  const client = (await register.json()).client;
+  await executeLocalD1(`UPDATE oauth_provider_clients SET review_status = 'verified', write_access_approved = 1 WHERE client_id = '${client.clientId}'`);
+
+  const payerEmail = `f1-payer-${runId}@example.com`;
+  const payerHeaders = authHeaders("F1 买家", payerEmail);
+  await fetch(`${baseUrl}/api/community`, { headers: payerHeaders });
+  await creditTestFruit(payerEmail, 20, "f1-payer");
+  // fruit_external_payment_guard 要求付款人账龄 ≥24h
+  await executeLocalD1(`UPDATE members SET joined_at = '2020-01-01 00:00:00' WHERE email = '${payerEmail}'`);
+
+  const seedPayment = async (suffix) => {
+    const id = `extpay_f1${suffix}${runId.replaceAll("-", "")}`;
+    await executeLocalD1(`
+      INSERT INTO external_fruit_payments
+        (id, client_id, payer_email, merchant_email, external_reference, title, description,
+         pricing_model, amount, idempotency_key, return_uri, expires_at)
+      VALUES ('${id}', '${client.clientId}', '${payerEmail}', '${merchantEmail}', 'f1_ref_${suffix}',
+              'F1 竞态订单', '审计 F1 验证', 'one_time', 5, 'f1_key_${suffix}_${runId}',
+              'https://f1.example/callback', datetime('now', '+10 minutes'))
+    `);
+    return id;
+  };
+  const approvalChallenge = async (paymentId) => {
+    const page = await fetch(`${baseUrl}/oauth/payment/${paymentId}`, { headers: payerHeaders });
+    assert.equal(page.status, 200);
+    const challenge = (await page.text()).match(/name="challenge" value="([^"]+)"/)?.[1];
+    assert.equal(typeof challenge, "string");
+    return challenge;
+  };
+  const submitApproval = (paymentId, challenge) => fetch(`${baseUrl}/api/v1/fruit/payments/approve`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { ...payerHeaders, origin: baseUrl, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ payment_id: paymentId, challenge, decision: "allow" }).toString(),
+  });
+
+  // ── 场景 1:旧挑战码必须被拒,当前挑战码照常可付 ─────────────────────────────
+  const stalePaymentId = await seedPayment("stale");
+  const challenge1 = await approvalChallenge(stalePaymentId);
+  const challenge2 = await approvalChallenge(stalePaymentId);
+  assert.notEqual(challenge1, challenge2, "重开确认页必须换发挑战码(覆盖 hash)");
+
+  const staleSubmit = await submitApproval(stalePaymentId, challenge1);
+  assert.equal(staleSubmit.status, 403);
+  assert.deepEqual(await staleSubmit.json(), { error: "invalid_approval_challenge" });
+  const heldWallet = (await (await fetch(`${baseUrl}/api/community`, { headers: payerHeaders })).json()).wallet;
+  assert.equal(heldWallet.balance, 20, "旧挑战码被拒不扣款");
+  assert.equal(heldWallet.balance, heldWallet.ledgerBalance);
+  assert.equal((await queryLocalD1(`SELECT status FROM external_fruit_payments WHERE id = '${stalePaymentId}'`))[0]?.status, "pending");
+
+  const freshSubmit = await submitApproval(stalePaymentId, challenge2);
+  assert.equal(freshSubmit.status, 303, "换发后的当前挑战码必须照常支付");
+  assert.equal(new URL(freshSubmit.headers.get("location")).searchParams.get("payment_status"), "paid");
+
+  // ── 场景 2:校验后、批次前 hash 被覆盖(窄窗口)────────────────────────────
+  // 纯 HTTP 无法卡进"校验与批次之间"的窗口,按 decideExternalPayment 批次的原始语句
+  // 直接执行:先覆盖 hash(模拟第二标签页),再原样跑批次序列。批次 UPDATE 已不带
+  // challenge 条件——若回归带条件,单子会停在 pending 而扣款已提交(账实断裂,断言即红)。
+  const racePaymentId = await seedPayment("race");
+  // 打开确认页取当前挑战码(approvalChallenge 内部断言存在):此刻它是有效值,
+  // 即"校验已通过"的等价物;随后的 UPDATE 才是模拟窄窗口内的第二标签页覆盖。
+  await approvalChallenge(racePaymentId);
+  const operationId = `external-purchase:${racePaymentId}`;
+  await executeLocalD1(`
+    UPDATE external_fruit_payments SET approval_challenge_hash = 'swapped-by-tab-two'
+     WHERE id = '${racePaymentId}' AND payer_email = '${payerEmail}' AND status = 'pending';
+    INSERT INTO fruit_operations
+      (id, kind, idempotency_key, actor_email, target_email, amount, reference_type, reference_id, description)
+    VALUES ('${operationId}', 'external_purchase', '${operationId}', '${payerEmail}', '${merchantEmail}', 5,
+            'external_payment', '${racePaymentId}', '外部应用支付《F1 竞态订单》');
+    UPDATE wallets SET balance = CASE WHEN status = 'active' THEN balance - 5 ELSE -1 END,
+      lifetime_spent = lifetime_spent + 5, updated_at = CURRENT_TIMESTAMP WHERE user_email = '${payerEmail}';
+    UPDATE wallets SET pending_balance = CASE WHEN status = 'active' THEN pending_balance + 5 ELSE -1 END,
+      updated_at = CURRENT_TIMESTAMP WHERE user_email = '${merchantEmail}';
+    INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES ('${operationId}', '${payerEmail}', 'available', -5);
+    INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES ('${operationId}', '${merchantEmail}', 'pending', 5);
+    UPDATE external_fruit_payments SET status = 'paid', purchase_operation_id = '${operationId}',
+      paid_at = CURRENT_TIMESTAMP, refundable_until = datetime('now', '+10 minutes'),
+      available_at = datetime('now', '+24 hours'), approval_challenge_hash = NULL
+     WHERE id = '${racePaymentId}' AND status = 'pending';
+    INSERT INTO transactions (user_email, delta, type, description, reference_id)
+      VALUES ('${payerEmail}', -5, 'external_purchase', '通过 ${client.name} 支付《F1 竞态订单》', '${racePaymentId}');
+    INSERT INTO transactions (user_email, delta, type, description, reference_id)
+      VALUES ('${merchantEmail}', 0, 'external_sale_pending', '${client.name} 收入待结算 +5', '${racePaymentId}');
+    INSERT INTO external_fruit_entitlements
+      (client_id, payer_email, external_reference, payment_id, status, revoked_at)
+    VALUES ('${client.clientId}', '${payerEmail}', 'f1_ref_race', '${racePaymentId}', 'active', NULL)
+  `);
+
+  const racedRow = await queryLocalD1(`
+    SELECT status, purchase_operation_id AS purchaseOperationId
+    FROM external_fruit_payments WHERE id = '${racePaymentId}'
+  `);
+  assert.equal(racedRow[0]?.status, "paid", "hash 被换掉的窗口里批次仍必须把单子落到 paid");
+  assert.equal(racedRow[0]?.purchaseOperationId, operationId, "支付操作必须绑定到单子(可退可结算)");
+  const finalPayer = (await (await fetch(`${baseUrl}/api/community`, { headers: payerHeaders })).json()).wallet;
+  const finalMerchant = (await (await fetch(`${baseUrl}/api/community`, { headers: merchantHeaders })).json()).wallet;
+  assert.equal(finalPayer.balance, 10, "场景 1 与场景 2 各扣 5");
+  assert.equal(finalPayer.balance, finalPayer.ledgerBalance, "买家钱包与账本一致(钱没有凭空消失)");
+  assert.equal(finalMerchant.pendingBalance, 10);
+  assert.equal(finalMerchant.pendingBalance, finalMerchant.ledgerPendingBalance, "商户待结算与账本一致");
 });
 }

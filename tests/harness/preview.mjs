@@ -554,6 +554,10 @@ export function previewServerArgs() {
     "--persist-to", stateDir,
     "--var", "APP_ENV:test",
     "--var", "LOCAL_DEV_LOGIN:1",
+    // 集成测试专用:把课程生成 Stage1 服务端预算从 300s 压到 5s,让 11-hyperknow 的
+    // 超时退费用例能在秒级真实触发"超时→失败→退费"路径(route 经 budgets 门禁只在
+    // APP_ENV=test 采纳该 var;正常用例无人工延迟,远低于此预算)。
+    "--var", "HK_COURSE_GEN_TIMEOUT_MS:5000",
     "--var", `ZAOCHANG_ADMIN_EMAILS:${adminEmail},${operationsAdminEmail}`,
     "--var", `ZAOCHANG_FOUNDER_EMAIL:${adminEmail}`,
     "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,

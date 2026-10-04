@@ -287,12 +287,17 @@ export async function decideExternalPayment(userEmail: string, paymentId: string
     ).bind(row.amount, row.merchantEmail),
     db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'available', ?)`).bind(operationId, row.payerEmail, -row.amount),
     db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, row.merchantEmail, row.amount),
+    // 刻意不带 approval_challenge_hash 条件:challenge 已在上方单独校验。若这里再比对,
+    // 校验与批次之间另一标签页重载确认页(prepareExternalPaymentApproval 覆盖 hash)
+    // 会让本 UPDATE 命中 0 行,而同批的扣款/入账/权益照常提交——钱扣了、单子停在
+    // pending、永不结算也不可退。去掉后:同一事务内 fruit_external_payment_guard 已
+    // 要求 INSERT 时 status='pending',此 UPDATE 必命中 1 行,扣款与 paid 同生同灭。
     db.prepare(
       `UPDATE external_fruit_payments SET status = 'paid', purchase_operation_id = ?,
          paid_at = CURRENT_TIMESTAMP, refundable_until = CASE WHEN ? THEN datetime('now', '+${FRUIT_POLICY.oneTimeRefundMinutes} minutes') ELSE NULL END,
          available_at = datetime('now', '+${FRUIT_POLICY.settlementHours} hours'), approval_challenge_hash = NULL
-       WHERE id = ? AND status = 'pending' AND approval_challenge_hash = ?`,
-    ).bind(operationId, refundable ? 1 : 0, paymentId, challengeHash),
+       WHERE id = ? AND status = 'pending'`,
+    ).bind(operationId, refundable ? 1 : 0, paymentId),
     db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'external_purchase', ?, ?)`).bind(row.payerEmail, -row.amount, `通过 ${row.clientName} 支付《${row.title}》`, paymentId),
     db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, 0, 'external_sale_pending', ?, ?)`).bind(row.merchantEmail, `${row.clientName} 收入待结算 +${row.amount}`, paymentId),
   ];

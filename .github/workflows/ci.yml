@@ -41,4 +41,4 @@ jobs:
       - name: Require staging/prod database separation
         run: node scripts/check-env-split.mjs
       - name: Block high and critical production dependency findings
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=high --prefer-online

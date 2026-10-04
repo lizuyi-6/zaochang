@@ -1,4 +1,5 @@
-// 一次性本地种子脚本:用 TRUST_OAI_IDENTITY_HEADERS 身份头通过真实 API 造验收数据。
+// 一次性本地种子脚本:用 oai-authenticated-user-* 身份头通过真实 API 造验收数据
+// (目标 worker 须以 APP_ENV=development 或 test 启动,其余环境一律拒绝这些头)。
 
 const BASE = "http://localhost:3000";
 const ADMIN = "preview@zaochang.test";

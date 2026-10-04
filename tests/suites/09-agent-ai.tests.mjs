@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { renderMarkdownKatexHtml } from "../../app/lib/markdown-katex.ts";
-import { DEV_LOGIN_DEFAULT_EMAIL, localDevLoginEnabled, normalizeDevLoginEmail } from "../../app/api/_lib/dev-login-gate.ts";
+import { DEV_LOGIN_DEFAULT_EMAIL, legacyIdentityHeadersEnabled, localDevLoginEnabled, normalizeDevLoginEmail } from "../../app/api/_lib/dev-login-gate.ts";
 import { READING_AI_ACTION_LIMITS, READING_AI_LIMITS, READING_AI_REASONING_HEADROOM, buildAskPrompt, detectTargetLang, parseReadingAiImage, resolveReadingAiConfig } from "../../app/api/_lib/reading-ai-prompts.ts";
 import {
   baseUrl,
@@ -488,6 +488,18 @@ test("dev-login: flag-gated simulated login issues a real working session", asyn
   assert.equal(normalizeDevLoginEmail("  Dev-1@Zaochang.Test "), "dev-1@zaochang.test");
   assert.equal(normalizeDevLoginEmail("no-at-sign"), null);
   assert.equal(normalizeDevLoginEmail("a b@x.test"), null);
+
+  // 遗留身份头门禁(审计 A4,与 dev-login 同一 APP_ENV 白名单):staging/未设置/typo
+  // 一律拒绝;TRUST_OAI_IDENTITY_HEADERS 不再是开关——公网可达环境信任自报身份头
+  // 等于任意客户端可自封任意 email(含管理员),整账户接管。
+  assert.equal(legacyIdentityHeadersEnabled({ APP_ENV: "staging", TRUST_OAI_IDENTITY_HEADERS: "true" }), false,
+    "staging 即便误配旧 flag 也必须拒绝自封身份(旧实现的洞)");
+  assert.equal(legacyIdentityHeadersEnabled({ APP_ENV: "production" }), false);
+  assert.equal(legacyIdentityHeadersEnabled({ APP_ENV: "Production" }), false, "大小写 typo 视为未知环境");
+  assert.equal(legacyIdentityHeadersEnabled({ TRUST_OAI_IDENTITY_HEADERS: "true" }), false, "APP_ENV 未设置必须保持关闭");
+  assert.equal(legacyIdentityHeadersEnabled({}), false);
+  assert.equal(legacyIdentityHeadersEnabled({ APP_ENV: "development" }), true);
+  assert.equal(legacyIdentityHeadersEnabled({ APP_ENV: "test" }), true);
 
   // 跨站导航守卫:不开会话、不落 cookie
   const csrf = await fetch(`${baseUrl}/api/auth/dev-login`, { headers: { "sec-fetch-site": "cross-site" }, redirect: "manual" });
