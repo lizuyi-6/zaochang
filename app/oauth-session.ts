@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { toBase64Url } from "./api/_lib/crypto-utils";
 import { cookies, headers } from "next/headers";
 import { resolvePublicAppOrigin } from "./lib/public-origin";
 import { isInvitationRegistrationRequiredError, isInvitationUnavailableError } from "./api/_lib/errors";
@@ -94,12 +95,8 @@ export function safeReturnPath(value: string | null | undefined) {
 }
 
 // 常数时间比较:对齐 agent token 的时序标准(state/验证码哈希同为高熵认证值)。
-export function constantTimeEquals(a: string, b: string) {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+// 实现收敛到 _lib/crypto-utils(2026-10 审计重构 #6);re-export 保持既有 import 面不变。
+export { constantTimeEquals } from "./api/_lib/crypto-utils";
 
 export function randomToken(bytes = 32) {
   const data = new Uint8Array(bytes);
@@ -143,11 +140,6 @@ export async function invitationAvailable(codeHash: string) {
   return Boolean(row);
 }
 
-function toBase64Url(bytes: Uint8Array) {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
 
 function toHex(bytes: Uint8Array) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
