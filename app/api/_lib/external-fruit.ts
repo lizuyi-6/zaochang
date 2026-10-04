@@ -1,4 +1,5 @@
 import { database } from "./community";
+import { assertWalletIntegrity, pendingToAvailableStatements, sqliteTimestamp, validIdempotencyKey, walletOverview, type WalletOverviewRow } from "./fruit-core";
 import {
   errorMessageIncludes as errorIncludes,
   isUniqueConstraintError as isUniqueError,
@@ -38,14 +39,6 @@ type PaymentRow = {
   createdAt: string;
 };
 
-type WalletRow = {
-  balance: number;
-  pendingBalance: number;
-  ledgerBalance: number;
-  ledgerPendingBalance: number;
-  status: string;
-};
-
 export class ExternalFruitError extends Error {
   constructor(public code: string, public status = 409) {
     super(code);
@@ -62,35 +55,11 @@ export function externalApiErrorResponse(error: unknown): Response | null {
   return null;
 }
 
-function validIdempotencyKey(value: string) {
-  return /^[A-Za-z0-9:_-]{8,120}$/.test(value);
-}
-
-function sqliteTimestamp(date: Date) {
-  return date.toISOString().slice(0, 19).replace("T", " ");
-}
-
-async function wallet(email: string) {
-  return database().prepare(
-    `SELECT balance, pending_balance AS pendingBalance, status,
-            COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'available'), 0) AS ledgerBalance,
-            COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0) AS ledgerPendingBalance
-     FROM wallets WHERE user_email = ?`,
-  ).bind(email, email, email).first<WalletRow>();
-}
-
-async function assertWalletIntegrity(email: string, row: WalletRow | null | undefined) {
-  if (!row) throw new ExternalFruitError("wallet_not_found", 404);
-  if (row.balance === row.ledgerBalance && row.pendingBalance === row.ledgerPendingBalance) return;
-  await database().batch([
-    database().prepare(`UPDATE wallets SET status = 'review', updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`).bind(email),
-    database().prepare(
-      `INSERT INTO fruit_risk_events (id, user_email, kind, severity, evidence)
-       VALUES (?, ?, 'wallet_ledger_mismatch', 'high', ?)`,
-    ).bind(`risk:${randomToken(20)}`, email, JSON.stringify({ balance: row.balance, ledgerBalance: row.ledgerBalance, pendingBalance: row.pendingBalance, ledgerPendingBalance: row.ledgerPendingBalance })),
-  ]);
-  throw new ExternalFruitError("wallet_ledger_mismatch", 423);
-}
+// 资金路径共享原语收敛到 fruit-core(2026-10 审计重构 #7):钱包聚合读/完整性断言/
+// 幂等键形状/时间戳格式不再与 fruit.ts 各持一份;错误码体系与风险事件 id 形态不变。
+const wallet = walletOverview;
+const assertIntegrity = (email: string, row: WalletOverviewRow | null | undefined) =>
+  assertWalletIntegrity(email, row, (code, status) => new ExternalFruitError(code, status), () => `risk:${randomToken(20)}`);
 
 async function paymentById(id: string) {
   return database().prepare(
@@ -175,8 +144,8 @@ export async function createExternalPayment(identity: ExternalIdentity, input: R
     if (entitlement) return { owned: true, paymentId: entitlement.paymentId, replayed: false };
   }
   const [payerWallet, merchantWallet] = await Promise.all([wallet(identity.userEmail), wallet(identity.clientOwnerEmail)]);
-  await assertWalletIntegrity(identity.userEmail, payerWallet);
-  await assertWalletIntegrity(identity.clientOwnerEmail, merchantWallet);
+  await assertIntegrity(identity.userEmail, payerWallet);
+  await assertIntegrity(identity.clientOwnerEmail, merchantWallet);
   if (!payerWallet || !merchantWallet) throw new ExternalFruitError("wallet_not_found", 404);
   if (payerWallet.status !== "active" || merchantWallet.status !== "active") throw new ExternalFruitError("wallet_restricted", 423);
   if (payerWallet.balance < amount) throw new ExternalFruitError("insufficient_balance", 409);
@@ -261,8 +230,8 @@ export async function decideExternalPayment(userEmail: string, paymentId: string
   }
 
   const [payerWallet, merchantWallet] = await Promise.all([wallet(row.payerEmail), wallet(row.merchantEmail)]);
-  await assertWalletIntegrity(row.payerEmail, payerWallet);
-  await assertWalletIntegrity(row.merchantEmail, merchantWallet);
+  await assertIntegrity(row.payerEmail, payerWallet);
+  await assertIntegrity(row.merchantEmail, merchantWallet);
   // 状态前置判定:非 active 钱包是 wallet_restricted,不该落到 CHECK 失败后被
   // isBalanceError 误报成 insufficient_balance(错误码决定第三方客户端的重试策略)。
   if (payerWallet?.status !== "active" || merchantWallet?.status !== "active") {
@@ -358,8 +327,8 @@ export async function refundExternalPayment(identity: Pick<ExternalIdentity, "cl
   // 与购买路径同政策:钱包/账本漂移必须阻断留痕(assertWalletIntegrity),
   // 不得静默按账本改写——那会把漂移信号抹掉,若账本本身是错的一方,错值反被扶正。
   const [payerWalletRow, merchantWalletRow] = await Promise.all([wallet(row.payerEmail), wallet(row.merchantEmail)]);
-  await assertWalletIntegrity(row.payerEmail, payerWalletRow);
-  await assertWalletIntegrity(row.merchantEmail, merchantWalletRow);
+  await assertIntegrity(row.payerEmail, payerWalletRow);
+  await assertIntegrity(row.merchantEmail, merchantWalletRow);
   const replayKey = `external-refund:${identity.clientId}:${identity.userEmail}:${idempotencyKey}`;
   const prior = await db.prepare(
     `SELECT reference_id AS referenceId FROM fruit_operations WHERE idempotency_key = ?`,
@@ -418,7 +387,7 @@ export async function settleDueExternalFruit(merchantEmail: string) {
   const merchantWallet = await wallet(merchantEmail);
   if (!merchantWallet || merchantWallet.status !== "active") return;
   try {
-    await assertWalletIntegrity(merchantEmail, merchantWallet);
+    await assertIntegrity(merchantEmail, merchantWallet);
   } catch {
     return;
   }
@@ -436,13 +405,8 @@ export async function settleDueExternalFruit(merchantEmail: string) {
            (id, kind, idempotency_key, target_email, amount, reference_type, reference_id, description)
            VALUES (?, 'external_settlement', ?, ?, ?, 'external_payment', ?, '外部应用收入结算')`,
         ).bind(operationId, operationId, merchantEmail, item.amount, item.id),
-        db.prepare(
-          `UPDATE wallets SET pending_balance = CASE WHEN status = 'active' THEN pending_balance - ? ELSE -1 END,
-             balance = CASE WHEN status = 'active' THEN balance + ? ELSE -1 END,
-             lifetime_earned = lifetime_earned + ?, updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
-        ).bind(item.amount, item.amount, item.amount, merchantEmail),
-        db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, merchantEmail, -item.amount),
-        db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'available', ?)`).bind(operationId, merchantEmail, item.amount),
+        ...pendingToAvailableStatements(db, { operationId, email: merchantEmail, amount: item.amount }),
+
         // 与支付侧对称:结算落一行可见流水(购买侧已有 external_purchase/external_sale_pending 两行)。
         db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'external_settlement', '外部应用收入已结算', ?)`).bind(merchantEmail, item.amount, item.id),
         db.prepare(`UPDATE external_fruit_payments SET status = 'settled', settled_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'paid'`).bind(item.id),

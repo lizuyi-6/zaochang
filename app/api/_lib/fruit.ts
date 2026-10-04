@@ -1,4 +1,5 @@
 import { database } from "./community";
+import { assertWalletIntegrity, pendingToAvailableStatements, validIdempotencyKey, walletOverview, type WalletOverviewRow } from "./fruit-core";
 // D1 约束嗅探的事实来源在 errors.ts;本地沿用旧短名(调用点 20 处,重命名导入保 diff 最小)。
 import {
   errorMessageIncludes as errorIncludes,
@@ -71,9 +72,7 @@ type OperationRow = {
   relatedOperationId: string | null;
 };
 
-function validIdempotencyKey(value: string) {
-  return /^[a-zA-Z0-9:_-]{8,120}$/.test(value);
-}
+
 
 function rewardGuardReason(error: unknown) {
   if (errorIncludes(error, "like_velocity_limit")) return "velocity_limit";
@@ -83,35 +82,15 @@ function rewardGuardReason(error: unknown) {
   return null;
 }
 
-async function wallet(email: string) {
-  return database().prepare(
-    `SELECT balance, pending_balance AS pendingBalance,
-            lifetime_earned AS lifetimeEarned, lifetime_spent AS lifetimeSpent,
-            status,
-            COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'available'), 0) AS ledgerBalance,
-            COALESCE((SELECT SUM(delta) FROM fruit_entries WHERE user_email = ? AND bucket = 'pending'), 0) AS ledgerPendingBalance
-     FROM wallets WHERE user_email = ?`,
-  ).bind(email, email, email).first<WalletRow>();
-}
+// 钱包/账本/幂等键原语收敛到 fruit-core(2026-10 审计重构 #7),错误码体系不变。
+const wallet = walletOverview;
+const assertIntegrity = (email: string, row: WalletOverviewRow | null | undefined) =>
+  assertWalletIntegrity(email, row, (code, status) => new FruitError(code, status));
 
 // 钱包+账本聚合读的对外出口(此前 community GET 与 v1/fruit/wallet 各抄了一份同义 SQL):
 // 返回 materialized 与 ledger 双余额的行,完整性断言在 assertWalletIntegrity,读侧不重复实现。
 export function getWalletOverview(email: string) {
   return wallet(email);
-}
-
-async function assertWalletIntegrity(email: string, row: WalletRow | null | undefined) {
-  if (!row) throw new FruitError("wallet_not_found", 404);
-  if (row.balance === row.ledgerBalance && row.pendingBalance === row.ledgerPendingBalance) return row;
-  const db = database();
-  await db.batch([
-    db.prepare(`UPDATE wallets SET status = 'review', updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`).bind(email),
-    db.prepare(
-      `INSERT INTO fruit_risk_events (id, user_email, kind, severity, evidence)
-       VALUES (?, ?, 'wallet_ledger_mismatch', 'high', ?)`,
-    ).bind(`risk:${crypto.randomUUID()}`, email, JSON.stringify({ balance: row.balance, ledgerBalance: row.ledgerBalance, pendingBalance: row.pendingBalance, ledgerPendingBalance: row.ledgerPendingBalance })),
-  ]);
-  throw new FruitError("wallet_ledger_mismatch", 423);
 }
 
 async function product(productId: number) {
@@ -198,7 +177,7 @@ export async function settleDueFruit(sellerEmail: string) {
   const sellerWallet = await wallet(sellerEmail);
   if (!sellerWallet || sellerWallet.status !== "active") return;
   try {
-    await assertWalletIntegrity(sellerEmail, sellerWallet);
+    await assertIntegrity(sellerEmail, sellerWallet);
   } catch {
     return;
   }
@@ -218,17 +197,9 @@ export async function settleDueFruit(sellerEmail: string) {
            (id, kind, idempotency_key, target_email, amount, reference_type, reference_id, description)
            VALUES (?, 'like_reward_settlement', ?, ?, ?, 'reward_event', ?, '有效点赞奖励结算')`,
         ).bind(operationId, operationId, sellerEmail, reward.amount, reward.id),
-        // 与订单结算同构的 CASE 守卫:钱包在读取与批次之间被置 review/frozen 时,
-        // ELSE -1 触发 CHECK 令整批原子失败——这里是唯一的资金路径,不许 fail-open。
-        db.prepare(
-          `UPDATE wallets SET
-             pending_balance = CASE WHEN status = 'active' THEN pending_balance - ? ELSE -1 END,
-             balance = CASE WHEN status = 'active' THEN balance + ? ELSE -1 END,
-             lifetime_earned = lifetime_earned + ?, updated_at = CURRENT_TIMESTAMP
-           WHERE user_email = ?`,
-        ).bind(reward.amount, reward.amount, reward.amount, sellerEmail),
-        db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'pending', ?)`).bind(operationId, sellerEmail, -reward.amount),
-        db.prepare(`INSERT INTO fruit_entries (operation_id, user_email, bucket, delta) VALUES (?, ?, 'available', ?)`).bind(operationId, sellerEmail, reward.amount),
+        // 待结算→可用资金移动收敛到 fruit-core(CASE 守卫:钱包被置 review/frozen 时
+        // ELSE -1 触发 CHECK 令整批原子失败——资金路径不许 fail-open)。
+        ...pendingToAvailableStatements(db, { operationId, email: sellerEmail, amount: reward.amount }),
         db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'like_reward', '有效点赞奖励已结算', ?)`).bind(sellerEmail, reward.amount, reward.id),
       ]);
     } catch (error) {
@@ -251,21 +222,7 @@ export async function settleDueFruit(sellerEmail: string) {
            (id, kind, idempotency_key, target_email, amount, reference_type, reference_id, description)
            VALUES (?, 'settlement', ?, ?, ?, 'order', ?, '作品收入结算')`,
         ).bind(operationId, operationId, sellerEmail, item.amount, item.id),
-        db.prepare(
-          `UPDATE wallets SET
-             pending_balance = CASE WHEN status = 'active' THEN pending_balance - ? ELSE -1 END,
-             balance = CASE WHEN status = 'active' THEN balance + ? ELSE -1 END,
-             lifetime_earned = lifetime_earned + ?, updated_at = CURRENT_TIMESTAMP
-           WHERE user_email = ?`,
-        ).bind(item.amount, item.amount, item.amount, sellerEmail),
-        db.prepare(
-          `INSERT INTO fruit_entries (operation_id, user_email, bucket, delta)
-           VALUES (?, ?, 'pending', ?)`,
-        ).bind(operationId, sellerEmail, -item.amount),
-        db.prepare(
-          `INSERT INTO fruit_entries (operation_id, user_email, bucket, delta)
-           VALUES (?, ?, 'available', ?)`,
-        ).bind(operationId, sellerEmail, item.amount),
+        ...pendingToAvailableStatements(db, { operationId, email: sellerEmail, amount: item.amount }),
         // 与购买侧对称:结算必须落一行可见流水,否则卖家"最近流水"与余额脱节
         // (wallet 页与社区 feed 通知都以 transactions 为源)。
         db.prepare(
@@ -325,8 +282,8 @@ export async function checkoutProduct(userEmail: string, productId: number, idem
   }
 
   const [buyerWallet, sellerWallet] = await Promise.all([wallet(userEmail), wallet(item.ownerEmail)]);
-  await assertWalletIntegrity(userEmail, buyerWallet);
-  await assertWalletIntegrity(item.ownerEmail, sellerWallet);
+  await assertIntegrity(userEmail, buyerWallet);
+  await assertIntegrity(item.ownerEmail, sellerWallet);
   if (!buyerWallet || !sellerWallet) throw new FruitError("wallet_not_found", 404);
   if (buyerWallet.status !== "active" || sellerWallet.status !== "active") throw new FruitError("wallet_restricted", 423);
 
@@ -438,8 +395,8 @@ export async function refundProductOrder(userEmail: string, orderId: string, ide
   // 优先于卖家侧风控(frozen/review),否则卖家被风控会顺带冻结买家的正当退款。
   // 07-oidc-external 的"商户钱包 frozen 下退款仍 200"断言钉住该语义。
   const [buyerWallet, sellerWalletRow] = await Promise.all([wallet(userEmail), wallet(current.sellerEmail)]);
-  await assertWalletIntegrity(userEmail, buyerWallet);
-  await assertWalletIntegrity(current.sellerEmail, sellerWalletRow);
+  await assertIntegrity(userEmail, buyerWallet);
+  await assertIntegrity(current.sellerEmail, sellerWalletRow);
 
   const operationId = `refund:${crypto.randomUUID()}`;
   try {
@@ -517,8 +474,8 @@ export async function tipProduct(userEmail: string, productId: number, amount: n
   if (item.ownerEmail === userEmail) throw new FruitError("tip_not_allowed", 409);
   await assertTransferEligible(userEmail);
   const [sender, recipient] = await Promise.all([wallet(userEmail), wallet(item.ownerEmail)]);
-  await assertWalletIntegrity(userEmail, sender);
-  await assertWalletIntegrity(item.ownerEmail, recipient);
+  await assertIntegrity(userEmail, sender);
+  await assertIntegrity(item.ownerEmail, recipient);
   if (sender?.status !== "active" || recipient?.status !== "active") throw new FruitError("wallet_restricted", 423);
   const operationId = `tip:${crypto.randomUUID()}`;
   const reference = `tip:${productId}:${operationId}`;
@@ -619,7 +576,7 @@ export async function awardProductLike(recipientEmail: string, actorEmail: strin
     return suppressLikeReward(recipientEmail, actorEmail, targetRef, "wallet_restricted", false);
   }
   try {
-    await assertWalletIntegrity(recipientEmail, recipient);
+    await assertIntegrity(recipientEmail, recipient);
   } catch {
     return suppressLikeReward(recipientEmail, actorEmail, targetRef, "wallet_ledger_mismatch", true);
   }
