@@ -401,10 +401,10 @@ function fakeD1(failLabels = []) {
   };
 }
 
-test("purge: 四域七条 statement 全部注册,SQL 与标签逐字固定", () => {
+test("purge: 五域九条 statement 全部注册,SQL 与标签逐字固定", () => {
   const db = fakeD1();
   const registry = purgeRegistry(db);
-  assert.equal(registry.length, 7);
+  assert.equal(registry.length, 9);
   assert.deepEqual(registry.map((entry) => entry.label), [
     "oauth.authorization_requests",
     "oauth.authorization_codes",
@@ -413,6 +413,8 @@ test("purge: 四域七条 statement 全部注册,SQL 与标签逐字固定", () 
     "external-fruit.payments",
     "email-codes.login_codes",
     "sessions.auth_sessions",
+    "webauthn.challenges_consumed",
+    "webauthn.challenges_expired",
   ]);
   assert.deepEqual(db.prepared.map((entry) => entry.sql), [
     "DELETE FROM oauth_provider_authorization_requests WHERE expires_at <= CURRENT_TIMESTAMP",
@@ -422,6 +424,8 @@ test("purge: 四域七条 statement 全部注册,SQL 与标签逐字固定", () 
     "DELETE FROM external_fruit_payments WHERE status IN ('expired', 'cancelled') AND expires_at <= datetime('now', '-7 days')",
     "DELETE FROM email_login_codes WHERE expires_at <= datetime('now', '-1 day') OR consumed_at IS NOT NULL",
     "DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP",
+    "DELETE FROM webauthn_challenges WHERE consumed_at IS NOT NULL",
+    "DELETE FROM webauthn_challenges WHERE expires_at < datetime('now', '-1 day')",
   ]);
 });
 
@@ -431,13 +435,13 @@ test("purge: 单条失败不阻断后续,日志含 label 且返回计数", async
   const errors = [];
   const logger = { log: (message) => logs.push(message), error: (message) => errors.push(message) };
   const result = await runPurgeRegistry(db, logger);
-  assert.deepEqual(result, { ok: 6, failed: 1 });
+  assert.deepEqual(result, { ok: 8, failed: 1 });
   assert.equal(errors.length, 1);
   assert.ok(errors[0].startsWith("[cron-purge] failed oauth.authorization_codes:"));
-  assert.equal(logs.length, 6);
+  assert.equal(logs.length, 8);
   assert.ok(logs.every((message) => /^\[cron-purge\] ok [\w.-]+ changes=3$/.test(message)));
-  // 最后一条(sessions)在失败之后仍执行——注册表顺序不受影响。
-  assert.ok(logs.at(-1).includes("sessions.auth_sessions"));
+  // 最后一条(webauthn challenges_expired)在失败之后仍执行——注册表顺序不受影响。
+  assert.ok(logs.at(-1).includes("webauthn.challenges_expired"));
 });
 
 function createHyperknowCleanupFixture({ status = "clean", afterCandidateRead, failRowDelete = false } = {}) {

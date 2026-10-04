@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getOAuthSessionUser, oauthProviderStatus, safeReturnPath, turnstileSiteKey } from "../oauth-session";
 import { EmailLoginForm } from "./email-form";
+import { PasskeyLoginButton } from "./passkey-button";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -42,10 +43,12 @@ export default async function SignInPage({ searchParams }: PageProps) {
             ? "人机验证未通过，请稍后在登录页重新完成验证后再注册。"
           : null;
 
-  // 登录方式区块:GitHub 登录 + 邮箱验证码 + 首次注册(邀请码)。主站与 /lattice/* 门禁
-  // 变体共用同一份——两条路都必须能走 GitHub 登录,差异只在标题/说明文案。
+  // 登录方式区块:通行密钥 + GitHub 登录 + 邮箱验证码 + 首次注册(邀请码)。主站与
+  // /lattice/* 门禁变体共用同一份——两条路都必须能走 GitHub 登录,差异只在标题/说明
+  // 文案。PasskeyLoginButton 在不支持 WebAuthn 的环境自渲染为 null,无需条件分支。
   const providers = (
     <>
+      <PasskeyLoginButton returnTo={returnTo} />
       {status.github ? (
         <a className="auth-provider github" href={loginHref}>
           <Github size={18} /><span>使用 GitHub 登录</span>

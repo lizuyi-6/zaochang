@@ -54,7 +54,9 @@ export const authSessions = sqliteTable(
   },
   (table) => [
     index("auth_sessions_expiry_idx").on(table.expiresAt),
-    check("session_provider_valid", sql`${table.provider} in ('google', 'github', 'email')`),
+    // 'passkey' 自 0028:通行密钥登录与 GitHub/邮箱码签发完全同权的会话。
+    // 'google' 是 0001 时代的历史值,登录入口已移除,保留不动。
+    check("session_provider_valid", sql`${table.provider} in ('google', 'github', 'email', 'passkey')`),
   ],
 );
 
@@ -120,6 +122,51 @@ export const emailLoginCodes = sqliteTable(
   },
   (table) => [index("email_login_codes_email_idx").on(table.email, table.createdAt)],
 );
+
+// 通行密钥(WebAuthn)凭据:已登录成员在设置页追加的登录钥匙。身份锚点仍是
+// members.email——passkey 不参与首次注册(邀请码门槛不经过这里),也不是联邦
+// 身份,故不进 oauth_accounts。credential_id 是认证器侧主键;user_handle 为
+// 该成员的稳定随机标识(options userID,usernameless 登录时浏览器经它呈现账户),
+// 不携带 PII;public_key 存 COSE 字节的 base64url。counter/synced 语义:
+// 同步型凭据(backup 状态)counter 可恒 0,克隆检测按 deviceType 分流。
+export const webauthnCredentials = sqliteTable(
+  "webauthn_credentials",
+  {
+    credentialId: text("credential_id").primaryKey(),
+    userHandle: text("user_handle").notNull(),
+    email: text("email").notNull().references(() => members.email),
+    name: text("name").notNull().default(""),
+    publicKey: text("public_key").notNull(),
+    counter: integer("counter").notNull().default(0),
+    transports: text("transports"),
+    aaguid: text("aaguid").notNull().default(""),
+    deviceType: text("device_type").notNull().default("singleDevice"),
+    backedUp: integer("backed_up", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastUsedAt: text("last_used_at"),
+  },
+  (table) => [
+    index("webauthn_credentials_user_handle_idx").on(table.userHandle),
+    index("webauthn_credentials_email_idx").on(table.email),
+    check("webauthn_credentials_device_type_valid", sql`${table.deviceType} in ('singleDevice', 'multiDevice')`),
+  ],
+);
+
+// WebAuthn 挑战:options 端点签发一行,verify 端点原子消费(consumed_at 条件 UPDATE,
+// meta.changes 判定——与 email_login_codes 同语义)。只存 SHA-256,挑战值本体只在
+// HttpOnly cookie 与 clientDataJSON 里。purpose 隔离注册/登录两用挑战:注册挑战
+// 携带 user_handle(register verify 用它把凭据绑到成员),login 行该列为空。
+export const webauthnChallenges = sqliteTable("webauthn_challenges", {
+  challengeHash: text("challenge_hash").primaryKey(),
+  purpose: text("purpose").notNull(),
+  userHandle: text("user_handle"),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("webauthn_challenges_expiry_idx").on(table.expiresAt),
+  check("webauthn_challenges_purpose_valid", sql`${table.purpose} in ('register', 'login')`),
+]);
 
 export const wallets = sqliteTable(
   "wallets",

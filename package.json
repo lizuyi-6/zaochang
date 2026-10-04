@@ -10,7 +10,7 @@
     "build": "vinext build",
     "postbuild": "node scripts/sync-katex-fonts.mjs",
     "start": "vinext start",
-    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/hello-system-freeze.test.mjs tests/worker-contracts.test.mjs tests/agent-admin-api.test.mjs tests/lattice-css-health.test.mjs tests/modularization-contracts.test.mjs tests/migration-gate.test.mjs tests/hyperknow-core.test.mjs tests/lattice-gate.test.mjs tests/lattice-backend.test.mjs tests/hyperknow-diagram.test.mjs tests/lattice-brand.test.mjs tests/lattice-markup.test.mjs tests/hyperknow-feed.test.mjs tests/spa-typecheck.test.mjs tests/lattice-course.test.mjs tests/lattice-course-behavior.test.mjs tests/whiteboard-camera.test.mjs tests/lattice-layout.test.mjs tests/lattice-llm.test.mjs tests/lattice-dag-finalization.test.mjs tests/whiteboard-caption-sync.test.mjs tests/whiteboard-plan-budget.test.mjs tests/build-assets.test.mjs tests/whiteboard-free-topic.test.mjs tests/whiteboard-caption-window.test.mjs tests/whiteboard-narration-sanitize.test.mjs tests/hyperknow-hardening.test.mjs",
+    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/hello-system-freeze.test.mjs tests/worker-contracts.test.mjs tests/agent-admin-api.test.mjs tests/lattice-css-health.test.mjs tests/modularization-contracts.test.mjs tests/migration-gate.test.mjs tests/hyperknow-core.test.mjs tests/lattice-gate.test.mjs tests/lattice-backend.test.mjs tests/hyperknow-diagram.test.mjs tests/lattice-brand.test.mjs tests/lattice-markup.test.mjs tests/hyperknow-feed.test.mjs tests/spa-typecheck.test.mjs tests/lattice-course.test.mjs tests/lattice-course-behavior.test.mjs tests/whiteboard-camera.test.mjs tests/lattice-layout.test.mjs tests/lattice-llm.test.mjs tests/lattice-dag-finalization.test.mjs tests/whiteboard-caption-sync.test.mjs tests/whiteboard-plan-budget.test.mjs tests/build-assets.test.mjs tests/whiteboard-free-topic.test.mjs tests/whiteboard-caption-window.test.mjs tests/whiteboard-narration-sanitize.test.mjs tests/hyperknow-hardening.test.mjs tests/passkey-core.test.mjs",
     "test:lattice": "node --experimental-strip-types --test tests/hyperknow-core.test.mjs tests/lattice-gate.test.mjs tests/lattice-backend.test.mjs tests/hyperknow-diagram.test.mjs tests/lattice-brand.test.mjs tests/lattice-course.test.mjs tests/lattice-course-behavior.test.mjs tests/whiteboard-camera.test.mjs tests/lattice-layout.test.mjs tests/lattice-llm.test.mjs tests/lattice-dag-finalization.test.mjs tests/whiteboard-caption-sync.test.mjs tests/whiteboard-free-topic.test.mjs tests/whiteboard-caption-window.test.mjs tests/whiteboard-narration-sanitize.test.mjs tests/hyperknow-hardening.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --max-warnings=0",
     "db:generate": "drizzle-kit generate"
@@ -20,6 +20,8 @@
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@fontsource/noto-serif-sc": "^5.3.0",
     "@fontsource/source-serif-4": "^5.3.0",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.0.3",
     "drizzle-orm": "0.45.2",
     "framer-motion": "12.23.12",
     "jose": "^6.1.3",

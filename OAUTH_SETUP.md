@@ -54,6 +54,19 @@ Client Secret 不写入本文件、仓库或发布包，只能存在于服务器
 
 Google 登录当前停用，登录页不显示 Google 控件，运行时即使误注入 Google 变量也不会启用提供方。恢复 Google 需要单独的产品决策、邀请码规则复用、安全测试和代码变更，不能只添加两个环境变量。
 
+## Passkey（通行密钥）登录
+
+通行密钥是**已有成员的追加登录方式**，不参与首次注册——创建账号仍只走 GitHub / 邮箱验证码 + 邀请码，因此本节没有任何需要配置的 Secret 或第三方控制台。入口：
+
+- 登录页「使用通行密钥登录」（`app/signin/passkey-button.tsx`，discoverable 流程，无需输邮箱）；
+- 「编辑个人资料」页的通行密钥管理区（`app/profile/edit/passkey-manager.tsx`）：添加本设备、改名、删除。
+
+运行语义（无需配置，但验收时要知道）：
+
+- RP ID 与合法 origin 唯一推导自 `PUBLIC_APP_ORIGIN`（生产 `https://aetherstudio.top` → RP ID `aetherstudio.top`，`www.` 子域也在放行列表内；本地 dev 自动回落请求 origin，RP ID 即 `localhost`/`127.0.0.1`）。**不同环境的通行密钥互不通用**（RP ID 不同）：本地注册的钥匙在 staging/生产不可用，反之亦然；验收时各环境各注册各的。
+- 挑战在服务端原子消费（`webauthn_challenges` 表只存 SHA-256，注册/登录 purpose 隔离），重放同一条断言过不了消费闸；WebAuthn 浏览器 API 需要 HTTPS（生产满足）或 localhost。
+- 同步型凭据（iCloud 钥匙串 / Google 密码管理器）的 counter 可恒为 0，克隆判定按凭据的 deviceType 分流，删除凭据不影响 GitHub/邮箱码登录（passkey 永远是追加凭据，不存在锁定风险）。
+
 ## 造场作为 OIDC 身份提供方
 
 发现文档：

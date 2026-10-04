@@ -1021,3 +1021,26 @@ body:has(.reading-ai-panel.open) .reading-ai-rail { display: none; }
   .deep-circle-link { padding: 12px 9px; }
   .report-control > button { padding: 10px 6px; }
 }
+
+/* Passkey(通行密钥):登录页按钮沿用 .auth-provider 体系;设置页管理区沿用
+   .profile-edit-page 的版式变量(max-width/线框/mono 小字),独立类避免耦合。 */
+.auth-provider.passkey { color: var(--coral, #ff5c3d); }
+.passkey-manager { margin: 0 auto; max-width: 860px; }
+.passkey-manager > header { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 20px; justify-content: space-between; padding: 28px 0 18px; }
+.passkey-manager > header span { color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+.passkey-manager h2 { font-size: 22px; margin: 6px 0; }
+.passkey-manager header p { color: var(--muted); font-size: 11px; max-width: 520px; }
+.passkey-manager > header .primary-action { flex-shrink: 0; }
+.passkey-manager ul { display: grid; gap: 10px; list-style: none; padding: 18px 0; }
+.passkey-manager li { align-items: center; border: 1px solid var(--line); display: grid; gap: 12px; grid-template-columns: 16px 1fr auto; padding: 12px 14px; }
+.passkey-manager li > svg { color: var(--coral, #ff5c3d); }
+.passkey-manager li > div { display: grid; gap: 3px; }
+.passkey-manager li input { background: transparent; border: none; border-bottom: 1px dashed transparent; font-size: 12px; padding: 2px 0; width: 100%; }
+.passkey-manager li input:focus { border-bottom-color: var(--line-strong); outline: none; }
+.passkey-manager li small { color: var(--muted); font-size: 9px; }
+.passkey-manager li > button { align-items: center; background: none; border: 1px solid var(--line); color: var(--muted); cursor: pointer; display: flex; font-size: 9px; gap: 5px; padding: 7px 10px; }
+.passkey-manager li > button:hover { border-color: var(--coral, #ff5c3d); color: var(--coral, #ff5c3d); }
+.passkey-empty { color: var(--muted); font-size: 11px; padding: 18px 0 28px; }
+@media (max-width: 640px) {
+  .passkey-manager > header { align-items: start; flex-direction: column; }
+}

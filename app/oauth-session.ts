@@ -5,10 +5,11 @@ import { resolvePublicAppOrigin } from "./lib/public-origin";
 import { isInvitationRegistrationRequiredError, isInvitationUnavailableError } from "./api/_lib/errors";
 
 export type OAuthProvider = "github";
-// 会话签发可用的 provider:OAuth 登录走 OAuthProvider,邮箱验证码登录走 "email"。
+// 会话签发可用的 provider:OAuth 登录走 OAuthProvider,邮箱验证码登录走 "email",
+// 通行密钥登录走 "passkey"(凭据表 webauthn_credentials,0028 起加入 CHECK)。
 // (oauth_accounts/invitation_redemptions 的 CHECK 自 0018 起同样接受 'email';
 // "google" 曾在 0001 时代存在,登录入口已移除,DB CHECK 里的历史值保留不动。)
-export type SessionProvider = OAuthProvider | "email";
+export type SessionProvider = OAuthProvider | "email" | "passkey";
 
 export type SessionUser = {
   displayName: string;

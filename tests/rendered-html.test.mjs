@@ -14,6 +14,7 @@ import { register as register_08_community_uploads } from "./suites/08-community
 import { register as register_09_agent_ai } from "./suites/09-agent-ai.tests.mjs";
 import { register as register_10_ledger_misc } from "./suites/10-ledger-misc.tests.mjs";
 import { register as register_11_hyperknow } from "./suites/11-hyperknow.tests.mjs";
+import { register as register_12_passkey } from "./suites/12-passkey.tests.mjs";
 
 describe("造场社区集成流程", { concurrency: false }, () => {
   register_01_render();
@@ -27,4 +28,5 @@ describe("造场社区集成流程", { concurrency: false }, () => {
   register_09_agent_ai();
   register_10_ledger_misc();
   register_11_hyperknow();
+  register_12_passkey();
 });
