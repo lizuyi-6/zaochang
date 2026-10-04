@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { requireMember } from "../../_lib/access-control";
 import { jsonError } from "../../_lib/errors";
-import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, resolveCourseGenBudgetMs } from "../../_lib/hyperknow/budgets";
+import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, CREDIT_LEASE_MARGIN_MS, resolveCourseGenBudgetMs } from "../../_lib/hyperknow/budgets";
 import { assertSameOrigin } from "../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
 import { generateCourseBlueprint, generateUnitDetails, repairUnit, CHAT_MODEL_MAP, resolveChatModel } from "../../_lib/hyperknow/agents";
@@ -440,10 +440,19 @@ export async function POST(request: Request) {
       return Response.json({ error: (error as { code?: string }).code ?? "ai_not_configured" }, { status });
     }
 
-    // DB 原子幂等扣费与任务租约冲突拦截 (409 不放行，故障恢复不重复扣款，D1 batch 一致)
+    // 服务端总预算走 budgets 模块;HK_COURSE_GEN_TIMEOUT_MS 覆盖仅在 APP_ENV=test 生效
+    // (集成测试压缩 Stage1 预算触发真实超时路径,线上误配不得缩短预算)。
+    const envValues = env as unknown as Record<string, string | undefined>;
+    const stage1BudgetMs = resolveCourseGenBudgetMs(envValues.APP_ENV, envValues.HK_COURSE_GEN_TIMEOUT_MS, COURSE_STAGE1_BUDGET_MS);
+
+    // DB 原子幂等扣费与任务租约冲突拦截 (409 不放行，故障恢复不重复扣款，D1 batch 一致)。
+    // 计费租约必须罩住整个 Stage1 预算(2026-10 审计 C2):原 60s 默认短于蓝图生成耗时,
+    // 同 key 重发会在旧流仍在跑时免费接管、再启一路 Stage1(双倍上游调用);租约到期点
+    // 晚于超时点后,超时路径退费、完成路径 markCompleted 都会显式清掉租约。
     const { remaining: remainingCredits, conflict, charged } = await consumeCreditsIdempotent(
       member.email,
       idempotencyKey,
+      stage1BudgetMs + CREDIT_LEASE_MARGIN_MS,
     );
 
     if (conflict) {
@@ -478,10 +487,7 @@ export async function POST(request: Request) {
 
     // 服务端总预算走 budgets 模块;HK_COURSE_GEN_TIMEOUT_MS 覆盖仅在 APP_ENV=test 生效
     // (集成测试压缩 Stage1 预算触发真实超时路径,线上误配不得缩短预算)。
-    const envValues = env as unknown as Record<string, string | undefined>;
-    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(
-      resolveCourseGenBudgetMs(envValues.APP_ENV, envValues.HK_COURSE_GEN_TIMEOUT_MS, COURSE_STAGE1_BUDGET_MS),
-    )]);
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(stage1BudgetMs)]);
 
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {

@@ -6,6 +6,10 @@
 export const COURSE_STAGE1_BUDGET_MS = 300_000;
 export const COURSE_STAGE2_BUDGET_MS = 900_000;
 
+// 计费租约超出 Stage1 预算的安全余量:超时路径(退费/refunded)与完成路径
+// (markCompleted)都会显式清租约,余量只兜"abort 触发到收尾落库"的窗口。
+export const CREDIT_LEASE_MARGIN_MS = 60_000;
+
 // HK_COURSE_GEN_TIMEOUT_MS 仅在 APP_ENV=test 生效:集成测试用它把 Stage1 预算压到
 // 秒级,以真实触发"超时→失败→退费"路径。生产/预发/未设置/拼写错误的 APP_ENV 一律
 // 忽略——它不是生产旋钮,线上误配不得缩短真实预算。下限 1000ms 防止误配成 0/负数

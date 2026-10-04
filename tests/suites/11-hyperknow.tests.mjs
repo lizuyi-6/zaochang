@@ -11,6 +11,8 @@ import {
   baseUrl,
   runId,
   lastChatCompletion,
+  aiUpstreamCount,
+  blueprintUpstreamCount,
   lastTtsRequest,
   lastTtsBodyNonAscii,
   ttsUpstreamCount,
@@ -540,6 +542,60 @@ export function register() {
       assert.equal(chargeRow[0]?.status, "refunded", "超时失败的计费行必须标 refunded");
       const info = (await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json()).data.subscription;
       assert.equal(info.remaining_credits, 20, "超时失败必须把 10 积分退回当日余额");
+    } finally {
+      setAiUpstreamUnitDelay(0);
+      resetAiUpstream();
+    }
+  });
+
+  test("hyperknow course-generation: Stage1 运行期同 key 重发被 409 拦截,不双跑上游(C2)", async () => {
+    resetAiUpstream();
+    const email = `hk-c2-${runId}@example.com`;
+    const headers = authHeaders("C2 用户", email);
+    const chargeKey = `hk-c2-${runId}`;
+    // 第一路卡在单元生成(蓝图已出、任务未完):此时同 key 重发必须 409。原 60s 计费
+    // 租约短于蓝图耗时,过期后重发会免费接管再启一路 Stage1——双倍上游调用;租约时长
+    // 与预算的关系由 hyperknow-hardening 契约钉锁死(共享预览的 5s 测试预算下,>60s 的
+    // 真实窗口无法在套件内自然重现)。
+    setAiUpstreamUnitDelay(4000);
+    try {
+      const first = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+        method: "POST",
+        headers: { ...headers, "x-hk-web-search-provider": "off" },
+        body: JSON.stringify({ query: "C2 Lease Race", idempotencyKey: chargeKey }),
+      });
+      assert.equal(first.status, 200);
+      const reader = first.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let sawBlueprint = false;
+      while (!sawBlueprint) {
+        const { done, value } = await reader.read();
+        assert.equal(done, false, "流在蓝图就绪前不应结束");
+        buffer += decoder.decode(value, { stream: true });
+        let frameEnd = buffer.indexOf("\n\n");
+        while (frameEnd >= 0) {
+          const frameText = buffer.slice(0, frameEnd);
+          buffer = buffer.slice(frameEnd + 2);
+          frameEnd = buffer.indexOf("\n\n");
+          const dataLine = frameText.split("\n").find((line) => line.startsWith("data:"));
+          if (!dataLine) continue;
+          if (JSON.parse(dataLine.slice(5).trim()).type === "blueprint_ready") sawBlueprint = true;
+        }
+      }
+      assert.equal(blueprintUpstreamCount, 1, "第一路蓝图恰好一次上游调用");
+
+      const second = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+        method: "POST",
+        headers: { ...headers, "x-hk-web-search-provider": "off" },
+        body: JSON.stringify({ query: "C2 Lease Race", idempotencyKey: chargeKey }),
+      });
+      assert.equal(second.status, 409, "Stage1 运行期同 key 重发不得放行(免接管双跑)");
+      assert.deepEqual(await second.json(), { error: "concurrent_operation_in_progress" });
+      assert.equal(blueprintUpstreamCount, 1, "拦截后不得出现第二次上游蓝图调用");
+      const credits = (await (await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers })).json()).data.subscription.remaining_credits;
+      assert.equal(credits, 10, "409 不改变扣费语义(仍只扣一次)");
+      await reader.cancel();
     } finally {
       setAiUpstreamUnitDelay(0);
       resetAiUpstream();

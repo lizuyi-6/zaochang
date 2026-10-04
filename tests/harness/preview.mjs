@@ -33,6 +33,8 @@ export let aiServer;
 export let aiPort;
 export let lastChatCompletion = null;
 export let aiUpstreamCount = 0;
+/** 蓝图形状(CourseBlueprint)的非流式调用计数——C2 双跑断言用,与单元调用区分 */
+export let blueprintUpstreamCount = 0;
 export let lastTtsRequest = null;
 export let lastTtsBodyNonAscii = false;
 export let ttsUpstreamCount = 0;
@@ -126,6 +128,7 @@ export function setImageUpstreamDelay(ms) {
 export function resetAiUpstream() {
   lastChatCompletion = null;
   aiUpstreamCount = 0;
+  blueprintUpstreamCount = 0;
   lastTtsRequest = null;
   lastTtsBodyNonAscii = false;
   ttsUpstreamCount = 0;
@@ -257,6 +260,7 @@ export async function startFakeAiUpstream() {
         const sys = String(lastChatCompletion.system || "");
         const usr = String(lastChatCompletion.user || "");
         if (sys.includes("CourseBlueprint") || sys.includes("Curriculum Architect") || usr.includes("course blueprint")) {
+          blueprintUpstreamCount += 1;
           const isZh = usr.includes("Language: zh-CN") || /[\u4e00-\u9fa5]/.test(usr);
           const isDeep = usr.includes("Target Depth: deep");
           const isOverview = usr.includes("Target Depth: overview");

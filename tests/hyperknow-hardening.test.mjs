@@ -109,6 +109,13 @@ test('timeout: course-generation stage budgets resolve through the test-only ove
   assert.doesNotMatch(route, /AbortSignal\.timeout\(\d/, '服务端超时不得内联魔法数字(须走导出常量,契约可断言)');
 });
 
+test('lease: credit lease duration must cover the whole Stage1 budget (C2)', () => {
+  const route = read('app/api/hyperknow/course-generation/route.ts');
+  assert.match(route, /consumeCreditsIdempotent\(\s*member\.email,\s*idempotencyKey,\s*stage1BudgetMs \+ CREDIT_LEASE_MARGIN_MS,/, '计费租约必须 = Stage1 预算 + 余量——60s 默认租约短于蓝图生成耗时,同 key 重发会免费接管并双跑上游');
+  const budgets = read('app/api/_lib/hyperknow/budgets.ts');
+  assert.match(budgets, /CREDIT_LEASE_MARGIN_MS = 60_000/, '余量常量必须显式导出(可契约断言)');
+});
+
 test('auth: legacy identity headers gate delegates to the pure dev/test-only helper (A4)', () => {
   const gate = read('app/api/_lib/dev-login-gate.ts');
   assert.match(gate, /export function legacyIdentityHeadersEnabled/, '门禁判定必须是零 import 纯函数(可单测)');
