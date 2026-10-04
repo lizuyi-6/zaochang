@@ -108,6 +108,10 @@ export let aiUpstreamForceFail = false;
 /** 置模型名后,该模型的 /v1/messages 与 /v1/chat/completions 调用一律 404
  * (测 H3 主模型降级:llm.ts 404 候选回退 + model_degraded 帧)。 */
 export let aiUpstreamMissingModel = null;
+/** StepFun MCP 通道(tools/call 信封)计数与模式:success 回内嵌 JSON 命中,
+ * auth_failed 回 401(2026-10 审计第 5 批:MCP 成功路径此前无集成测试)。 */
+export let mcpUpstreamCount = 0;
+export let mcpMockOutcome = "success";
 /** 置对象后,非流式 Messages 调用(llm.chat)以该对象的 JSON 串作为回复文本
  * (白板讲座计划 quick_check/diagram 透传断言用);resetAiUpstream 会复位。 */
 export let aiUpstreamJsonOverride = null;
@@ -118,6 +122,10 @@ export function setAiUpstreamForceFail(value) {
 
 export function setAiUpstreamMissingModel(model) {
   aiUpstreamMissingModel = model || null;
+}
+
+export function setMcpMockOutcome(outcome) {
+  mcpMockOutcome = outcome;
 }
 
 export function setAiUpstreamJsonResponse(value) {
@@ -147,6 +155,8 @@ export function resetAiUpstream() {
   stepfunSearchMockOutcome = "success";
   aiUpstreamForceFail = false;
   aiUpstreamMissingModel = null;
+  mcpUpstreamCount = 0;
+  mcpMockOutcome = "success";
   aiUpstreamJsonOverride = null;
   unitResponseDelayMs = 0;
   imageResponseDelayMs = 0;
@@ -175,7 +185,7 @@ export async function startFakeAiUpstream() {
       const isStepSearch = request.url === "/v1/search";
       if (
         request.method !== "POST" ||
-        (!isMessages && !isTts && !isSearch && !isImages && !isStepSearch && request.url !== "/v1/chat/completions")
+        (!isMessages && !isTts && !isSearch && !isImages && !isStepSearch && request.url !== "/v1/chat/completions" && request.url !== "/v1/mcp/web_search/mcp")
       ) {
         response.writeHead(404).end();
         return;
@@ -194,6 +204,27 @@ export async function startFakeAiUpstream() {
       && body.model === aiUpstreamMissingModel) {
       response.writeHead(404, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "model_not_found" }));
+      return;
+    }
+    if (request.url === "/v1/mcp/web_search/mcp") {
+      // StepFun MCP tools/call:success 回 text 内嵌 JSON 命中(主通道),
+      // auth_failed 回 401(回退 /v1/search 的触发器)。
+      mcpUpstreamCount += 1;
+      if (mcpMockOutcome === "auth_failed") {
+        response.writeHead(401, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { message: "invalid api key" } }));
+        return;
+      }
+      const q = String((body.arguments ?? {}).query ?? body.query ?? "topic");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: body.id ?? null,
+        result: {
+          isError: false,
+          content: [{ type: "text", text: JSON.stringify({ results: [{ title: `MCP Docs: ${q}`, url: `https://mcp.research.test/${encodeURIComponent(q)}`, snippet: `MCP channel verified result for ${q}.` }] }) }],
+        },
+      }));
       return;
     }
     if (isSearch) {

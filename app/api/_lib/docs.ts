@@ -1,10 +1,8 @@
 import sanitizeHtml from "sanitize-html";
-import { UPLOAD_KEY_URL_PATTERN } from "./upload-core";
 import { cache } from "react";
 import { env } from "cloudflare:workers";
 import { renderMarkdownKatexHtml } from "@/app/lib/markdown-katex";
 import { canViewContent } from "./access-control";
-import { isUniqueConstraintError } from "./errors";
 import { database, optionalMember, type MemberIdentity } from "./community";
 import { createDocDataCache } from "./doc-data-cache";
 

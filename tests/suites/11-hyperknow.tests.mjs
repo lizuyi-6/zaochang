@@ -11,7 +11,6 @@ import {
   baseUrl,
   runId,
   lastChatCompletion,
-  aiUpstreamCount,
   blueprintUpstreamCount,
   lastTtsRequest,
   lastTtsBodyNonAscii,
@@ -23,6 +22,8 @@ import {
   setAiUpstreamJsonResponse,
   setAiUpstreamUnitDelay,
   setAiUpstreamMissingModel,
+  setMcpMockOutcome,
+  mcpUpstreamCount,
   setImageUpstreamDelay,
   authHeaders,
   executeD1Sql,
@@ -1423,4 +1424,47 @@ export function register() {
     assert.ok(okFrames.find((f) => f.type === "course_structure_ready"), "重置后应能真实生成");
     assert.equal(await info(), 10, "课程生成扣 10");
   });
+
+  test("hyperknow course-generation: StepFun MCP 成功路径命中且不打 /v1/search", async () => {
+    resetAiUpstream();
+    const email = `hk-mcp-${runId}@example.com`;
+    const response = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers: { ...authHeaders("MCP 用户", email), "x-hk-web-search-provider": "stepfun" },
+      body: JSON.stringify({ query: "MCP Channel Course", idempotencyKey: `hk-mcp-${runId}` }),
+    });
+    assert.equal(response.status, 200);
+    const frames = await readHkFrames(response);
+    assert.ok(frames.find((f) => f.type === "course_structure_ready"), "MCP 通道建课照常完成");
+    assert.ok(mcpUpstreamCount >= 1, "必须走 MCP tools/call 通道");
+    assert.equal(stepfunSearchRequests.length, 0, "MCP 成功时不得回退 /v1/search");
+    const progress = frames.find((f) => f.type === "course_generation_progress");
+    assert.equal(progress.data.status, "success");
+    assert.ok(progress.data.links.some((l) => l.includes("mcp.research.test")), "MCP 命中透传到轮次帧");
+    resetAiUpstream();
+  });
+
+  test("hyperknow course-generation: MCP 401 按回退语义打 /v1/search,不劣于旧通道", async () => {
+    resetAiUpstream();
+    setMcpMockOutcome("auth_failed");
+    const email = `hk-mcp401-${runId}@example.com`;
+    try {
+      const response = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+        method: "POST",
+        headers: { ...authHeaders("MCP401 用户", email), "x-hk-web-search-provider": "stepfun" },
+        body: JSON.stringify({ query: "MCP Fallback Course", idempotencyKey: `hk-mcp401-${runId}` }),
+      });
+      assert.equal(response.status, 200);
+      const frames = await readHkFrames(response);
+      assert.ok(mcpUpstreamCount >= 1, "先走 MCP");
+      assert.equal(stepfunSearchRequests.length, 1, "401 必须回退 /v1/search 恰一次");
+      const progress = frames.find((f) => f.type === "course_generation_progress");
+      assert.ok(progress.data.links.some((l) => l.includes("stepfun.research.test")), "回退通道命中透传");
+      assert.ok(frames.find((f) => f.type === "course_structure_ready"), "回退后建课照常完成");
+    } finally {
+      setMcpMockOutcome("success");
+      resetAiUpstream();
+    }
+  });
+
 }

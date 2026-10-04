@@ -49,7 +49,7 @@ jobs:
       # 不让 npm ci 的 install 脚本 / npm test 等第三方代码读到生产 token。
       CLOUDFLARE_ACCOUNT_ID: 65ebf2011c45b578d745221c646434fc
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # 自动:部署触发 ci 的那个 commit;手动:输入的 exact SHA(不再回落分支 HEAD)
           ref: ${{ github.event.workflow_run.head_sha || inputs.sha }}
@@ -79,7 +79,7 @@ jobs:
             fi
             echo "MANUAL DEPLOY sha=$EXPECTED_SHA owner=$DEPLOY_OWNER reason=$DEPLOY_REASON" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22.13.0
           cache: npm
@@ -90,7 +90,7 @@ jobs:
       - name: Reject disabled tests
         shell: bash
         run: |
-          if git grep -nE '(^|[^[:alnum:]_])(test|it|describe)\.(skip|todo)|(^|[^[:alnum:]_])(xit|xtest|xdescribe)[[:space:]]*\(|[[:space:]]skip[[:space:]]*:' -- tests; then
+          if git grep -nE '(^|[^[:alnum:]_])(test|it|describe|t)\.(skip|todo)|(^|[^[:alnum:]_])(xit|xtest|xdescribe)[[:space:]]*\(|[[:space:]]skip[[:space:]]*:' -- tests; then
             echo "Disabled test mechanism found."
             exit 1
           fi

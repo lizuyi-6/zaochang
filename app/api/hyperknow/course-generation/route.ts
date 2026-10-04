@@ -283,7 +283,6 @@ export async function POST(request: Request) {
                 completedUnits = [];
               }
 
-              const totalUnits = targetBlueprintUnits.length;
               // ── H1:brief 一律以任务行落库的为准(briefJson),请求体携带的 brief
               // 可能与任务不一致,且会被持久化进讲师 prompt 与课程记录。
               let taskBrief: CourseBrief | undefined;

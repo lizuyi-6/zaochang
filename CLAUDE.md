@@ -14,7 +14,7 @@ Requires Node `>=22.13.0` (tests use `node:sqlite` and `--experimental-strip-typ
 npm ci                          # install
 npm run dev                     # vinext dev server (local D1/R2 via @cloudflare/vite-plugin)
 npm run build                   # -> dist/server/index.js (Worker) + dist/client (assets)
-npm test                        # builds (vinext), runs the full suite (414 tests — 以 node:test 输出为准)
+npm test                        # builds (vinext), runs the full suite(测试数以 node:test 输出为准,不在此固定数字)
 npm run lint                    # eslint
 npx tsc --noEmit                # typecheck (root; hyperknow-spa 有独立 tsc,由 spa-typecheck 测试门禁强制)
 npm run db:generate             # should output "No schema changes"; new SQL = drift (see below)
@@ -67,7 +67,7 @@ All DB access in routes goes through `database()` in `app/api/_lib/community.ts`
 
 ## Tests
 
-`npm test` runs ~22 node:test entry files (with `--experimental-strip-types`, so tests can import `.ts` source directly), all registered in `package.json`'s `test` script:
+`npm test` runs the node:test entry files registered in `package.json`'s `test` script(数量以脚本清单为准) (with `--experimental-strip-types`, so tests can import `.ts` source directly), all registered in `package.json`'s `test` script:
 
 - `tests/rendered-html.test.mjs` — a **thin runner** (`concurrency: false`) that drives the serial suites in `tests/suites/01..11` in order. All of them share one harness, `tests/harness/preview.mjs`: a **real Wrangler preview server** on port 4179 against a fresh local D1 (applies all migrations from empty), plus a fake upload scanner, fake AI chat upstream, and fake email transport — asserting real HTTP responses + DB field state against the live worker runtime and real triggers, not mocks. The suites are **not** runnable in parallel outside the runner (each file's before-hook would start its own preview server and collide on the port).
 - The rest are pure-Node contract tests (no Wrangler startup): worker pipeline (`worker-contracts`), 《Hello System》 freeze, admin/agent API capability tables, migration drift, modularization, and the **见界 suite** — `hyperknow-*` / `lattice-*` / `whiteboard-*` cover the SPA's backend client parsing, whiteboard caption/engine contracts (incl. `WHITEBOARD_INSTRUCTOR_PROMPT` pedagogy invariants in `whiteboard-caption-sync` Regressions 15/19), course DAG finalization, CSS health (unclosed-comment scanner), brand copy, layout, and markup rendering. `tests/spa-typecheck.test.mjs` forces `tsc -b` inside `hyperknow-spa/` — the root `tsconfig` excludes the SPA, so this gate is the only thing catching its type errors (added after a missing-import white-screen shipped to prod).

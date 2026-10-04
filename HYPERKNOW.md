@@ -51,7 +51,7 @@ TTS 请求体必须纯 ASCII(`asciiSafeJson` 做 `\u` 转义):上游 WAF 对该�
 | --- | --- | --- |
 | `AI_CHAT_BASE_URL` / `AI_CHAT_API_KEY` | 复用 | 与阅读 AI 共用密钥面;缺任一 → 503 `ai_not_configured`(fail-closed) |
 | `HYPERKNOW_AI_BASE_URL` / `HYPERKNOW_AI_API_KEY` | 可选 | 覆盖位:上游与阅读 AI 不同时使用(如专门指向 StepFun) |
-| `HYPERKNOW_AI_MODEL` | 可选 | 默认回退 `AI_CHAT_MODEL`,再默认 `step-explore` |
+| `HYPERKNOW_AI_MODEL` | 可选 | 默认回退 `AI_CHAT_MODEL`,再默认 `step-3.7-flash`(config.ts 实际值) |
 | `HYPERKNOW_TTS_BASE_URL` / `HYPERKNOW_TTS_MODEL` | 可选 | 默认 `https://api.stepfun.com/v1` / `stepaudio-3-tts`(测试注入假上游用) |
 | `HK_WEB_SEARCH_PROVIDER` | 可选 | 课程研学供应商(`stepfun`/`tavily`/`brave`/`cloudflare`/`off`);未显式指定时默认优先现有 AI 渠道(`stepfun`),保留显式 Tavily/Brave;为 `off` 时跳过搜索 |
 | `HK_WEB_SEARCH_STEPFUN_MCP` | 可选 | StepFun 搜索默认优先 MCP web_search 端点(`{AI base}/mcp/web_search/mcp`),除 success/timeout 外任何异常回退 `/v1/search`;设 `off` 只走 `/v1/search` |

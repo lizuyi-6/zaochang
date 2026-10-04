@@ -10,12 +10,17 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
+    // build/** 整体忽略,但 sites-vite-plugin 是 vite.config 直接引用的插件源码,必须参与 lint。
     "build/**",
+    "!build/sites-vite-plugin.ts",
     "dist/**",
     "public/product-apps/**",
     "public/lattice/**",
     // Hyperknow 复刻 SPA(独立 Vite 工程,不参与主站 lint)。
     "hyperknow-spa/**",
+    // qa-runs 是验收证据归档(2026-10 审计第 5 批):历史产物只读,不参与 lint;
+    // 新产物经 .gitignore 停止入库。
+    "qa-runs/**",
     ".wrangler/**",
     ".playwright-cli/**",
     "output/**",

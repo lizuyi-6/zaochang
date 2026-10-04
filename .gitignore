@@ -66,3 +66,10 @@ next-env.d.ts
 # 临时验收产物(cookie/流抓包等)一律不入库
 .tmp-*
 hyperknow-spa/.ssr-*.mjs
+
+# 2026-10 审计第 5 批:qa-runs 历史证据保留但停止新增(归档产物不再入库);
+# Python 字节码不入库。
+/qa-runs/*
+!/qa-runs/.gitkeep
+__pycache__/
+*.pyc
