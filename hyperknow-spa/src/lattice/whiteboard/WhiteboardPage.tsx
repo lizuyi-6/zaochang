@@ -324,9 +324,20 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   useEffect(() => {
     if (!liveTopic) return;
+    // 卸载/换话题级中止:只管"这一轮备课整体还要不要"
     const ctrl = new AbortController();
-    // 预算必须盖过服务端 130s 路由超时(冷实例 92-100s),否则浏览器提前掐死成功在望的计划
-    const timer = window.setTimeout(() => ctrl.abort(), PLAN_CLIENT_TIMEOUT_MS);
+    /* W1(2026-10 审计):每次真实请求独立预算——旧实现整轮共用一个 135s 计时器,
+     * 冷启动首次请求烧掉 ~100s 后,预热补发/降级重试只剩 ~35s,注定失败。
+     * 每个请求各自拿满 PLAN_CLIENT_TIMEOUT_MS,与卸载信号取交。 */
+    const requestWithBudget = async (): Promise<Awaited<ReturnType<typeof planLectureLive>>> => {
+      const reqCtrl = new AbortController();
+      const reqTimer = window.setTimeout(() => reqCtrl.abort(), PLAN_CLIENT_TIMEOUT_MS);
+      try {
+        return await planLectureLive(planParams, AbortSignal.any([ctrl.signal, reqCtrl.signal]));
+      } finally {
+        window.clearTimeout(reqTimer);
+      }
+    };
     let alive = true;
     setPlanPending(true); // 话题是进入页面后才选定的(自由讲座):收起"可开讲"态
     setPlanFailed(false);
@@ -343,11 +354,12 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     // 旅程页预生成的 plan 直接复用(同 key、15min TTL);预热失败(null)补一次真实请求
     const prefetched = takePrefetchedEntry(planParams);
     let fromPrefetch = false;
-    void (prefetched?.plan ?? planLectureLive(planParams, ctrl.signal))
+    void (prefetched?.plan ?? requestWithBudget())
       .then(async (plan) => {
         if (!alive) return;
-        if (plan === null && prefetched && !ctrl.signal.aborted) {
-          plan = await planLectureLive(planParams, ctrl.signal);
+        if (plan === null && prefetched) {
+          // 预热失效补发:全新预算,不吃首发的剩余时间
+          plan = await requestWithBudget();
           if (!alive) return;
         } else if (plan && prefetched) {
           fromPrefetch = true;
@@ -355,8 +367,9 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         /* 模板降级计划(上游故障 5 步兜底)就是"还是老套路"的观感来源:自由讲座
          * 用它开讲等于辜负学员命题,再挣一次真实生成(此时实例多已预热);仍降级
          * 则接受——话题对得上的模板好过话题对不上的演示课。 */
-        if (plan?.degraded && freeTopicMode && !ctrl.signal.aborted) {
-          const fresh = await planLectureLive(planParams, ctrl.signal);
+        if (plan?.degraded && freeTopicMode) {
+          // 模板降级再挣一次真实生成:同样拿满独立预算
+          const fresh = await requestWithBudget();
           if (!alive) return;
           if (fresh) plan = fresh;
         }
@@ -421,7 +434,6 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       });
     return () => {
       alive = false;
-      window.clearTimeout(timer);
       ctrl.abort();
       imageWaitResolvers.current.forEach((res) => res());
       imageWaitResolvers.current.clear();
@@ -862,7 +874,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           try {
             await wait(1500);
             if (spokenAck) await Promise.race([spokenAck.ended, wait(6000)]);
-          } catch {}
+          } catch (error) {
+            // W10:空 catch 不得静默——转场被打断/TTS 提前结束都应留排查线索
+            console.warn('[whiteboard] acknowledge track interrupted:', error);
+          }
         }
         setCaption(null);
         setStatus('explaining');

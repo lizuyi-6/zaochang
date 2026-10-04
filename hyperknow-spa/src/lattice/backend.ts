@@ -6,6 +6,8 @@
  */
 
 import { normalizeBackendCourse } from './backend-course.ts';
+import { L } from './i18n/content';
+import { toast } from './toast';
 
 export interface BackendCourseSession {
   sessionId?: string;
@@ -254,7 +256,11 @@ export async function generateCourseLive(
   }
   if (!res.ok) return { ok: false, reason: await failureReason(res) }; // 鉴权/限流/积分不足/未配置 AI
   const ct = res.headers.get('content-type') || '';
-  if (!ct.includes('text/event-stream') || !res.body) return { ok: false, reason: 'error' };
+  if (!ct.includes('text/event-stream') || !res.body) {
+    // W9:非 SSE 的提前返回必须排空/取消响应体,否则连接要等 GC 才释放
+    await res.body?.cancel().catch(() => {});
+    return { ok: false, reason: 'error' };
+  }
 
   try {
     const found: {
@@ -286,6 +292,13 @@ export async function generateCourseLive(
       } else if (type === 'course_structure_ready') {
         found.course = normalizeBackendCourse(data.course);
         if (!found.course) found.failed = true;
+      } else if (type === 'model_degraded') {
+        // H3:主模型 404 降级必须让用户看见(Pro→Flash),不再静默换模型
+        const info = (data.data as { from_model?: string; to_model?: string } | undefined) ?? {};
+        toast(L(
+          `Requested model ${info.from_model ?? ''} is unavailable — continuing with ${info.to_model ?? 'fallback'}.`,
+          `所选模型 ${info.from_model ?? ''} 暂不可用，已用 ${info.to_model ?? '备选模型'} 继续。`,
+        ));
       } else if (type === 'course_generation_error' || type === 'error') {
         found.failed = true;
       } else {
@@ -345,7 +358,11 @@ export async function chatLive(message: string, handlers: ChatHandlers, options:
   }
   if (!res.ok) return { ok: false, reason: await failureReason(res) };
   const ct = res.headers.get('content-type') || '';
-  if (!ct.includes('text/event-stream') || !res.body) return { ok: false, reason: 'error' };
+  if (!ct.includes('text/event-stream') || !res.body) {
+    // W9:非 SSE 的提前返回必须排空/取消响应体,否则连接要等 GC 才释放
+    await res.body?.cancel().catch(() => {});
+    return { ok: false, reason: 'error' };
+  }
 
   try {
     let acc = '';
@@ -408,7 +425,11 @@ export async function translateLive(
   }
   if (!res.ok) return { ok: false, reason: await failureReason(res) };
   const ct = res.headers.get('content-type') || '';
-  if (!ct.includes('text/event-stream') || !res.body) return { ok: false, reason: 'error' };
+  if (!ct.includes('text/event-stream') || !res.body) {
+    // W9:非 SSE 的提前返回必须排空/取消响应体,否则连接要等 GC 才释放
+    await res.body?.cancel().catch(() => {});
+    return { ok: false, reason: 'error' };
+  }
 
   try {
     let acc = '';
@@ -737,7 +758,7 @@ export async function fetchCourseDetail(uuid: string, signal?: AbortSignal): Pro
 export async function pingBackend(): Promise<number | null> {
   const started = performance.now();
   try {
-    const res = await fetch('/api/hyperknow/auth/get_user_info', { cache: 'no-store' });
+    const res = await fetch('/api/hyperknow/auth/get_user_info', { cache: 'no-store', signal: AbortSignal.timeout(JSON_FETCH_TIMEOUT_MS) });
     await res.json().catch(() => null);
     if (!res.ok) return null;
     return Math.round(performance.now() - started);
@@ -755,7 +776,7 @@ export type ModelCheckResult =
 /** 一次最小代价的真实模型调用;不扣积分、不落库(见后端 /model-check 注释)。 */
 export async function modelCheck(): Promise<ModelCheckResult> {
   try {
-    const res = await fetch('/api/hyperknow/model-check', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const res = await fetch('/api/hyperknow/model-check', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(JSON_FETCH_TIMEOUT_MS) });
     if (res.status === 401 || res.status === 403) return { ok: false, reason: 'unauthorized' };
     const data = (await res.json().catch(() => null)) as { ok?: boolean; latency_ms?: number; error?: string } | null;
     if (res.ok && data?.ok && typeof data.latency_ms === 'number') return { ok: true, latencyMs: data.latency_ms };
@@ -769,18 +790,23 @@ export async function modelCheck(): Promise<ModelCheckResult> {
 }
 
 /* ---------------- 造场账户身份与历史(后端按会话成员隔离) ---------------- */
+
+/** W8(2026-10 审计):非流式 JSON 请求的统一客户端兜底——无超时的 fetch 在断网/
+ * 半开连接下会挂到浏览器默认超时(可长达数分钟),状态面板/身份拉取全被拖死。 */
+export const JSON_FETCH_TIMEOUT_MS = 15_000;
 export interface MeInfo {
   username: string;
   email: string;
   tier: string;
-  credits: number;
+  /** W7:null = 后端未回报余额(不可伪造为 20 误导"余额充足"),调用方显示 — 并择机重拉 */
+  credits: number | null;
 }
 
 /** 当前登录成员身份(造场会话);纯静态托管/未登录下返回 null,由调用方回退演示数据。 */
 export async function fetchMe(): Promise<MeInfo | null> {
   let res: Response;
   try {
-    res = await fetch('/api/hyperknow/auth/get_user_info');
+    res = await fetch('/api/hyperknow/auth/get_user_info', { signal: AbortSignal.timeout(JSON_FETCH_TIMEOUT_MS) });
   } catch {
     return null;
   }
@@ -795,7 +821,7 @@ export async function fetchMe(): Promise<MeInfo | null> {
       username: json.data.username || json.data.email,
       email: json.data.email,
       tier: json.data.subscription?.tier || 'FREE',
-      credits: json.data.subscription?.remaining_credits ?? 20,
+      credits: json.data.subscription?.remaining_credits ?? null,
     };
   } catch {
     return null;

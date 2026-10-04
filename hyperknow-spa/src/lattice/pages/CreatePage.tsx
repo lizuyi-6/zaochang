@@ -207,7 +207,13 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     if (followRef.current) colEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [questions, qIdx, phase, stepStatus, research, blueprint, waiting, unitDone.length, unit.cur, ready, genFailed, insufficient, cancelled, intakeLoading]);
 
+  // W5:卸载标记——问询等异步续作在卸载后不得再 setState/弹 toast
+  const aliveRef = useRef(true);
   useEffect(() => () => {
+    // W2:首行先钉死 finishedRef,否则 abort 触发的 {ok:false} 续作仍会再次
+    // setGenFailed/登记检查点(守卫在卸载后全部失效)
+    finishedRef.current = true;
+    aliveRef.current = false;
     stage1CtrlRef.current?.abort();
     stage2CtrlRef.current?.abort();
     if (finishTimerRef.current !== null) window.clearTimeout(finishTimerRef.current);
@@ -463,16 +469,18 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
         // 冷实例混合推理出题实测 30s+;20s 会在 AI 仍在思考时主动放弃,模板 brief 持久化进课程
         timeoutMs: 60_000,
       });
-      if (runRef.current !== run) return;
+      if (runRef.current !== run || !aliveRef.current) return;
       if (res && res.questions && res.questions.length > 0) {
         setQuestions(res.questions);
         setIntakeSource(res.source ?? 'ai');
       } else {
         setQuestions(buildDefaultInquiryQuestions(prompt, zhCourse));
         setIntakeSource('template');
-        toast(L('AI intake is unavailable right now — using the standard questionnaire.', 'AI 实时出题暂时不可用，已改用标准问询。'));
+        if (aliveRef.current) {
+          toast(L('AI intake is unavailable right now — using the standard questionnaire.', 'AI 实时出题暂时不可用，已改用标准问询。'));
+        }
       }
-      setIntakeLoading(false);
+      if (aliveRef.current) setIntakeLoading(false);
     })();
   };
 
@@ -970,7 +978,12 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
               <button
                 type="button"
                 onClick={() => {
-                  localStorage.setItem('hk_gen_nav_hint_at', String(Date.now()));
+                  // W6:隐私模式/配额下 setItem 会抛错,不得打断关闭提示
+                  try {
+                    localStorage.setItem('hk_gen_nav_hint_at', String(Date.now()));
+                  } catch {
+                    console.warn('[create] localStorage unavailable; hint will reappear');
+                  }
                   setNavHintOff(true);
                 }}
               >

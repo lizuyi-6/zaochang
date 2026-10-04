@@ -27,6 +27,11 @@ test('plan budget: client abort budget exceeds the server route timeout, via exp
 
   const page = read('hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx');
   assert.match(page, /PLAN_CLIENT_TIMEOUT_MS/, 'WhiteboardPage 必须引用常量而非内联毫秒数');
+  // W1(2026-10 审计):预算属于"每次请求"而非"整轮备课"——重试共用一个计时器时,
+  // 冷启动首发烧掉 ~100s 后重试只剩 ~35s 注定失败。
+  assert.match(page, /const requestWithBudget = async/, '每次真实计划请求必须经独立预算包装');
+  assert.match(page, /AbortSignal\.any\(\[ctrl\.signal, reqCtrl\.signal\]\)/, '请求级超时与卸载级中止必须取交,各自独立计时');
+  assert.doesNotMatch(page, /planLectureLive\(planParams, ctrl\.signal\)/, '不得再直接以整轮 ctrl 作为请求超时载体');
 });
 
 test('plan budget: no inline abort timers on plan fetch paths anywhere in the SPA', () => {

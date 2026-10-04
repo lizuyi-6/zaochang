@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useModal } from './useModal';
 import {
   AudioLines,
   Check,
@@ -332,12 +333,13 @@ const ThinkingArt: React.FC = () => (
 
 export const ExitConfirm: React.FC<{ onKeep: () => void; onExit: () => void }> = ({ onKeep, onExit }) => {
   const { t } = useI18n();
+  const modal = useModal(onKeep);
   return (
   <div
       style={{ position: 'absolute', inset: 0, zIndex: 60, background: 'rgba(255,255,255,0.42)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={(e) => e.target === e.currentTarget && onKeep()}
   >
-    <div className="wb-exit-card">
+    <div className="wb-exit-card" ref={modal.cardRef} {...modal.containerProps}>
       <ThinkingArt />
       <h3>{t('courseSession.exitConfirmTitle')}</h3>
       <p>{t('courseSession.exitConfirmDesc')}</p>
@@ -357,11 +359,12 @@ export const ExitConfirm: React.FC<{ onKeep: () => void; onExit: () => void }> =
 export const StillThere: React.FC<{ onKeep: () => void; onBack: () => void }> = ({ onKeep, onBack }) => {
   const { t } = useI18n();
   const [snooze, setSnooze] = useState(false);
+  const modal = useModal(onKeep);
   return (
     <div
       style={{ position: 'absolute', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >
-      <div className="wb-idle-card">
+      <div className="wb-idle-card" ref={modal.cardRef} {...modal.containerProps}>
         <div className="wb-idle-left">
           <div className="wb-idle-stars">
             <span className="wb-idle-twinkle">:</span>
@@ -387,7 +390,14 @@ export const StillThere: React.FC<{ onKeep: () => void; onBack: () => void }> = 
         <div className="wb-idle-right">
           <h3>{t('courseSession.idlePromptTitle')}</h3>
           <p>{t('courseSession.idlePromptMessage')}</p>
-          <label className="wb-idle-check" onClick={() => setSnooze(!snooze)}>
+          {/* W4:原生 checkbox(可聚焦/可空格切换),视觉沿用原勾选框;label 包裹即点选 */}
+          <label className="wb-idle-check">
+            <input
+              type="checkbox"
+              checked={snooze}
+              onChange={(e) => setSnooze(e.target.checked)}
+              style={{ position: 'absolute', opacity: 0, width: 16, height: 16, margin: 0, cursor: 'pointer' }}
+            />
             <span
               style={{
                 width: 16, height: 16, borderRadius: 4,
@@ -561,13 +571,22 @@ export const ExportMenu: React.FC<{
   <>
     {/* 点击任意处关闭:fixed 透明垫在菜单之下,替代易误关的 onMouseLeave */}
     <div style={{ position: 'fixed', inset: 0, zIndex: 54 }} onClick={onClose} />
-    <div className="wb-export-menu" style={{ ...style, zIndex: 55 }}>
+    <div className="wb-export-menu" style={{ ...style, zIndex: 55 }} role="menu" aria-label={t('courseSession.exportCurrentPage')}>
       <div className="grp">{t('courseSession.exportCurrentPage')}</div>
-      <div className="it" onClick={item('jpg', 'current')}>JPG</div>
-      <div className="it" onClick={item('pdf', 'current')}>PDF</div>
+      {/* W4:菜单项可键盘操作(Tab 聚焦 + Enter/Space 触发),不再只是可点 div */}
+      {([['jpg', 'current'], ['pdf', 'current']] as const).map(([fmt, scope]) => (
+        <div key={`cur-${fmt}`} className="it" role="menuitem" tabIndex={0} onClick={item(fmt, scope)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item(fmt, scope)(); } }}>
+          {fmt.toUpperCase()}
+        </div>
+      ))}
       <div className="grp" style={{ marginTop: 8 }}>{t('courseSession.exportAllPages')}</div>
-      <div className="it" onClick={item('jpg', 'all')}>JPG</div>
-      <div className="it" onClick={item('pdf', 'all')}>PDF</div>
+      {([['jpg', 'all'], ['pdf', 'all']] as const).map(([fmt, scope]) => (
+        <div key={`all-${fmt}`} className="it" role="menuitem" tabIndex={0} onClick={item(fmt, scope)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item(fmt, scope)(); } }}>
+          {fmt.toUpperCase()}
+        </div>
+      ))}
     </div>
   </>
   );
@@ -600,12 +619,13 @@ export const FeedbackModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     if (openFeedbackMail(body, t('courseFeedback.title'))) onClose();
   };
 
+  const modal = useModal(onClose);
   return (
   <div
     style={{ position: 'absolute', inset: 0, zIndex: 60, background: 'rgba(15,23,42,0.18)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     onClick={(e) => e.target === e.currentTarget && onClose()}
   >
-    <div className="wb-feedback-card">
+    <div className="wb-feedback-card" ref={modal.cardRef} {...modal.containerProps}>
       <div className="wb-feedback-head">
         <Wrench size={15} /> {t('courseFeedback.title')}
         <button onClick={onClose} aria-label="Close feedback"><X size={15} /></button>

@@ -784,7 +784,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
                 <div className="hk-menu-item" style={{ cursor: 'default' }}>
                   <span className="cp-status-dot" style={{ background: '#E5A23C' }} />
                   {L('Credits', '积分')}
-                  <span className="hk-menu-hint">{state.identity ? state.identity.credits : '—'}</span>
+                  <span className="hk-menu-hint">{state.identity?.credits ?? '—'}</span>
                 </div>
                 <button
                   className="hk-menu-item"

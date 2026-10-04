@@ -207,3 +207,25 @@ test('community-hardening: storage/db failures are 503, docs images whitelisted,
   const incubation = read('app/api/incubation/route.ts');
   assert.match(incubation, /db\.batch\(\[\s*[\s\S]*?INSERT INTO project_materials[\s\S]*?UPDATE incubation_projects/, 'M4:资料插入与项目状态推进必须同批原子');
 });
+
+test('spa-hardening: W2/W5 unmount guards, W6 storage, W7 credits honesty, W8 timeouts, W9 body cancel, W4 modal a11y', () => {
+  const create = read('hyperknow-spa/src/lattice/pages/CreatePage.tsx');
+  assert.match(create, /finishedRef\.current = true;\s*\n\s*aliveRef\.current = false;/, 'W2:卸载 cleanup 首行必须钉死 finishedRef(abort 续作不得再 setGenFailed/登记检查点)');
+  assert.match(create, /if \(runRef\.current !== run \|\| !aliveRef\.current\) return;/, 'W5:问询续作必须带卸载守卫');
+  assert.match(create, /try \{\s*\n\s*localStorage\.setItem/, 'W6:localStorage 写入必须 try/catch(隐私模式抛错不得打断 UI)');
+  const backend = read('hyperknow-spa/src/lattice/backend.ts');
+  assert.match(backend, /remaining_credits \?\? null/, 'W7:余额缺失不得伪造成 20');
+  assert.match(backend, /export const JSON_FETCH_TIMEOUT_MS = 15_000;/, 'W8:非流式 JSON 请求必须有导出常量兜底超时');
+  assert.match(backend, /signal: AbortSignal\.timeout\(JSON_FETCH_TIMEOUT_MS\)/, 'W8:ping/身份/探针 fetch 必须挂超时');
+  assert.match(backend, /await res\.body\?\.cancel\(\)\.catch\(\(\) => \{\}\);/, 'W9:非 SSE 提前返回必须取消响应体');
+  assert.match(backend, /type === 'model_degraded'/, 'H3 前端:模型降级帧必须提示用户');
+  const popups = read('hyperknow-spa/src/lattice/whiteboard/Popups.tsx');
+  assert.ok((popups.match(/useModal\(/g) ?? []).length >= 3, 'W4:主要弹窗(退出确认/仍在吗/反馈)必须走 useModal 对话框语义');
+  assert.match(popups, /role=\"menuitem\" tabIndex=\{0\}/, 'W4:导出菜单项必须可键盘操作');
+  assert.match(popups, /type=\"checkbox\"/, 'W4:勾选项必须用原生 checkbox(可聚焦/可空格)');
+  const modal = read('hyperknow-spa/src/lattice/whiteboard/useModal.ts');
+  assert.match(modal, /role: 'dialog' as const, 'aria-modal': true as const/, 'W4:对话框角色与模态标记');
+  assert.match(modal, /restoreRef\.current\?\.focus/, 'W4:关闭后焦点还原到触发元素');
+  const wb = read('hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx');
+  assert.match(wb, /console\.warn\('\[whiteboard\] acknowledge track interrupted/, 'W10:空 catch 必须留排查线索');
+});
