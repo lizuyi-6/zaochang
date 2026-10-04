@@ -675,6 +675,10 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                 })
                               }
                               onKeyDown={(e) => {
+                                /* 内层真实按钮(重温/练一练)的按键不得被外层吞掉:
+                                 * keydown 冒泡进外层时 preventDefault 会吃掉按钮的合成
+                                 * click,导致回车进了"练习"而非按钮本意(P1-K)。 */
+                                if (e.target !== e.currentTarget) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
                                   openLesson(isFirst && done ? 'practice' : 'lecture', {

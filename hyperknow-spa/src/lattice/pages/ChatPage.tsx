@@ -65,6 +65,16 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   const colEndRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  /** 每条消息在途翻译的控制器与序号(2026-10 审计 P1-T):同一条消息先选英文再选
+   * 日文时,旧流必须被 abort 且其迟到 chunk 不得拼进新译文;切会话/换账户/卸载时
+   * 全量 abort 并清空,旧译文不得按 idx 漂进新视图。 */
+  const translateCtlRef = useRef(new Map<number, AbortController>());
+  const translateSeqRef = useRef(new Map<number, number>());
+  const abortAllTranslations = () => {
+    for (const ctrl of translateCtlRef.current.values()) ctrl.abort();
+    translateCtlRef.current.clear();
+    translateSeqRef.current.clear();
+  };
   /** 本屏绑定的后端会话(从历史打开 → 预置;新发消息 → conversation_created 回填) */
   const convIdRef = useRef<string | null>(null);
   const conversationsRef = useRef(state.conversations);
@@ -80,6 +90,8 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    abortAllTranslations();
+    setTranslations({});
     setStreaming(false);
     const id = state.activeConversationId;
     if (!id) return;
@@ -99,6 +111,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     identityEmailRef.current = email;
     abortRef.current?.abort();
     abortRef.current = null;
+    abortAllTranslations();
     convIdRef.current = null;
     setStreaming(false);
     setMsgs([]);
@@ -207,7 +220,10 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    abortAllTranslations();
+  }, []);
   /* 自动跟随门控:用户往上翻阅时不得被每个流式 chunk 拽回底部;
    * 只有本就停在列底部附近才自动跟随。滚动容器是会话列本身(页内滚动布局)。 */
   const followRef = useRef(true);
@@ -267,14 +283,24 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     setMenu('none');
     const text = msgs[idx]?.text ?? '';
     if (!text.trim()) return;
+    /* P1-T:同一条消息重译(换语言)先 abort 旧流并递增序号——旧流的迟到 chunk/
+     * 完成写回按序号丢弃,不再拼进新译文(原实现两路 chunk 追加同一 cur.text 出混合文本)。 */
+    translateCtlRef.current.get(idx)?.abort();
+    const seq = (translateSeqRef.current.get(idx) ?? 0) + 1;
+    translateSeqRef.current.set(idx, seq);
+    const ctrl = new AbortController();
+    translateCtlRef.current.set(idx, ctrl);
+    const stillCurrent = () => translateSeqRef.current.get(idx) === seq;
     setTranslations((prev) => ({ ...prev, [idx]: { lang, text: '', loading: true } }));
     const result = await translateLive(text, lang, {
-      onChunk: (chunk) =>
+      onChunk: (chunk) => {
+        if (!stillCurrent()) return;
         setTranslations((prev) => {
           const cur = prev[idx];
           if (!cur) return prev;
           return { ...prev, [idx]: { ...cur, text: cur.text + chunk } };
-        }),
+        });
+      },
       onRemaining: (remaining) => {
         set({
           energy: remaining,
@@ -286,11 +312,14 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           },
         });
       },
-    });
+    }, ctrl.signal);
+    if (translateCtlRef.current.get(idx) === ctrl) translateCtlRef.current.delete(idx);
+    if (!stillCurrent()) return;
     if (result.ok === true) {
       setTranslations((prev) => ({ ...prev, [idx]: { lang, text: result.text, loading: false } }));
       return;
     }
+    if (result.reason === 'aborted') return;
     setTranslations((prev) => {
       const next = { ...prev };
       delete next[idx];
@@ -342,6 +371,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   const startNewConversation = () => {
     abortRef.current?.abort();
     abortRef.current = null;
+    abortAllTranslations();
     convIdRef.current = null;
     setStreaming(false);
     setMsgs([]);
@@ -670,7 +700,8 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') send(input);
+            /* 中文输入法回车选词不得触发发送(isComposing 期间的 Enter 属于组词确认) */
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) send(input);
           }}
           placeholder={listening ? L('Listening…', '正在听…') : t('home.inputPlaceholder')}
         />

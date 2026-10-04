@@ -146,8 +146,8 @@ export interface CourseGenParams {
   model?: 'flash' | 'pro';
 }
 
-/** 在线调用失败原因:offline=静态托管/断网(可伪生成兜底);insufficient=积分不足(绝不可兜底);error=后端/上游故障。 */
-export type LiveFailureReason = 'offline' | 'insufficient' | 'error';
+/** 在线调用失败原因:offline=静态托管/断网(可伪生成兜底);insufficient=积分不足(绝不可兜底);error=后端/上游故障;aborted=调用方主动取消(同 idx 换语言重译/切会话,不算失败,不弹 toast)。 */
+export type LiveFailureReason = 'offline' | 'insufficient' | 'error' | 'aborted';
 
 export interface BlueprintData {
   courseTitle?: string;
@@ -404,7 +404,7 @@ export async function translateLive(
       signal,
     });
   } catch {
-    return { ok: false, reason: 'offline' };
+    return signal?.aborted ? { ok: false, reason: 'aborted' } : { ok: false, reason: 'offline' };
   }
   if (!res.ok) return { ok: false, reason: await failureReason(res) };
   const ct = res.headers.get('content-type') || '';
@@ -437,7 +437,8 @@ export async function translateLive(
     });
     return complete && !failed && acc.length ? { ok: true, text: acc } : { ok: false, reason: 'error' };
   } catch {
-    return { ok: false, reason: 'error' };
+    /* 中途取消(同一条消息换语言重译/切会话)不是失败:不落错误态、不弹 toast */
+    return signal?.aborted ? { ok: false, reason: 'aborted' } : { ok: false, reason: 'error' };
   }
 }
 

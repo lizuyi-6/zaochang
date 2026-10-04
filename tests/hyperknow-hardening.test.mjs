@@ -123,3 +123,20 @@ test('auth: legacy identity headers gate delegates to the pure dev/test-only hel
   assert.match(auth, /legacyIdentityHeadersEnabled\(env as unknown as Record<string, string \| undefined>\)/, 'chatgpt-auth 必须经纯函数判定');
   assert.doesNotMatch(auth, /(?:\.|\[['"])TRUST_OAI_IDENTITY_HEADERS/, '旧开关的读取必须彻底移除——staging/未设置 APP_ENV 误配不得重新打开自封身份的门(注释提及历史不算复发)');
 });
+
+test('chat: translation streams are aborted and seq-guarded per message (P1-T/W3)', () => {
+  const page = read('hyperknow-spa/src/lattice/pages/ChatPage.tsx');
+  assert.match(page, /translateCtlRef\.current\.get\(idx\)\?\.abort\(\);/, '同一条消息重译(换语言)必须先 abort 旧流——两路 chunk 追加同一译文会出混合文本');
+  assert.match(page, /const stillCurrent = \(\) => translateSeqRef\.current\.get\(idx\) === seq;/, '迟到 chunk/完成写回必须按序号守卫丢弃');
+  assert.match(page, /onChunk: \(chunk\) => \{\s*if \(!stillCurrent\(\)\) return;/, 'onChunk 首行必须是序号守卫');
+  assert.match(page, /if \(result\.reason === 'aborted'\) return;/, '主动取消不算失败:不弹 toast、不清译文');
+  assert.match(page, /abortAllTranslations\(\);\s*\n\s*setTranslations\(\{\}\);/, '切会话必须 abort 全部在途翻译并清空译文(旧结果不得按 idx 漂进新视图)');
+  assert.match(page, /if \(e\.key === 'Enter' && !e\.nativeEvent\.isComposing\) send\(input\);/, '中文输入法回车选词不得触发发送');
+  const backend = read('hyperknow-spa/src/lattice/backend.ts');
+  assert.match(backend, /reason: 'aborted'/, 'translateLive 必须把调用方中止归类为 aborted 而非 error');
+});
+
+test('journey: inner button keys are not swallowed by the outer row handler (P1-K)', () => {
+  const page = read('hyperknow-spa/src/lattice/pages/CourseJourney.tsx');
+  assert.match(page, /if \(e\.target !== e\.currentTarget\) return;/, '外层行按键处理必须放行内层真实按钮的 keydown——否则回车进练习而非按钮本意');
+});
