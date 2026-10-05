@@ -832,3 +832,19 @@
 - 状态：部分完成。用户明确请求部署，按 release-gates → deploy-production 流程。独立复核 More 菜单844×390 inert/越界反例，补丁与621/621静态浏览器断言（fail=0、skipped=0、exit=0）纳入同一提交；最终源npm test 538/538（fail=0、skipped=0、todo=0、exit=0）。
 - 本地依赖两次npm ci失败如实保留日志；生产依赖audit total=0；Worker与D1回退锚点见 MOBILE_ADAPTATION_2026-10-05.md。
 - 没做：提交时尚未上线，生产浏览器结果待发布后追加；真安卓/WebView/系统IME/刘海未实测，未发APK。
+
+
+## 2026-10-05 见界手机适配生产结果
+
+- 状态：部分完成（网页发布有证据，真机验收未覆盖）。生产提交b5249eaac932a8d04702702f45f5d18bad2f2cf9在main/github/main；release-gates 37280891500、deploy-production 37281147414均status==completed、conclusion==success、headSha==该SHA，gh命令exit=0。Worker 50a5cb24-809f-435b-b327-ebfff027510a承接100%流量（wrangler deployments list exit=0）。
+- 本请求轮次新生产证据：13/13发布文件bytes与SHA256等于提交blob；线上中英文六视口及缩小视口矩阵621/621、failed=0、skipped=0、exit=0。390px输入right=318.703125<=390、paddingLeft==0px，More inert==false且键盘/指针激活后count==0。CI全量538/538、failed=0、skipped=0、todo=0。命题映射、命令、逐文件证据、时间和指纹见 [MOBILE_ADAPTATION_2026-10-05.md](MOBILE_ADAPTATION_2026-10-05.md)生产结果节。
+- 没做：未发APK，安卓/iOS真机WebView/IME/刘海、真实生成失败路径、旧缓存跨版本懒加载未实测。新交互取舍：769–1024px抽屉先打开、320px工具栏增行、More使最近活动下移。6条历史迁移仅tag比对无内容hash，非本轮DB改动。
+- 发布后账本仅本地追加，未推文档触发重复发版；生产代码提交保持上述SHA。
+
+
+## 2026-10-05 手机底部导航重构(首页/探索/中央发布/动态/我的)
+
+- 状态:本地完成,未推送未部署。用户验收反馈「首页下面按钮不合理」,线上实测确认:旧栏 首页/探索/书架/圈子+最右端凸起发布钮;书架 Library 图标 20px 下呈柱状信号格易误读;标签 fontSize=8px、tab 热区仅 35px 高;≤900px 断点通知铃铛 display:none,未读红点在手机端完全不可达;无「我的」一级入口。
+- 改动:底部栏固定五栏 首页/探索/＋发布(居中凸起)/动态/我的,书架、圈子让位;标签 10px、网格项 align-items:stretch 拉满栏高、激活项加粗;≤900px 恢复通知铃铛(44×44),640px 顶栏列改 auto 容纳铃铛+头像。文件:app/components/site-shell.tsx、app/globals.css、tests/modularization-contracts.test.mjs。
+- 证据:npx tsc --noEmit exit=0;npm run lint exit=0;npm test 539/539(fail=0、skipped=0、todo=0,较基线 538 新增 1 条 mobile-nav 契约钉:白名单/渲染顺序/铃铛可见性/字号)。本地 dev(localhost:5200)390×844 实测:发布钮圆心 x=190.5≈栏中心 190、标签 fontSize=10px、tab 热区 72×56、铃铛 44×44 可见;320×640 scrollWidth-clientWidth=0 无横向溢出。
+- 没做:未推送未部署;安卓/iOS 真机 WebView 未实测;未登录点「我的」落到既有 /profile 登录引导页,未新增处理;书架降级后手机端入口为首页区块与搜索,未在其他页面新增链接。

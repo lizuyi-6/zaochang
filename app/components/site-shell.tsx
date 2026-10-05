@@ -54,8 +54,9 @@ const navItems = [
 ];
 
 // 手机底部 tab 的主入口白名单(按 href 取 navItems,不依赖数组顺序)。
-// 书架是核心阅读入口,需在手机一级可达;动态内容首页已有,故让位。
-const mobileTabHrefs = ["/", "/discover", "/bookshelf", "/circles"];
+// 动态是社区高频入口,回到一级;"我的"(/profile,不在桌面侧栏 navItems)在渲染时单列;
+// 书架/圈子让位,分别从首页区块与探索页进入;发布作品作为中央凸起按钮插在渲染层两段之间。
+const mobileTabHrefs = ["/", "/discover", "/feed"];
 const mobileTabItems = mobileTabHrefs.map((href) => navItems.find((item) => item.href === href)).filter((item) => item !== undefined);
 
 const routeNames: Record<string, string> = {
@@ -199,6 +200,12 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   const productSlug = pathname.startsWith("/product/") ? pathname.slice("/product/".length).split("/")[0] : null;
   const officialProduct = productSlug ? products.find((product) => product.slug === productSlug && product.official) : undefined;
   const routeName = officialProduct ? "造场官方产品" : pathname.startsWith("/product/") ? "作品体验" : routeNames[pathname] ?? "造场";
+
+  const renderMobileTab = (item: (typeof navItems)[number]) => {
+    const Icon = item.icon;
+    const active = routeIsActive(pathname, item.href);
+    return <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon size={20} /><span>{item.label}</span></Link>;
+  };
   // 书架阅读器(/bookshelf/某本书/...)进入沉浸模式:隐藏站侧栏、顶部搜索/发布,
   // 只保留右上角账户区,让目录树与正文占满宽度。书架首页(/bookshelf)保留整站导航。
   const readingMode = /^\/bookshelf\/[^/]+/.test(pathname);
@@ -360,12 +367,10 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
       </div>
 
       <nav className="deep-mobile-nav" aria-label="移动端导航">
-        {mobileTabItems.map((item) => {
-          const Icon = item.icon;
-          const active = routeIsActive(pathname, item.href);
-          return <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon size={20} /><span>{item.label}</span></Link>;
-        })}
+        {mobileTabItems.slice(0, 2).map(renderMobileTab)}
         <Link className="deep-mobile-create" href="/studio/new" aria-label="发布作品"><Plus size={23} /></Link>
+        {mobileTabItems.slice(2).map(renderMobileTab)}
+        <Link href="/profile" className={routeIsActive(pathname, "/profile") ? "active" : ""} aria-current={routeIsActive(pathname, "/profile") ? "page" : undefined}><UserRound size={20} /><span>我的</span></Link>
       </nav>
 
       <AnimatePresence>

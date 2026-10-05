@@ -1,6 +1,6 @@
 # 见界手机布局改动证据 · 2026-10-05
 
-状态：部分完成。用户随后明确请求“部署”；本轮发布前产物与实际命令记录见末节，提交时尚待 GitHub release-gates → deploy-production。真实安卓 WebView/IME/刘海仍无实测。初次本地证据保留原请求上下文，不作本轮新增证据。
+状态：部分完成（网页生产发布证据见末节；真实安卓 WebView/IME/刘海验收未实测）。用户随后明确请求“部署”，GitHub release-gates → deploy-production 的同 SHA 结果与线上字段断言在末节追加。初次本地证据保留原请求上下文，不作本轮新增证据。
 
 ## 本轮改动与解释
 
@@ -63,7 +63,7 @@ npm run lint
 | public/lattice/assets/WhiteboardPage-r7SPqLDN.css | 重建移除旧哈希；check-lattice-mobile-assets.mjs 的 stale.length == 0，当前 JS/CSS/入口不再引用此旧文件；不构成独立业务行为验证。 |
 | public/lattice/assets/index-DpLH91S7.css | 重建移除旧哈希；check-lattice-mobile-assets.mjs 的 stale.length == 0，当前 JS/CSS/入口不再引用此旧文件；不构成独立业务行为验证。 |
 | public/lattice/assets/index-DyNHSrtd.js | 重建移除旧哈希；check-lattice-mobile-assets.mjs 的 stale.length == 0，当前 JS/CSS/入口不再引用此旧文件；不构成独立业务行为验证。 |
-| public/lattice/index.html | 本次部署请求重建入口与 viewport；SPA build exit=0、哈希引用缺失计数==0、静态浏览器矩阵加载；提交时生产发布仍待 CI。 |
+| public/lattice/index.html | 本次部署请求重建入口与 viewport；SPA build exit=0、哈希引用缺失计数==0；发布后线上 bytes==914、SHA256==提交 blob，详见末节。真实系统键盘行为未实测。 |
 | tests/lattice-css-health.test.mjs | 新 CSS 纳入现有注释扫描；lattice CSS:注释不得包含花括号、course journey 布局主规则存活，两项 pass=2 / fail=0 / skipped=0；该扫描不证明视觉正确。 |
 | MOBILE_ADAPTATION_2026-10-05.md | 刷新实际文件集合、独立复核反例、最终源 full-test 538/538 和指纹；文档本身不证明运行。 |
 | hyperknow-spa/src/lattice/mobile.css | 集中手机样式与抽屉内 More 静态排版；本次部署请求静态产物矩阵 621/621，fail=0、skipped=0，more-contained、more-not-inert、more-keyboard-activation、more-pointer-activation 均为具体字段断言；真实 IME/刘海未验证。 |
@@ -95,7 +95,7 @@ npm run lint
 - 引导第 1/5/6/7/8/9/10 步未跑矩阵；创建课程的真实问询/流式生成/蓝图侧板、断网重试、权限拒绝、余额不足、退款 UI 未触发。API requireMember/扣费/生成端点未作为本轮界面调试的读改范围。
 - 会话面板在 390×844 与 844×390 打开，其他会话状态未测，不把静态白板开场矩阵扩张成所有白板对话状态的覆盖；画布拖拽/双指缩放、真实 TTS/讲课/导出、反馈上传未跑端到端。
 - 未运行的其他相关顶层测试名：经检索无其他相关顶层 .test.mjs；命令按 tests 文件名匹配 lattice|whiteboard|hyperknow|spa-typecheck 并与 package.json scripts.test 比对，relatedFiles=21，notInFullSuite=[]。这不证明所有业务分支都有现成测试。
-- 本轮不含生产部署、APK 更新或真机验收，不能声明当前手机 APP 已采用这些改动。
+- 初次本地请求轮次不含生产部署、APK 更新或真机验收；随后“部署”请求的网页发布证据见末节，仍不能声明手机真机验收通过。
 
 ## 首次产物指纹（本请求轮次）
 
@@ -151,3 +151,89 @@ npm run lint
 - hyperknow-spa/src/lattice/Sidebar.tsx: mtime=2026-10-05T07:02:12.920Z, SHA256=9f38fb3321df390eb3fbbb2e3ff7bff528d36d74d36b5cb337da8f22c8ec5c3d
 - public/lattice/index.html: mtime=2026-10-05T07:37:15.674Z, SHA256=b1a8781e633d9c181429f121997421d91af412c9ab571eabdf6db0c377acfc9f
 - output/playwright/lattice-mobile-release-local.json: mtime=2026-10-05T07:45:28.776Z, SHA256=27211f272379e3fcce3d883284fb361ca35069324bbe5a1c86ba9dec1b6ad285
+
+
+## “部署”请求的生产结果（2026-10-05 16:04 CST 发布）
+
+- 当前提交 b5249eaac932a8d04702702f45f5d18bad2f2cf9，git log -1 状态为 HEAD -> main, github/main, github/HEAD；标题原文 lattice: adapt phone layouts and accessible drawer menu，无 gap/todo/not-yet 限定词。git ls-remote github refs/heads/main 返回相同 SHA，exit=0。未创建 PR，未另发 APK。
+- [release-gates](https://github.com/lizuyi-6/zaochang/actions/runs/37280891500) 与 [deploy-production](https://github.com/lizuyi-6/zaochang/actions/runs/37281147414) 均 status==completed、conclusion==success、headSha==上述SHA，gh run view <runID> --json databaseId,workflowName,status,conclusion,headSha,url,createdAt,updatedAt，exit=0；原字段 [production-runs.json](output/playwright/lattice-mobile-production-runs.json)。环境 Linux/Node 22.13，正常npm ci与所有门禁；两次npm test均 total=538、passed=538、failed=0、skipped=0、todo=0，与本地538无下降，production audit found 0 vulnerabilities。选摘日志为 release-gates-evidence.log、production-deploy-evidence.log。
+- Worker版本50a5cb24-809f-435b-b327-ebfff027510a，发布日志时间2026-10-05T08:04:37.895Z；wrangler deployments list --config wrangler.prod.jsonc，exit=0，最新Version(s)==(100%)该版本。没有本机直接部署绕过CI。
+- 迁移门禁输出journal.count==production.count==30、latest.created_at==1791173022484，exit=0；6条历史账目为tag入帐，无内容hash可比，不证明这6条迁移内容逐字一致。本轮未改DB schema、迁移或权限/安全代码路径。
+- 命题Y：生产边缘返回本提交13个新增/改写网页产物。证据X：每文件status==200、bytes==expectedBytes、sha256==git show HEAD:path的blob哈希，X与Y同一件事，不是仅HTTP状态码。命令 .tmp/verify-lattice-prod-assets.ps1，exit=0，total=13、passed=13、failed=0、skipped=0；HTML实测914字节，主CSS实测79254字节。[完整资产字段](output/playwright/lattice-mobile-production-assets.json)。
+- 命题Y：发布页面在所列视口/语言/菜单状态下满足布局断言。证据X：实际Chromium DOM几何、paddingLeft、inert、输入值和菜单数量字段，X与Y同一件事。命令 .tmp/run-lattice-mobile-audit.ps1 -BaseUrl https://aetherstudio.top/lattice/ -SessionName lattice-prod -EvidenceTag production，exit=0，total=621、passed=621、failed=0、skipped=0，与最终本地621相同，未过滤/删除/禁用用例；前置为正式站点验收会话，只导航与本地UI操作，未发起建课、消息或扣费请求。[完整逐断言数据](output/playwright/lattice-mobile-production.json)。
+- 390×844中文聊天：发布前input.right=544.9375>390、width=20、paddingLeft=262px；发布后input.right=318.703125<=390、width=297.703125、composer.right=378<=390、paddingLeft==0px。英文320px课程预览scrollWidth==clientWidth==320；844×390 More inert==false，Enter/点击后菜单count==0；390×440 composer.bottom==428<=440且草稿字段等于填入值。缩小布局视口不是系统IME证据。
+- [生产首页截图](output/playwright/lattice-mobile-production-home.png)、[生产白板开场截图](output/playwright/lattice-mobile-production-whiteboard.png)仅证明UI渲染；不证明截图积分来源、数据持久化或权限。独立复核只有一个agent，最终本地59/59、failed=0、skipped=0、exit=0；范围及原命令后补落盘说明见 .tmp/lattice-mobile-independent-repro.md。原命令未再次执行，不计为新增测试；生产621另行执行。
+
+### 逐发布文件的线上证据
+
+每行只证明该发布文件与提交内容一致；页面几何与菜单行为另由621字段断言证明，不扩张为全部业务分支验收。源文件、删除的旧哈希和测试文件的逐项语义沿用前方35路径表。
+
+| 文件 | 针对本文件的字段断言 |
+| --- | --- |
+| public/lattice/assets/ChatPage-I8IAxsk5.js | bytes=29494==expectedBytes；SHA256=e0a9311f99e3570ed2635757efedbb0646826fdf83cc0621ddb5786d5fe7292e==提交 blob |
+| public/lattice/assets/CourseJourney-CGkJThYw.js | bytes=25933==expectedBytes；SHA256=2a6222e6d6a8beef21cf786ac6a9ccdb1d390ee5998893f8a0082134e74db206==提交 blob |
+| public/lattice/assets/CoursesPage-CcX1tbnb.js | bytes=12429==expectedBytes；SHA256=3b747a53791f84b4aeb2ad1720ae51732d5cc49d761a4c2c9b34d951bd54ef81==提交 blob |
+| public/lattice/assets/CreatePage-C6ee__tf.js | bytes=27269==expectedBytes；SHA256=7ca059600da9e52696939e903ce1d89b8fdc7f1d049e358cd7a5ab1ad4e3ab13==提交 blob |
+| public/lattice/assets/HistoryPage-Y5GM5l1a.js | bytes=4364==expectedBytes；SHA256=c19ece1f524dd5345708a2edca9b9b8f41e727749335400579c9fd5fe83337c7==提交 blob |
+| public/lattice/assets/LearningFeed-mzrS9YgQ.js | bytes=13396==expectedBytes；SHA256=0211566dfed5a2be78987eac3c4dfde76f9cd51aaf181d159c94d05429596bc7==提交 blob |
+| public/lattice/assets/MarketplacePage-CP8VyCdH.js | bytes=5418==expectedBytes；SHA256=10863954069ff0e8609e217937fed4e88b84ca73cbebd82ab4c5fec3a5e5214e==提交 blob |
+| public/lattice/assets/PlansPage-qhuxA1N3.js | bytes=3528==expectedBytes；SHA256=3c43833c17283af23f58f4b3b9cf0c2f7623ceecc26ff2f30f95f09a51be57de==提交 blob |
+| public/lattice/assets/WhiteboardPage-DTvFojDW.js | bytes=127313==expectedBytes；SHA256=710bedcb2208740db0736d65ab32399d5920ea2fb33e13bd75c004ad2fc305d2==提交 blob |
+| public/lattice/assets/WhiteboardPage-hj8k-5YN.css | bytes=36175==expectedBytes；SHA256=0b88864fd5ed8fd6d06a5d8e17598a0ceadfeeeddeb9aa4152cbe69da0ea0c18==提交 blob |
+| public/lattice/assets/index-DcqzhFCm.js | bytes=385997==expectedBytes；SHA256=d8d0f81428cf22dff3a9283bdfde0a8268d31e6892396f84e9816c123a571239==提交 blob |
+| public/lattice/assets/index-zxba1WPA.css | bytes=79254==expectedBytes；SHA256=f5aab0794a2d58f209a93281987d4ed9809e06952682d9c01658fa7cd0a73c57==提交 blob |
+| public/lattice/index.html | bytes=914==expectedBytes；SHA256=b1a8781e633d9c181429f121997421d91af412c9ab571eabdf6db0c377acfc9f==提交 blob |
+
+### 未覆盖范围（发布后）
+
+安卓/iOS真机、WebView系统键盘/刘海/全屏切换/进程恢复、其他五种语言、引导1/5–10、真实生成/讲课/TTS/手势/断网恢复、生产失败分支、旧缓存页面跨版本懒加载未验证。主站其余模块、原生壳与前方遗留未使用CSS不在本轮布局范围。21个相关顶层测试全部在全量套件内，不证明不存在未测试业务分支；未读函数/文件等详细范围沿用前方未覆盖范围节。
+
+### 本轮改动可能引入的新风险
+
+769–1024px改抽屉后导航增加一次打开动作；320–374px工具栏增加一行；More展开使最近活动区下移，小横屏需滚动。真实安全区/键盘及旧缓存跨版本资源请求仍缺实测证据，不作真机可用态声明。发布未修改安全默认值、限额、鉴权或DB语义。
+
+### 发布后记录文件验证与留痕
+
+- MOBILE_ADAPTATION_2026-10-05.md：区分历史本地状态与当前生产字段；生成脚本断言SHA、两run状态、621/13统计和聊天/More字段匹配后再写入（exit=0）；文档不是运行证明。
+- PROJECT_STATUS.md：追加账本且保留状态部分完成，显式列真机缺口；同一脚本读取实际字段生成账本（exit=0）；状态文字不替代运行证据。
+- 两份发布后记录仅本地追加，未另推无代码变化的文档提交触发重复发版；生产代码锚点仍为b5249eaac932a8d04702702f45f5d18bad2f2cf9。发布前35路径范围取自 git show --no-renames --name-status HEAD；发布后本地差异以 git diff --stat 为准，不将生产改动范围收窄成只有文档。
+
+本次“部署”请求新采集的生产证据指纹（首次出现于本请求轮次）：
+
+- output/playwright/lattice-mobile-production-runs.json: mtime=2026-10-05T08:13:20.023Z, SHA256=b74d23bf7aaa5653746eca8d232a218c9056e0cf3d6e8a2609146d4e896346e0
+- output/playwright/lattice-mobile-production-assets.json: mtime=2026-10-05T08:08:08.343Z, SHA256=a29a99466be6923e756066306d446e2024712a07ab194fd41cd1df30b1b8afdf
+- output/playwright/lattice-mobile-production.json: mtime=2026-10-05T08:13:40.626Z, SHA256=cebd408ae2a6b2571a1e9da921fd193cbcd295ebc588f3b887e3b54ed707aae7
+- output/playwright/lattice-mobile-production-versions.log: mtime=2026-10-05T08:12:07.526Z, SHA256=64b7d96dad4847b8b51795a72b4f45c5ec0b6b99d75a5eacd7552db23cf0eb93
+- output/playwright/lattice-mobile-production-home.png: mtime=2026-10-05T08:13:39.041Z, SHA256=e148307f94d4d8f0b247d23906109acfad98cde4d1277f96c7ac16394a5695a6
+- output/playwright/lattice-mobile-production-whiteboard.png: mtime=2026-10-05T08:13:39.870Z, SHA256=ff9f3cd81a4805aeda987eea41866e21591f1729a10f62662a31a68b76c7eb5c
+
+生产代码提交范围（git show --stat HEAD）：
+
+~~~text
+b5249ea lattice: adapt phone layouts and accessible drawer menu
+ MOBILE_ADAPTATION_2026-10-05.md                    | 153 ++++++++++++++++++
+ PROJECT_STATUS.md                                  |  15 ++
+ hyperknow-spa/index.html                           |   2 +-
+ hyperknow-spa/src/lattice/Header.tsx               |   8 +-
+ hyperknow-spa/src/lattice/Sidebar.tsx              |  42 +++--
+ hyperknow-spa/src/lattice/mobile.css               | 179 +++++++++++++++++++++
+ hyperknow-spa/src/lattice/shell.css                |   4 +-
+ .../src/lattice/whiteboard/whiteboard.css          |   2 +-
+ hyperknow-spa/src/main.tsx                         |   1 +
+ .../{ChatPage-CrcYPB06.js => ChatPage-I8IAxsk5.js} |   2 +-
+ ...urney-DNdvDG2B.js => CourseJourney-CGkJThYw.js} |   2 +-
+ ...sesPage-Ct6wM2gE.js => CoursesPage-CcX1tbnb.js} |   2 +-
+ ...eatePage-CJYzQUmq.js => CreatePage-C6ee__tf.js} |   2 +-
+ ...oryPage-6lluyh3x.js => HistoryPage-Y5GM5l1a.js} |   2 +-
+ ...ngFeed-ULme-4lF.js => LearningFeed-mzrS9YgQ.js} |   2 +-
+ ...age-D5BDLDxz.js => MarketplacePage-CP8VyCdH.js} |   2 +-
+ ...PlansPage-CIGfXVNN.js => PlansPage-qhuxA1N3.js} |   2 +-
+ ...Page-BtDG1wbv.js => WhiteboardPage-DTvFojDW.js} |   2 +-
+ ...ge-r7SPqLDN.css => WhiteboardPage-hj8k-5YN.css} |   2 +-
+ public/lattice/assets/index-DcqzhFCm.js            |  16 ++
+ public/lattice/assets/index-DyNHSrtd.js            |  16 --
+ .../{index-DpLH91S7.css => index-zxba1WPA.css}     |   2 +-
+ public/lattice/index.html                          |   6 +-
+ tests/lattice-css-health.test.mjs                  |   1 +
+ 24 files changed, 416 insertions(+), 51 deletions(-)
+~~~

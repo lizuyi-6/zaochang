@@ -217,3 +217,29 @@ test("shell-state-sync: 站壳监听与全部写操作派发共用同一事件�
     assert.ok(!source.includes('"zaochang:shell-state-refresh"'), `${path} 不得复制事件字符串字面量`);
   }
 });
+
+// ---- 手机底部导航契约 ----
+
+test("mobile-nav: 底部五栏为 首页/探索/中央发布/动态/我的,手机端通知铃铛可达", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const shell = read("../app/components/site-shell.tsx");
+  // 一级 tab 白名单(2026-10 手机验收:书架柱状图标在 20px 下误读为信号格,
+  // 社区 App 缺「我的」入口,通知铃铛在 ≤900px 被 display:none 导致未读完全不可达)。
+  assert.match(shell, /mobileTabHrefs = \["\/", "\/discover", "\/feed"\]/, "手机底部 tab 白名单必须是 首页/探索/动态");
+  assert.ok(!/mobileTabHrefs[^;]*bookshelf/.test(shell), "书架不得再占手机一级入口");
+  // 渲染顺序钉:前两 tab → 中央发布按钮 → 动态 → 我的;发布按钮不得再落回最右端。
+  const nav = shell.match(/<nav className="deep-mobile-nav"[\s\S]*?<\/nav>/);
+  assert.ok(nav, "必须存在移动端底部导航");
+  const order = ["slice(0, 2)", "deep-mobile-create", "slice(2)", 'href="/profile"'];
+  const positions = order.map((marker) => nav[0].indexOf(marker));
+  assert.ok(positions.every((pos) => pos >= 0), `底部栏缺少渲染标记: ${order.filter((_, i) => positions[i] < 0).join(", ")}`);
+  assert.ok(positions.every((pos, i) => i === 0 || pos > positions[i - 1]), "底部栏渲染顺序必须是 tab×2 → 发布 → tab → 我的");
+  const css = read("../app/globals.css");
+  // 通知铃铛在手机断点必须可见。
+  const mobileHide = css.match(/\.deep-brand small, [^}]+display: none/)?.[0] ?? "";
+  assert.ok(!mobileHide.includes("deep-icon-button"), "手机断点不得再隐藏通知铃铛");
+  // 标签字号从实测不可读的 8px 抬起;网格项拉伸使触控热区拉满栏高。
+  assert.match(css, /\.deep-mobile-nav a \{[^}]*font-size: 10px/, "底部栏标签字号必须是 10px");
+  assert.match(css, /\.deep-mobile-nav \{[^}]*align-items: stretch/, "底部栏网格项必须拉满栏高(触控热区)");
+});
