@@ -63,8 +63,9 @@ APK 托管在站点自身:`public/downloads/zaochang-<version>.apk`(文件名带
 3. 拷贝为 `public/downloads/zaochang-<version>.apk`(不删旧文件,留作回滚);
 4. 更新 `app/api/_lib/app-download.ts` 的全部常量(sha256/sizeBytes/fileName/versionCode/versionName);
 5. 跑 `npm test`——集成测试会**字节级校验**下载文件与常量的 sha256/大小一致,并断言 `/api/app-shell` 清单指向同一文件,不一致即红。
+6. **GitHub Release(用户要求,每次发包必做)**:标签 `android-v<versionName>`,附 APK 文件,notes 写变更摘要 + SHA-256 + 大小 + 系统要求 + 升级路径。例:`gh release create android-v1.2.2 --title "造场 App v1.2.2(Android 壳)" --notes "…" public/downloads/zaochang-1.2.2.apk`。
 
-用户入口:站点 `/app` 页(下载按钮 + 校验值 + 安装说明);`/api/app-shell` 清单的 `android.downloadUrl` 同源直链,供壳与第三方程序化获取。缓存策略见 `public/_headers`(文件名版本化 → immutable)。
+用户入口:站点 `/app` 页(下载按钮 + 校验值 + 安装说明);`/api/app-shell` 清单的 `android.downloadUrl` 同源直链,供壳与第三方程序化获取;GitHub Releases 为第二分发渠道与历史档案。缓存策略见 `public/_headers`(文件名版本化 → immutable)。
 
 ## 安全不变量(改动前自查)
 
