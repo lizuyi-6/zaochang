@@ -199,6 +199,32 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.012em; }
 .auth-providers { display: grid; gap: 8px; }.auth-provider { align-items: center; border: 1px solid #c6c5bf; border-radius: 0; display: flex; font-size: 11px; gap: 9px; min-height: 44px; padding: 0 13px; transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease; width: 100%; }.auth-provider:hover { background: white; border-color: #171816; transform: translateY(-1px); }.auth-provider.google { color: #2f5f9e; }.auth-provider.github { color: #171816; }.auth-provider small { color: #9b9b94; font-family: var(--font-geist-mono), monospace; font-size: 8px; margin-left: auto; }.auth-provider.is-disabled, .auth-provider:disabled { cursor: not-allowed; opacity: .55; }.auth-provider.is-disabled:hover, .auth-provider:disabled:hover { background: transparent; border-color: #c6c5bf; transform: none; }
 .auth-invite-form { display: grid; gap: 8px; }.auth-invite-form label { align-items: center; color: #474943; display: flex; font-size: 9px; justify-content: space-between; }.auth-invite-form label span { color: #92948d; font-size: 8px; }.auth-invite-form > input:not([type="hidden"]) { background: #fffdf8; border: 1px solid #c6c5bf; border-radius: 0; color: #171816; font-family: var(--font-geist-mono), monospace; font-size: 11px; height: 42px; letter-spacing: .05em; padding: 0 12px; text-transform: none; }.auth-invite-form > input:focus { border-color: #171816; outline: 2px solid rgb(216 180 106 / 28%); outline-offset: 1px; }
 .auth-divider { align-items: center; color: #9a9b94; display: flex; font-size: 9px; gap: 10px; margin: 20px 0; }.auth-divider::before, .auth-divider::after { background: #d9d8d2; content: ""; flex: 1; height: 1px; }.auth-chatgpt { align-items: center; background: #171816; border-radius: 0; color: white; display: flex; font-size: 11px; height: 44px; justify-content: center; }.auth-chatgpt:hover { background: #ff5c3d; }.auth-email-back { background: none; border: none; color: #92948d; cursor: pointer; font-family: inherit; font-size: 9px; padding: 2px 0; text-decoration: underline; }.auth-email-back:hover { color: #171816; }.auth-note { color: #8a8b84; display: block; font-size: 8px; line-height: 1.6; margin-top: 19px; }
+/* 扫码登录:桌面 QR 面板 + 手机确认/扫一扫页。 */
+.auth-qr-panel { align-items: center; display: flex; flex-direction: column; gap: 10px; }
+.auth-qr-frame { background: #fffdf8; border: 1px solid #d9d8d2; box-sizing: content-box; height: 208px; padding: 10px; width: 208px; }
+.auth-qr-image svg { display: block; height: 208px; width: 208px; }
+.auth-qr-placeholder { align-items: center; color: #9a9b94; display: flex; font-size: 11px; height: 100%; justify-content: center; }
+.auth-qr-caption { color: #8a8b84; font-size: 10px; margin: 0; }
+.auth-qr-panel.is-done { color: #171816; gap: 8px; padding: 18px 0; text-align: center; }
+.auth-qr-panel .text-action { color: #171816; cursor: pointer; }
+.qr-confirm-page, .qr-scan-page { align-items: center; display: flex; justify-content: center; min-height: 72vh; padding: 96px 16px 48px; }
+.qr-confirm-panel { background: #f4f1ea; border: 1px solid #d9d8d2; box-shadow: 0 24px 70px rgb(0 0 0 / 14%); display: flex; flex-direction: column; gap: 14px; max-width: 420px; padding: 28px; width: 100%; }
+.qr-confirm-panel h1 { font-size: 26px; margin: 0; }
+.qr-confirm-note { color: #73766f; font-size: 12px; line-height: 1.7; margin: 0; }
+.qr-confirm-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 14px; margin-top: 4px; }
+.qr-confirm-error { color: #b3441f; font-size: 12px; line-height: 1.6; margin: 0; }
+.qr-confirm-done { align-items: center; color: #171816; display: flex; flex-direction: column; gap: 8px; text-align: center; }
+.qr-scanner { display: flex; flex-direction: column; gap: 12px; }
+.qr-scanner-view { background: #171816; height: 264px; overflow: hidden; position: relative; width: 100%; }
+.qr-scanner-video { height: 100%; object-fit: cover; width: 100%; }
+.qr-scanner-placeholder { align-items: center; color: #9a9b94; display: flex; flex-direction: column; gap: 8px; inset: 0; justify-content: center; position: absolute; }
+/* 反向扫码:桌面宿主配对码 + 手机配对码输入。 */
+.qr-host-code { background: #171816; border-radius: 0; color: #f3f1ec; font-family: var(--font-geist-mono), monospace; font-size: 30px; letter-spacing: .08em; padding: 10px 22px; }
+.qr-host-decide { align-items: center; display: flex; gap: 16px; margin-top: 4px; }
+.qr-host-decide .text-action { color: #b3441f; cursor: pointer; }
+.qr-pair-form { display: flex; flex-direction: column; gap: 12px; }
+.qr-pair-input { background: #fffdf8; border: 1px solid #c6c5bf; color: #171816; font-family: var(--font-geist-mono), monospace; font-size: 26px; height: 60px; letter-spacing: .12em; padding: 0 14px; text-align: center; }
+.qr-pair-input:focus { border-color: #171816; outline: 2px solid rgb(216 180 106 / 28%); outline-offset: 1px; }
 @media (max-width: 640px) {
   .auth-page { align-items: flex-start; padding: 92px 16px 58px; }
   .auth-brand { left: 18px; top: 18px; }.auth-context { bottom: 16px; left: 18px; }

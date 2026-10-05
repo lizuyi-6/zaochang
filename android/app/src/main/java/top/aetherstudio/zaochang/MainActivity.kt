@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.view.WindowInsets
@@ -33,9 +34,12 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -61,6 +65,29 @@ class MainActivity : Activity() {
   private lateinit var upgradeOverlay: LinearLayout
 
   private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+  // 全屏自定义视图(HTML5 requestFullscreen,如星野页的全屏按钮):
+  // 视图挂到 window decor 顶层并进入沉浸模式;back 先退全屏再走历史。
+  private var fullscreenView: View? = null
+  private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+  // API 33+ 预测性返回:可后退/全屏中时注册系统返回回调;历史根上注销,
+  // 让系统接管(finish + 返回桌面动画)。AndroidManifest 需
+  // enableOnBackInvokedCallback=true(API 33 以下仍走 onBackPressed)。
+  private var backInvoker: OnBackInvokedCallback? = null
+  private var backInvokerRegistered = false
+  // 冷启动恢复进程死亡前的会话:restoreState 会自动重载当前历史项,
+  // 门禁放行时不要再叠加一次首页加载(否则首页被叠进刚恢复的历史)。
+  private var restoredLaunch = false
+  // 最近一次 /api/app-shell 清单(驱动「新版可用」横幅;升级判定时不显示)。
+  private var latestManifest: ShellManifest? = null
+  // 横幅被用户划掉的版本:同版本不再打扰,更新版本号后重新出现。
+  private var updateBannerDismissedFor: Int? = null
+  // 已下载、等待「安装未知应用」授权的 APK(MediaStore 行 URI)。
+  private var pendingInstallApkUri: Uri? = null
+  // 等待 CAMERA 运行时权限的 getUserMedia 请求(扫一扫)。
+  private var pendingCameraRequest: android.webkit.PermissionRequest? = null
+  private lateinit var updateBanner: LinearLayout
+  private lateinit var updateBannerText: TextView
+  private lateinit var upgradeDownload: Button
   private var upgradeVerdictSeen = false
   private var lastStartedUrl: String? = null
   private var pendingInitialUrl: String = ShellConfig.BASE_URL
@@ -89,11 +116,38 @@ class MainActivity : Activity() {
       hide(upgradeOverlay)
       checkShellCompatibility(initial = true)
     }
+    updateBanner = findViewById(R.id.update_banner)
+    updateBannerText = findViewById(R.id.update_banner_text)
+    upgradeDownload = findViewById(R.id.upgrade_download)
+    findViewById<Button>(R.id.update_banner_action).setOnClickListener {
+      latestManifest?.androidUpdate?.downloadUrl?.let { url ->
+        hide(updateBanner)
+        startApkUpdate(url)
+      }
+    }
+    findViewById<ImageButton>(R.id.update_banner_dismiss).setOnClickListener {
+      updateBannerDismissedFor = latestManifest?.androidUpdate?.latestVersionCode
+      hide(updateBanner)
+    }
+    upgradeDownload.setOnClickListener {
+      latestManifest?.androidUpdate?.downloadUrl?.let { url ->
+        hide(upgradeOverlay)
+        startApkUpdate(url)
+      }
+    }
 
     applySystemBarAppearance()
     rebuildWebView()
     applyWindowInsets()
-    resolveSiteUrl(intent)?.let { pendingInitialUrl = it }
+    val deepLink = resolveSiteUrl(intent)
+    if (deepLink != null) {
+      pendingInitialUrl = deepLink
+    } else if (savedInstanceState != null) {
+      savedInstanceState.getString(KEY_PENDING_INITIAL_URL)?.let { pendingInitialUrl = it }
+      // restoreState 返回恢复的 WebBackForwardList(null = 无可恢复状态)。
+      if (web.restoreState(savedInstanceState) != null) restoredLaunch = true
+    }
+    updateBackHandler()
     // 兼容检查是网络往返(超时上限 6s):先显示 loading,别让用户盯着空白页。
     show(loadingOverlay)
     checkShellCompatibility(initial = true)
@@ -101,7 +155,15 @@ class MainActivity : Activity() {
 
   override fun onDestroy() {
     destroyed = true
+    exitFullscreen()
+    unregisterBackInvoker()
     super.onDestroy()
+  }
+
+  override fun onSaveInstanceState(outState: Bundle) {
+    super.onSaveInstanceState(outState)
+    if (this::web.isInitialized) web.saveState(outState)
+    outState.putString(KEY_PENDING_INITIAL_URL, pendingInitialUrl)
   }
 
   override fun onNewIntent(intent: Intent) {
@@ -119,6 +181,12 @@ class MainActivity : Activity() {
     super.onResume()
     web.onResume()
     web.resumeTimers()
+    // 用户从「安装未知应用」授权页回来:若此前已下好 APK,自动续上安装。
+    val pending = pendingInstallApkUri
+    if (pending != null && canInstallPackages()) {
+      pendingInstallApkUri = null
+      launchInstaller(pending)
+    }
     if (SystemClock.elapsedRealtime() - lastCompatCheckAt > COMPAT_RECHECK_INTERVAL_MS) {
       checkShellCompatibility(initial = false)
     }
@@ -132,10 +200,14 @@ class MainActivity : Activity() {
     CookieManager.getInstance().flush()
   }
 
-  /** 返回键/返回手势:优先在 WebView 历史中后退,历史为空才退出应用。 */
+  /** 返回键/返回手势:先退全屏,再在 WebView 历史中后退,历史为空才退出应用。 */
   @Deprecated("Deprecated in Java")
   override fun onBackPressed() {
-    if (web.canGoBack()) web.goBack() else super.onBackPressed()
+    when {
+      fullscreenView != null -> exitFullscreen()
+      web.canGoBack() -> web.goBack()
+      else -> super.onBackPressed()
+    }
   }
 
   // ————————————————————————— WebView 装配 —————————————————————————
@@ -151,6 +223,8 @@ class MainActivity : Activity() {
       web,
       FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
     )
+    // 新 WebView 无历史:历史根上注销系统返回回调,交还系统默认行为。
+    updateBackHandler()
   }
 
   @SuppressLint("SetJavaScriptEnabled")
@@ -239,11 +313,20 @@ class MainActivity : Activity() {
         Log.w(TAG, "blocked non-allowlisted main document after redirect: $url")
         web.loadUrl(ShellConfig.BASE_URL)
       }
+      // 前进/后退/新导航都会改写历史:重新评估预测性返回回调的注册状态。
+      updateBackHandler()
     }
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
       lastStartedUrl = url
+      // 真实导航已开始:进程死亡恢复的特殊路径结束,回到常规生命周期。
+      restoredLaunch = false
       hide(errorOverlay)
+    }
+
+    /** 首帧内容可见即撤 loading 遮罩;onPageFinished 只作兜底。 */
+    override fun onPageCommitVisible(view: WebView, url: String?) {
+      hide(loadingOverlay)
     }
 
     override fun onPageFinished(view: WebView, url: String) {
@@ -270,6 +353,8 @@ class MainActivity : Activity() {
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
       Log.w(TAG, "webview render process gone (crashed=${detail.didCrash()}); rebuilding")
       runOnUiThread {
+        // 全屏视图属于崩溃的渲染进程:先摘掉再重建。
+        exitFullscreen()
         rebuildWebView()
         // 与加载门禁同规:升级判定后只显示升级页;恢复目标还要过主机闸
         // (lastStartedUrl 可能是重定向落地的非白名单主机)。
@@ -289,6 +374,15 @@ class MainActivity : Activity() {
   }
 
   private inner class ShellChromeClient : WebChromeClient() {
+
+    /** HTML5 requestFullscreen(星野页全屏按钮):不实现本回调时 WebView 静默忽略全屏请求。 */
+    override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+      enterFullscreen(view, callback)
+    }
+
+    override fun onHideCustomView() {
+      exitFullscreen()
+    }
 
     override fun onShowFileChooser(
       webView: WebView,
@@ -311,6 +405,32 @@ class MainActivity : Activity() {
     /** 站点无定位需求;显式拒绝,避免任何提示。 */
     override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
       callback?.invoke(origin, false, false)
+    }
+
+    /**
+     * getUserMedia(扫一扫):只对本站页面、且只请求摄像头时放行;麦克风/其余
+     * 资源一律 deny。WebView 的 grant() 以 App 自身持有 CAMERA 运行时权限为前提
+     * (API 31+ 起系统强制):未授予时先 requestPermissions,系统对话框回来在
+     * onRequestPermissionsResult 里续授——首次扫码弹一次,拒绝则由页面自行提示。
+     */
+    override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
+      val host = request.origin?.host?.lowercase(Locale.ROOT)
+      val resources = request.resources ?: emptyArray()
+      val videoOnly = resources.isNotEmpty() &&
+        resources.all { it == android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE }
+      if (host == null || host !in ShellConfig.INTERNAL_HOSTS || !videoOnly) {
+        runOnUiThread { if (!destroyed) request.deny() }
+        return
+      }
+      runOnUiThread {
+        if (destroyed) return@runOnUiThread
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+          request.grant(request.resources)
+        } else {
+          pendingCameraRequest = request
+          requestPermissions(arrayOf(android.Manifest.permission.CAMERA), REQUEST_CAMERA)
+        }
+      }
     }
   }
 
@@ -390,13 +510,29 @@ class MainActivity : Activity() {
     callback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
   }
 
+  /** 系统相机权限对话框回来:授权则续接此前挂起的 getUserMedia,拒绝通知页面。 */
+  override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode != REQUEST_CAMERA) return
+    val request = pendingCameraRequest
+    pendingCameraRequest = null
+    if (request == null || destroyed) return
+    val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+    if (granted) request.grant(request.resources) else request.deny()
+  }
+
   /**
    * 自研下载器(MediaStore 写公共 Downloads),取代 DownloadManager:
    * 本项目验证用的 API 35 WebView 124 模拟器上,DM 服务端会静默丢弃任务
    * (enqueue 正常返回、服务端零记录),自研路径在任何 ROM 上确定工作。
    * API <29 无 MediaStore.Downloads,回退系统浏览器下载。
    */
-  private fun startFileDownload(url: String, mimeType: String?, contentDisposition: String?) {
+  private fun startFileDownload(
+    url: String,
+    mimeType: String?,
+    contentDisposition: String?,
+    onDownloaded: ((Uri) -> Unit)? = null,
+  ) {
     if (Build.VERSION.SDK_INT < 29) {
       openExternal(Uri.parse(url))
       return
@@ -429,7 +565,12 @@ class MainActivity : Activity() {
             connection.disconnect()
           }
         } ?: throw IOException("openOutputStream returned null")
-        runOnUiThread { Toast.makeText(activity, R.string.download_done, Toast.LENGTH_SHORT).show() }
+        val downloaded = target
+        runOnUiThread {
+          // 有回调(应用内更新)时由回调接管反馈;普通下载 toast。
+          if (onDownloaded != null) onDownloaded(downloaded)
+          else Toast.makeText(activity, R.string.download_done, Toast.LENGTH_SHORT).show()
+        }
       } catch (e: Exception) {
         Log.w(TAG, "file download failed: $url", e)
         // 清掉已建而未写完的 MediaStore 行:否则公共 Downloads 里会积累 0 字节/半截文件。
@@ -477,12 +618,15 @@ class MainActivity : Activity() {
   }
 
   private fun applyCompatibilityVerdict(manifest: ShellManifest?, initial: Boolean) {
+    latestManifest = manifest
+    updateUpdateBannerVisibility()
     val code = versionCode()
     when {
       manifest == null -> {
         // 清单不可达 = 网络问题:首次启动照常加载站点。
         // 但若此前已明确判定不兼容,维持升级页(fail-closed,不用"网络失败"洗掉升级判定)。
         if (upgradeVerdictSeen) {
+          exitFullscreen()
           hide(loadingOverlay)
           show(upgradeOverlay)
         } else if (initial) {
@@ -494,8 +638,14 @@ class MainActivity : Activity() {
       manifest.minShellVersionCode > code ||
         (manifest.maxShellVersionCode != null && manifest.maxShellVersionCode < code) -> {
         upgradeVerdictSeen = true
+        // 全屏视图会盖住遮罩(fail-closed 不允许升级页下有活页面)。
+        exitFullscreen()
         hide(loadingOverlay)
+        hide(updateBanner)
         show(upgradeOverlay)
+        // 清单带同源下载直链时提供壳内下载;否则仍走「在浏览器中打开」。
+        upgradeDownload.visibility =
+          if (manifest.androidUpdate?.downloadUrl != null) View.VISIBLE else View.GONE
       }
       else -> {
         upgradeVerdictSeen = false
@@ -506,7 +656,13 @@ class MainActivity : Activity() {
   }
 
   private fun loadInitialUrl() {
+    if (!this::web.isInitialized) return
+    // 进程死亡恢复的导航已在途(restoreState 自动重载当前历史项):
+    // 这里再 loadUrl 会把首页叠进刚恢复的历史。恢复的加载若一直没提交
+    // (onPageStarted 未触发、web.url 仍为 null),仍以 pendingInitialUrl 兜底。
+    if (restoredLaunch && web.url != null) return
     if (web.url == null) {
+      restoredLaunch = false
       show(loadingOverlay)
       web.loadUrl(pendingInitialUrl)
     }
@@ -528,6 +684,161 @@ class MainActivity : Activity() {
       @Suppress("DEPRECATION") info.versionCode.toLong()
     }
     return code.toInt()
+  }
+
+  // ————————————————————————— 应用内更新 —————————————————————————
+
+  /** 「新版可用」横幅:仅当清单报了更高版本、未被划掉、且未处于升级判定时显示。 */
+  private fun updateUpdateBannerVisibility() {
+    val update = latestManifest?.androidUpdate
+    val visible = update != null && update.latestVersionCode > versionCode() &&
+      updateBannerDismissedFor != update.latestVersionCode && !upgradeVerdictSeen
+    if (visible) {
+      updateBannerText.text = getString(R.string.update_banner_text, update!!.latestVersionName)
+      show(updateBanner)
+    } else {
+      hide(updateBanner)
+    }
+  }
+
+  /**
+   * 应用内更新:APK 走自研下载器(带会话 Cookie,服务器/manifest 校验其完整性),
+   * 下载完弹安装器。安装受「安装未知应用」门控:未授权时先跳系统授权页,
+   * 授权回来在 onResume 续装。
+   */
+  private fun startApkUpdate(url: String) {
+    if (!canInstallPackages()) {
+      try {
+        startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+        Toast.makeText(this, R.string.update_enable_install_hint, Toast.LENGTH_LONG).show()
+      } catch (e: ActivityNotFoundException) {
+        Log.w(TAG, "no unknown-app-sources settings activity", e)
+        Toast.makeText(this, R.string.update_install_unavailable, Toast.LENGTH_LONG).show()
+      }
+      return
+    }
+    startFileDownload(url, "application/vnd.android.package-archive", null) { uri -> tryShowInstallPrompt(uri) }
+  }
+
+  private fun canInstallPackages(): Boolean =
+    Build.VERSION.SDK_INT < 26 || packageManager.canRequestPackageInstalls()
+
+  private fun tryShowInstallPrompt(uri: Uri) {
+    if (!canInstallPackages()) {
+      pendingInstallApkUri = uri
+      try {
+        startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+        Toast.makeText(this, R.string.update_install_permission_hint, Toast.LENGTH_LONG).show()
+      } catch (e: ActivityNotFoundException) {
+        pendingInstallApkUri = null
+        Log.w(TAG, "no unknown-app-sources settings activity", e)
+        Toast.makeText(this, R.string.update_install_unavailable, Toast.LENGTH_LONG).show()
+      }
+      return
+    }
+    launchInstaller(uri)
+  }
+
+  private fun launchInstaller(uri: Uri) {
+    try {
+      startActivity(Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      })
+    } catch (e: ActivityNotFoundException) {
+      Log.w(TAG, "no package installer activity", e)
+      Toast.makeText(this, R.string.update_install_unavailable, Toast.LENGTH_LONG).show()
+    }
+  }
+
+  // ————————————————————————— 预测性返回(API 33+) —————————————————————————
+
+  /**
+   * 按导航状态动态启停系统返回回调:可后退或全屏中 → 注册(本壳接管,
+   * 依次退全屏/后退历史);历史根 → 注销,系统接管(finish + 返回桌面动画)。
+   */
+  private fun updateBackHandler() {
+    if (Build.VERSION.SDK_INT < 33) return
+    val shouldIntercept = fullscreenView != null ||
+      (this::web.isInitialized && web.canGoBack())
+    if (shouldIntercept == backInvokerRegistered) return
+    if (shouldIntercept) {
+      val invoker = backInvoker ?: object : OnBackInvokedCallback {
+        override fun onBackInvoked() {
+          when {
+            fullscreenView != null -> exitFullscreen()
+            this@MainActivity::web.isInitialized && web.canGoBack() -> web.goBack()
+          }
+        }
+      }.also { backInvoker = it }
+      onBackInvokedDispatcher.registerOnBackInvokedCallback(
+        OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+        invoker,
+      )
+      backInvokerRegistered = true
+    } else {
+      unregisterBackInvoker()
+    }
+  }
+
+  private fun unregisterBackInvoker() {
+    val invoker = backInvoker ?: return
+    if (backInvokerRegistered) {
+      onBackInvokedDispatcher.unregisterOnBackInvokedCallback(invoker)
+      backInvokerRegistered = false
+    }
+  }
+
+  // ————————————————————————— 全屏自定义视图 —————————————————————————
+
+  /** 全屏视图挂到 window decor 顶层(盖过一切遮罩)并进入沉浸模式。 */
+  private fun enterFullscreen(view: View, callback: WebChromeClient.CustomViewCallback) {
+    if (fullscreenView != null) {
+      callback.onCustomViewHidden()
+      return
+    }
+    fullscreenView = view
+    fullscreenCallback = callback
+    (window.decorView as? FrameLayout)?.addView(
+      view,
+      FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
+    )
+    applyImmersiveMode(true)
+    updateBackHandler()
+  }
+
+  private fun exitFullscreen() {
+    val view = fullscreenView ?: return
+    fullscreenView = null
+    (view.parent as? FrameLayout)?.removeView(view)
+    // 回调属于(可能已崩溃的)WebView:通知隐藏即可,失败不致命。
+    fullscreenCallback?.let { runCatching { it.onCustomViewHidden() } }
+    fullscreenCallback = null
+    applyImmersiveMode(false)
+    applySystemBarAppearance()
+    updateBackHandler()
+  }
+
+  private fun applyImmersiveMode(immersive: Boolean) {
+    if (Build.VERSION.SDK_INT >= 30) {
+      window.insetsController?.apply {
+        if (immersive) {
+          systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+          hide(WindowInsets.Type.systemBars())
+        } else {
+          show(WindowInsets.Type.systemBars())
+        }
+      }
+    } else {
+      @Suppress("DEPRECATION")
+      window.decorView.systemUiVisibility = if (immersive) {
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+          View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+          View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+      } else {
+        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+      }
+    }
   }
 
   // ————————————————————————— 系统栏 / 内边距 —————————————————————————
@@ -576,6 +887,7 @@ class MainActivity : Activity() {
   }
 
   private fun showError(detail: String) {
+    exitFullscreen()
     hide(loadingOverlay)
     errorDetail.text = detail
     show(errorOverlay)
@@ -592,6 +904,8 @@ class MainActivity : Activity() {
   companion object {
     private const val TAG = "ZaochangShell"
     private const val REQUEST_FILE_CHOOSER = 1001
+    private const val REQUEST_CAMERA = 1002
+    private const val KEY_PENDING_INITIAL_URL = "pendingInitialUrl"
     private const val COMPAT_TIMEOUT_MS = 6_000
     private const val COMPAT_RECHECK_INTERVAL_MS = 5 * 60 * 1000L
     private const val APK_REQUEST_DEDUPE_MS = 5_000L

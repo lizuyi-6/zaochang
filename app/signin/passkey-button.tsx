@@ -1,9 +1,12 @@
 "use client";
 
 import { Fingerprint } from "lucide-react";
-import { useState } from "react";
-import { useSyncExternalStore } from "react";
-import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser";
+import { useEffect, useState } from "react";
+import {
+  browserSupportsWebAuthn,
+  platformAuthenticatorIsAvailable,
+  startAuthentication,
+} from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/server";
 
 const ERROR_TEXT: Record<string, string> = {
@@ -13,18 +16,34 @@ const ERROR_TEXT: Record<string, string> = {
   invalid_request: "请求格式不正确，请刷新页面后重试。",
 };
 
-// WebAuthn 可用性检测:useSyncExternalStore 而非 effect+setState(lint 禁同步
-// cascade;且 server snapshot=false,SSR 输出与客户端各自稳定,无 hydration 抖动)。
-const noopSubscribe = () => () => {};
-function useWebauthnSupported() {
-  return useSyncExternalStore(noopSubscribe, () => browserSupportsWebAuthn(), () => false);
+// WebAuthn 可用性检测:仅看 window.PublicKeyCredential 存在还不够——Android
+// WebView 等"有 API 面但无实现"的环境(WebView 至今不支持 WebAuthn/passkey,
+// 见 passkeys.dev)仪式必然失败,按钮不能渲染出来骗点击。故以
+// platformAuthenticatorIsAvailable()(平台认证器探测,WebView 返回 false;
+// 无锁屏凭据的桌面同样返回 false,这类环境仪式本就不可完成)为准,并叠加
+// browserSupportsWebAuthn。探测异步:unknown 期间不渲染,避免"闪现后消失",
+// 初始 false 与 SSR 一致,无 hydration 抖动。
+function useWebauthnAvailable() {
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const isAvailable = browserSupportsWebAuthn()
+        && await platformAuthenticatorIsAvailable().catch(() => false);
+      if (alive) setAvailable(Boolean(isAvailable));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return available;
 }
 
 // 登录页通行密钥按钮(discoverable/usernameless:不输邮箱,直接弹系统凭据选择器,
 // 认得哪把钥匙就进哪个账号)。特性检测:浏览器/环境不支持 WebAuthn(非 HTTPS、
 // 过旧内核)时整个按钮不渲染,登录页回落 GitHub/邮箱码。
 export function PasskeyLoginButton({ returnTo }: { returnTo: string }) {
-  const supported = useWebauthnSupported();
+  const supported = useWebauthnAvailable();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

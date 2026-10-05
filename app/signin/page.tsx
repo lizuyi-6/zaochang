@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getOAuthSessionUser, oauthProviderStatus, safeReturnPath, turnstileSiteKey } from "../oauth-session";
 import { EmailLoginForm } from "./email-form";
 import { PasskeyLoginButton } from "./passkey-button";
+import { QrLoginPanel } from "./qr-login-panel";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -60,6 +61,8 @@ export default async function SignInPage({ searchParams }: PageProps) {
       )}
       <div className="auth-divider">或邮箱验证码</div>
       <EmailLoginForm returnTo={returnTo} turnstileKey={turnstileKey} />
+      <div className="auth-divider">或扫码登录</div>
+      <QrLoginPanel returnTo={returnTo} />
       <div className="auth-divider">首次注册（GitHub）</div>
       <form className="auth-invite-form" action="/api/auth/github/start" method="post">
         <input type="hidden" name="return_to" value={returnTo} />

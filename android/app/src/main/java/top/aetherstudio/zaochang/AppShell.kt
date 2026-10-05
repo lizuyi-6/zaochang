@@ -4,6 +4,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 
 /** 壳配置:应用唯一可信源。与站点 app/api/app-shell/route.ts 的契约一一对应。 */
 object ShellConfig {
@@ -32,6 +33,14 @@ data class ShellManifest(
   val webBuildId: String,
   val minShellVersionCode: Int,
   val maxShellVersionCode: Int?,
+  /** android.* 更新信息:版本横幅/升级页「下载新版」用;缺失或形态不对为 null。 */
+  val androidUpdate: AndroidUpdateInfo?,
+)
+
+data class AndroidUpdateInfo(
+  val latestVersionCode: Int,
+  val latestVersionName: String,
+  val downloadUrl: String?,
 )
 
 object AppShell {
@@ -55,7 +64,8 @@ object AppShell {
       connection.setRequestProperty("accept", "application/json")
       try {
         if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
-        val web = JSONObject(readBounded(connection)).optJSONObject("web") ?: return null
+        val manifest = JSONObject(readBounded(connection))
+        val web = manifest.optJSONObject("web") ?: return null
         val buildId = web.optString("buildId")
         if (buildId.isBlank()) return null
         // minShellVersionCode 是 fail-closed 闸门的输入:缺失/非数值时宁可判"清单不可用"
@@ -68,6 +78,7 @@ object AppShell {
           webBuildId = buildId,
           minShellVersionCode = minCode,
           maxShellVersionCode = if (web.isNull("maxShellVersionCode")) null else web.optInt("maxShellVersionCode"),
+          androidUpdate = parseAndroidUpdate(manifest.optJSONObject("android")),
         )
       } finally {
         connection.disconnect()
@@ -75,6 +86,31 @@ object AppShell {
     } catch (_: Exception) {
       null
     }
+  }
+
+  /**
+   * android.* 更新信息解析:latestVersionCode 必须是真 Int(不用 optInt 的默认值
+   * 语义),latestVersionName 非空;downloadUrl 必须是 https + 站点主机(下载器
+   * 只打白名单主机,但在解析层就拒掉,不给恶意清单值触达网络层的机会)。
+   * 任何形态不对 → 整体 null(横幅不显示,兼容性门禁不受影响)。
+   */
+  private fun parseAndroidUpdate(android: JSONObject?): AndroidUpdateInfo? {
+    android ?: return null
+    val code = android.takeIf { it.has("latestVersionCode") }
+      ?.takeIf { it.get("latestVersionCode") is Int }
+      ?.getInt("latestVersionCode")
+      ?: return null
+    val name = android.optString("latestVersionName")
+    if (name.isBlank()) return null
+    var downloadUrl: String? = null
+    val rawUrl = android.optString("downloadUrl")
+    if (rawUrl.isNotBlank()) {
+      val url = runCatching { URL(rawUrl) }.getOrNull()
+      if (url != null && url.protocol == "https" && url.host?.lowercase(Locale.ROOT) in ShellConfig.SITE_HOSTS) {
+        downloadUrl = rawUrl
+      }
+    }
+    return AndroidUpdateInfo(latestVersionCode = code, latestVersionName = name, downloadUrl = downloadUrl)
   }
 
   /** 有界读取;超过上限视为清单异常(截断的 JSON 会解析失败,同样 fail-closed)。 */

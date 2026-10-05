@@ -10,6 +10,49 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- 「新版可用」横幅:清单 android.latestVersionCode > 当前版本时出现,点立即更新
+         走应用内下载+安装;× 只对同版本号不再打扰。 -->
+    <LinearLayout
+        android:id="@+id/update_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@color/ink"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="16dp"
+        android:paddingTop="6dp"
+        android:paddingRight="4dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/update_banner_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/paper"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/update_banner_action"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:text="@string/button_update_now"
+            android:textSize="13sp" />
+
+        <ImageButton
+            android:id="@+id/update_banner_dismiss"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/button_dismiss"
+            android:src="@android:drawable/ic_menu_close_clear_cancel" />
+    </LinearLayout>
+
     <LinearLayout
         android:id="@+id/loading_overlay"
         android:layout_width="match_parent"
@@ -101,6 +144,14 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:text="@string/button_open_browser" />
+
+        <Button
+            android:id="@+id/upgrade_download"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/button_download_update"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/upgrade_retry"

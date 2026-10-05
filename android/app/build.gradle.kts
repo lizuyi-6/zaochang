@@ -19,8 +19,8 @@ android {
     applicationId = "top.aetherstudio.zaochang"
     minSdk = 26
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.0.1"
+    versionCode = 4
+    versionName = "1.2.0"
   }
 
   // Kotlin(built-in)的 jvmTarget 跟随 Java 目标。

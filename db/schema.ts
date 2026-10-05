@@ -55,8 +55,9 @@ export const authSessions = sqliteTable(
   (table) => [
     index("auth_sessions_expiry_idx").on(table.expiresAt),
     // 'passkey' 自 0028:通行密钥登录与 GitHub/邮箱码签发完全同权的会话。
+    // 'qr' 自 0029:扫码登录——手机端已登录成员确认桌面端 QR 后同管线签发。
     // 'google' 是 0001 时代的历史值,登录入口已移除,保留不动。
-    check("session_provider_valid", sql`${table.provider} in ('google', 'github', 'email', 'passkey')`),
+    check("session_provider_valid", sql`${table.provider} in ('google', 'github', 'email', 'passkey', 'qr')`),
   ],
 );
 
@@ -166,6 +167,37 @@ export const webauthnChallenges = sqliteTable("webauthn_challenges", {
 }, (table) => [
   index("webauthn_challenges_expiry_idx").on(table.expiresAt),
   check("webauthn_challenges_purpose_valid", sql`${table.purpose} in ('register', 'login')`),
+]);
+
+// 扫码登录,两个方向共用一张表,以 pair_code_hash 是否为空区分:
+// - 正向(手机已登录 → 电脑未登录):桌面 start 签发 pending 行,QR 内容即
+//   /signin/qr/<token>;手机端已登录成员显式确认后 pending→confirmed,桌面端
+//   poll 命中 confirmed 时原子 consumed 并走 createOAuthSession(provider 'qr')
+//   同管线发会话。
+// - 反向(电脑已登录 → 手机未登录):桌面 host 签发 pending 行(pair_code_hash
+//   非空,QR 内容为 /signin/qr-pair/<token>);手机输入桌面显示的 6 位配对码
+//   (接近性验证,错 5 次整行作废)→ pair_requested;桌面端显式「允许」→
+//   confirmed;手机 claim 原子 consumed 并拿到会话。多出的两道验证是本方向的
+//   安全底线:二维码可能被截图/旁观,配对码证明接近性、桌面允许证明设备主人
+//   在场。token 只存 SHA-256(本体只出现在 QR 与页面 URL),2 分钟 TTL、一次性;
+//   各消费方向都是条件 UPDATE + meta.changes 判定(与 email_login_codes 同语义)。
+// desktop_label 是正向发起端浏览器粗粒度摘要;request_ip_hash 只用于事后审计。
+export const qrLoginSessions = sqliteTable("qr_login_sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  desktopLabel: text("desktop_label").notNull().default(""),
+  returnTo: text("return_to").notNull().default("/"),
+  requestIpHash: text("request_ip_hash").notNull(),
+  status: text("status").notNull().default("pending"),
+  memberEmail: text("member_email").references(() => members.email),
+  pairCodeHash: text("pair_code_hash").notNull().default(""),
+  pairAttempts: integer("pair_attempts").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  expiresAt: text("expires_at").notNull(),
+  confirmedAt: text("confirmed_at"),
+  consumedAt: text("consumed_at"),
+}, (table) => [
+  index("qr_login_sessions_status_idx").on(table.status, table.expiresAt),
+  check("qr_login_sessions_status_valid", sql`${table.status} in ('pending', 'pair_requested', 'confirmed', 'consumed')`),
 ]);
 
 export const wallets = sqliteTable(

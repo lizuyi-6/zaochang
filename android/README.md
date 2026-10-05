@@ -72,7 +72,7 @@ APK 托管在站点自身:`public/downloads/zaochang-<version>.apk`(文件名带
 2. SSL 错误永远 `handler.cancel()`;不放宽混合内容;`allowFileAccess`/`allowContentAccess`/定位全关。
 3. 无 `addJavascriptInterface`,无任何原生桥。
 4. WebView 调试仅 debuggable 构建开启;`allowBackup=false`(会话 cookie 不进云备份)。
-5. 唯一权限 `INTERNET`;文件选择走系统 SAF、下载走自研 MediaStore 下载器(公共 Downloads,带会话 Cookie、还原中文文件名;失败清理残留行)。
+5. 权限仅 `INTERNET` + `CAMERA`(扫一扫:getUserMedia 只对本站、只视频放行;运行时权限未授予先弹系统对话框)+ `REQUEST_INSTALL_PACKAGES`(应用内更新自装,受系统「安装未知应用」门控)。文件选择走系统 SAF、下载走自研 MediaStore 下载器(公共 Downloads,带会话 Cookie、还原中文文件名;失败清理残留行)。
 6. 深链仅接受 `https://aetherstudio.top` / `www.aetherstudio.top`,进 Activity 前仍做主机校验。
 
 ## 构建命令
@@ -86,9 +86,25 @@ cd android
 - 本机(Android Studio SDK + Gradle 9.4.1 + AGP 9.2.0 + Kotlin 2.2.10 已缓存)可 `--offline` 构建;新机器首次构建需联网拉取。
 - 版本三件套:AGP `android/build.gradle.kts`、Gradle wrapper(`gradle/wrapper/gradle-wrapper.properties`)、`app/build.gradle.kts` 的 `versionCode/versionName`。
 
+## 更新记录
+
+- **v1.2.0(versionCode 4,2026-10-05)**
+  - **扫码登录(全栈,双向)**:正向(手机已登录 → 电脑未登录)在登录页展示 QR,手机确认后电脑登录;反向(电脑已登录 → 手机未登录)在个人页「让手机扫码登录」展示 QR + 6 位配对码,手机扫码输码、桌面显式「允许」后手机登录(多两道验证:二维码可能被截图/旁观)。`/api/auth/qr/{start,poll,confirm,host,pair,claim,host-state,approve}` 路由 + `qr_login_sessions` 表(迁移 `0029`,auth_sessions provider CHECK 扩 `'qr'` 整表重建)。token 一次性、只存 SHA-256、2 分钟 TTL;全部状态迁移条件 UPDATE + `meta.changes` 原子判定;会话与 GitHub/邮箱码/passkey 同管线(provider `'qr'`);配对码错 5 次整行作废;方向互斥(正向行 pair_code_hash='',反向行非空,互相不可消费)。手机端 `/signin/qr/scan` 纯 JS 扫码(jsQR,不依赖 Play Services 的 BarcodeDetector),只认同源两类登录链接并按路径分流。
+  - **应用内更新**:清单 `android.latest*` 驱动「新版可用」横幅(可划掉,同版本不再打扰);立即更新走自研下载器 + PackageInstaller,受系统「安装未知应用」门控(授权页回来自动续装);强制升级页也新增「下载新版本」。AppShell 解析 `android.*` 时 fail-closed(版本必须是真 Int、downloadUrl 必须 https+站点主机)。
+  - **壳内相机(扫一扫)**:`onPermissionRequest` 只对本站、只视频放行;WebView `grant()` 以 App 持有 CAMERA 运行时权限为前提,未授予先 `requestPermissions`,对话框回来续授。新增 `CAMERA`、`REQUEST_INSTALL_PACKAGES` 两权限 + 安装器包可见性 queries。
+  - **passkey 检测修复**:`browserSupportsWebAuthn()` 只查 API 面存在,Android WebView(不支持 WebAuthn)会渲染出永远失败的按钮;现叠加 `platformAuthenticatorIsAvailable()` 异步探测,无平台认证器的环境(WebView/无锁屏凭据桌面)按钮不渲染。App 内 passkey 登录仍不可用(WebView 平台限制),用户走扫码/GitHub/邮箱码。
+  - 测试:`tests/qr-login.test.mjs` 契约钉 12 条 + `tests/suites/13-qr-login.tests.mjs` 端到端 4 条(签发→401→成员确认→同权会话→重放/过期终态);harness 迁移列表补 0029。
+  - 已知边界:模拟器(API 35 镜像)上 WebView getUserMedia 因平台相机 HAL 问题不可用(枚举有设备但打开挂起),真机不受影响;扫码也可改用系统相机扫后跳转。
+
+- **v1.1.0(versionCode 3,2026-10-05)**
+  - 全屏支持:`WebChromeClient.onShowCustomView/onHideCustomView` 落地,星野页「切换全屏」按钮在 App 内生效(此前 requestFullscreen 被静默丢弃)。全屏视图挂 window decor 顶层 + 沉浸模式,back 先退全屏,升级判定/主文档错误时先摘全屏视图再弹遮罩(fail-closed 不允许遮罩下有活页面)。
+  - 进程死亡状态恢复:`onSaveInstanceState` 保存 `WebView.saveState` + `pendingInitialUrl`,冷启动 `restoreState` 回到离开时的页面;恢复导航在途时门禁放行不再叠加首页加载(`restoredLaunch`),深链 intent 优先于恢复。
+  - 预测性返回(API 33+,manifest `enableOnBackInvokedCallback=true`):可后退/全屏中注册 `OnBackInvokedCallback`(历史后退/退全屏),历史根注销回调交还系统(finish + 返回桌面动画);API < 33 仍走 `onBackPressed`,行为不变。
+  - 冷启动体感:loading 遮罩在 `onPageCommitVisible`(首帧内容可见)即撤,不再等 `onPageFinished`。
+
 ## 已知取舍
 
 - 深链未做 Digital Asset Links 验证(需在站点发 `/.well-known/assetlinks.json` 才能免确认弹窗),首次点链接系统会问"用哪个应用打开"。
-- 返回键走 legacy `onBackPressed`(未启用 predictive back 预览动画),换取在所有版本上行为确定。
+- 预测性返回仅 API 33+ 动态启停;低版本返回行为不变(legacy `onBackPressed`)。
 - `configChanges` 吸收旋转/键盘形态变化(WebView 不重载);深色模式跟随系统 UI 但站点自身是固定浅色主题。
 - Google 登录在国内网络环境依赖 `accounts.google.com` 可达性,与网页端一致;邮箱验证码登录不受影响。

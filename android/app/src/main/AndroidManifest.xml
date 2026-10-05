@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 唯一权限:网络。文件选择走系统 SAF、下载走系统 DownloadManager,均无需权限。 -->
+    <!-- 网络:壳本体。相机:扫一扫(getUserMedia 由 onPermissionRequest 只对本站、
+         只视频放行;API <33 的 WebView 授权需要 CAMERA 运行时权限背书,不弹系统
+         对话框由 WebView 面板呈现)。安装:应用内更新自装的 APK,受系统「安装
+         未知应用」门控,首次触发时系统弹授权页。 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- API 30+ 包可见性:解析「查看 APK」的安装器 Activity。 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
 
     <application
         android:label="@string/app_name"
@@ -11,6 +24,7 @@
         android:allowBackup="false"
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.Zaochang">
 
         <activity
