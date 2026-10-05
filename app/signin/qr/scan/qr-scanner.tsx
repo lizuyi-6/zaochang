@@ -36,6 +36,7 @@ function cameraErrorText(error: unknown): string {
 export function QrScanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [state, setState] = useState<ScannerState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -55,27 +56,21 @@ export function QrScanner() {
   }, []);
 
   // 流就绪 → 挂载后的 video 元素接上并起播,然后开始解码循环。
+  // (canvas/ctx 由 startScanning 在事件处理器里建好放入 ref;effect 体内不 setState。)
   useEffect(() => {
     if (!stream) return;
     const video = videoRef.current;
-    if (!video) return;
+    const surface = canvasRef.current;
+    if (!video || !surface) return;
     video.srcObject = stream;
     video.play().catch(() => {});
     const jsQRReady = import("jsqr").then((mod) => mod.default);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) {
-      setState("failed");
-      setError("当前环境不支持相机解码。");
-      stopCamera();
-      return;
-    }
     const timer = window.setInterval(async () => {
       if (streamRef.current !== stream || video.readyState < 2 || !video.videoWidth) return;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-      const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      surface.canvas.width = video.videoWidth;
+      surface.canvas.height = video.videoHeight;
+      surface.ctx.drawImage(video, 0, 0);
+      const image = surface.ctx.getImageData(0, 0, surface.canvas.width, surface.canvas.height);
       const jsQR = await jsQRReady;
       const found = jsQR(image.data, image.width, image.height, { inversionAttempts: "dontInvert" });
       if (!found?.data) return;
@@ -121,6 +116,15 @@ export function QrScanner() {
       setError(cameraErrorText(lastError));
       return;
     }
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      stream.getTracks().forEach((track) => track.stop());
+      setState("failed");
+      setError("当前环境不支持相机解码,请改用系统相机扫码。");
+      return;
+    }
+    canvasRef.current = { canvas, ctx };
     streamRef.current = stream;
     setStream(stream);
     setState("scanning");
