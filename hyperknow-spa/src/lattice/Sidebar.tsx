@@ -24,21 +24,28 @@ export const LatticeSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
   const [activitiesOpen, setActivitiesOpen] = useState(true);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const showContinue = state.lectureDone;
-  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 1024px)').matches);
   const [mobileOpen, setMobileOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
   const closeMobile = () => { setMobileOpen(false); setMoreOpen(false); };
   const navigate: AppAction = (patch) => { closeMobile(); set(patch); };
 
   useEffect(() => {
-    const query = window.matchMedia('(max-width: 768px)');
+    const query = window.matchMedia('(max-width: 1024px)');
     const change = () => { setMobile(query.matches); setMobileOpen(false); setMoreOpen(false); };
     query.addEventListener('change', change);
+    // 首次渲染与 effect 注册之间可能发生旋转/视口缩放，补齐这段窗口的尺寸变化。
+    change();
     return () => query.removeEventListener('change', change);
   }, []);
 
   useEffect(() => { setMobileOpen(false); }, [state.screen, state.activeConversationId]);
+
+  useEffect(() => {
+    if (mobile && moreOpen) moreRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [mobile, moreOpen]);
 
   useEffect(() => {
     const drawer = drawerRef.current;
@@ -104,6 +111,22 @@ export const LatticeSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
       if (previousFocus?.isConnected && previousFocus.getClientRects().length) previousFocus.focus();
     };
   }, [mobile, mobileOpen]);
+
+  const moreFlyout = moreOpen && (
+    <button
+      ref={moreRef}
+      type="button"
+      className="hk-more-flyout"
+      onClick={() => {
+        setMoreOpen(false);
+        toast(L('Knowledge Base is not available in this build yet', '知识库功能尚未接入'));
+      }}
+    >
+      <Library size={16} />
+      <span>{t('sidebar.drive')}</span>
+      <span className="hk-soon">{L('SOON', '即将上线')}</span>
+    </button>
+  );
 
   return (
     <>
@@ -182,6 +205,7 @@ export const LatticeSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
             <Ellipsis size={18} strokeWidth={1.8} />
             <span>{t('sidebar.more')}</span>
           </button>
+          {mobile && moreFlyout}
         </div>
 
         {showContinue && (
@@ -257,19 +281,7 @@ export const LatticeSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
         </button>
       </div>
 
-      {moreOpen && (
-        <div
-          className="hk-more-flyout"
-          onClick={() => {
-            setMoreOpen(false);
-            toast(L('Knowledge Base is not available in this build yet', '知识库功能尚未接入'));
-          }}
-        >
-          <Library size={16} />
-          <span>{t('sidebar.drive')}</span>
-          <span className="hk-soon">{L('SOON', '即将上线')}</span>
-        </div>
-      )}
+      {!mobile && moreFlyout}
 
       {whatsNewOpen && <WhatsNewModal onClose={() => setWhatsNewOpen(false)} />}
     </>

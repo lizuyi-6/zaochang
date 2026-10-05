@@ -3,6 +3,7 @@ import './styles/variables.css'
 import './styles/fonts.css'
 import './index.css'
 import App from './App.tsx'
+import './lattice/mobile.css'
 import { prepareI18n } from './lattice/i18n'
 
 // NOTE: no StrictMode — its dev-only double effect mount would break the

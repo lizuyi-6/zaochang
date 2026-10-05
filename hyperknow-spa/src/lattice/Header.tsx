@@ -79,7 +79,11 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
         )}
         <LanguageSwitcher />
         {cta}
-        <span
+        <button
+          type="button"
+          className="hk-avatar-trigger"
+          aria-label={L('Account menu', '账户菜单')}
+          aria-expanded={state.avatarMenuOpen}
           style={{ cursor: 'pointer', display: 'inline-flex' }}
           onClick={(e) => {
             e.stopPropagation();
@@ -87,7 +91,7 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
           }}
         >
           <AvatarCat size={36} ring={state.avatarMenuOpen} />
-        </span>
+        </button>
       </div>
 
       {state.avatarMenuOpen && (

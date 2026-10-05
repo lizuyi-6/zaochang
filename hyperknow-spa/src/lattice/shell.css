@@ -693,7 +693,7 @@
   box-shadow: 0 0 0 2px var(--focus-ring), 0 0 0 4px var(--panel-bg);
 }
 
-/* ---------------- Mobile Responsive Shell (<= 768px) ---------------- */
+/* ---------------- Mobile / Tablet Responsive Shell (<= 1024px) ---------------- */
 .hk-mobile-backdrop {
   display: none;
 }
@@ -705,7 +705,7 @@
   margin: 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .hk-page.with-sidebar {
     left: 0 !important;
     width: 100% !important;

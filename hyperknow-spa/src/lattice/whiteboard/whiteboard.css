@@ -1065,7 +1065,7 @@
 }
 
 /* On narrow screens the panel is a dismissible overlay sheet */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .wb-app-layout.with-panel {
     grid-template-columns: minmax(0, 1fr);
   }

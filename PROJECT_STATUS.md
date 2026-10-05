@@ -817,3 +817,18 @@
 - 本轮改动可能引入的新风险：应用代码若先于 `0023` 迁移上线，建课 SQL 因缺 `credit_key` 返回 500（本地重建后漏载迁移的预览环境已触发），必须先迁移再切应用；课程任务 16 分钟租约或图片 45 秒租约若实际上游耗时超过期限，完成写入会被拒绝，可能留下已产生的外部费用或私有孤儿对象；缓存 v2 冷启动增加生图用量；Messages 供应商若不发送 `message_delta.stop_reason=end_turn`，现在会明确报错。上传后清理 D1/R2 失败的孤儿对象处理仍是发布阻断级缺口，当前成功清理的 mock 测试不证明真实云端失败路径。
 - 计费语义决策（用户本轮明确回复“完整课程生成后”）：语义变更:从“二阶段用 resumeUuid 结算，显式原计费键可能长期 pending”改为“课程任务持久保存 credit_key，完整课程生成后以原键标记 completed；蓝图就绪和二阶段失败时保持 pending”。`db/schema.ts` 新增 nullable `credit_key`，Drizzle 生成迁移 `drizzle/0023_cool_madame_hydra.sql`（`ALTER TABLE hk_course_tasks ADD credit_key text`），测试预览迁移清单同步更新。新增集成反例在旧构建上得到 `actual=pending/expected=completed`（退出码 1）；重建并载入迁移后 `node --experimental-strip-types --test tests/rendered-html.test.mjs` 为 130 pass/0 fail/0 skipped，退出码 0。字段断言证明蓝图就绪/失败时 charge=pending 且余额=10、完整课程落库后 charge=completed 且余额仍=10；最后一次 `npm test` 为 367 pass/0 fail/0 skipped、退出码 0。此变更在生产应用代码前必须先迁移；历史无映射的任务仍用 UUID 兜底，历史账目未批量修复。
 - 未覆盖范围：真实 StepFun Messages/TTS/生图供应商与生产 D1/R2、认证浏览器端到端、弱网断流后用户恢复、租约过期时上游仍在执行的外部费用/对象对账，以及审计中的 TTS 回退缓存、翻译计费与会话切换旧译文等路径未验证；`tests/whiteboard-camera.test.mjs` 与 `tests/whiteboard-caption-sync.test.mjs` 的既有脏工作区变更虽被整套执行，未对其全部新增视觉/交互语义做逐项浏览器验收。状态保持“部分完成”，没有提交、推送或部署。
+
+
+## 2026-10-05 见界手机布局（本地，未部署）
+
+- 状态：部分完成。用户本轮反馈“手机 APP 适配不好，特别是见界”，按网页布局处理；断点 768→1024，聊天/创建去除固定留白、设置/动态单栏、课程动作换行、白板弹窗与插图限制视口，预构建 SPA 重建。
+- 本轮证据：静态 Chromium 中英文矩阵 571/571，fail=0、skipped=0，命令 .tmp/run-lattice-mobile-audit.ps1 -BaseUrl http://127.0.0.1:5187/lattice/ 退出码 0；pointer:coarse 补充 5/5，fail=0、skipped=0；最终相关检查 25/25，fail=0、skipped=0；npm run test:lattice 200/200；全量 npm test 538/538（最后纯 CSS 收尾之前），全部退出码 0。
+- 没做：未部署、未发 APK；无 adb 设备，真实 WebView/IME/刘海、生产数据长内容、生成失败 UI 未验证。
+- 逐文件证据、实际 diff 范围、新风险、未覆盖路径和本轮 SHA256 指纹：[MOBILE_ADAPTATION_2026-10-05.md](MOBILE_ADAPTATION_2026-10-05.md)。
+
+
+## 2026-10-05 见界手机适配发布请求（发布前）
+
+- 状态：部分完成。用户明确请求部署，按 release-gates → deploy-production 流程。独立复核 More 菜单844×390 inert/越界反例，补丁与621/621静态浏览器断言（fail=0、skipped=0、exit=0）纳入同一提交；最终源npm test 538/538（fail=0、skipped=0、todo=0、exit=0）。
+- 本地依赖两次npm ci失败如实保留日志；生产依赖audit total=0；Worker与D1回退锚点见 MOBILE_ADAPTATION_2026-10-05.md。
+- 没做：提交时尚未上线，生产浏览器结果待发布后追加；真安卓/WebView/系统IME/刘海未实测，未发APK。

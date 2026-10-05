@@ -16,6 +16,7 @@ const cssFiles = [
   "styles/variables.css",
   "styles/fonts.css",
   "lattice/shell.css",
+  "lattice/mobile.css",
   "lattice/SettingsModal.css",
   "lattice/whiteboard/whiteboard.css",
   "lattice/pages/ChatPage.css",
