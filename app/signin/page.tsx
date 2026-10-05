@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, Github } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Github, ScanLine } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getOAuthSessionUser, oauthProviderStatus, safeReturnPath, turnstileSiteKey } from "../oauth-session";
@@ -62,7 +62,14 @@ export default async function SignInPage({ searchParams }: PageProps) {
       <div className="auth-divider">或邮箱验证码</div>
       <EmailLoginForm returnTo={returnTo} turnstileKey={turnstileKey} />
       <div className="auth-divider">或扫码登录</div>
-      <QrLoginPanel returnTo={returnTo} />
+      {/* 扫码方向感:二维码是给"被扫的设备"看的——只有桌面(宽屏)展示 QR,
+          手机端是扫的一方,给「扫一扫」入口(SSR 都渲染,按断点 CSS 显隐)。 */}
+      <div className="auth-qr-desktop-only">
+        <QrLoginPanel returnTo={returnTo} />
+      </div>
+      <Link className="primary-action auth-qr-mobile-only" href="/signin/qr/scan">
+        <ScanLine size={18} /><span>扫一扫登录桌面</span>
+      </Link>
       <div className="auth-divider">首次注册（GitHub）</div>
       <form className="auth-invite-form" action="/api/auth/github/start" method="post">
         <input type="hidden" name="return_to" value={returnTo} />

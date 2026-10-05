@@ -225,6 +225,12 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.012em; }
 .qr-pair-form { display: flex; flex-direction: column; gap: 12px; }
 .qr-pair-input { background: #fffdf8; border: 1px solid #c6c5bf; color: #171816; font-family: var(--font-geist-mono), monospace; font-size: 26px; height: 60px; letter-spacing: .12em; padding: 0 14px; text-align: center; }
 .qr-pair-input:focus { border-color: #171816; outline: 2px solid rgb(216 180 106 / 28%); outline-offset: 1px; }
+/* 扫码方向感:二维码只在桌面(宽屏)展示,手机端是扫的一方(与 .auth-page 同断点)。 */
+.auth-qr-mobile-only { display: none; }
+@media (max-width: 640px) {
+  .auth-qr-desktop-only { display: none; }
+  .auth-qr-mobile-only { display: inline-flex; }
+}
 @media (max-width: 640px) {
   .auth-page { align-items: flex-start; padding: 92px 16px 58px; }
   .auth-brand { left: 18px; top: 18px; }.auth-context { bottom: 16px; left: 18px; }

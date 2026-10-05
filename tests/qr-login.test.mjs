@@ -205,3 +205,20 @@ test("qr-contract: 反向路由齐备(host/pair/claim/host-state/approve 是薄�
     assert.match(route, new RegExp(`${fn}\\(request`), `${name} 路由必须薄壳调用 ${fn}`);
   }
 });
+
+test("qr-contract: 登录页扫码方向感——桌面展示 QR,手机端给扫一扫入口(断点分流)", () => {
+  const page = read("app/signin/page.tsx");
+  assert.match(page, /auth-qr-desktop-only/, "QR 面板必须包在桌面专属容器里");
+  assert.match(page, /auth-qr-mobile-only/, "手机端必须有扫一扫 CTA");
+  const css = read("app/globals.css");
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.auth-qr-desktop-only \{ display: none; \}/, "窄屏必须隐藏 QR 面板");
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.auth-qr-mobile-only \{ display: inline-flex; \}/, "窄屏必须显示扫一扫入口");
+});
+
+test("qr-contract: 扫一扫页公开可访(反向流程手机未登录也要能扫);正向确认页仍要求登录", () => {
+  const scanPage = read("app/signin/qr/scan/page.tsx");
+  assert.doesNotMatch(scanPage, /getOAuthSessionUser|redirect\(/, "扫一扫页不得有登录门槛");
+  const confirmPage = read("app/signin/qr/[token]/page.tsx");
+  assert.match(confirmPage, /getOAuthSessionUser/, "正向确认页必须校验登录");
+  assert.match(confirmPage, /先登录，再确认/, "未登录落点文案在位");
+});
