@@ -211,7 +211,7 @@
 
 | 编号 | 位置 | 问题 | 修法 | 核实 |
 | --- | --- | --- | --- | --- |
-| L1 | `fruit.ts:450-459`、触发器 0003:148-161、0006:101-102 | 退款不检查卖家钱包状态 | **降级为设计确认**:`07-oidc-external` 现有测试显式把商户钱包置 `frozen` 后断言退款 200、pending 归零——这是被测试钉住的有意行为。只需在 `fruit.ts` 与 0006 迁移旁的文档(PROJECT_STATUS/HYPERKNOW 无关,建议写进 OAUTH_SETUP 资金章节)补书面理由:买家退款权优先于卖家风控状态 | 主会话核对测试 |
+| L1 | `fruit.ts:450-459`、触发器 0003:148-161、0006:101-102 | 退款不检查卖家钱包状态 | **降级为设计确认**:`07-oidc-external` 现有测试显式把商户钱包置 `frozen` 后断言退款 200、pending 归零——这是被测试钉住的有意行为。只需在 `fruit.ts` 与 0006 迁移旁的文档(PROJECT_STATUS/LATTICE 无关,建议写进 OAUTH_SETUP 资金章节)补书面理由:买家退款权优先于卖家风控状态 | 主会话核对测试 |
 | L2 | `oauth-provider.ts:627-630` | refresh 重放只吊销 `refresh_parent_hash IN 家族` 的 access token,授权码换出的第一枚 access token 不在内 | 前向迁移给 access token 表加 `family_id`(授权码兑换时生成,refresh 继承),吊销按 `family_id`;回填历史行可设为自身 id | 子 agent |
 | L3 | `oauth-provider.ts:604` | 授权码重放只回 `invalid_grant`,不吊销已签发 token(RFC 6749 §4.1.2 SHOULD) | 发现 `usedAt` 时按 `authorization_code_hash` 找家族并吊销全部 access/refresh | 子 agent |
 | L4 | `oauth-provider.ts:657-660` | revoke refresh token 不连带同家族 access token | revoke 时按家族吊销 | 子 agent |
@@ -295,7 +295,7 @@ SPA 改动统一要求:`npx oxlint src`、`tsc -b`(经 `spa-typecheck` 测试)�
 | actions 版本 | 未 pin commit SHA | `actions/checkout@<sha> # v7` 等 | 否 |
 | 未引用脚本 | 7 个(如 take-system-shots) | 确认无人工使用后删除 | 是 |
 | CLAUDE.md 漂移 | 写 "~22 entry files"/"414 tests",实际 28 / 458 | 改为"以 node:test 输出为准",去掉具体数字 | 否 |
-| HYPERKNOW.md 漂移 | `HYPERKNOW_AI_MODEL` 默认写 `step-explore`,`config.ts:42` 实为 `step-3.7-flash` | 改文档 | 否 |
+| LATTICE.md 漂移 | `HYPERKNOW_AI_MODEL` 默认写 `step-explore`,`config.ts:42` 实为 `step-3.7-flash` | 改文档 | 否 |
 | MCP 集成测试缺口 | 测试桩对 `/v1/mcp/web_search/mcp` 返回 404,MCP 成功路径无集成测试 | harness 加 MCP 路由(tools/call 信封),新增"MCP 成功不打 /v1/search"与"MCP 401 回退 /v1/search"两条 | 否 |
 
 ---

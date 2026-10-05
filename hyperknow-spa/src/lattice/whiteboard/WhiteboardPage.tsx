@@ -283,9 +283,9 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       )
     : undefined;
 
-  /* 演示脚本(参考录课逐字复刻,语言随挂载时点);直播课成功后整体替换。
+  /* 演示脚本(内置录课,语言随挂载时点);直播课成功后整体替换。
    * 旁白称呼先绑定登录用户名(邮箱取 @ 前缀)再构建脚本;匿名/离线保底
-   * 录课原版 "Ryan"。名字只在开场/过渡/收尾几处,重建也只发生在开场前。 */
+   * 录课默认称呼 "Ryan"。名字只在开场/过渡/收尾几处,重建也只发生在开场前。 */
   const learnerName = (() => {
     const raw = state.identity?.username ?? '';
     return (raw.includes('@') ? raw.slice(0, raw.indexOf('@')) : raw).trim();
@@ -306,14 +306,14 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   );
 
   /* 直播放:生成课(伪生成/后端课)进白板 → 按选中课节话题真拉讲座计划;失败静默
-   * 回退演示课(与其余端点同一双轨纪律)。演示公开演讲课不走直播,保住像素复刻。
+   * 回退演示课(与其余端点同一双轨纪律)。演示公开演讲课不走直播,保住演示观感。
    * 严格锁定当前课节上下文，杜绝默认跳第一讲。 */
   const liveTopic = targetTopic;
   const [liveScript, setLiveScript] = useState<LessonScript | null>(null);
   const [planPending, setPlanPending] = useState(liveTopic !== null);
   const imageWaitResolvers = useRef<Map<number, () => void>>(new Map());
 
-  /* 自由讲座模式:无课程上下文直进白板(#/whiteboard)。旧行为是静默播放录课复刻的
+  /* 自由讲座模式:无课程上下文直进白板(#/whiteboard)。旧行为是静默播放录课的
    * 公开演讲演示课——教学提示词怎么改白板都不变,用户看到的"老套路"正是这条路径。
    * 现在改为学员命题(intro 采集或 ?topic= 深链)→ 与课程讲次完全相同的
    * planLectureLive 实时备课链路;备课失败显式给重试,绝不拿话题对不上的演示课冒充。

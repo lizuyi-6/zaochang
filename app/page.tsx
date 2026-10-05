@@ -83,7 +83,7 @@ export default async function HomePage() {
             <span>MORI / DEEP FOCUS</span><strong>42:18</strong><i><b /></i><small>森林正在生长</small>
           </div>
           <div className="floating-work work-type" aria-hidden="true" data-depth="" style={depthStyle(26)}><span>字浪</span><strong>呼<br />吸</strong><small>WEIGHT 72 / FLOW 48</small></div>
-          <a className="floating-work work-hyperknow" href="/lattice/" aria-label="进入见界学习 Agent" data-depth="" style={depthStyle(11)}>
+          <a className="floating-work work-lattice" href="/lattice/" aria-label="进入见界学习 Agent" data-depth="" style={depthStyle(11)}>
             <span>JIANJIE / AGENT</span><strong>AI<br />研学</strong><small>白板授课 · 举手插话 ↗</small>
           </a>
           <div className="floating-work work-loop" aria-hidden="true" data-depth="" style={depthStyle(21)}><span>LOOP 04</span><div>{Array.from({ length: 16 }).map((_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 70)}%` }} />)}</div><small>城市雨棚.wav</small></div>

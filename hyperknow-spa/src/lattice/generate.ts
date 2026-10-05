@@ -3,7 +3,7 @@ import { coverForTitle, type Lecture, type SessionRow, type Unit } from './data'
 import type { BackendCourse } from './backend';
 
 /**
- * 伪生成引擎：复刻版没有 LLM,课程内容是预生成(author)骨架;但用户的自由输入
+ * 伪生成引擎:纯静态演示没有 LLM,课程内容是预生成(author)骨架;但用户的自由输入
  * 决定课程的话题、命名与结构展示——输入不落空,自由不被限制。
  * 后端可达时 courseFromBackend 把真 LLM 生成的课程树映射为同一形态。
  */

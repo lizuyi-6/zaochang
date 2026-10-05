@@ -1,8 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { toast } from '../toast';
 
-/* 1:1 复刻原站 i18next 体系:7 语言单 translation 树(locales/ 目录由原站 locales.json 按语言拆分,
-   存储键/规范化/复数后缀/插值均与原站一致)。
+/* i18next 体系:7 语言单 translation 树(locales/ 目录按语言拆分,
+   存储键/规范化/复数后缀/插值统一)。
    每语言 ~140-290KB,按需动态 import 成独立 chunk:启动只加载当前语言 + 英文兜底,
    不再把 1.3MB 全量字典打进首包。注意不能用 import.meta.glob——Node 测试加载器
    (tests/lattice-*.test.mjs 的 CommonJS 转译)不支持 import.meta,静态字符串 import() 会被

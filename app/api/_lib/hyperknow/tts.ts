@@ -3,35 +3,34 @@ import { HyperknowUpstreamError } from "./llm";
 import { resolveConfigOrThrow } from "./config";
 import { asciiSafeJson, sanitizeTtsText, ttsCacheKey } from "./protocol";
 
-// StepFun 语音合成引擎 + Hyperknow 官方 6 大原声克隆音色(从原 ttsService.js 移植)。
-// 缓存两级:per-isolate 内存 Map → R2 UPLOADS 桶 tts-cache/ 前缀(替代原磁盘
-// data/audio_cache/)。MISS 路径为流式(与原版逐块 pipe 对齐):上游分块边收边发给
+// StepFun 语音合成引擎 + 见界 6 个预置音色。
+// 缓存两级:per-isolate 内存 Map → R2 UPLOADS 桶 tts-cache/ 前缀(替代早期磁盘
+// data/audio_cache/)。MISS 路径为流式:上游分块边收边发给
 // <audio>,首音延迟 = 上游首块到达时间而非整段合成时间;分块在 ReadableStream pull
 // 里同步收集,流关闭前完成内存/R2 回填——回填发生在本请求生命周期内,不依赖
-// waitUntil 挂靠点。其余与原版的差异(如实记录):
-// - 原版"启动预热 6 音色"改为惰性首次合成(Workers 无常驻启动钩子);
+// waitUntil 挂靠点。其余与早期实现的差异(如实记录):
+// - 早期"启动预热 6 音色"改为惰性首次合成(Workers 无常驻启动钩子);
 // - md5 换 SHA-256(寻址 key,不影响语义);
-// - 内存缓存加 100 条 FIFO 上限(原版无界,Workers isolate 内存 128MB 需守卫)。
+// - 内存缓存加 100 条 FIFO 上限(早期实现无界,Workers isolate 内存 128MB 需守卫)。
 
-// 官方 6 大原声克隆 Voice Tone ID(2026-09-05 由 clone_all_hyperknow_voices.js
-// 对官方 6 个真实音频样本克隆得到,与 data/cloned_voices.json 一致)。
+// 6 个预置 Voice Tone ID。
 export const CLONED_VOICES: Record<string, string> = {
-  warm: "voice-tone-U5kvAcyum0", // Hyperknow Warm 官方原声克隆
-  calm: "voice-tone-U5kvQekdQ8", // Hyperknow Calm 官方原声克隆
-  bright: "voice-tone-U5kvhE0w5Y", // Hyperknow Bright 官方原声克隆
-  gentle: "voice-tone-U5kvwngGSu", // Hyperknow Gentle 官方原声克隆
-  firm: "voice-tone-U5kwECtB0C", // Hyperknow Firm 官方原声克隆
-  lively: "voice-tone-U5kwU9GQqm", // Hyperknow Lively 官方原声克隆
+  warm: "voice-tone-U5kvAcyum0",
+  calm: "voice-tone-U5kvQekdQ8",
+  bright: "voice-tone-U5kvhE0w5Y",
+  gentle: "voice-tone-U5kvwngGSu",
+  firm: "voice-tone-U5kwECtB0C",
+  lively: "voice-tone-U5kwU9GQqm",
 };
 
-// /tts/config 的音色目录(色板与描述从原 routes/tts.js 逐字搬运)。
+// /tts/config 的音色目录。
 export const VOICE_CATALOG = [
-  { id: "warm", label: "Warm (官方原声克隆)", color: ["#F0997B", "#ED93B1"], desc: "Hyperknow Warm 官方原声克隆：温暖亲切" },
-  { id: "calm", label: "Calm (官方原声克隆)", color: ["#85B7EB", "#9AA0A6"], desc: "Hyperknow Calm 官方原声克隆：沉稳磁性" },
-  { id: "bright", label: "Bright (官方原声克隆)", color: ["#EF9F27", "#F0997B"], desc: "Hyperknow Bright 官方原声克隆：明快启发" },
-  { id: "gentle", label: "Gentle (官方原声克隆)", color: ["#AFA9EC", "#ED93B1"], desc: "Hyperknow Gentle 官方原声克隆：优雅舒缓" },
-  { id: "firm", label: "Firm (官方原声克隆)", color: ["#5DCAA5", "#85B7EB"], desc: "Hyperknow Firm 官方原声克隆：严谨权威" },
-  { id: "lively", label: "Lively (官方原声克隆)", color: ["#97C459", "#5DCAA5"], desc: "Hyperknow Lively 官方原声克隆：轻快生动" },
+  { id: "warm", label: "Warm", color: ["#F0997B", "#ED93B1"], desc: "温暖亲切" },
+  { id: "calm", label: "Calm", color: ["#85B7EB", "#9AA0A6"], desc: "沉稳磁性" },
+  { id: "bright", label: "Bright", color: ["#EF9F27", "#F0997B"], desc: "明快启发" },
+  { id: "gentle", label: "Gentle", color: ["#AFA9EC", "#ED93B1"], desc: "优雅舒缓" },
+  { id: "firm", label: "Firm", color: ["#5DCAA5", "#85B7EB"], desc: "严谨权威" },
+  { id: "lively", label: "Lively", color: ["#97C459", "#5DCAA5"], desc: "轻快生动" },
 ] as const;
 
 export const TTS_SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0] as const;

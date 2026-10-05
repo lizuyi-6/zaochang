@@ -518,7 +518,7 @@ export interface PlanLectureParams {
 export const PLAN_CLIENT_TIMEOUT_MS = 135_000;
 
 /**
- * 真实白板讲座计划(原 WS whiteboard/ws 的无状态化端点,见 HYPERKNOW.md)。
+ * 真实白板讲座计划(无状态化端点,见 LATTICE.md)。
  * 支持 courseUuid/unitId/lectureId/sessionId 严密锁定，拒绝默认第一讲。
  * 支持 language 字段供白板代理传入，默认 zh-CN。
  * 返回 null = 不可用(未登录/静态托管/限流/上游故障),调用方回退本地演示
@@ -686,7 +686,7 @@ export interface MarketCourse {
 }
 
 /**
- * 课程市场列表:本人 D1 课程在前、两条官方样例在后(后端 1:1 复刻原版形状)。
+ * 课程市场列表:本人 D1 课程在前、两条官方样例在后。
  * 返回 null = 不可用(纯静态托管/未登录),调用方回退演示卡片。
  */
 export async function fetchMarketCourses(): Promise<MarketCourse[] | null> {

@@ -1,6 +1,6 @@
-// Hyperknow Agent(1:1 复刻 agent.hyperknow.io)· 集成套件:真实 Wrangler 预览 +
+// 见界学习 Agent · 集成套件:真实 Wrangler 预览 +
 // 假 AI 上游(messages 协议)与假 TTS 上游,覆盖:
-// - chat SSE 全事件序列(与原 WS 逐帧对齐)+ 会话持久化与归属隔离
+// - chat SSE 全事件序列逐帧断言 + 会话持久化与归属隔离
 // - TTS 缓存语义(MISS → HIT)与音色/速度缓存 key 隔离
 // - 白板讲座规划(降级 fallback)与举手插话、归属 404
 // - 课程蓝图生成事件序列、市场列表隔离与详情 404
@@ -36,8 +36,8 @@ import {
 } from "../harness/preview.mjs";
 import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, resolveCourseGenBudgetMs } from "../../app/api/_lib/hyperknow/budgets.ts";
 
-// Hyperknow SSE 帧(`event: frame\ndata: {...}\n\n`)→ 按序解析出原始事件对象
-// (与原 WS 版 ws.send(JSON) 的帧形状一致,断言才能逐帧对齐)。
+// 见界 SSE 帧(`event: frame\ndata: {...}\n\n`)→ 按序解析出原始事件对象
+// (帧形状固定,断言逐帧对齐)。
 async function readHkFrames(response) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -72,7 +72,7 @@ export function register() {
     const body = await response.json();
     assert.equal(body.success, true);
     assert.equal(body.data.email, email);
-    assert.equal(body.data.user_id, email, "user_id 用造场身份(替代原复刻版假鉴权)");
+    assert.equal(body.data.user_id, email, "user_id 用造场身份(替代早期假鉴权)");
     assert.equal(body.data.subscription.remaining_credits, 20, "新账户每日额度 20(真实余额,懒重置建行)");
     assert.equal(body.data.subscription.max_credits, 20);
 
@@ -168,7 +168,7 @@ export function register() {
     assert.equal(first.headers.get("content-type"), "audio/mpeg");
     assert.equal(first.headers.get("x-cache"), "MISS");
     const firstBody = Buffer.from(await first.arrayBuffer());
-    assert.equal(lastTtsRequest.voice, "voice-tone-U5kvAcyum0", "warm 必须映射官方克隆音色 ID");
+    assert.equal(lastTtsRequest.voice, "voice-tone-U5kvAcyum0", "warm 必须映射预置音色 ID");
     assert.equal(lastTtsRequest.model, "stepaudio-3-tts");
     assert.equal(lastTtsRequest.speed, 1);
     assert.equal(ttsUpstreamCount, 1, "首次必须真实触达上游");

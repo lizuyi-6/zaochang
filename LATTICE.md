@@ -1,10 +1,8 @@
-# Hyperknow Agent · 1:1 复刻 agent.hyperknow.io
+# 见界学习 Agent(Lattice)
 
-本模块是对 **Hyperknow.io 学习 Agent**(agent.hyperknow.io / hyperknow.io)的 1:1 完整复刻,
-接入造场平台运行。原复刻工程(Node.js Express + WebSocket 独立服务)经协议迁移后原生跑在
-Cloudflare Workers 上:三路 WebSocket 改为 SSE/REST,单文件 JSON 库改为 D1,磁盘音频缓存改为
-R2。像素级前端以预构建 SPA 挂载在 `/lattice/`(与 `public/product-apps/` 的六个嵌入式产品同
-一模式,但为直接访问,非 iframe)。
+造场平台内置的学习 Agent:流式学习对话、白板授课与举手插话、全自动课程蓝图、多音色 TTS。
+后端原生跑在 Cloudflare Workers 上(SSE/REST + D1 + R2);前端为预构建 SPA,挂载在
+`/lattice/`(与 `public/product-apps/` 的六个嵌入式产品同一模式,但为直接访问,非 iframe)。
 
 ## 组成
 
@@ -24,25 +22,25 @@ tests/                         # hyperknow-core(纯逻辑)+ suites/11-hyperknow(
                                #   白板字幕/引擎、backend 解析器、CSS 健康、DAG 定稿、spa-typecheck 门禁)
 ```
 
-## 与原复刻工程的协议差异(全部如实声明)
+## 与早期独立服务形态的协议差异(全部如实声明)
 
-| 原版(Express + ws) | 本模块(Workers) | 说明 |
+| 早期形态(Express + ws) | 本模块(Workers) | 说明 |
 | --- | --- | --- |
 | `WS /api/v1/ws`,事件逐帧 JSON | `POST /api/hyperknow/chat` → SSE(`event: frame`) | 事件序列逐帧一致:conversation_created → credit_status → directorAgent thinking → content_chunk×N → recommend_next_step → complete |
 | `WS /api/v1/course-generation/ws` | `POST /api/hyperknow/course-generation` → SSE | 事件序列一致(含装饰性研学 sleep 1.2s/1s) |
-| `WS /api/v1/whiteboard/ws`,服务端 setTimeout 链按节奏推步、连接内存存计划 | `POST /api/hyperknow/whiteboard/plan` 一次返回完整计划;播放节奏由客户端适配器驱动(hyperknow-spa/src/lattice/backend.ts `planLectureLive` 拉计划 → whiteboard/liveLesson.ts 转成与演示脚本同构的板书脚本,与服务端 protocol.ts 同一条 `max(4000, 字数×180ms)` 公式;拉取失败/超时静默回退内置演示脚本) | 举手插话改独立 `POST /whiteboard/interject`;答疑后 5s 恢复主线。**顺带修复原版缺陷**:插话恢复后原服务端推进链因 isPaused 标记永久停摆,现从当前步继续推进 |
+| `WS /api/v1/whiteboard/ws`,服务端 setTimeout 链按节奏推步、连接内存存计划 | `POST /api/hyperknow/whiteboard/plan` 一次返回完整计划;播放节奏由客户端适配器驱动(hyperknow-spa/src/lattice/backend.ts `planLectureLive` 拉计划 → whiteboard/liveLesson.ts 转成与演示脚本同构的板书脚本,与服务端 protocol.ts 同一条 `max(4000, 字数×180ms)` 公式;拉取失败/超时静默回退内置演示脚本) | 举手插话改独立 `POST /whiteboard/interject`;答疑后 5s 恢复主线。**顺带修复早期缺陷**:插话恢复后原服务端推进链因 isPaused 标记永久停摆,现从当前步继续推进 |
 | TTS 未命中逐块 pipe 流式返回 | 未命中整段合成后返回(≤500 字短文本);命中内存/R2 毫秒级 | Workers 无 waitUntil 挂靠点时后台回填不可靠,取整段换取确定性;`X-Cache: HIT-MEMORY/HIT-R2/MISS` 语义保留 |
 | 启动时预热 6 音色试听缓存 | 惰性首次合成(Workers 无常驻启动钩子) | 首次试听慢(上游合成延迟),之后毫秒级 |
-| md5 缓存 key | SHA-256(寻址 key,不影响语义) | 内存缓存加 100 条 FIFO 上限(原版无界,isolate 内存 128MB 需守卫) |
-| 明文密码注册/伪造 token 假鉴权 | 全部不移植,身份统一走造场登录(requireMember) | `get_user_info` 返回造场成员身份;credits 为装饰性固定值 20/20(仅驱动徽章,无扣减语义) |
+| md5 缓存 key | SHA-256(寻址 key,不影响语义) | 内存缓存加 100 条 FIFO 上限(早期实现无界,isolate 内存 128MB 需守卫) |
+| 明文密码注册/伪造 token 假鉴权 | 不保留,身份统一走造场登录(requireMember) | `get_user_info` 返回造场成员身份;credits 为装饰性固定值 20/20(仅驱动徽章,无扣减语义) |
 | store.json 单文件库(课程/会话无归属过滤) | D1 三表 `hk_*`,归属列 FK members.email | 市场列表只出本人课程 + 2 条官方样例;详情/续聊/插话越权一律 404(不泄露存在性) |
 
 ## 上游与配置
 
 LLM 走 **StepFun/Anthropic Messages 协议**(`{base}/messages`,thinking 预算 384(流)/256(JSON),
 step-explore 原生协议),`thinking_delta` 增量映射为 directorAgent 思考过程实时展示——与
-`reading-ai-provider.ts` 刻意丢弃思维链不同,这是复刻产品的核心语义。TTS 走 StepFun
-`/audio/speech`(默认 `stepaudio-3-tts`,StepAudio 3 代;兼容 step-tts 时代的克隆音色与 speed 参数),音色为对官方 6 个真实音频样本克隆所得的 Voice Tone ID
+`reading-ai-provider.ts` 刻意丢弃思维链不同,这是本产品的核心语义。TTS 走 StepFun
+`/audio/speech`(默认 `stepaudio-3-tts`,StepAudio 3 代;兼容 step-tts 时代的自定义音色与 speed 参数),音色为 6 个预置 Voice Tone ID
 (warm/calm/bright/gentle/firm/lively,见 `tts.ts` 常量)。缓存 key 含模型名,换模型即全量重新合成。
 TTS 请求体必须纯 ASCII(`asciiSafeJson` 做 `\u` 转义):上游 WAF 对该路由做字节级内容扫描,
 原始 CJK 字节一律 451 `censorship_blocked`(chat/completions 与 /messages 无此层,勿扩大适用)。
@@ -63,31 +61,31 @@ TTS 请求体必须纯 ASCII(`asciiSafeJson` 做 `\u` 转义):上游 WAF 对该�
 | `HK_IMAGE_ENABLED` | 可选 | 白板按需生图总开关(`true`/`false`,默认 `true`) |
 | `HK_IMAGE_MODEL` | 可选 | 阶跃生图模型(默认 `step-image-edit-2`)。**风险提示**: 阶跃官方文档记录旧版生图模型预计于 2026-10-10 停止服务，必须使用 `step-image-edit-2` 且保持可配置 |
 
-注意:上游必须支持 Messages 协议(原复刻版的 OpenAI chat/completions 回退不移植——
+注意:上游必须支持 Messages 协议(旧版 OpenAI chat/completions 回退不保留——
 "上游必须说 Messages"是显式契约)。
 
-## 按钮接线:复刻界面 → 真实功能
+## 按钮接线:界面 → 真实功能
 
-复刻 SPA 里每个可点控件都必须有真实行为或显式失败反馈,不留静默死按钮。实现分三类:
+SPA 里每个可点控件都必须有真实行为或显式失败反馈,不留静默死按钮。实现分三类:
 
 | 类别 | 实现 |
 | --- | --- |
-| 真实后端能力 | 翻译(`POST /api/hyperknow/translate`,SSE 逐帧、服务端扣 2 积分、余额不足 402);模型探针(`POST /api/hyperknow/model-check`,`max_tokens:16` 的最小 ping,**不计费、不落库**,限流 20/h,只回 `{ok,latency_ms}`);连接面板延迟(ping 真实往返);音频自检(真拉 TTS 样本,量首字节延迟与下载码率,阈值 32 kbps,再真回放);白板课程计划(`POST /api/hyperknow/whiteboard/plan`,板书动作 `card|formula|diagram|image|quick_check`——服务端按 `courseUuid`/`unitId`/`lectureId`/`sessionId` 校验归属权限与精确定位讲次,兼容旧课仅传 `topic`;`diagram` 支持结构化节点边与 Mermaid 子集,失败友好文字降级不显示代码;`quick_check` 落选择题等学员作答;服务端无 AI 密钥时回退话题模板计划,客户端拉取失败回退演示脚本,均不静默卡死);白板按需生图(`POST /api/hyperknow/whiteboard/image`,阶跃星辰生图同步官方规范:n=1,1024x1024,b64_json,prompt<=512,核对 finish_reason;图片不可信限制响应大小、1024x1024像素、MIME魔数检测拒SVG/HTML;复用上传隔离 ClamAV 扫描 fail-closed 入 R2,属主私有缓存;缓存 key 包含模型、参数、版本、课节、用户并发去重,每节最多 1 图,日配额 10 张,总开关 `HK_IMAGE_ENABLED`,不擅改课程 10 积分定价;前端按需配图 pending/ready/failed 状态机、固定比例容器、alt 图注、点击放大 Lightbox、音频有界等待 3.5s、失败文字优雅降级、切课取消请求不串图);课程前置问询(`POST /api/hyperknow/course-inquiry`,3-5 项推荐问询一键推荐继续,必要时最多 2 轮智能追问,限流 30/h,组装版本化 CourseBrief:目标、基础、时间、深度、偏好、语言、视觉);课程大纲质量校验与单元修复(目标/先修/完成标准/项目/测验,DAG 先修无环检测,失败单元最多 1 次 LLM 修复,不模板冒充成功,规模适应主题与时间,6-8 单元仅作参考;蓝图就绪帧 `blueprint_ready` 与检查点恢复/取消/并发幂等锁,严守 10 积分定价);白板举手插话(`POST /api/hyperknow/whiteboard/interject`,按讲座会话与当前 step_id 取上下文答疑;主线声画同步暂停、答案与过渡句回流对话面板并 TTS 朗读、答疑后 5s 恢复;端点不可用给本地可见反馈,不落空);学员称呼(讲座计划/插话提示词与无密钥回退计划的开场白均携带会话成员 displayName,导师旁白/答疑以登录名称呼学员;演示课脚本同步模板化——挂载时绑定登录用户名、开播前等启动身份结算 `bootReady`,匿名/纯静态托管保底录课原版称呼);语音提问(Web Speech API 真转写,答步转写即作答、自由时段转写即插话,不再有 canned 台词);课程市场(`GET /api/hyperknow/marketplace/courses`:本人 D1 课程 + 官方样例,集市页与"我的课程"书架据此渲染,点击本人课程拉 `GET /courses/[uuid]` 详情进真实课程树;不可达回退演示卡);课程生成联网研学(原复刻版 `researching_the_web` 是装饰性 sleep——现真跑搜索:`POST /api/hyperknow/course-generation` 供应商可插拔 StepFun/Tavily/Brave/Cloudflare,默认优先复用现有 AI 渠道的 StepFun Chat Completions 协议 tools:web_search,单次真搜无自动重试;亦支持传统搜索按 3 条派生查询真搜;研学资料以隔离边界明确标记为外部不可信参考而非指令防范注入;搜索未配置时移除假等待假轮数直接跳过,上游失败/超时一律优雅降级为无研学上下文继续生成,不影响积分扣减语义,轮次帧与完成帧的 `sources` 如实计数,不虚报来源);白板课程旁白(每教学步随字幕真声朗读,**音频是时钟**:字幕等起声才起跑、音频播完字幕立即补全、步进等播完才前进,杜绝冷合成延迟下的声画错位与截断;中英文按音节密度分别估窗 180ms/汉字、65ms/英文字符,暂停为同元素断点续播) |
+| 真实后端能力 | 翻译(`POST /api/hyperknow/translate`,SSE 逐帧、服务端扣 2 积分、余额不足 402);模型探针(`POST /api/hyperknow/model-check`,`max_tokens:16` 的最小 ping,**不计费、不落库**,限流 20/h,只回 `{ok,latency_ms}`);连接面板延迟(ping 真实往返);音频自检(真拉 TTS 样本,量首字节延迟与下载码率,阈值 32 kbps,再真回放);白板课程计划(`POST /api/hyperknow/whiteboard/plan`,板书动作 `card|formula|diagram|image|quick_check`——服务端按 `courseUuid`/`unitId`/`lectureId`/`sessionId` 校验归属权限与精确定位讲次,兼容旧课仅传 `topic`;`diagram` 支持结构化节点边与 Mermaid 子集,失败友好文字降级不显示代码;`quick_check` 落选择题等学员作答;服务端无 AI 密钥时回退话题模板计划,客户端拉取失败回退演示脚本,均不静默卡死);白板按需生图(`POST /api/hyperknow/whiteboard/image`,阶跃星辰生图同步官方规范:n=1,1024x1024,b64_json,prompt<=512,核对 finish_reason;图片不可信限制响应大小、1024x1024像素、MIME魔数检测拒SVG/HTML;复用上传隔离 ClamAV 扫描 fail-closed 入 R2,属主私有缓存;缓存 key 包含模型、参数、版本、课节、用户并发去重,每节最多 1 图,日配额 10 张,总开关 `HK_IMAGE_ENABLED`,不擅改课程 10 积分定价;前端按需配图 pending/ready/failed 状态机、固定比例容器、alt 图注、点击放大 Lightbox、音频有界等待 3.5s、失败文字优雅降级、切课取消请求不串图);课程前置问询(`POST /api/hyperknow/course-inquiry`,3-5 项推荐问询一键推荐继续,必要时最多 2 轮智能追问,限流 30/h,组装版本化 CourseBrief:目标、基础、时间、深度、偏好、语言、视觉);课程大纲质量校验与单元修复(目标/先修/完成标准/项目/测验,DAG 先修无环检测,失败单元最多 1 次 LLM 修复,不模板冒充成功,规模适应主题与时间,6-8 单元仅作参考;蓝图就绪帧 `blueprint_ready` 与检查点恢复/取消/并发幂等锁,严守 10 积分定价);白板举手插话(`POST /api/hyperknow/whiteboard/interject`,按讲座会话与当前 step_id 取上下文答疑;主线声画同步暂停、答案与过渡句回流对话面板并 TTS 朗读、答疑后 5s 恢复;端点不可用给本地可见反馈,不落空);学员称呼(讲座计划/插话提示词与无密钥回退计划的开场白均携带会话成员 displayName,导师旁白/答疑以登录名称呼学员;演示课脚本同步模板化——挂载时绑定登录用户名、开播前等启动身份结算 `bootReady`,匿名/纯静态托管保底录课默认称呼);语音提问(Web Speech API 真转写,答步转写即作答、自由时段转写即插话,不再有 canned 台词);课程市场(`GET /api/hyperknow/marketplace/courses`:本人 D1 课程 + 官方样例,集市页与"我的课程"书架据此渲染,点击本人课程拉 `GET /courses/[uuid]` 详情进真实课程树;不可达回退演示卡);课程生成联网研学(`POST /api/hyperknow/course-generation` 供应商可插拔 StepFun/Tavily/Brave/Cloudflare,默认优先复用现有 AI 渠道的 StepFun Chat Completions 协议 tools:web_search,单次真搜无自动重试;亦支持传统搜索按 3 条派生查询真搜;研学资料以隔离边界明确标记为外部不可信参考而非指令防范注入;搜索未配置时移除假等待假轮数直接跳过,上游失败/超时一律优雅降级为无研学上下文继续生成,不影响积分扣减语义,轮次帧与完成帧的 `sources` 如实计数,不虚报来源);白板课程旁白(每教学步随字幕真声朗读,**音频是时钟**:字幕等起声才起跑、音频播完字幕立即补全、步进等播完才前进,杜绝冷合成延迟下的声画错位与截断;中英文按音节密度分别估窗 180ms/汉字、65ms/英文字符,暂停为同元素断点续播) |
 | 浏览器本地能力 | 复制(execCommand 回退)、分享链接(navigator.share 回退剪贴板)、日历 `.ics` 下载、附件/材料/反馈附件上传(`/api/uploads`,visibility=private)、语音输入(Web Speech API 一次性识别)、朗读(TTS 单例)、反馈邮件(mailto) |
-| 复刻界面自绘 | 白板导出 JPG/PDF:Canvas 2D 按课堂数据重绘(Caveat/Handlee/Satoshi 用已加载 woff2,2200×1300 世界坐标,第 1/2 页按 x=1100 切分,表格波纹网格、荧光高亮带、红色圈注),非 DOM 截图;PDF 在点击内同步 `window.open` 再写 blob `<img>` 并 `print()` |
+| 前端自绘 | 白板导出 JPG/PDF:Canvas 2D 按课堂数据重绘(Caveat/Handlee/Satoshi 用已加载 woff2,2200×1300 世界坐标,第 1/2 页按 x=1100 切分,表格波纹网格、荧光高亮带、红色圈注),非 DOM 截图;PDF 在点击内同步 `window.open` 再写 blob `<img>` 并 `print()` |
 
-未复刻的装饰性按钮统一给可见反馈(顶部 toast 或 `SOON` 徽章),如兑换码、Canvas/Google 日历集成、外部记忆同步、付费档预览。
+未接线的装饰性按钮统一给可见反馈(顶部 toast 或 `SOON` 徽章),如兑换码、Canvas/Google 日历集成、外部记忆同步、付费档预览。
 
 集市/课程列表每张卡打开**对应课程**的预览与学习旅程(深链 `#/course/preview?topic=…&cover=…`
 可分享/直开),不再是固定演示课;进入白板时按当前课程话题实时拉取讲解计划,无课程上下文时
-播内置演示课(像素级保真路径)。
+播内置演示课(兜底路径)。
 
 ## 安全与限流
 
 所有端点 `requireMember`;写端点(chat/plan/interject/course-generation/translate/model-check)加 `assertSameOrigin`;
 限流(bucket/每小时):chat 30、tts 120、whiteboard plan 20、interject 30、course-gen 5、translate 60、model-check 20。
 答案侧无资金/证据语义,不需要 DB 触发器。白板板书 HTML 由 LLM 生成、前端
-`dangerouslySetInnerHTML` 渲染——**复刻原版行为**,如实记录(内容只能由本人触发生成)。
+`dangerouslySetInnerHTML` 渲染——如实记录(内容只能由本人触发生成)。
 
 ## 重建 SPA
 
@@ -122,17 +120,17 @@ CI 不安装 hyperknow-spa 依赖、不参与主站 tsc/eslint(tsconfig/eslint �
 - **积分纪律**:扣费点必须"上游探活成功后"(chat 先 generator.next() 再扣;translate 曾反过来,上游故障白扣 2 分,已对齐)。建课失败退费走 `refundCreditCharge`:退当日余额+计费行标 `refunded`,同 key 重试免费接管——"恢复不重复扣费"对失败重试同样成立。退费只在 `charged=true`(本次真扣)时调,接管重跑不退(钱属最初那次扣费)。幂等计费恒 10 分,函数签名不再收 cost(曾有 cost 参数被两分支相同的三元无视的陷阱)。402 的 `max` 用 `dailyCreditsFor`,勿写死 HK_DAILY_CREDITS。
 - **空正文防线**:非流式 `chat()` 只回 thinking 块时,视为可重试失败走一次 chat/completions 回退,不静默 `""`(那是模板课降级/空蓝图的根因);chat-completions SSE 的 data 行必须 try/catch 跳过坏帧。
 - **预热与实播必须同键**:白板 TTS 预热文本 = `sanitizeNarration(spoken_text)`,与实播同形,否则含标签/实体的旁白永远 MISS。语言分发:`!startsWith('en')` ≠ 中文——精确判 zh-CN/zh-TW;每课授课语言经 `courseLang.ts` 按课程 UUID 持久化(加入弹窗选择/白板备课/旅程预热三处同源)。
-- **已删死链**:guards.ts 整文件、Director Agent 链、generateCourse→COURSE_ARCHITECT_PROMPT 链——复刻演进时留下的旧路径,零消费;plan/interject 路由的 upstream-error 分支永不可达(planLecture/answerInterjection 内部全捕获)。契约钉在 `tests/hyperknow-hardening.test.mjs`(11 条)。
+- **已删死链**:guards.ts 整文件、Director Agent 链、generateCourse→COURSE_ARCHITECT_PROMPT 链——早期演进留下的旧路径,零消费;plan/interject 路由的 upstream-error 分支永不可达(planLecture/answerInterjection 内部全捕获)。契约钉在 `tests/hyperknow-hardening.test.mjs`(11 条)。
 
 ## 2026-10-03 回归审计修复(旧品牌清零/死邮箱/净化括号)
 
-- **品牌清零守卫**:更名时字典「值」与硬编码字面量是两个独立泄漏面,只查其一必漏——`lattice-brand` 现有全源扫(ts/tsx/json/css/html 禁 "Hyperknow"),小写内部标识符(包名/`/api/hyperknow/*` 路径/注释)不受限。字典值里的用户联系邮箱也是品牌面:`contact@/public-mail@hyperknow.io` 是指向外人域名的死通道,真实支持邮箱 `zaochang@aetherstudio.top`(actions.ts SUPPORT_EMAIL)。
+- **品牌守卫**:更名时字典「值」与硬编码字面量是两个独立泄漏面,只查其一必漏——`lattice-brand` 现有全源扫(ts/tsx/json/css/html 禁旧品牌词),小写内部标识符(包名/路径/注释)不受限。用户联系邮箱 `zaochang@aetherstudio.top`(actions.ts SUPPORT_EMAIL)。
 - **旁白净化新规**:未配对角括号(孤立「或」)整折——文本内只有一侧有括号即视为配对失败;两侧都在不做过深嵌套推断。模型随机错字(如"传导辑径")无确定性修法,不进净化层。
 - **en 简介模板**:`This session opens “{topic}” …`——自由命题话题可能是任意语言,嵌入英文句必须带引号,否则语法不成立且 TTS 逐字念出病句。
 
 ## 2026-10-03 白板自由讲座 + 板书观感四修
 
-- **自由讲座(直进 `#/whiteboard`)**:无课程上下文时不再静默播录课复刻演示脚本(教学提示词在这条路径上零作用的根因)——IntroOverlay 命题(输入+芯片)→ `set activeTopic` → 与课程讲次同一 `planLectureLive` 链路;`?topic=` 深链解析/自由话题回写 hash;失败显式重试(planAttempt 点火),degraded 模板再挣一次真实生成;演示课仅作显式兜底(匿名/屡败),匿名学员给登录引导。无课程上下文时讲师提示注入 STANDALONE 独立讲次声明(禁幻影"上一讲")。
+- **自由讲座(直进 `#/whiteboard`)**:无课程上下文时不再静默播录课演示脚本(教学提示词在这条路径上零作用的根因)——IntroOverlay 命题(输入+芯片)→ `set activeTopic` → 与课程讲次同一 `planLectureLive` 链路;`?topic=` 深链解析/自由话题回写 hash;失败显式重试(planAttempt 点火),degraded 模板再挣一次真实生成;演示课仅作显式兜底(匿名/屡败),匿名学员给登录引导。无课程上下文时讲师提示注入 STANDALONE 独立讲次声明(禁幻影"上一讲")。
 - **字幕分句窗口**(`whiteboard/captionWindow.ts` 纯函数):字幕栏只渲染当前窗口——一次至多两句(短句成对 ≤66 字),长句独占(语义最大连贯一句);句终判定排除小数点/连用省略号,右引号随前句;CaptionBar 按揭示游标滑窗,字幕栏 max-height 4.5em 兜底;答错反馈框限高三行可滚动。回归:`tests/whiteboard-caption-window.test.mjs`。
 - **公式 KaTeX 排版**(`whiteboard/FormulaBlock.tsx`):formula 动作不再把 LaTeX 源码当等宽文本上板——懒加载 katex 异步 chunk(仅公式出现时下载)+display 排版,throwOnError:false+错误段标红,失败回退等宽源码;**Vite 资产管线原生处理 node_modules CSS 字体**(主站 vinext 需 postbuild 同步,SPA 不需要——两套管线差异别搞混);契约 `tests/build-assets.test.mjs` lattice 段。
 - **diagram CJK 测量与折行**:节点盒宽改 `measureText` 逐字真实测量(CJK 17px/拉丁 7.6px/宽窄符分档,此前一律 7.6 致 CJK 盒宽低估一半、文字溢出互压);标签按 `LABEL_MAX_W=158px` 折行(≤3 行,超出省略号),盒随内容;边标签同法。回归:`tests/hyperknow-diagram.test.mjs` CJK 用例。

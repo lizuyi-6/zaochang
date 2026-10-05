@@ -104,7 +104,7 @@ function GeneralTab({ state, set }: Pick<PageProps, 'state' | 'set'>) {
       <div className="sm-section">
         <h3 className="sm-section-title">{t('settings.account')}</h3>
         <div className="sm-panel sm-account">
-          {/* 造场账户身份(启动时 get_user_info 拉取);null = 纯静态演示 → 复刻假身份 */}
+          {/* 造场账户身份(启动时 get_user_info 拉取);null = 纯静态演示 → 演示假身份 */}
           {state.identity ? (
             <span className="sm-avatar-initial">{(state.identity.username || state.identity.email)[0].toUpperCase()}</span>
           ) : (

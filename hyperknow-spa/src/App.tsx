@@ -209,7 +209,7 @@ export const App: React.FC = () => {
 
   /* 启动即同步造场账户:身份(get_user_info)+ 历史会话(list_past_conversations)
    * + 课程市场(marketplace/courses,本人 D1 课程 + 官方样例)。
-   * 后端按会话成员隔离;纯静态托管下 fetch 失败 → null,UI 回退复刻演示数据。 */
+   * 后端按会话成员隔离;纯静态托管下 fetch 失败 → null,UI 回退演示数据。 */
   useEffect(() => {
     let alive = true;
     void (async () => {

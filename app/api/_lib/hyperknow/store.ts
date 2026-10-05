@@ -1,8 +1,8 @@
 import { database } from "../community";
 
-// Hyperknow Agent 的 D1 持久化(替代原 store.json 单文件库)。
-// 原版三个桶 users/conversations/courses 中:users 由造场 members 统一承担
-// (假鉴权/明文密码不移植),whiteboards 桶在原版本就空置未用——这里落地为
+// 见界学习 Agent 的 D1 持久化(替代早期 store.json 单文件库)。
+// 早期三个桶 users/conversations/courses 中:users 由造场 members 统一承担
+// (假鉴权/明文密码不保留),whiteboards 桶在早期版本就空置未用——这里落地为
 // hk_whiteboard_sessions(白板无状态化后用于跨请求携带讲座计划与归属校验)。
 // 归属列 user_email FK → members.email,越权由路由层 404(不泄露存在性)。
 

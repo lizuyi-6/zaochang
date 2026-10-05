@@ -8,7 +8,7 @@ import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import './SignIn.css';
 
 /**
- * 登录屏:版式 1:1 复刻,但认证不做伪造——登录统一交给造场账户
+ * 登录屏:认证不做伪造——登录统一交给造场账户
  * (站内 /signin 的 lattice 变体:仅邮箱验证码,无第三方 OAuth)。
  * 点击后整页跳转到造场登录,成功后经 return_to 回到 /lattice/。
  */

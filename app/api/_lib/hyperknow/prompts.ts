@@ -1,14 +1,11 @@
-// Hyperknow Agent 提示词与输出解析(纯模块,零 import,可被单测直接加载)。
-// 四段 system prompt 与全部 fallback 行为逐字搬运自 1:1 复刻项目
-// (hyperknow_bundle/hyperknow/backend/src/agents/*),不改一个字的措辞——
-// 这是复刻的"内容层契约",改动会破坏与官方站的像素级对齐。
-// 获准的偏离(2026-10-01,产品决定):Content Generator 的 persona 从
-// "Hyperknow AI Study Agent" 改为 LATTICE AI Study Agent,并新增
+// 见界学习 Agent 提示词与输出解析(纯模块,零 import,可被单测直接加载)。
+// 四段 system prompt 与全部 fallback 行为是本模块的"内容层契约",
+// 措辞变更视为产品行为变更,需配合测试更新一起审。
+// Content Generator 的 persona 为 LATTICE AI Study Agent,并带
 // chatIdentityPrompt 身份保密块——对话模型对外必须自报见界自研,不泄露上游。
-// 解析策略与原版一致:JSON.parse 直接解析,失败走确定性 fallback,不重试。
+// 解析策略:JSON.parse 直接解析,失败走确定性 fallback,不重试。
 
-// 推理模型路径(Messages 协议 + thinking)不单独调 Director,用这条静态 guideline
-// ——与原版 chatWs.js 的 isReasoningModel 分支逐字一致。
+// 推理模型路径(Messages 协议 + thinking)不单独调 Director,用这条静态 guideline。
 export const FALLBACK_GUIDELINE = "Apply educational scaffolding, definitions, examples, and key takeaways.";
 
 // ── Content Generator(内容生成,流式)────────────────────────────────────
@@ -114,7 +111,7 @@ export function parseNextSteps(jsonStr: string): NextStepsData {
 }
 
 // ── Whiteboard Instructor(白板讲师 + 举手插话)────────────────────────────
-export const WHITEBOARD_INSTRUCTOR_PROMPT = `# Role: Hyperknow Whiteboard Instructor
+export const WHITEBOARD_INSTRUCTOR_PROMPT = `# Role: Lattice Whiteboard Instructor
 You are an expert tutor delivering an engaging, interactive FULL-LENGTH lecture on an infinite digital whiteboard.
 You break explanations into sequential, progressive STEPS, speaking with warm conversational narration while progressively building cards, diagrams, formulas, and interactive checkpoints on the board. The lecture should feel like a complete tutoring session (roughly 15-25 minutes), not a quick summary.
 
@@ -219,7 +216,7 @@ Output your response strictly as JSON:
   ]
 }`;
 
-export const INTERJECTION_ANSWER_PROMPT = `# Role: Hyperknow Whiteboard Assistant
+export const INTERJECTION_ANSWER_PROMPT = `# Role: Lattice Whiteboard Assistant
 A student has raised their hand and interrupted your lecture with a question.
 
 How to answer (evidence-based tutoring):
@@ -680,7 +677,7 @@ export type CourseBlueprint = {
   units: CourseBlueprintUnit[];
 };
 
-export const COURSE_BLUEPRINT_PROMPT = `# Role: Hyperknow Curriculum Architect
+export const COURSE_BLUEPRINT_PROMPT = `# Role: Lattice Curriculum Architect
 You design university-grade, scaffolding-driven interactive course blueprints.
 For any given subject query, you structure a comprehensive curriculum blueprint:
 Course Title, Description, Target Learner, Tags, and a sequence of units matching target cognitive depth:
@@ -730,7 +727,7 @@ Output strictly as a valid JSON object conforming to:
   ]
 }`;
 
-export const UNIT_GENERATION_PROMPT = `# Role: Hyperknow Curriculum Unit Specialist
+export const UNIT_GENERATION_PROMPT = `# Role: Lattice Curriculum Unit Specialist
 You generate university-grade lectures and sessions for a single unit in a course curriculum.
 Language rule (HIGHEST PRIORITY): Follow the specified Preferred Language strictly. If "zh-CN", write EVERY title, description, lecture/session name in Simplified Chinese.
 

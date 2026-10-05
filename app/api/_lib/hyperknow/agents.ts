@@ -1,7 +1,7 @@
-// Hyperknow 四大 Agent(director / content / whiteboard / courseArchitect)。
-// 从原 agents/*.js 逐字移植:prompt 与 fallback 在 prompts.ts(纯模块),这里只做
-// LLM 编排。原版四个类是无状态单例、只依赖 llmService——Workers 版保持无状态,
-// 会话历史由路由层从 D1 读出再传入(原版的连接级内存 history 数组随 WS 一起退役)。
+// 见界学习 Agent 的四个编排 Agent(director / content / whiteboard / courseArchitect)。
+// prompt 与 fallback 在 prompts.ts(纯模块),这里只做
+// LLM 编排。四个编排面是无状态单例、只依赖 llm 客户端——
+// 会话历史由路由层从 D1 读出再传入(连接级内存 history 数组随 WS 一起退役)。
 
 import { chat, streamChat, streamChatOpenAI, type LlmMessage } from "./llm";
 import {

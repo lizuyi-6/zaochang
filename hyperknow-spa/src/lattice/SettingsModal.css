@@ -413,7 +413,7 @@
   color: var(--ink-300);
 }
 
-/* 造场账户首字母头像(与 AvatarCat 同尺寸同位;复刻演示回退仍用猫头像) */
+/* 造场账户首字母头像(与 AvatarCat 同尺寸同位;演示回退仍用猫头像) */
 .sm-avatar-initial {
   width: 44px;
   height: 44px;

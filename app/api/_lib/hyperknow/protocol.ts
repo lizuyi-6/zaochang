@@ -1,8 +1,8 @@
 // 见界 运行时纯逻辑(零 import,单测直接加载):
 // - MessagesStreamParser:StepFun/Anthropic Messages SSE 的增量行解析器,把
 //   thinking_delta 与 text_delta 分流(与 reading-ai-provider 刻意丢弃思维链不同,
-//   复刻版把 thinking 增量映射为 directorAgent 思考过程实时展示,这是产品语义的一部分)。
-// - TTS 文本净化 / 缓存 key / 讲步时长:从原 ttsService.js 与 whiteboardWs.js 逐字搬运。
+//   本模块把 thinking 增量映射为 directorAgent 思考过程实时展示,这是产品语义的一部分)。
+// - TTS 文本净化 / 缓存 key / 讲步时长公式。
 
 export type StreamChunk = { type: "thinking" | "text"; text: string };
 

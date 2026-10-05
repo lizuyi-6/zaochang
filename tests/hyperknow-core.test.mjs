@@ -1,4 +1,4 @@
-// Hyperknow Agent 纯逻辑单测(零 Wrangler/网络):SSE 流解析、thinking/text 分流、
+// 见界学习 Agent 纯逻辑单测(零 Wrangler/网络):SSE 流解析、thinking/text 分流、
 // TTS 文本净化与缓存 key、白板节奏公式、四个 Agent 的 JSON 解析 fallback。
 // 被测模块全部零 import(--experimental-strip-types 直接加载 .ts 源码)。
 import { test } from "node:test";

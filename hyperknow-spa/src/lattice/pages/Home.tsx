@@ -150,7 +150,7 @@ export const Home = ({ state, set }: PageProps) => {
   };
 
   const copyInvite = async () => {
-    const ok = await copyText(`${window.location.origin}/?utm_source=hyperknow&utm_medium=invite`);
+    const ok = await copyText(`${window.location.origin}/?utm_source=lattice&utm_medium=invite`);
     toast(ok ? L('Invite link copied — share it with a friend', '邀请链接已复制——发给朋友吧') : L('Could not copy the link', '复制链接失败'));
   };
 

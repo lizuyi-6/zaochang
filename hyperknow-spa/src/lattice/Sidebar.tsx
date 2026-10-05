@@ -242,7 +242,7 @@ export const LatticeSidebar: React.FC<{ state: AppState; set: AppAction }> = ({ 
             <div className="hk-activities" style={{ overflowY: 'auto' }}>
               {/* 真实历史(按造场账户隔离);null 且 bootReady=false = 首次拉取在途,
                * 渲染加载骨架,不再先展示演示数据又被真实结果替换(生产环境闪现);
-               * null 且 bootReady = 拉取失败/纯静态托管,回退复刻演示列表;
+               * null 且 bootReady = 拉取失败/纯静态托管,回退演示列表;
                * [] = 真实为空,展示空态而非假数据。 */}
               {state.conversations === null
                 ? !state.bootReady

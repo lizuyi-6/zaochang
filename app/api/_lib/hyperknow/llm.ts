@@ -1,14 +1,14 @@
 import { resolveConfigOrThrow, HyperknowNotConfiguredError } from "./config";
 import { consumeMessagesSse, consumeChatCompletionsSse, type StreamChunk } from "./protocol";
 
-// Hyperknow LLM 客户端:StepFun/Anthropic Messages 协议,fetch + Web Streams
-// (从原 llmService.js 移植,删掉 OpenAI SDK 回退)。错误语义分层与 reading-ai
+// 见界 LLM 客户端:StepFun/Anthropic Messages 协议,fetch + Web Streams。
+// 错误语义分层与 reading-ai
 // provider 对齐:
 // - 配置缺失 → HyperknowNotConfiguredError(503,发流之前,路由可回干净 JSON);
 // - 上游连接失败/非 2xx → HyperknowUpstreamError(发流之前,路由可回干净 JSON);
 // - 流中失败 → 由路由补 error 帧收尾。
 // 与 reading-ai 的关键差异:thinking_delta 不丢弃,原样上抛(映射为 directorAgent
-// 思考过程);max_tokens/thinking 预算沿用原版数值(384 流式 / 256 JSON)。
+// 思考过程);max_tokens/thinking 预算 384 流式 / 256 JSON。
 
 export class HyperknowUpstreamError extends Error {
   readonly code: "ai_upstream_error" | "ai_auth_failed" | "ai_rate_limited";

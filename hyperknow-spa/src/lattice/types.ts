@@ -71,7 +71,7 @@ export interface AppState {
   bootReady: boolean;
   /** 订阅档位(展示态;backend 目前统一 FREE,兑换码/付款尚未接通) */
   plan: 'FREE' | 'PRO' | 'MAX';
-  /** 当前成员历史会话(null = 拉取失败,回退复刻演示列表;[] = 真实为空) */
+  /** 当前成员历史会话(null = 拉取失败,回退演示列表;[] = 真实为空) */
   conversations: ConvRow[] | null;
   /** 课程市场(D1 本人课程 + 官方样例;null = 未拉到/不可用,集市与我的课程回退演示卡) */
   marketCourses: MarketCourse[] | null;
@@ -111,7 +111,7 @@ export const PLANS: Array<{
 
 export const initialAppState: AppState = {
   /* 真实部署下 /lattice/* 已由主站 Worker 门禁保护——能进来的必然已登录,
-   * 落地屏必须是应用本体(Home);#/signin 仅作复刻深链保留。
+   * 落地屏必须是应用本体(Home);#/signin 仅作深链保留。
    * 曾默认 'signin':已登录用户进门即见登录屏,点"造场账户登录"被 Worker 302
    * 弹回 /lattice/,再见登录屏——正是用户报告的"反复跳回登录页"回环。 */
   screen: 'home',

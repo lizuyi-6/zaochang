@@ -149,15 +149,15 @@ test("lattice-brand: size changes preserve viewBoxes and repeated illustrations 
 });
 
 test("lattice-brand: public SVG assets retain basic standalone XML validity", () => {
-  // Preserve compatibility filenames; only branding content is expected to change.
-  const paths = ["hyperknow_logo.svg", "hyperknow-logo-w-text.svg", "translate.svg", "avatar/1.svg",
+  // 文件名 2026-10-05 已随旧品牌清除改名(hyperknow_* → lattice_*);内容同步受检。
+  const paths = ["lattice_logo.svg", "lattice-logo-w-text.svg", "translate.svg", "avatar/1.svg",
     ...readdirSync(new URL("public/accountDropdown/", spa)).filter(name => name.endsWith(".svg")).map(name => `accountDropdown/${name}`)];
   for (const path of paths) {
     const xml = readFileSync(new URL(`public/${path}`, spa), "utf8");
     assert.doesNotThrow(() => svgBasics(xml), path);
     assert.doesNotMatch(xml.replace(/<[^>]*>/g, ""), /hyperknow/i, path);
   }
-  const wordmark = readFileSync(new URL("public/hyperknow-logo-w-text.svg", spa), "utf8").replace(/<[^>]*>/g, "");
+  const wordmark = readFileSync(new URL("public/lattice-logo-w-text.svg", spa), "utf8").replace(/<[^>]*>/g, "");
   assert.match(wordmark, /见界/);
   assert.match(wordmark, /LATTICE/i);
 });
@@ -181,7 +181,7 @@ test("lattice-brand: document title and key localized auth branding contain no o
 
 test("lattice-brand: no old brand token anywhere in SPA source (values, keys, literals, filenames)", () => {
   // 回归审计 R-001(2026-10-03):更名见界/LATTICE 时只改了字典值,漏了硬编码 L() 字面量
-  // 与字典里的提示语文案(含指向 hyperknow.io 的死邮箱)。本守卫把整类问题锁死:
+  // 与字典里的提示语文案(含指向旧域名的死邮箱)。本守卫把整类问题锁死:
   // SPA 源码任何文件不得再出现大小写敏感的 "Hyperknow"——内部标识符(hyperknow 包名、
   // /api/hyperknow/* 路径、注释)是小写,不受影响。
   const offenders = [];

@@ -9,7 +9,7 @@ import { resolveEffectiveLanguage } from "../../../_lib/hyperknow/protocol";
 
 export const dynamic = "force-dynamic";
 
-// 白板讲座规划端点(原 ws/whiteboardWs.js 的无状态化改造,见 HYPERKNOW.md)。
+// 白板讲座规划端点(无状态化设计,见 LATTICE.md)。
 // 严格校验课程归属与权限，锁定 courseUuid/unitId/lectureId/sessionId 上下文，绝不默认第一讲。
 
 const DEFAULT_TOPIC = "Introduction to Learning Concepts";

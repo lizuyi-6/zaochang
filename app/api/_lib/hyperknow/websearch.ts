@@ -1,5 +1,5 @@
-// 课程生成的联网研学。原复刻版 courseGenWs 的 researching_the_web 是纯装饰
-// (固定 sleep + 假 "round 1/3" 帧);Workers 版接真搜索供应商,把研学结果注入
+// 课程生成的联网研学。早期版本的 researching_the_web 是纯装饰
+// (固定 sleep + 假 "round 1/3" 帧);本模块接真搜索供应商,把研学结果注入
 // 大纲提示词。纪律与站内其余双轨一致:
 // - 供应商可插拔(stepfun/tavily/brave/cloudflare),按 env 现有配置与密钥自动选择;
 //   HK_WEB_SEARCH_PROVIDER 可显式指定或 "off" 关闭。默认优先现有 AI 渠道 (stepfun)。

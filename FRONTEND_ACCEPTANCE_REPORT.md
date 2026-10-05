@@ -71,7 +71,7 @@
 ## 8. 自动化门控(真实结果)
 
 - `npx tsc --noEmit`:**0 错误**(修复 F-11 后)
-- `npm run lint`:**0 error / 7 warning**(全部为 hyperknow 模块历史遗留 unused-vars，非本轮改动文件；本轮触及的 7 个文件单独 lint 0 警告)
+- `npm run lint`:**0 error / 7 warning**(全部为见界模块历史遗留 unused-vars，非本轮改动文件；本轮触及的 7 个文件单独 lint 0 警告)
 - `npm test`:**340/340 通过,0 fail 0 skip**(6 套件，含构建，最终修复后重跑两次均绿)
 - `npm run db:generate`:"No schema changes"(无意外 schema 漂移)
 - `git diff --check`:干净(仅 CRLF 提示)
@@ -84,7 +84,7 @@
 2. 果子成功路径的验收使用了本地库直接注资(双入口一致);生产环境无此通道，该路径上线前建议用运营发放工具再验一次。
 3. 站内预置作品封面依赖 Unsplash(R-06),弱网/被墙环境会破图。
 4. 本轮在 dev 环境验证；Workers 生产边缘行为(缓存、地区延迟)未在本轮覆盖。
-5. hyperknow(见界)模块有大量未提交的并行改动(非本轮范围);其 lint 警告建议由对应负责人清理。
+5. 见界(lattice)模块有大量未提交的并行改动(非本轮范围);其 lint 警告建议由对应负责人清理。
 
 ## 10. 发布建议
 

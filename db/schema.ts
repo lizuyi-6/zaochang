@@ -975,11 +975,11 @@ export const readingProgress = sqliteTable(
   ],
 );
 
-// ── Hyperknow Agent(1:1 复刻 agent.hyperknow.io 的学习 Agent)───────────────
-// 三张表的归属列统一 FK → members.email(替代原复刻项目 store.json 的无归属
+// ── 见界学习 Agent(Lattice)──────────────────────────────────────
+// 三张表的归属列统一 FK → members.email(替代早期 store.json 的无归属
 // 单文件库);越权由 API 层 fail-closed 404 把关,不依赖 DB 触发器(无资金语义,
 // 无不可变账本需求)。
-// 学习对话:每会话一行,history_json 存完整 [{role, content}] 轮次(与原版
+// 学习对话:每会话一行,history_json 存完整 [{role, content}] 轮次(与早期
 // store.json 的 conversations 桶同构);列表/详情由 API 层按 user_email 隔离。
 export const hkConversations = sqliteTable(
   "hk_conversations",

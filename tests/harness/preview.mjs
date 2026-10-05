@@ -175,7 +175,7 @@ export async function startFakeAiUpstream() {
   };
     aiServer = createServer(async (request, response) => {
       // 六种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
-      // 专家模型与 Hyperknow Agent 共用)、/v1/audio/speech(Hyperknow TTS)、
+      // 专家模型与见界 Agent 共用)、/v1/audio/speech(见界 TTS)、
       // /v1/images/generations(StepFun 生图)、/v1/search(StepFun 独立搜索——
       // 课程研学与首页资讯)、/search(假 Tavily)。
       const isMessages = request.url === "/v1/messages";
