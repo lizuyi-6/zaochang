@@ -336,6 +336,13 @@ test("security: /product-apps/* 允许同源 iframe", () => {
   assert.ok((secured.headers.get("content-security-policy") ?? "").includes("frame-ancestors 'self'"));
 });
 
+test("security: 默认页 permissions-policy 放行同源相机(扫一扫),麦克风/定位仍关", () => {
+  // 曾全站 camera=()(无相机时代的加固):它会在策略层拒绝 getUserMedia,
+  // 用户级权限给到天上也无用。现 camera=(self);GitHub 连接页维持全关。
+  const secured = withSecurityHeaders(new Request(`${ORIGIN}/signin/qr/scan`), htmlResponse(), ORIGIN);
+  assert.equal(secured.headers.get("permissions-policy"), "camera=(self), microphone=(), geolocation=(self), payment=()");
+});
+
 test("security: /api/auth/github/start 使用连接页专用 CSP", () => {
   const secured = withSecurityHeaders(new Request(`${ORIGIN}/api/auth/github/start`), htmlResponse(), ORIGIN);
   assert.equal(secured.headers.get("referrer-policy"), "no-referrer");

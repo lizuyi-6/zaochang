@@ -243,6 +243,8 @@ class MainActivity : Activity() {
       setSupportMultipleWindows(false)
       javaScriptCanOpenWindowsAutomatically = false
       setGeolocationEnabled(false)
+      // getUserMedia 起播不依赖手势(扫码页按钮本身即用户意图);不影响权限门控。
+      mediaPlaybackRequiresUserGesture = false
       cacheMode = WebSettings.LOAD_DEFAULT
     }
     CookieManager.getInstance().setAcceptCookie(true)
@@ -510,7 +512,9 @@ class MainActivity : Activity() {
     callback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
   }
 
-  /** 系统相机权限对话框回来:授权则续接此前挂起的 getUserMedia,拒绝通知页面。 */
+  /** 系统相机权限对话框回来:授权则拒绝旧请求并重载页面——WebView 已知行为是
+   *  「授权前发起的取流请求,当次 grant() 仍可能被拒」(首次授权需重启才生效),
+   *  重载让页面在权限已持有的状态下重新发起,再点一次立即成功,无需重启 App。 */
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     if (requestCode != REQUEST_CAMERA) return
@@ -518,7 +522,12 @@ class MainActivity : Activity() {
     pendingCameraRequest = null
     if (request == null || destroyed) return
     val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
-    if (granted) request.grant(request.resources) else request.deny()
+    if (granted) {
+      runCatching { request.deny() }
+      if (this::web.isInitialized) web.reload()
+    } else {
+      request.deny()
+    }
   }
 
   /**

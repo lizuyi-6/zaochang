@@ -222,3 +222,20 @@ test("qr-contract: 扫一扫页公开可访(反向流程手机未登录也要能
   assert.match(confirmPage, /getOAuthSessionUser/, "正向确认页必须校验登录");
   assert.match(confirmPage, /先登录，再确认/, "未登录落点文案在位");
 });
+
+test("qr-contract: 扫码组件 <video> 只在拿到流后挂载(空 video 渲染内核巨大播放占位图)", () => {
+  const scanner = read("app/signin/qr/scan/qr-scanner.tsx");
+  assert.match(scanner, /\{stream && <video/, "video 必须条件挂载");
+  assert.match(scanner, /video\.srcObject = stream/, "流必须在挂载后接入");
+  assert.match(scanner, /NotAllowedError/, "权限错误需可诊断");
+  assert.match(scanner, /inAppWebview/, "App 内/浏览器错误文案必须分流");
+  assert.match(scanner, /\{ video: true, audio: false \}/, "约束回落在位");
+});
+
+test("qr-contract: 壳在首次相机授权后重载页面(WebView 首次授权当次 grant 仍被拒的已知坑)", () => {
+  const activity = read("android/app/src/main/java/top/aetherstudio/zaochang/MainActivity.kt");
+  const grantPart = activity.slice(activity.indexOf("onRequestPermissionsResult"));
+  assert.match(grantPart, /web.reload()/, "授权后必须重载而非续接旧请求");
+  assert.match(grantPart, /request.deny()/, "旧请求必须显式清理");
+  assert.match(activity, /mediaPlaybackRequiresUserGesture = false/, "起播不依赖手势");
+});

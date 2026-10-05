@@ -26,7 +26,10 @@ export function withSecurityHeaders(request: Request, response: Response, public
   headers.set("referrer-policy", githubConnection ? "no-referrer" : "strict-origin-when-cross-origin");
   headers.set("permissions-policy", githubConnection
     ? "camera=(), microphone=(), geolocation=(), payment=()"
-    : "camera=(), microphone=(), geolocation=(self), payment=()");
+    // camera=(self):扫一扫(/signin/qr/scan)需要 getUserMedia。曾全站 camera=()
+    // (无相机时代的加固),它会在策略层直接拒绝取流——用户级权限给到天上也无用。
+    // 麦克风维持关闭;定位仅本站;壳的 onPermissionRequest 在客户端再拦一层。
+    : "camera=(self), microphone=(), geolocation=(self), payment=()");
   headers.set("cross-origin-opener-policy", "same-origin");
   if (new URL(publicOrigin).protocol === "https:") {
     headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");

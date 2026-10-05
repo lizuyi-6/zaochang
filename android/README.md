@@ -88,6 +88,8 @@ cd android
 
 ## 更新记录
 
+- **v1.2.1(versionCode 5,2026-10-05)**:相机修复。根因是站点自己的安全头——`permissions-policy` 曾全站 `camera=()`(无相机时代的加固),在策略层直接拒绝 getUserMedia,任何客户端权限都无效;Web 侧改 `camera=(self)`(GitHub 连接页维持全关)。壳侧按 WebView 已知坑加固:首次相机授权回调后不再续接旧请求(当次 grant 仍可能被拒),改为重载页面让页面在权限已持有时重新发起;新增 `mediaPlaybackRequiresUserGesture=false`。Web 扫码组件:`<video>` 只在拿到流后挂载(空 video 在国产内核渲染巨大播放占位图),错误文案按 App 内/浏览器分流,后置约束不可用时回落任意摄像头。
+
 - **v1.2.0(versionCode 4,2026-10-05)**
   - **扫码登录(全栈,双向)**:正向(手机已登录 → 电脑未登录)在登录页展示 QR,手机确认后电脑登录;反向(电脑已登录 → 手机未登录)在个人页「让手机扫码登录」展示 QR + 6 位配对码,手机扫码输码、桌面显式「允许」后手机登录(多两道验证:二维码可能被截图/旁观)。`/api/auth/qr/{start,poll,confirm,host,pair,claim,host-state,approve}` 路由 + `qr_login_sessions` 表(迁移 `0029`,auth_sessions provider CHECK 扩 `'qr'` 整表重建)。token 一次性、只存 SHA-256、2 分钟 TTL;全部状态迁移条件 UPDATE + `meta.changes` 原子判定;会话与 GitHub/邮箱码/passkey 同管线(provider `'qr'`);配对码错 5 次整行作废;方向互斥(正向行 pair_code_hash='',反向行非空,互相不可消费)。手机端 `/signin/qr/scan` 纯 JS 扫码(jsQR,不依赖 Play Services 的 BarcodeDetector),只认同源两类登录链接并按路径分流。
   - **应用内更新**:清单 `android.latest*` 驱动「新版可用」横幅(可划掉,同版本不再打扰);立即更新走自研下载器 + PackageInstaller,受系统「安装未知应用」门控(授权页回来自动续装);强制升级页也新增「下载新版本」。AppShell 解析 `android.*` 时 fail-closed(版本必须是真 Int、downloadUrl 必须 https+站点主机)。
