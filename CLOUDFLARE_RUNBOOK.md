@@ -25,6 +25,10 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
       Cloudflare Tunnel (cloudflared, 出站, 绕开 ICP/beaver 入站封锁)
         ▼
       阿里云主机 127.0.0.1:3311  zaochang-upload-scanner.service (ClamAV)
+
+状态页:https://status.aetherstudio.top(独立 Tunnel zaochang-status-cibox)
+        ▼
+      华为云北京主机(1.92.152.128)  zc-status.service :8080 ← /var/log/zc-mon.jsonl(5 分钟探针)
 ```
 
 - **Web/DB/存储/DNS 全部在 Cloudflare**;阿里云主机**只剩一个职责:跑 ClamAV 扫描后端**。
@@ -49,6 +53,9 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 | R2 | `zaochang-uploads` |
 | 生产 Tunnel | `zaochang-scanner-local` / `ddc84c25-2f91-4f68-81b2-66572cc06eb2`(**本地托管**,盒子) |
 | Tunnel DNS | `scanner.aetherstudio.top` CNAME → `ddc84c25-...cfargotunnel.com`(proxied) |
+| 状态页 Tunnel | `zaochang-status-cibox` / `1e9c7b9d-d68d-45eb-99c0-db19c5b29919`(连接器在华为云北京主机,`/etc/cloudflared/`,systemd `zc-cloudflared`) |
+| 状态页 DNS | `status.aetherstudio.top` CNAME → `1e9c7b9d-...cfargotunnel.com`(proxied) |
+| 华为云北京主机 | EIP `1.92.152.128`,2C/1.7G,Ubuntu 24.04;职责:生产可达性探针 + 状态页(:8080,SG 已放行);GitHub 出站经 usvps 反向 SOCKS(127.0.0.1:1080) |
 | 阿里云主机 | EIP `39.96.196.207`,eth0 `172.27.78.123`,Ubuntu 26.04 x86_64 |
 | SSH | `ssh -i ~/.ssh/zaochang-deploy.pem root@39.96.196.207` |
 | GitHub OAuth App | `Ov23livgjlLc01RdgmuN` |
