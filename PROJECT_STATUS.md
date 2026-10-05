@@ -848,3 +848,17 @@
 - 改动:底部栏固定五栏 首页/探索/＋发布(居中凸起)/动态/我的,书架、圈子让位;标签 10px、网格项 align-items:stretch 拉满栏高、激活项加粗;≤900px 恢复通知铃铛(44×44),640px 顶栏列改 auto 容纳铃铛+头像。文件:app/components/site-shell.tsx、app/globals.css、tests/modularization-contracts.test.mjs。
 - 证据:npx tsc --noEmit exit=0;npm run lint exit=0;npm test 539/539(fail=0、skipped=0、todo=0,较基线 538 新增 1 条 mobile-nav 契约钉:白名单/渲染顺序/铃铛可见性/字号)。本地 dev(localhost:5200)390×844 实测:发布钮圆心 x=190.5≈栏中心 190、标签 fontSize=10px、tab 热区 72×56、铃铛 44×44 可见;320×640 scrollWidth-clientWidth=0 无横向溢出。
 - 没做:未推送未部署;安卓/iOS 真机 WebView 未实测;未登录点「我的」落到既有 /profile 登录引导页,未新增处理;书架降级后手机端入口为首页区块与搜索,未在其他页面新增链接。
+
+
+## 2026-10-05 手机底部导航重构生产上线(App 走网页增量更新)
+
+- 状态:网页部分已上线;真机未实测。提交 1eb8bb3abf65437bfa0c02444c64cc75ecb0d920 推送 github/main;release-gates run 37297386968、deploy-production run 37297648142 均 conclusion==success(gh run watch --exit-status exit=0),迁移门禁 fail-closed 通过。本次纯网页改动(站壳 tsx + CSS + 契约测试),无原生壳变更,故不发 APK:App WebView 加载线上站点,用户下次打开即增量生效。
+- 线上复验(390×844 Chromium,https://aetherstudio.top/):底部五栏 首页(x=10)/探索(82)/＋发布(168,圆心 190.5≈栏中心 190)/动态(226)/我的(298),标签 fontSize=10px,tab 热区 72×56,发布钮 45px 居中凸起;顶栏通知铃铛 display=flex、44×44 恢复可见。与本地 dev 实测一致。
+- 没做:安卓/iOS 真机与 WebView 未实测(无连接设备);未登录态点击「我的」走既有 /profile 登录引导页;旧缓存页面跨版本边界未逐一验证。
+
+## 2026-10-05 个人主页手机版式修复 + /app/version 版本页 + 壳 v1.2.2
+
+- 状态:本地完成,待部署。用户真机截图验收:个人主页动作列手机端半宽竖排留白难看;需要单独页面展示当前 App 版本与相关信息。
+- 改动:①profile-actions ≤640px 改全宽列表行(46px 高、11px 字),新增「App 与版本」入口;②新页 /app/version:当前安装版本(客户端 UA 识别:ZaochangApp/x.y.z → 已是最新/可更新;旧壳 ≤1.2.1 → 「版本未上报」引导更新;浏览器 → 下载引导)、线上最新版事实、站点构建号、权限与更新机制说明;③壳 v1.2.2(versionCode 6):WebView UA 末尾追加 ZaochangApp/<versionName>(PackageManager 取值,与 versionCode() 同源;不启用 AGP9 默认关闭的 BuildConfig);④app-shell 清单常量抽到 shell-manifest.ts 供路由与页面共用,buildId 2026-10-05.4;⑤APP_DOWNLOAD 常量更新至 1.2.2(sha256 fd507732…,672926 字节),APK 落 public/downloads(旧版本保留可回滚)。
+- 证据:tsc --noEmit exit=0;npm run lint exit=0;npm test 542/542(fail=0、skipped=0;新增 UA 三态解析/版本名比较单测、壳-站版本一致性钉、/app/version SSR 断言)。一轮 541/542 的 failure 是本地 dev 服务器与 harness 生产子服务器并发抢资源启动超时,停掉 dev 后复跑全绿。本地 390×844 截图验证 /app/version 浏览器态与 /profile 修复后版式。
+- 没做:真机/模拟器装 v1.2.2 实测 UA 上报链,部署后补验;旧壳 legacy 分支仅有单测与源码钉,未做真机截图。

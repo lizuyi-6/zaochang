@@ -246,6 +246,10 @@ class MainActivity : Activity() {
       // getUserMedia 起播不依赖手势(扫码页按钮本身即用户意图);不影响权限门控。
       mediaPlaybackRequiresUserGesture = false
       cacheMode = WebSettings.LOAD_DEFAULT
+      // UA 末尾追加壳版本标记,/app/version 页据此展示当前安装版本并与清单比对。
+      // "; wv)" 段保持不动,既有 WebView 检测(qr-scanner inAppWebview)不受影响。
+      // 不启用 BuildConfig(AGP9 默认不生成),版本名与 versionCode() 同源取自 PackageManager。
+      userAgentString = "$userAgentString ZaochangApp/${shellVersionName()}"
     }
     CookieManager.getInstance().setAcceptCookie(true)
     view.webViewClient = ShellWebViewClient()
@@ -694,6 +698,9 @@ class MainActivity : Activity() {
     }
     return code.toInt()
   }
+
+  private fun shellVersionName(): String =
+    packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown"
 
   // ————————————————————————— 应用内更新 —————————————————————————
 

@@ -68,6 +68,7 @@ const routeNames: Record<string, string> = {
   "/collections": "灵感收藏",
   "/bookshelf": "书架",
   "/app": "造场 App",
+  "/app/version": "App 版本与信息",
   "/lattice/": "见界研学",
   "/docs": "造场文档",
   "/studio/docs": "文档管理",

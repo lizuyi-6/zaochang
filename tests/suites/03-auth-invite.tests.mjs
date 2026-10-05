@@ -236,6 +236,17 @@ test("/app download page links to the published APK", async () => {
   assert.match(html, /造场 App/);
 });
 
+test("/app/version page renders latest-version facts and the client status island placeholder", async () => {
+  const response = await fetch(`${baseUrl}/app/version`, { headers: { accept: "text/html" } });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /App 版本与信息/);
+  assert.match(html, new RegExp(APP_DOWNLOAD.versionName));
+  assert.match(html, new RegExp(APP_DOWNLOAD.sha256));
+  // 环境识别在客户端挂载后替换(SSR 统一占位,避免 hydration 不一致)。
+  assert.match(html, /正在识别运行环境/);
+});
+
 test("keeps sign-in outside the community shell", async () => {
   const response = await fetch(`${baseUrl}/signin`, { headers: { accept: "text/html" } });
   assert.equal(response.status, 200);

@@ -88,6 +88,8 @@ cd android
 
 ## 更新记录
 
+- **v1.2.2(versionCode 6,2026-10-05)**:WebView UA 末尾追加 `ZaochangApp/<versionName>` 标记(取自 PackageManager,与 `versionCode()` 同源;不启用 AGP9 默认关闭的 BuildConfig)。站点新增 `/app/version` 页:据此展示当前安装版本并与清单最新版比对(已是最新/可更新/浏览器未安装三态);旧壳(≤1.2.1)无此标记,页面显示「版本未上报」并引导更新到本版。`; wv)` 特征段保持不动,既有 WebView 检测(qr-scanner)不受影响。
+
 - **v1.2.1(versionCode 5,2026-10-05)**:相机修复。根因是站点自己的安全头——`permissions-policy` 曾全站 `camera=()`(无相机时代的加固),在策略层直接拒绝 getUserMedia,任何客户端权限都无效;Web 侧改 `camera=(self)`(GitHub 连接页维持全关)。壳侧按 WebView 已知坑加固:首次相机授权回调后不再续接旧请求(当次 grant 仍可能被拒),改为重载页面让页面在权限已持有时重新发起;新增 `mediaPlaybackRequiresUserGesture=false`。Web 扫码组件:`<video>` 只在拿到流后挂载(空 video 在国产内核渲染巨大播放占位图),错误文案按 App 内/浏览器分流,后置约束不可用时回落任意摄像头。
 
 - **v1.2.0(versionCode 4,2026-10-05)**

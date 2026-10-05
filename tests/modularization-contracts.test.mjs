@@ -243,3 +243,31 @@ test("mobile-nav: 底部五栏为 首页/探索/中央发布/动态/我的,手�
   assert.match(css, /\.deep-mobile-nav a \{[^}]*font-size: 10px/, "底部栏标签字号必须是 10px");
   assert.match(css, /\.deep-mobile-nav \{[^}]*align-items: stretch/, "底部栏网格项必须拉满栏高(触控热区)");
 });
+
+// ---- 安卓壳 UA 契约 ----
+
+test("app-shell-ua: 三态解析(带版本新壳/旧壳/浏览器)与版本名比较", async () => {
+  const ua = await import("../app/lib/app-shell-ua.ts");
+  const WV = "Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A.230805.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36";
+  assert.deepEqual(ua.parseShellUserAgent(`${WV} ZaochangApp/1.2.2`), { kind: "shell", versionName: "1.2.2" });
+  assert.deepEqual(ua.parseShellUserAgent(WV), { kind: "legacy-shell" });
+  assert.deepEqual(ua.parseShellUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"), { kind: "browser" });
+  assert.equal(ua.compareVersionNames("1.2.1", "1.2.2"), -1);
+  assert.equal(ua.compareVersionNames("1.2.2", "1.2.2"), 0);
+  assert.equal(ua.compareVersionNames("1.10.0", "1.2.9"), 1);
+});
+
+test("app-shell-ua: 壳 UA 必须追加 ZaochangApp/<版本名>,且与站点发布常量一致", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const kt = read("../android/app/src/main/java/top/aetherstudio/zaochang/MainActivity.kt");
+  // /app/version 页的「当前安装版本」完全依赖这个 UA 标记;删掉它页面会退回「版本未上报」。
+  assert.match(kt, /userAgentString = "\$userAgentString ZaochangApp\//, "壳 UA 必须携带 ZaochangApp/ 版本标记");
+  // AGP9 默认不生成 BuildConfig,版本名必须与 versionCode() 同源取自 PackageManager。
+  assert.match(kt, /shellVersionName\(\)/, "版本名必须来自 PackageManager");
+  const gradle = read("../android/app/build.gradle.kts");
+  const versionName = /versionName = "([^"]+)"/.exec(gradle)?.[1];
+  assert.ok(versionName, "build.gradle.kts 必须声明 versionName");
+  const { APP_DOWNLOAD } = await import("../app/api/_lib/app-download.ts");
+  assert.equal(APP_DOWNLOAD.versionName, versionName, "站点发布常量与壳 versionName 必须一致");
+});
