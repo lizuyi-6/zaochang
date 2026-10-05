@@ -31,6 +31,11 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
       华为云北京主机(1.92.152.128)  zc-status.service :8080 ← /var/log/zc-mon.jsonl(5 分钟探针)
 ```
 
+状态页运维(华为云北京主机上):
+- 探针 `/opt/zc-mon/probe.sh`(cron `*/5`)覆盖 8 条链路:home/signin/version 页面、app-shell(纯 Worker)、shell-state(验 D1)、community(验 D1 聚合)、apk(HEAD,URL 从 /api/app-shell 动态解析,发新版无需改脚本)、scanner 隧道(404=存活)。公开页只显示职责描述,不暴露探测 URL。
+- 事件与公告:`zc-incident` CLI(软链到 /usr/local/bin,实文件 /opt/zc-status/zc-incident.mjs)维护 /opt/zc-status/incidents.json:`add --level info|degraded|down --title … --text …`、`update <id> --text …`、`resolve <id> --text …`、`list`。未解决的非 info 事件会把页面总状态抬升为降级/故障。
+- 页面源码 /opt/zc-status/server.mjs(零依赖 Node);改版先备份同目录 server.mjs.bak-*。
+
 - **Web/DB/存储/DNS 全部在 Cloudflare**;阿里云主机**只剩一个职责:跑 ClamAV 扫描后端**。
 - 旧 workerd(`zaochang.service` :3001)与盒子 nginx Web 入口(443)**已停用**。
 - 登录:GitHub OAuth(回调 `https://aetherstudio.top/api/auth/github/callback`)**或邮箱验证码**
