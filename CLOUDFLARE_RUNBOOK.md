@@ -35,6 +35,7 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 - 探针 `/opt/zc-mon/probe.sh`(cron `*/5`)覆盖 8 条链路:home/signin/version 页面、app-shell(纯 Worker)、shell-state(验 D1)、community(验 D1 聚合)、apk(HEAD,URL 从 /api/app-shell 动态解析,发新版无需改脚本)、scanner 隧道(404=存活)。公开页只显示职责描述,不暴露探测 URL。
 - 事件与公告:`zc-incident` CLI(软链到 /usr/local/bin,实文件 /opt/zc-status/zc-incident.mjs)维护 /opt/zc-status/incidents.json:`add --level info|degraded|down --title … --text …`、`update <id> --text …`、`resolve <id> --text …`、`list`。未解决的非 info 事件会把页面总状态抬升为降级/故障。
 - 页面源码 /opt/zc-status/server.mjs(零依赖 Node);改版先备份同目录 server.mjs.bak-*。
+- 性能(2026-10-06):mtime 渲染缓存(jsonl/公告 mtime 不变不重算;`zc-incident` 改完下次请求即时生效,实测发布即上屏)+ ETag/304 + 源站 gzip(HTML 33KB→4.8KB)+ `Cache-Control: public, max-age=30, stale-while-revalidate=300, no-transform`。no-transform 让 CF 不做 zstd 重压缩,ETag 得以穿透——60s 自刷过期重验可拿 304 零正文(源站 gzip 体积与 CF zstd 持平,不亏)。**边缘缓存未启用**:CF 对 HTML 默认 DYNAMIC,首次访问回源北京(TTFB ~1s);要启用需 Dashboard 给 status.aetherstudio.top 加 Cache Rule(Cache eligibility: Eligible for cache;Edge TTL: Respect origin),源站响应头已备好,配完 `cf-cache-status` DYNAMIC→HIT。本地 wrangler OAuth 只有 zone:read,无权配置。
 
 - **Web/DB/存储/DNS 全部在 Cloudflare**;阿里云主机**只剩一个职责:跑 ClamAV 扫描后端**。
 - 旧 workerd(`zaochang.service` :3001)与盒子 nginx Web 入口(443)**已停用**。
