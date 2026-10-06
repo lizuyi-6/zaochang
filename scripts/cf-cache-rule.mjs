@@ -54,19 +54,21 @@ if (get.status === 200 && get.data?.success) {
     console.log('cache rule already present, nothing to do');
     process.exit(0);
   }
-  const put = await j('PUT', entry, { rules: [...rules, rule] });
+  rules.push(rule);
+  const put = await j('PUT', entry, { rules });
   if (!put.data?.success) {
     console.error(`PUT failed: HTTP ${put.status}`, JSON.stringify(put.data?.errors ?? put.data ?? null));
     process.exit(1);
   }
-  console.log(`cache rule appended, total rules=${put.data.result.rules.length}`);
+  console.log(`cache rule written, total rules=${put.data.result.rules.length}`);
 } else {
-  // 404 = 该 phase 还没有 entrypoint ruleset,直接创建;其余状态先打出便于诊断
-  console.log(`GET entrypoint not usable: HTTP ${get.status}`, JSON.stringify(get.data?.errors ?? null));
-  const post = await j('POST', `${entry}/rulesets`, { rules: [rule] });
-  if (!post.data?.success) {
-    console.error(`POST failed: HTTP ${post.status}`, JSON.stringify(post.data?.errors ?? post.data ?? null));
+  // 404 = 该 phase 还没有 entrypoint ruleset。此 phase 的规范写法是直接 PUT phase
+  // entrypoint(不存在则创建;POST entrypoint/rulesets 会被 10405 拒)。
+  console.log(`GET entrypoint: HTTP ${get.status}`, JSON.stringify(get.data?.errors ?? null));
+  const put = await j('PUT', entry, { rules: [rule] });
+  if (!put.data?.success) {
+    console.error(`PUT failed: HTTP ${put.status}`, JSON.stringify(put.data?.errors ?? put.data ?? null));
     process.exit(1);
   }
-  console.log(`cache ruleset created: ${post.data.result?.id}`);
+  console.log(`cache ruleset created via PUT: ${put.data.result?.id ?? 'ok'}`);
 }
