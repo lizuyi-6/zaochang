@@ -61,7 +61,8 @@ if (get.status === 200 && get.data?.success) {
   }
   console.log(`cache rule appended, total rules=${put.data.result.rules.length}`);
 } else {
-  // 404 = 该 phase 还没有 entrypoint ruleset,直接创建
+  // 404 = 该 phase 还没有 entrypoint ruleset,直接创建;其余状态先打出便于诊断
+  console.log(`GET entrypoint not usable: HTTP ${get.status}`, JSON.stringify(get.data?.errors ?? null));
   const post = await j('POST', `${entry}/rulesets`, { rules: [rule] });
   if (!post.data?.success) {
     console.error(`POST failed: HTTP ${post.status}`, JSON.stringify(post.data?.errors ?? post.data ?? null));
