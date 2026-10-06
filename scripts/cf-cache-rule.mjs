@@ -30,7 +30,13 @@ console.log(`zone ${zone.id} ${zone.name} plan=${zone.plan?.name ?? '?'}`);
 
 const rule = {
   action: 'set_cache_settings',
-  action_parameters: { cache: true, edge_ttl: { mode: 'respect_origin' } },
+  action_parameters: {
+    cache: true,
+    edge_ttl: { mode: 'respect_origin' },
+    // browser_ttl 不显式给 respect_origin 时,规则默认改写成 4h(14400),
+    // 访问者浏览器会长时间持有旧页,公告更新看不到——必须钉住。
+    browser_ttl: { mode: 'respect_origin' },
+  },
   expression: EXPR,
   description: 'zc-status: edge cache per origin max-age (respect origin)',
   enabled: true,
@@ -50,11 +56,13 @@ const entry = `${api}/zones/${zone.id}/rulesets/phases/${phase}/entrypoint`;
 const get = await j('GET', entry);
 if (get.status === 200 && get.data?.success) {
   const rules = (get.data.result.rules ?? []).map(sanitize);
-  if (rules.some(r => r.expression === EXPR)) {
+  const idx = rules.findIndex(r => r.expression === EXPR);
+  if (idx >= 0 && JSON.stringify(rules[idx]) === JSON.stringify(rule)) {
     console.log('cache rule already present, nothing to do');
     process.exit(0);
   }
-  rules.push(rule);
+  if (idx >= 0) rules[idx] = { ...(rules[idx].id ? { id: rules[idx].id } : {}), ...rule };
+  else rules.push(rule);
   const put = await j('PUT', entry, { rules });
   if (!put.data?.success) {
     console.error(`PUT failed: HTTP ${put.status}`, JSON.stringify(put.data?.errors ?? put.data ?? null));
