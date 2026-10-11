@@ -196,8 +196,11 @@ test('hyperknow-hardening: H1 task brief / H4 fixed search copy / H7 reading sam
 });
 
 test('community-hardening: storage/db failures are 503, docs images whitelisted, incubation add_material atomic (M2/M3/M4)', () => {
-  const products = read('app/api/products/route.ts');
-  assert.match(products, /storage_unavailable" \}, \{ status: 503 \}/, 'M2:bucket 缺失必须 503,不得混同对象不属主的 403');
+  // 项目创建逻辑已抽到共享的 _lib/products.ts(REST 与 MCP 共用),路由经 jsonError 原样透传 accessError 状态码。
+  const productsRoute = read('app/api/products/route.ts');
+  assert.match(productsRoute, /import \{ createProduct \} from "\.\.\/_lib\/products"/, 'M2:REST 创建必须走共享 createProduct');
+  const products = read('app/api/_lib/products.ts');
+  assert.match(products, /if \(check\.bucketMissing\) throw accessError\("storage_unavailable", 503\)/, 'M2:bucket 缺失必须 503,不得混同对象不属主的 403');
   const community = read('app/api/_lib/community.ts');
   assert.match(community, /accessError\("database_unavailable", 503\)/, 'M2:DB binding 缺失必须 503(不得裸 500)');
   // #11 拆分后写侧在 docs-write.ts;docs.ts re-export 保持路由 import 面。

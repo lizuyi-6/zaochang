@@ -25,6 +25,21 @@ export const members = sqliteTable("members", {
   uniqueIndex("members_member_number_idx").on(table.memberNumber),
 ]);
 
+export const apiKeys = sqliteTable("api_keys", {
+  id: text("id").primaryKey(),
+  memberEmail: text("member_email").notNull().references(() => members.email),
+  name: text("name").notNull(),
+  prefix: text("prefix").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  expiresAt: text("expires_at").notNull(),
+  lastUsedAt: text("last_used_at"),
+  revokedAt: text("revoked_at"),
+}, (table) => [
+  uniqueIndex("api_keys_token_hash_idx").on(table.tokenHash),
+  index("api_keys_member_active_idx").on(table.memberEmail, table.revokedAt, table.expiresAt),
+]);
+
 export const oauthAccounts = sqliteTable(
   "oauth_accounts",
   {

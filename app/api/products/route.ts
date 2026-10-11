@@ -1,81 +1,12 @@
 import { requireMember } from "../_lib/access-control";
-import { UPLOAD_KEY_URL_PATTERN } from "../_lib/upload-core";
-import { database, jsonError } from "../_lib/community";
-import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
-import { verifyScannedUpload } from "../_lib/upload-core";
-import { normalizePricingModel, normalizeProductTheme } from "../../lib/product-hydrate";
-
-const categories = ["效率工具", "互动体验", "声音影像", "生活方式", "开发工具"];
+import { createProduct } from "../_lib/products";
+import { jsonError } from "../_lib/community";
 
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
-    await enforceRateLimit(await rateLimitKey("publish-product", member.email), 10, 24 * 60 * 60);
-    const input = (await request.json()) as Record<string, unknown>;
-    const title = String(input.title ?? "").trim().slice(0, 36);
-    const description = String(input.description ?? "").trim().slice(0, 180);
-    const category = String(input.category ?? "");
-    const demoUrl = String(input.demoUrl ?? "").trim().slice(0, 500) || null;
-    const imageUrl = String(input.imageUrl ?? "").trim().slice(0, 500) || null;
-    const pricingModel = normalizePricingModel(input.pricingModel);
-    const requestedPrice = Math.max(0, Math.min(99, Math.floor(Number(input.price) || 0)));
-    const price = pricingModel === "free" ? 0 : Math.max(1, requestedPrice);
-    const coverTheme = normalizeProductTheme(input.coverTheme);
-
-    if (title.length < 2 || description.length < 12 || !categories.includes(category)) {
-      return Response.json({ error: "invalid_product" }, { status: 400 });
-    }
-    if (demoUrl && !/^https:\/\//i.test(demoUrl)) {
-      return Response.json({ error: "invalid_demo_url" }, { status: 400 });
-    }
-    if (imageUrl && !(/^https?:\/\//i.test(imageUrl) || UPLOAD_KEY_URL_PATTERN.test(imageUrl))) {
-      return Response.json({ error: "invalid_image_url" }, { status: 400 });
-    }
-    if (imageUrl?.startsWith("/api/uploads/")) {
-      const key = decodeURIComponent(imageUrl.slice("/api/uploads/".length));
-      const check = await verifyScannedUpload({ key, ownerEmail: member.email, expectedPurpose: "product_cover" });
-      // M2(2026-10 审计):bucket 缺失是平台侧故障(503),不得与对象不属主(403)混同。
-      if (check.bucketMissing) {
-        return Response.json({ error: "storage_unavailable" }, { status: 503 });
-      }
-      if (check.verdict === "not_owned") {
-        return Response.json({ error: "product_cover_not_owned" }, { status: 403 });
-      }
-      if (check.verdict === "not_scanned") {
-        return Response.json({ error: "invalid_product_cover" }, { status: 400 });
-      }
-    }
-
-    const db = database();
-    const created = await db
-      .prepare(
-        `INSERT INTO products
-         (owner_email, owner_name, title, description, category, demo_type,
-          demo_url, image_url, cover_theme, price, pricing_model, status,
-          moderation_status, review_status, review_version, approved_version)
-         VALUES (?, ?, ?, ?, ?, 'prototype', ?, ?, ?, ?, ?,
-                 'pending_review', 'visible', 'pending_review', 1, 0)
-         RETURNING id, owner_name AS ownerName, title, description, category,
-                   demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
-                   cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
-                   plays_count AS plays, status, review_status AS reviewStatus,
-                   review_version AS reviewVersion, submitted_at AS submittedAt,
-                   created_at AS createdAt`,
-      )
-      .bind(
-        member.email,
-        member.displayName,
-        title,
-        description,
-        category,
-        demoUrl,
-        imageUrl,
-        coverTheme,
-        price,
-        pricingModel,
-      )
-      .first();
-    return Response.json({ product: created, reward: 0 }, { status: 201 });
+    const product = await createProduct(member, () => request.json() as Promise<Record<string, unknown>>);
+    return Response.json({ product, reward: 0 }, { status: 201 });
   } catch (error) {
     return jsonError(error);
   }
