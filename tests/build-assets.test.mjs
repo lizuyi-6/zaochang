@@ -44,6 +44,81 @@ test('build assets: KaTeX woff2 主字体已随产物分发', () => {
   assert.ok(fonts.filter((f) => f.startsWith('KaTeX_')).length >= 10, 'KaTeX 字体族应整组同步');
 });
 
+/* ---- Web 字体按路由分发 ----
+ * 全站共享 CSS(index-*.css)只带 --font-display 实际用到的字重(Source Serif 4 600/700、
+ * Noto Serif SC 600/900);书页(Inter / JetBrains Mono / 衬线 400-500)与银河页
+ * (Noto Serif SC 400/500)各自用 `?url` + <link precedence> 引入独立内容哈希 CSS。
+ * 反例(code-review 2026-10-11):阅读字体拆出后,galaxy/ecosystem 模块里点名
+ * "Noto Serif SC" 的 400/500 规则在 Windows/Android(无 Songti SC/STSong)只剩 600 字面,
+ * 正文/标题渲染成半粗——下面的源码↔产物契约就是为了让这类缺字重直接失败。 */
+const fontFaces = (css) => [...css.matchAll(/@font-face\s*\{[^}]*\}/g)].map((match) => {
+  const face = match[0];
+  return {
+    family: /font-family:\s*["']?([^;"'}]+)/.exec(face)?.[1].trim() ?? '',
+    weight: /font-weight:\s*(\d+)/.exec(face)?.[1] ?? '',
+  };
+});
+const weightsOf = (faces, family) => new Set(faces.filter((face) => face.family === family).map((face) => face.weight));
+const singleAsset = (pattern, label) => {
+  const files = readdirSync(assetsDir).filter((f) => pattern.test(f));
+  assert.equal(files.length, 1, `${label} 必须恰好一个内容哈希产物,实际 ${JSON.stringify(files)}`);
+  return { file: files[0], css: readFileSync(join(assetsDir, files[0]), 'utf8') };
+};
+const assertFontUrlsShipped = (css, label) => {
+  const fontPaths = [...css.matchAll(/url\(["']?(\/assets\/[^)"']+\.woff2?)["']?\)/g)].map((match) => match[1]);
+  assert.equal(fontPaths.length > 0, true, `${label}: 必须检查实际字体资源路径`);
+  const missing = fontPaths.filter((path) => !existsSync(join(process.cwd(), 'dist/client', path.slice(1))));
+  assert.deepEqual(missing, [], `${label}: 引用的每个字体文件必须真实分发`);
+};
+const serverBundle = () => readFileSync(join(process.cwd(), 'dist', 'server', 'index.js'), 'utf8');
+
+test('build assets: shared CSS carries only the site-wide display faces', () => {
+  const { css } = singleAsset(/^index-.*\.css$/, '全站共享 CSS');
+  const faces = fontFaces(css);
+  assert.deepEqual([...weightsOf(faces, 'Noto Serif SC')].sort(), ['600', '900'], '全站中文衬线只带 600/900(--font-display)');
+  assert.deepEqual([...weightsOf(faces, 'Source Serif 4')].sort(), ['600', '700'], '全站西文衬线只带 600/700(--font-display)');
+  assert.equal(weightsOf(faces, 'Inter').size, 0, 'Inter 只属于书页');
+  assert.equal(weightsOf(faces, 'JetBrains Mono').size, 0, 'JetBrains Mono 只属于书页');
+});
+
+test('build assets: reading page fonts ship as their own linked stylesheet', () => {
+  const { file, css } = singleAsset(/^reading-fonts-.*\.css$/, '阅读字体 CSS');
+  const faces = fontFaces(css);
+  assert.deepEqual([...weightsOf(faces, 'Inter')].sort(), ['400', '500', '600']);
+  assert.deepEqual([...weightsOf(faces, 'JetBrains Mono')].sort(), ['400', '500']);
+  assert.deepEqual([...weightsOf(faces, 'Source Serif 4')].sort(), ['400', '500']);
+  assert.deepEqual([...weightsOf(faces, 'Noto Serif SC')].sort(), ['400', '500']);
+  assertFontUrlsShipped(css, file);
+  assert.equal(serverBundle().includes(`/assets/${file}`), true, '服务端产物必须引用阅读字体 CSS 的哈希 URL(?url 接线)');
+  const page = readFileSync(join(process.cwd(), 'app', 'bookshelf', '[...slug]', 'page.tsx'), 'utf8');
+  assert.match(page, /from "\.\.\/reading-fonts\.css\?url"/);
+  assert.match(page, /<link rel="stylesheet" href=\{readingFontsHref\} precedence="default" \/>/);
+});
+
+test('build assets: galaxy routes get every Noto Serif SC weight their CSS modules name', () => {
+  const { file, css } = singleAsset(/^galaxy-fonts-.*\.css$/, '银河字体 CSS');
+  const galaxyFaces = fontFaces(css);
+  assert.equal(weightsOf(galaxyFaces, 'Inter').size + weightsOf(galaxyFaces, 'JetBrains Mono').size, 0, '银河字体 CSS 不应带书页字体');
+  const shared = fontFaces(singleAsset(/^index-.*\.css$/, '全站共享 CSS').css);
+  const available = new Set([...weightsOf(shared, 'Noto Serif SC'), ...weightsOf(galaxyFaces, 'Noto Serif SC')]);
+  const needed = [];
+  for (const moduleFile of ['galaxy.module.css', 'ecosystem.module.css']) {
+    const source = readFileSync(join(process.cwd(), 'app', 'galaxy', moduleFile), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const rule of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!/font-family:[^;]*"Noto Serif SC"/.test(rule[2])) continue;
+      const weight = /font-weight:\s*(\d+)/.exec(rule[2])?.[1] ?? '400';
+      needed.push({ rule: `${moduleFile} ${rule[1].trim()}`, weight });
+    }
+  }
+  assert.equal(needed.length > 0, true, '必须扫描到点名 Noto Serif SC 的银河规则,否则契约失效');
+  assert.deepEqual(needed.filter((item) => !available.has(item.weight)), [], '银河规则点名的 Noto Serif SC 字重必须在该路由有字面');
+  assertFontUrlsShipped(css, file);
+  assert.equal(serverBundle().includes(`/assets/${file}`), true, '服务端产物必须引用银河字体 CSS 的哈希 URL(?url 接线)');
+  const layout = readFileSync(join(process.cwd(), 'app', 'galaxy', 'layout.tsx'), 'utf8');
+  assert.match(layout, /from "\.\/galaxy-fonts\.css\?url"/);
+  assert.match(layout, /<link rel="stylesheet" href=\{galaxyFontsHref\} precedence="default" \/>/);
+});
+
 /* ---- 见界 SPA(public/lattice,入库产物):白板公式 KaTeX 同一纪律 ----
  * 白板公式动作此前直接把 LaTeX 源码当等宽文本上板;改 KaTeX 渲染后,Vite 资产
  * 管线把 node_modules CSS 的 url(fonts/…) 重写成 /lattice/assets/<hash>.woff2

@@ -29,13 +29,18 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 状态页:https://status.aetherstudio.top(独立 Tunnel zaochang-status-cibox)
         ▼
       华为云北京主机(1.92.152.128)  zc-status.service :8080 ← /var/log/zc-mon.jsonl(5 分钟探针)
+      (2026-10-11 起 server.mjs 默认只绑 127.0.0.1,cloudflared 经 localhost:8080 回源)
 ```
 
 状态页运维(华为云北京主机上):
 - 探针 `/opt/zc-mon/probe.sh`(cron `*/5`)覆盖 8 条链路:home/signin/version 页面、app-shell(纯 Worker)、shell-state(验 D1)、community(验 D1 聚合)、apk(HEAD,URL 从 /api/app-shell 动态解析,发新版无需改脚本)、scanner 隧道(404=存活)。公开页只显示职责描述,不暴露探测 URL。
 - 事件与公告:`zc-incident` CLI(软链到 /usr/local/bin,实文件 /opt/zc-status/zc-incident.mjs)维护 /opt/zc-status/incidents.json:`add --level info|degraded|down --title … --text …`、`update <id> --text …`、`resolve <id> --text …`、`list`。未解决的非 info 事件会把页面总状态抬升为降级/故障。
 - 页面源码 /opt/zc-status/server.mjs(零依赖 Node);改版先备份同目录 server.mjs.bak-*。
-- 性能(2026-10-06):mtime 渲染缓存(jsonl/公告 mtime 不变不重算;`zc-incident` 改完下次请求即时生效,实测发布即上屏)+ ETag/304 + 源站 gzip(HTML 33KB→4.8KB)+ `Cache-Control: public, max-age=30, stale-while-revalidate=300, no-transform`。no-transform 让 CF 不做 zstd 重压缩,ETag 得以穿透——60s 自刷过期重验可拿 304 零正文(源站 gzip 体积与 CF zstd 持平,不亏)。**边缘缓存规则已上线**(2026-10-06,规则 id `d726273fd2524af4a2806ce291e5d786`):hostname eq `status.aetherstudio.top` → Eligible for cache + Edge TTL/Browser TTL 均 respect origin。经 CI 工作流 `.github/workflows/cf-cache-rule.yml`(手动 dispatch、幂等确保型,`scripts/cf-cache-rule.mjs`)用生产 API Token 配置。API 实测经验:① Rulesets API 拒 OAuth(全量 scope 也一样,GET 403/写 405 auth scheme),必须 API Token(部署 token 已加 Zone→Cache Rules→Edit);② 创建/更新入口规则集只能 **PUT** `/zones/{id}/rulesets/phases/http_request_cache_settings/entrypoint`,POST entrypoint/rulesets 恒被 10405 拒;③ Browser TTL 不显式钉 respect_origin 时默认改写成 14400(4h),访问者浏览器长期持有旧页、看不到公告更新。效果:cf-cache-status DYNAMIC→HIT,源站每 PoP 每 30s 才被回源一次,304/gzip/no-transform 链路保持。
+- 2026-10-06 用户“发布”授权后的替换命令 exit=0：仓库源 `deploy/status/server.mjs` 与远端 SHA256 均为 `09910096c3c11d0d7e2d7b30040d4154879f1598103a97d17553e42bbcfdda9a`，service=active；备份 `/opt/zc-status/server.mjs.bak-status-20261006T024930Z` 的 SHA 为原322d3d5a…；发行目录 `/opt/zc-status/releases/status-20261006T024930Z`。Linux/Node22.20.0定向测试36/36、fail/skipped/cancelled/todo=0、exit=0；源站和公开字段检查exit=0（staleAfterMin=10、probeCount=8、状态重算相等）。完整命令/日志/逐文件证据见 `deploy/status/README.md` 与 `output/status-fix-2026-10-06/`。真实生产停采样、来源失败缓存及回滚未执行。
+- ⚠️ 安全变更/缺口：前次99源码判定冻结于 `output/status-reasons-2026-10-06/server-before.mjs:136`。语义变更:从“24h旧成功样本持续正常”改为“10min到期unknown”；从“最新事件覆盖总状态”改为“down>degraded>unknown>up最高严重度”；从“mtime不变不重算及SWR300”改为“时间约束缓存、max-age<=30且不跨有效期、must-revalidate”。依据为本对话修复请求/10分钟选择/发布授权。公开10:54:46 API和HTML头为 `public, max-age=29, must-revalidate, no-transform`、CF=EXPIRED、HTML解码125447B；本次没有改边缘规则。停止采样若仍显示正常会破坏新鲜度不变量，精确到期反例由36项隔离测试覆盖，未在生产故意停止探针。
+- 本次原因修订发布（2026-10-06 14:12 UTC+8）：`node output/status-reasons-2026-10-06/publish-release.mjs` exit0；发行 `/opt/zc-status/releases/status-reasons-20261006T060537Z`，生产源SHA256=`9071ba7b529e0419aece78e21f02c1afbdf1f53f1325f12e567ed1453469a3ce`，备份 `/opt/zc-status/server.mjs.bak-status-reasons-20261006T060537Z` SHA=`09910096c3c11d0d7e2d7b30040d4154879f1598103a97d17553e42bbcfdda9a`。Windows与生产LinuxNode22隔离57/57、最终npm test601/601（exit0、fail/skipped/cancelled/todo=0）。源站与公网release-smoke exit0，真实历史shell-state/community 02:20HTTP500显示http_error及02:25恢复，当前8项up/reason null；客户端函数与9071源码相等。
+- ⚠️ 安全变更/缺口：`deploy/status/server.mjs:198`。语义变更：从公开原始latest行/err/附加字段改为publicSample白名单（非法数值null、错误为安全诊断），原始本机日志保留；依据为本次原因请求及独立伪secret反例，原样公开附加敏感字段会破坏不外泄不变量。另将本轮未发布初候选的保守未知文案从“已满10min”改为“可能提前最多30s，新鲜度无法确认”；到期门禁与分类函数不变。rc!=0/无HTTP→down，非预期HTTP或TTFB>10s→degraded，age>=10min→unknown；用户选择只显示状态/原因，业务继续现有规则，无业务熔断/告警投递改动。API新增reason/lastAnomaly/bucketDetails/全异常计数；只保留每格最近3及最严重原因，根因未确认。真实超时/停探针/源站失联缓存/回滚未验证；公开投影会影响依赖raw err的API使用者，HTML156122B/JSON57566B增加传输负担，多PoP负载未测。
+- 历史性能记录（本次替换前版本，不代表当前缓存语义或HTML体积）：mtime缓存、ETag/304、源站gzip曾测HTML33KB→4.8KB，旧响应允许 `stale-while-revalidate=300`，已由上述发布移除。历史边缘缓存规则ID `d726273fd2524af4a2806ce291e5d786` 为 status hostname Eligible for cache，Edge/Browser TTL respect origin；由 `.github/workflows/cf-cache-rule.yml` / `scripts/cf-cache-rule.mjs` 用API Token设置，本次未读取规则集或修改。历史经验为Rulesets API拒OAuth、入口规则集用PUT、Browser TTL需显式respect_origin；实际当前来源失败行为未实测，不能据此前HIT记录宣称本次故障缓存正确。
 
 - **Web/DB/存储/DNS 全部在 Cloudflare**;阿里云主机**只剩一个职责:跑 ClamAV 扫描后端**。
 - 旧 workerd(`zaochang.service` :3001)与盒子 nginx Web 入口(443)**已停用**。
@@ -61,7 +66,7 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 | Tunnel DNS | `scanner.aetherstudio.top` CNAME → `ddc84c25-...cfargotunnel.com`(proxied) |
 | 状态页 Tunnel | `zaochang-status-cibox` / `1e9c7b9d-d68d-45eb-99c0-db19c5b29919`(连接器在华为云北京主机,`/etc/cloudflared/`,systemd `zc-cloudflared`) |
 | 状态页 DNS | `status.aetherstudio.top` CNAME → `1e9c7b9d-...cfargotunnel.com`(proxied) |
-| 华为云北京主机 | EIP `1.92.152.128`,2C/1.7G,Ubuntu 24.04;职责:生产可达性探针 + 状态页(:8080,SG 已放行);GitHub 出站经 usvps 反向 SOCKS(127.0.0.1:1080) |
+| 华为云北京主机 | EIP `1.92.152.128`,2C/1.7G,Ubuntu 24.04;职责:生产可达性探针 + 状态页(:8080,SG 仍放行;2026-10-11 已部署 `deploy/status/server.mjs` SHA `324d7eb5…`,默认只绑 127.0.0.1(`STATUS_HOST` 可覆盖),`ss -ltnp` 只见 `127.0.0.1:8080`,从阿里云主机直连 `1.92.152.128:8080` 连接拒绝;cloudflared ingress 为 `http://localhost:8080`;8080 的 SG 规则撤销需另行审批,证据见 `deploy/status/README.md` 末节);GitHub 出站经 usvps 反向 SOCKS(127.0.0.1:1080) |
 | 阿里云主机 | EIP `39.96.196.207`,eth0 `172.27.78.123`,Ubuntu 26.04 x86_64 |
 | SSH | `ssh -i ~/.ssh/zaochang-deploy.pem root@39.96.196.207` |
 | GitHub OAuth App | `Ov23livgjlLc01RdgmuN` |
@@ -74,13 +79,23 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 
 | 凭证 | 位置 | 能做什么 | 不能 |
 |---|---|---|---|
-| 本地 `wrangler` OAuth | `X:\zaochang`(`npx wrangler …`,登录 zaherharris65@gmail.com;已加 email_routing/email_sending write 权限,用于建 Email Routing 规则与 Email Service 发信) | deploy Worker、`secret put/list`、建 Workers Route、Email Routing 规则/目的地址、Email Service 发送测试 | **DNS write、Workers Domains、tunnel config**(REST 10000) |
-| MCP CF token | Claude MCP | D1 query、R2、Workers script+secret **write**、tunnel/DNS **read** | DNS/routes/domains/tunnel **write**(10000/1001) |
+| 本地 `wrangler` OAuth | `X:\zaochang`(`npx wrangler …`,登录 zaherharris65@gmail.com;已加 email_routing/email_sending write 权限,用于建 Email Routing 规则与 Email Service 发信) | deploy Worker、`secret put/list`、建 Workers Route、Workers Domains read（2026-10-06 GET=200）、Email Routing 规则/目的地址、Email Service 发送测试 | **DNS read/write（本轮 GET=403）、Workers Domains write、tunnel config**(REST 10000) |
+| MCP CF token | Claude插件的本地OAuth，C:\Users\Abraham\.claude\.credentials.json | 历史授权含dns.read、不含dns.write；旧记录曾操作D1/R2/Workers | 2026-10-06旧grant已过期，官方刷新HTTP400/invalid_grant；本轮未取得MCP工具或DNS内容，不将历史权限视作当前可用 |
 | cloudflared `cert.pem` | 盒子 `/root/.cloudflared/cert.pem` | 建 tunnel、写 tunnel 本地配置、`route dns` | — |
 | Tunnel connector token | (已弃用,改 cert.pem 本地 tunnel) | — | — |
 
-> **教训**:CF 的写权限分散。DNS/tunnel 改动要么用盒子 cert.pem,要么人在控制台点。
-> apex/www 的 A 记录至今仍指盒子 IP(见 §6 残留),因为本地/MCP 都没有 DNS write。
+> **教训**:CF 的写权限分散。本轮DNS GET被拒，不能以Wrangler登录成功代替DNS授权；可用单Zone API Token整理DNS与短入口。
+> apex/www 旧A记录指盒子IP是历史记录(见 §6)，当前值尚未通过DNS接口重读，不能凭历史值删除或替换。
+
+2026-10-06 本地只读重查：Wrangler OAuth 的 Zone/Workers Routes/Workers Domains GET 为 200，DNS Records GET 为 403/10000；没有取得当前 DNS 清单，也没有改记录。历史源站 A 值仍需 DNS 权限复核。短入口候选与认证来源取舍见 `DNS_PLAN_2026-10-06.md`；不靠 CNAME 把主机映射到页面路径，不为导航入口扩大会话 Cookie Domain 或壳白名单。
+
+用户再次授权后重试仍为同样403（inventory命令exit=2）；旧Claude MCP refresh为400/invalid_grant。未发现已设置的常用API token环境变量，其他应用私有凭据库未查。最低实用token限定aetherstudio.top，Zone/Zone/Read、Zone/DNS/Edit、Zone/Single Redirect/Edit；当前DNS整理停在导出之前。证据与安全保存路径说明见DNS计划；不需要将token值贴到对话。
+
+上述是新token前的历史阶段。2026-10-06用户提供新API token并更新Single Redirect权限后，本轮操作请求限定此Zone：DNS读取及3条新建POST200，Single Redirect新建POST200。最后DNS18/18，原15条字段相等；新增learn/books/app，均proxied A192.0.2.1、TTL Auto，规范化根路径GET/HEAD 302到主站/lattice/、/bookshelf、/app，query保留。规则集ID `9ee7acef9be64496b0ecf76397632899`，phase=http_request_dynamic_redirect、version1、3规则。真实公网18项测试exit=0/fail=skipped=cancelled=todo=0；未登录learn仍经主站门禁转signin。详细ID、完整备份、部分写入停止与仅补缺项的实际证据见DNS_PLAN_2026-10-06.md文末及output/status-fix-2026-10-06/dns-2026-10-06T05-20-11-626Z/。
+
+token值只在内存，没有写入本机.env/持久凭据或报告；原Wrangler OAuth仍用于已有Workers Routes只读核对。新token不含Cache Rules body读取，GET403；原cache规则集ID/kind/phase/version2/last_updated前后元数据相等，根据每次修改生成新版本证明该当前版本未改，不宣称body深比。只加三入口，不改apex/www A、status/scanner Tunnel、MX/TXT、主站Worker或认证配置。
+
+短入口：[learn.aetherstudio.top](https://learn.aetherstudio.top/)→/lattice/、[books.aetherstudio.top](https://books.aetherstudio.top/)→/bookshelf、[app.aetherstudio.top](https://app.aetherstudio.top/)→/app。取舍：非匹配深路径与POST实际522（约20秒），不提供产品API；Cloudflare归一化后根路径会包括//和点段路径。没有配置developers，登录后会话/Android/证书续期/真实回滚未验。回滚只能针对本轮新增DNS ID/新重定向规则，不删除原15记录；本轮未执行回滚。
 
 ## 2. 密钥(名称清单,值永不入库/不入对话)
 
@@ -281,7 +296,7 @@ npx wrangler secret delete ZAOCHANG_AGENT_TOKEN --config wrangler.prod.jsonc
 
 ## 9. 残留 / 待办(不阻断)
 
-1. apex/www 的 **A 记录仍指盒子 IP `39.96.196.207`**(proxied;route 边缘接管故可用)。建议在 CF 控制台改成占位 `192.0.2.1`(proxied),彻底摘掉盒子 IP 暴露。需 DNS write 权限(本地/MCP 都没有 → 控制台)。
+1. 2026-10-06新token完整清单确认apex/www A仍指向盒子IP `39.96.196.207`(proxied)，两条精确Workers Route接管；不能只凭旧origin删除。原15条无精确重复且全对象保留，另增三个产品短入口后18/18；不再是旧凭据DNS403时的未读状态。真实Worker回源失败/邮件投递依赖未验，见DNS计划。
 2. CF 控制台删未用的旧 dashboard tunnel `e617e40b-2a9a-48f7-8cb4-98c0fc4837da`(先删其 private route 才能删 tunnel)。
 3. 盒子那次误传文件 `02207791-....png` 在盒子本地 state(`/var/lib/zaochang/state/v3/r2`),可忽略。
 4. **Turnstile 未上生产**(仅影响邀请码兑换路径);staging 已验证。
@@ -292,5 +307,6 @@ npx wrangler secret delete ZAOCHANG_AGENT_TOKEN --config wrangler.prod.jsonc
    `zaochang-uploads-staging` 并改 `wrangler.staging.jsonc` 的 R2 绑定。
 
 ---
-*最后更新:2026-08-30 —— 迁移对账升级为有序 hash 校验;测试总数口径改为 node:test 实际输出;补记 staging R2 共享边界。*
+*最后更新:2026-10-06 —— 独立status异常原因9071版本/真实HTTP500历史及恢复，三个产品短入口；保留DNS/业务规则，证据见deploy/status/README.md、DNS_PLAN_2026-10-06.md与PROJECT_STATUS.md。*
+*此前更新:2026-08-30 —— 迁移对账升级为有序 hash 校验;测试总数口径改为 node:test 实际输出;补记 staging R2 共享边界。*
 *此前更新:2026-08-09 —— 切换至 Cloudflare 生产、上传经 Tunnel 扫描端到端验证通过、旧 workerd 退役。*

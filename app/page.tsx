@@ -1,9 +1,9 @@
 import { ArrowRight, ArrowUpRight, Bot, Eye, Flame, Heart, Radio, Sparkles, Users } from "lucide-react";
-import Link from "next/link";
+import Link from "./components/intent-link";
 import { loadPublicCommunityState } from "./api/_lib/public-community";
 import { AnimatedNumber } from "./components/animated-number";
 import { CoverImage } from "./components/cover-image";
-import BlurText from "./components/motion/blur-text";
+import { PRODUCT_CARD_SIZES } from "./lib/cover-image-sources";
 import Magnet from "./components/motion/magnet";
 import { ProductCard } from "./components/product-card";
 import { Reveal } from "./components/reveal";
@@ -14,6 +14,16 @@ import { challenges, circles, products } from "./lib/community-data";
 import { formatZhDateTime } from "./lib/format";
 
 export const dynamic = "force-dynamic";
+
+const featuredProducts = products.slice(0, 4);
+
+// 侧栏缩略图(42px)与精选卡片网格展示同一批照片:与卡片共用同一 sizes,浏览器会选中
+// 同一个 srcset 候选 URL,一次下载两处复用;不在网格里的才用小图。
+function liveRankSizes(productId: (typeof products)[number]["id"]) {
+  const gridIndex = featuredProducts.findIndex((item) => item.id === productId);
+  if (gridIndex < 0) return "48px";
+  return gridIndex === 0 ? PRODUCT_CARD_SIZES.large : PRODUCT_CARD_SIZES.standard;
+}
 
 function Metric({ value }: { value: number | null }) {
   return value === null ? <span aria-label="数据暂不可用">--</span> : <AnimatedNumber value={value} />;
@@ -57,8 +67,8 @@ export default async function HomePage() {
           </div>
           <h1 className="masthead-title">
             <span className="masthead-mark" aria-hidden="true">※</span>
-            <BlurText text="今天，大家" animateBy="letters" delay={70} />
-            <BlurText text="都在造什么" animateBy="letters" delay={70} />
+            <span>今天，大家</span>
+            <span>都在造什么</span>
           </h1>
           <div className="masthead-body">
             <p className="masthead-lede">这里没有“等待发布”的作品。每个想法都从一个能被试玩、被讨论的版本开始。</p>
@@ -114,7 +124,7 @@ export default async function HomePage() {
         <section className="home-section">
           <div className="deep-section-heading"><div><span className="deep-eyebrow"><Flame size={14} /> SEC. 01 · 产品精选</span><h2>现在可以直接体验</h2></div><Link href="/discover">查看全部 <ArrowRight size={15} /></Link></div>
           <div className="home-product-grid">
-            {products.slice(0, 4).map((product, index) => <ProductCard key={product.id} product={product} index={index} large={index === 0} />)}
+            {featuredProducts.map((product, index) => <ProductCard key={product.id} product={product} index={index} large={index === 0} />)}
           </div>
         </section>
 
@@ -130,7 +140,7 @@ export default async function HomePage() {
       <aside className="home-aside">
         <section className="aside-block live-board">
           <div className="aside-title"><span><Flame size={16} /> 产品目录</span><small>OPEN</small></div>
-          {products.slice(1, 5).map((product, index) => <Link href={`/product/${product.slug}`} key={product.id} className="live-rank"><b>0{index + 1}</b><CoverImage src={product.image} /><span><strong>{product.title}</strong><small>{product.category} · {product.release}</small></span><ArrowRight size={14} /></Link>)}
+          {products.slice(1, 5).map((product, index) => <Link href={`/product/${product.slug}`} key={product.id} className="live-rank"><b>0{index + 1}</b><CoverImage src={product.image} sizes={liveRankSizes(product.id)} loading="lazy" /><span><strong>{product.title}</strong><small>{product.category} · {product.release}</small></span><ArrowRight size={14} /></Link>)}
         </section>
 
         <section className="aside-block">

@@ -28,7 +28,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "./intent-link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CoverImage } from "./cover-image";
@@ -384,7 +384,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
                 <span>{query ? "搜索结果" : "此刻热门"}</span>
                 {results.map((product) => (
                   <Link href={`/product/${product.slug ?? product.id}`} key={product.id}>
-                    <CoverImage src={product.image} />
+                    <CoverImage src={product.image} sizes="48px" loading="lazy" />
                     <span><strong>{product.title}</strong><small>{product.category} · {product.ownerName}</small></span>
                     <em>{product.price ? `${product.price} 果` : "免费"}</em>
                   </Link>

@@ -25,18 +25,10 @@ import { ReadingAiDock } from "../reading-ai-dock";
 // 书站阅读字体(self-host woff2 via @fontsource;按 weight/subset 精确引入,浏览器按 unicode-range 按需下载)。
 // Serif(书的声音):英文 Source Serif 4 + 中文 Noto Serif SC(=思源宋体,与 Source Han Serif SC 同字形),覆盖正文 400/强调与标题 500/备用 600。
 // Sans(系统的声音):Inter(UI/目录/元信息)。Mono(代码的声音):JetBrains Mono。
-// 中文 Sans 不加载 Web Font,走系统 fallback(PingFang SC/Microsoft YaHei 等)。import scoped 到书站路由 bundle,不影响其他页。
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
-import "@fontsource/source-serif-4/400.css";
-import "@fontsource/source-serif-4/500.css";
-import "@fontsource/source-serif-4/600.css";
-import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/500.css";
-import "@fontsource/noto-serif-sc/400.css";
-import "@fontsource/noto-serif-sc/500.css";
-import "@fontsource/noto-serif-sc/600.css";
+// 中文 Sans 走系统 fallback。`?url` 让 Vite 把这些字体编译成独立、内容哈希的 CSS 资产
+// (服务端 CSS 普通 import 会并入全站共享样式);React 以 precedence 把 <link> 提升进 <head>,
+// 只在阅读页 SSR/客户端导航时加载。woff URL 仍由 Vite 生成与分发。
+import readingFontsHref from "../reading-fonts.css?url";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +105,7 @@ export default async function BookPage({ params }: PageProps) {
   const nextLeaf = !isCover && leafIdx >= 0 && leafIdx + 1 < leaves.length ? leaves[leafIdx + 1] : null;
 
   return <div className={`book-page ${isCover ? "book-page-cover" : "book-page-chapter"}`}>
+    <link rel="stylesheet" href={readingFontsHref} precedence="default" />
     <BookSideToggle />
     <aside className="book-side">
       <Link href="/bookshelf" className="book-back"><ArrowLeft size={14} /> 书架</Link>

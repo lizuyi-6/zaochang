@@ -5,6 +5,7 @@ import { ArrowUpRight, Bookmark, Check, Coins, Eye, Heart, Pause, Play, RotateCc
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CoverImage } from "../../components/cover-image";
+import { PRODUCT_HERO_SIZES } from "../../lib/cover-image-sources";
 import { compactNumber, type Product } from "../../lib/community-data";
 import { refreshShellState } from "../../components/shell-state-sync";
 import { EmbeddedProduct, hasEmbeddedProduct } from "./embedded-product";
@@ -135,7 +136,7 @@ export function ProductExperience({ product }: { product: Product }) {
           </motion.div></FruitAccessGate>
         ) : tab === "体验" ? (
           <FruitAccessGate product={product}><motion.section key="experience" className="immersive-experience" style={{ "--product-accent": accent } as React.CSSProperties} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <CoverImage src={product.image} />
+            <CoverImage src={product.image} sizes={PRODUCT_HERO_SIZES} />
             <span className="experience-shade" />
             <div className="experience-grid-lines" />
             <motion.div className="experience-console" initial={reduced ? false : { opacity: 0, scale: 0.94, y: 28 }} animate={reduced ? undefined : { opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.55 }}>

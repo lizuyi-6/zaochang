@@ -1,0 +1,15 @@
+/* Loaded only via `?url` + <link precedence> in app/bookshelf/[...slug]/page.tsx,
+   so it builds as its own hashed asset instead of joining the shared site CSS.
+   Inter / JetBrains Mono / Source Serif 4 400-500 are referenced only through
+   --font-reader-* (book pages); galaxy routes get Noto Serif SC 400/500 from
+   app/galaxy/galaxy-fonts.css. */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/source-serif-4/400.css";
+@import "@fontsource/source-serif-4/500.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/noto-serif-sc/400.css";
+@import "@fontsource/noto-serif-sc/500.css";
+/* Serif weight 600 is already supplied by app/layout.tsx on every route. */

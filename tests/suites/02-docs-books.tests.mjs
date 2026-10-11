@@ -217,6 +217,22 @@ test("bookshelf: book card wall, cover toc, chapter renders katex + mermaid, mem
     const chap = await fetch(`${baseUrl}/bookshelf/book-${tag}/part-1/chap-1`);
     assert.equal(chap.status, 200);
     const chapHtml = await chap.text();
+    const readingStylesheet = chapHtml.match(/\/assets\/reading-fonts-[^"<>\s]+\.css/)?.[0];
+    assert.equal(typeof readingStylesheet, "string", "阅读页必须引用独立字体样式文件");
+    const fontStyles = await fetch(`${baseUrl}${readingStylesheet}`);
+    assert.equal(fontStyles.status, 200, "阅读字体样式必须随产物分发");
+    const readingFonts = await fontStyles.text();
+    assert.equal(readingFonts.includes("@font-face"), true, "阅读页必须携带自己的字体样式");
+    assert.equal(readingFonts.includes("Noto Serif SC"), true, "阅读页必须保留中文衬线字体");
+    assert.equal(readingFonts.includes("JetBrains Mono"), true, "阅读页必须保留代码字体");
+    assert.equal(readingFonts.includes("font-weight:400"), true, "阅读正文字重必须保留");
+    const fontPaths = [...readingFonts.matchAll(/url\(["']?(\/assets\/[^)"']+\.woff2)["']?\)/g)].map((match) => match[1]);
+    assert.equal(fontPaths.length > 0, true, "字体 URL 必须由 Vite 解析成产物路径");
+    for (const path of [fontPaths[0], fontPaths.at(-1)]) {
+      const response = await fetch(`${baseUrl}${path}`);
+      assert.equal(response.status, 200, `阅读字体应随产物分发: ${path}`);
+      assert.equal((await response.arrayBuffer()).byteLength > 100, true, "必须取得真实字体字节");
+    }
     assert.match(chapHtml, /class="katex"/, "行内公式应被 KaTeX 渲染");
     assert.match(chapHtml, /katex-block/, "块级公式应被 KaTeX 渲染");
     assert.match(chapHtml, /<pre class="mermaid">/, "mermaid 应回填为 pre.mermaid");

@@ -246,6 +246,95 @@ test("mobile-nav: 底部五栏为 首页/探索/中央发布/动态/我的,手�
 
 // ---- 安卓壳 UA 契约 ----
 
+test("cover images: resize showcase images but preserve exact upload/private and unrelated URLs", async () => {
+  const { coverImageSources } = await import("../app/lib/cover-image-sources.ts");
+  const original = "https://images.unsplash.com/photo-example?auto=format&w=1600&q=88&token=keep";
+  const resized = coverImageSources(original);
+  assert.equal(new URL(resized.src).searchParams.get("w"), "640");
+  assert.equal(new URL(resized.src).searchParams.get("token"), "keep");
+  assert.equal(new URL(resized.src).pathname, "/photo-example");
+  // 候选不超过原 w,且原 w 本身是最大候选(全宽 hero 仍可取回原来的 1600)。
+  const candidates = (sources) => sources.srcSet.split(", ").map((entry) => {
+    const [href, descriptor] = entry.split(" ");
+    return { url: new URL(href), descriptor };
+  });
+  assert.deepEqual(candidates(resized).map((item) => item.descriptor), ["320w", "640w", "960w", "1280w", "1600w"]);
+  for (const { url, descriptor } of candidates(resized)) assert.equal(`${url.searchParams.get("w")}w`, descriptor);
+  // 原 URL 未指定 fit 时不得被强加 fit=crop。
+  assert.equal(new URL(resized.src).searchParams.has("fit"), false);
+
+  // 带 h:每个候选的 h 按 w 等比缩放,宽高比与原 1600x900 一致;fit=crop 原样保留。
+  const withHeight = coverImageSources("https://images.unsplash.com/photo-hero?w=1600&h=900&fit=crop&crop=entropy");
+  for (const { url, descriptor } of [...candidates(withHeight), { url: new URL(withHeight.src), descriptor: "src" }]) {
+    const w = Number(url.searchParams.get("w"));
+    const h = Number(url.searchParams.get("h"));
+    assert.ok(Math.abs(w / h - 1600 / 900) < 0.01, `${descriptor}: 宽高比被改变 ${w}x${h}`);
+    assert.equal(url.searchParams.get("fit"), "crop");
+    assert.equal(url.searchParams.get("crop"), "entropy");
+  }
+  assert.equal(new URL(withHeight.src).searchParams.get("h"), "360");
+  // 反例:旧实现会产出 w=320&h=900(纵向拉伸裁切),这里必须是 320x180。
+  assert.equal(candidates(withHeight)[0].url.searchParams.get("h"), "180");
+
+  // fit=max / fit=clip 不得被改成 crop;rect 原样保留。
+  const withMax = coverImageSources("https://images.unsplash.com/photo-max?w=1200&fit=max&rect=0,0,800,600");
+  assert.deepEqual(candidates(withMax).map((item) => item.descriptor), ["320w", "640w", "960w", "1200w"]);
+  for (const { url } of candidates(withMax)) {
+    assert.equal(url.searchParams.get("fit"), "max");
+    assert.equal(url.searchParams.get("rect"), "0,0,800,600");
+    assert.equal(url.searchParams.has("h"), false);
+  }
+  assert.equal(new URL(coverImageSources("https://images.unsplash.com/p?w=1200&fit=clip").src).searchParams.get("fit"), "clip");
+
+  // 无任何参数:默认候选 320..1280,src 取 640,不强加 fit。
+  const bare = coverImageSources("https://images.unsplash.com/photo-bare");
+  assert.deepEqual(candidates(bare).map((item) => item.descriptor), ["320w", "640w", "960w", "1280w"]);
+  assert.equal(new URL(bare.src).searchParams.get("w"), "640");
+  assert.equal(new URL(bare.src).searchParams.get("auto"), "format");
+  assert.equal(new URL(bare.src).searchParams.has("fit"), false);
+  assert.equal(new URL(bare.src).searchParams.has("h"), false);
+
+  // auto 已有其他取值时追加 format,不覆盖。
+  assert.equal(new URL(coverImageSources("https://images.unsplash.com/p?auto=compress&w=800").src).searchParams.get("auto"), "compress,format");
+  // 原 w 小于 640:src 不放大到 640,候选只到原 w。
+  const small = coverImageSources("https://images.unsplash.com/p?w=500&h=250");
+  assert.equal(new URL(small.src).searchParams.get("w"), "500");
+  assert.equal(new URL(small.src).searchParams.get("h"), "250");
+  assert.deepEqual(candidates(small).map((item) => item.descriptor), ["320w", "500w"]);
+
+  // 有 h 但没有可用 w(无法保证宽高比)或 h 非法:原样返回,不生成 srcSet。
+  for (const src of ["https://images.unsplash.com/p?h=900&fit=crop", "https://images.unsplash.com/p?w=abc&h=900", "https://images.unsplash.com/p?w=1600&h=0"]) {
+    assert.deepEqual(coverImageSources(src), { src }, `无法保宽高比时不得改写: ${src}`);
+  }
+  for (const src of [
+    "/api/uploads/42?signature=original", "https://cdn.example.com/image.png?token=original",
+    "https://images.unsplash.com.evil.test/image.png", "http://images.unsplash.com/image.png",
+    "data:image/png;base64,AA==", "not a URL",
+  ]) {
+    assert.deepEqual(coverImageSources(src), { src }, `不得改写原 URL: ${src}`);
+  }
+});
+
+test("cover images: callers pass layout-matched sizes and share card sizes with live-rank thumbnails", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+  const { PRODUCT_CARD_SIZES, PRODUCT_HERO_SIZES } = await import("../app/lib/cover-image-sources.ts");
+  // 全宽沉浸 hero 不得落回 CoverImage 默认的 640px 提示。
+  const experience = await read("app/product/[slug]/product-experience.tsx");
+  assert.match(experience, /<CoverImage src=\{product\.image\} sizes=\{PRODUCT_HERO_SIZES\} \/>/);
+  assert.match(PRODUCT_HERO_SIZES, /100vw/);
+  // 收藏夹 50px 缩略图给出真实尺寸。
+  assert.match(await read("app/collections/collections-client.tsx"), /<CoverImage key=\{product\.id\} src=\{product\.image\} sizes="50px" \/>/);
+  // 卡片与首页侧栏共用同一 sizes 常量(同一 srcset 候选 → 同一 URL → 只下载一次)。
+  assert.match(await read("app/components/product-card.tsx"), /sizes=\{large \? PRODUCT_CARD_SIZES\.large : PRODUCT_CARD_SIZES\.standard\}/);
+  const home = await read("app/page.tsx");
+  assert.match(home, /const featuredProducts = products\.slice\(0, 4\);/);
+  assert.match(home, /featuredProducts\.map\(\(product, index\) => <ProductCard [^>]*large=\{index === 0\}/);
+  assert.match(home, /return gridIndex === 0 \? PRODUCT_CARD_SIZES\.large : PRODUCT_CARD_SIZES\.standard;/);
+  assert.match(home, /<CoverImage src=\{product\.image\} sizes=\{liveRankSizes\(product\.id\)\} loading="lazy" \/>/);
+  assert.notEqual(PRODUCT_CARD_SIZES.large, PRODUCT_CARD_SIZES.standard);
+});
+
 test("app-shell-ua: 三态解析(带版本新壳/旧壳/浏览器)与版本名比较", async () => {
   const ua = await import("../app/lib/app-shell-ua.ts");
   const WV = "Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A.230805.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36";

@@ -1,0 +1,9 @@
+/* Galaxy/ecosystem serif faces. galaxy.module.css (.hero h1/p/blockquote,
+   .atlasNav strong, .temporalEcho) and ecosystem.module.css (.pageIntro h1,
+   .applicationIntro h1) name "Noto Serif SC" at weight 400/500 after
+   "Songti SC". Windows/Android have no Songti SC/STSong, so without these
+   faces weight matching falls to the only loaded face (600, app/layout.tsx)
+   and the hero copy renders semi-bold. Loaded only by app/galaxy/layout.tsx via
+   `?url`, so non-galaxy routes do not carry these @font-face rules. */
+@import "@fontsource/noto-serif-sc/400.css";
+@import "@fontsource/noto-serif-sc/500.css";
