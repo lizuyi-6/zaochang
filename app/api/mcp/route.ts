@@ -3,6 +3,8 @@ import { database, jsonError, type MemberIdentity } from "../_lib/community";
 import { accessError } from "../_lib/errors";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { PRODUCT_CATEGORIES, createProduct, getProduct, listMyProducts, updateProduct } from "../_lib/products";
+import { createHostingUploadToken, getHostingStatus, requestHostingRemoval } from "../_lib/hosting";
+import hostingRules from "../_lib/hosting-rules.json" with { type: "json" };
 import { MAX_UPLOAD_BYTES } from "../_lib/upload-security";
 import { storeScannedUpload } from "../_lib/upload-core";
 import { parseBearerToken } from "../_lib/agent-auth";
@@ -13,7 +15,9 @@ import { requireMcpOAuthBearer } from "../_lib/oauth-provider";
 const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26"] as const;
 const MAX_MCP_REQUEST_BYTES = 11 * 1024 * 1024;
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
-const EXTERNAL_DEMO_REVIEW_WARNING = "External experience links (demo_url) cannot currently pass platform review because review requires experience content that cannot be replaced in place. Until static hosting is available, leave demo_url blank and use the cover and description to present the project.";
+const EXTERNAL_DEMO_REVIEW_WARNING = "External experience links (demo_url) cannot currently pass platform review because review requires experience content that cannot be replaced in place. If your account has an invitation hosting grant, use static hosting and keep demo_url blank; otherwise leave it blank and use the cover and description to present the project.";
+const HOSTING_ALLOWED_EXTENSIONS = hostingRules.extensions.allowed.map((extension) => `.${extension}`).join(", ");
+const HOSTING_UPLOAD_CONSTRAINTS = `Static websites only: ZIP up to ${hostingRules.bundle.maxZipBytes / (1024 * 1024)} MiB and ${hostingRules.bundle.maxEntries} archive entries maximum (directory entries count), with root ${hostingRules.bundle.rootFile} required. Allowed extensions from hosting-rules.json: ${HOSTING_ALLOWED_EXTENSIONS}. Do not include dotfiles (including .env), private keys, or node_modules. Hosting requires an invitation grant, and product demo_url must be empty. Hosted links become public only after platform review approval.`;
 
 type JsonRpcId = string | number | null;
 type JsonRpcRequest = { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown };
@@ -157,6 +161,21 @@ const tools = [
       data_base64: { type: "string" },
     }, ["filename", "mime_type", "data_base64"]),
   },
+  {
+    name: "begin_hosting_upload",
+    description: `Create a one-time static-site ZIP upload URL for an existing project owned by the signed-in member. Prerequisites: the member must have an invitation hosting grant and demo_url must be empty. ${HOSTING_UPLOAD_CONSTRAINTS}`,
+    inputSchema: inputSchema({ product_id: { type: "integer", minimum: 1 } }, ["product_id"]),
+  },
+  {
+    name: "get_hosting_status",
+    description: "Read the signed-in owner's static-hosting and review status, including the next executable step. Rows with desired=removed are omitted by the shared REST status function; a null hosting field does not prove remote cleanup.",
+    inputSchema: inputSchema({ product_id: { type: "integer", minimum: 1 } }, ["product_id"]),
+  },
+  {
+    name: "remove_hosting",
+    description: "Request removal of the signed-in owner's hosted site. Removal is audited and may take time while the deployer removes the remote site; get_hosting_status omits desired=removed rows and cannot confirm remote cleanup.",
+    inputSchema: inputSchema({ product_id: { type: "integer", minimum: 1 } }, ["product_id"]),
+  },
 ];
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -173,6 +192,51 @@ function requiredId(args: Record<string, unknown>): number {
   const id = args.id;
   if (!Number.isSafeInteger(id) || Number(id) < 1) throw accessError("invalid_arguments", 400);
   return Number(id);
+}
+
+function requiredProductId(args: Record<string, unknown>): number {
+  const productId = args.product_id;
+  if (!Number.isSafeInteger(productId) || Number(productId) < 1) throw accessError("invalid_arguments", 400);
+  return Number(productId);
+}
+
+function hostingNextStep(status: Awaited<ReturnType<typeof getHostingStatus>>): string {
+  const hosting = status.hosting as Record<string, unknown> | null;
+  if (!hosting) return "No active hosting record is visible. If removal was just requested, this status API does not expose removed rows or confirm remote cleanup; ask the hosting operator to verify cleanup before creating another deployment.";
+
+  const state = typeof hosting.state === "string" ? hosting.state : "unknown";
+  const desired = typeof hosting.desired === "string" ? hosting.desired : "unknown";
+  const failureCode = typeof hosting.failureCode === "string" ? hosting.failureCode : "";
+  const hostedUrl = typeof hosting.hostedUrl === "string" ? hosting.hostedUrl : "";
+
+  if (desired === "removed") {
+    return state === "removed" ? "Hosting has been removed; no further action is needed." : "Removal is in progress; wait and poll again.";
+  }
+  if (state === "queued" || state === "deploying" || state === "promoting" || state === "removing") {
+    return "The hosting job is in progress; wait and poll again in 10–20 seconds.";
+  }
+  if (state === "staged") {
+    return desired === "live"
+      ? "The product is approved; wait for the deployer to promote this staged bundle, then poll again."
+      : "The bundle is staged; wait for platform review before the hosted link is public.";
+  }
+  if (state === "live") {
+    return hostedUrl
+      ? "The approved hostedUrl is public."
+      : "The provider reports a live site, but hostedUrl is not exposed; wait for product approval and poll again.";
+  }
+  if (state === "removed") return "Hosting has been removed; no further action is needed.";
+  if (state === "failed") {
+    if (failureCode === "validation_bundle") return "Fix the ZIP structure, allowed extensions, size, archive entry count (including directories), and root index.html, then call begin_hosting_upload again.";
+    if (failureCode === "validation_secret") return "Remove secrets and private keys from the static files, then create a new ZIP and call begin_hosting_upload again.";
+    if (failureCode === "bundle_missing") return "The stored bundle is unavailable; build and upload a new ZIP with begin_hosting_upload.";
+    if (failureCode === "ambiguous") return "Remote state is uncertain; do not upload another bundle. Ask the hosting operator to reconcile the recorded site first.";
+    if (failureCode === "provider_auth") return "The deployer could not authenticate with the hosting provider; ask the hosting operator to check its provider credential.";
+    if (failureCode === "provider_quota") return "The hosting provider quota is exhausted; ask the hosting operator to resolve quota before retrying.";
+    if (failureCode === "provider_audit_rejected") return "The provider rejected the staged site during review; ask the hosting operator to inspect the provider audit result.";
+    return "Review failureCode and failureDetail, then ask the hosting operator for the next action before retrying.";
+  }
+  return "Read the current state and failureCode, then poll again or ask the hosting operator to investigate.";
 }
 
 function validateToolArguments(name: string, args: Record<string, unknown>) {
@@ -264,7 +328,7 @@ async function readMcpJson(request: Request): Promise<JsonRpcRequest> {
   return JSON.parse(new TextDecoder().decode(bytes)) as JsonRpcRequest;
 }
 
-async function callTool(name: string, args: Record<string, unknown>, member: MemberIdentity): Promise<ToolResult> {
+async function callTool(name: string, args: Record<string, unknown>, member: MemberIdentity, request: Request): Promise<ToolResult> {
   try {
     validateToolArguments(name, args);
     if (name === "list_my_products") {
@@ -304,7 +368,36 @@ async function callTool(name: string, args: Record<string, unknown>, member: Mem
       });
       return successToolResult({ cover_upload_key: upload.key, url: upload.url, name: upload.name });
     }
+    if (name === "begin_hosting_upload") {
+      const productId = requiredProductId(args);
+      const publicOrigin = publicAppOrigin(request);
+      await enforceRateLimit(await rateLimitKey("hosting-token", member.email), 10, 60 * 60);
+      const issued = await createHostingUploadToken(member, productId);
+      const uploadUrl = new URL(issued.url, publicOrigin).toString();
+      const instructions = `curl --fail --show-error -sS -X PUT -H "content-type: application/zip" --data-binary @bundle.zip "${uploadUrl}" # One-time URL; valid for 15 minutes; do not share.`;
+      return successToolResult({
+        upload_url: uploadUrl,
+        method: "PUT",
+        content_type: "application/zip",
+        expires_at: issued.expiresAt,
+        max_bytes: issued.maxBytes,
+        instructions,
+      });
+    }
+    if (name === "get_hosting_status") {
+      const status = await getHostingStatus(member, requiredProductId(args));
+      return successToolResult({ ...status, next_step: hostingNextStep(status) });
+    }
+    if (name === "remove_hosting") {
+      const productId = requiredProductId(args);
+      await requestHostingRemoval(member, productId);
+      return successToolResult({ product_id: productId, requested: true });
+    }
   } catch (error) {
+    if (name === "begin_hosting_upload" && error && typeof error === "object"
+      && "code" in error && error.code === "hosting_owner_mismatch") {
+      return errorToolResult(accessError("product_not_found", 404));
+    }
     return errorToolResult(error);
   }
   throw accessError("unknown_tool", 400);
@@ -312,11 +405,14 @@ async function callTool(name: string, args: Record<string, unknown>, member: Mem
 
 type McpCredential = { kind: "api_key" | "oauth"; id: string };
 
-async function callWriteToolWithAudit(name: string, args: Record<string, unknown>, member: MemberIdentity, credential: McpCredential): Promise<ToolResult> {
-  const writeTool = name === "create_product" || name === "update_product" || name === "upload_cover";
-  if (!writeTool) return callTool(name, args, member);
+async function callWriteToolWithAudit(name: string, args: Record<string, unknown>, member: MemberIdentity, credential: McpCredential, request: Request): Promise<ToolResult> {
+  const writeTool = name === "create_product" || name === "update_product" || name === "upload_cover"
+    || name === "begin_hosting_upload" || name === "remove_hosting";
+  if (!writeTool) return callTool(name, args, member, request);
   const auditId = crypto.randomUUID();
-  const initialProductId = Number.isSafeInteger(args.id) && Number(args.id) > 0 ? Number(args.id) : null;
+  const initialProductId = Number.isSafeInteger(args.product_id) && Number(args.product_id) > 0
+    ? Number(args.product_id)
+    : Number.isSafeInteger(args.id) && Number(args.id) > 0 ? Number(args.id) : null;
   try {
     await database().prepare(
       `INSERT INTO mcp_write_audit (id, member_email, credential_kind, credential_id, tool_name, product_id, result)
@@ -325,14 +421,17 @@ async function callWriteToolWithAudit(name: string, args: Record<string, unknown
   } catch {
     return errorToolResult(accessError("audit_unavailable", 503));
   }
-  const result = await callTool(name, args, member);
+  const result = await callTool(name, args, member, request);
   const errorCode = result.isError ? String(result.structuredContent?.error ?? "server_error") : "ok";
   const resultCode = /^[a-z0-9_]+$/.test(errorCode) ? errorCode : "server_error";
   const product = result.structuredContent?.product;
+  const structuredProductId = result.structuredContent?.product_id;
   const returnedProductId = product && typeof product === "object" && "id" in product
     && Number.isSafeInteger((product as { id: unknown }).id)
     ? Number((product as { id: number }).id)
-    : initialProductId;
+    : Number.isSafeInteger(structuredProductId)
+      ? Number(structuredProductId)
+      : initialProductId;
   try {
     await database().prepare(
       `UPDATE mcp_write_audit SET product_id = ?, result = ? WHERE id = ? AND member_email = ?`,
@@ -435,7 +534,7 @@ export async function POST(request: Request) {
     const name = params.name;
     if (typeof name !== "string" || !tools.some((tool) => tool.name === name)) return rpcError(id, -32602, "Unknown tool");
     const args = plainObject(params.arguments) ? params.arguments : {};
-    const result = await callWriteToolWithAudit(name, args, member, credential);
+    const result = await callWriteToolWithAudit(name, args, member, credential, request);
     const capacityExceeded = result.isError === true
       && result.structuredContent?.error === "upload_capacity_exceeded";
     const retryAfterSeconds = Number(result.structuredContent?.retryAfterSeconds);
