@@ -86,7 +86,7 @@ async function assertGrant(memberEmail: string): Promise<void> {
   if (!grant) fail("hosting_not_granted", 403);
 }
 
-async function assertMemberProduct(member: MemberIdentity, productId: number): Promise<HostingProduct> {
+async function assertMemberProduct(member: Pick<MemberIdentity, "email">, productId: number): Promise<HostingProduct> {
   if (!Number.isSafeInteger(productId) || productId < 1) fail("product_not_found", 404);
   await assertGrant(member.email);
   const product = await database().prepare(
@@ -163,8 +163,11 @@ export async function submitHostingBundle(args: {
         args.member.email,
       ),
     ]);
-    if (Number(results[0]?.meta?.changes ?? 0) !== 1 || Number(results[2]?.meta?.changes ?? 0) !== 1) {
-      // The INSERT's NOT NULL scalar lookups fail before this point if ownership changed concurrently.
+    // D1 的 meta.changes 把触发器引起的行变更也算进去(UPDATE products 会触发
+    // product_material_change_requires_review 再 UPDATE 一次 → changes=2),所以这里不能断言恰好为 1。
+    // 所有权并发变化时 INSERT 的 NOT NULL 标量子查询会让整批回滚(见 catch),此处只做兜底:
+    // 产品更新至少命中一行、INSERT 恰好落一行。
+    if (Number(results[0]?.meta?.changes ?? 0) < 1 || Number(results[2]?.meta?.changes ?? 0) !== 1) {
       throw accessError("product_not_found", 404);
     }
   } catch (error) {

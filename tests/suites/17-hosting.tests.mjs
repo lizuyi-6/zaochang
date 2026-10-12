@@ -138,6 +138,13 @@ async function productDb(productId) {
   return rows[0];
 }
 
+// 部署器 claim 按优先级/先进先出领取全库作业,而各用例共享同一个本地 D1:前面用例遗留的
+// queued/staged 行会被后面的 claim 先领走。依赖 claim 的用例开头先清空托管表(product_hostings
+// 没有子表引用、也没有 DELETE 触发器),保证 claim 只会看到本用例创建的作业。
+async function resetHostingQueue() {
+  await executeLocalD1("DELETE FROM product_hostings");
+}
+
 async function hostingDb(hostingId) {
   const rows = await queryLocalD1(
     `SELECT id, product_id, state, desired, attempts, site_id, version_id,
@@ -445,6 +452,7 @@ export function register() {
   });
 
   test("hosting deploy, approval, public view, material re-review, and package replacement follow the contract", async () => {
+    await resetHostingQueue();
     const owner = await createMember(`hosting-flow-${runId}@example.com`);
     await grantMember(owner.email, 5);
     const admin = await adminCookie();
@@ -638,6 +646,7 @@ export function register() {
   });
 
   test("hosting superseded promotions become removal work and expired uncertain deploys never redeploy", async () => {
+    await resetHostingQueue();
     const owner = await createMember(`hosting-superseded-${runId}@example.com`);
     await grantMember(owner.email, 5);
 
@@ -734,6 +743,7 @@ export function register() {
   });
 
   test("hosting external-demo approval, rejection cleanup, and moderator removal enqueue removal", async () => {
+    await resetHostingQueue();
     const owner = await createMember(`hosting-review-actions-${runId}@example.com`);
     await grantMember(owner.email, 5);
     const demoProduct = await createProduct(owner.cookie, `external-${runId}`, { demoUrl: "https://demo.example/replaceable" });
@@ -1012,6 +1022,7 @@ export function register() {
   });
 
   test("hosting leases expire safely, old leases fail, reports replay, and exhausted attempts stop", async () => {
+    await resetHostingQueue();
     const owner = await createMember(`hosting-lease-${runId}@example.com`);
     await grantMember(owner.email, 5);
     const productId = await createProduct(owner.cookie, `lease-${runId}`);
