@@ -95,7 +95,23 @@ export class HostingRunner {
       if (record.phase !== "intent") continue;
       if (record.action === "deploy") {
         const found = await this.findInterruptedDeploy(record);
-        if (!found.ok) {
+        if (found.kind === "absent") {
+          const original = found.failure ?? failure("provider_error", true, "provider request failed");
+          await this.storeAndReport(record, failure(original.code, original.retryable, original.detail));
+          continue;
+        }
+        if (found.kind === "untrusted") {
+          const cleanup = await this.cleanupSite(found.siteId, record.siteName).catch(() => ({ ok: false }));
+          if (!cleanup.ok) {
+            await this.storeAndReport(record, failure("ambiguous", false,
+              `untrusted site cleanup failed (${found.reason}) for ${record.siteName}; siteId=${found.siteId}; files=${record.expectedFileCount}; bytes=${record.expectedUncompressedBytes}`));
+            continue;
+          }
+          const original = record.deployFailure ?? failure("provider_error", true, "provider request failed");
+          await this.storeAndReport(record, failure(original.code, true, original.detail));
+          continue;
+        }
+        if (found.kind === "ambiguous") {
           await this.storeAndReport(record, failure("ambiguous", false, found.detail));
           continue;
         }
@@ -160,16 +176,15 @@ export class HostingRunner {
         deployed = await this.steppage.deploy(zipPath, record.siteName);
       } catch (error) {
         const classified = classifyCliFailure(error);
-        if (classified.code === "provider_error") {
-          // 保留 intent 并进入统一对账路径，避免对未知结果的 deploy 自动重发。
-          throw error;
-        }
-        return await this.storeAndReport(record, failure(classified.code, classified.retryable, classified.detail));
+        await this.rememberDeployFailure(record, classified);
+        throw error;
       }
       const siteId = stringId(deployed?.siteId);
       const versionId = stringId(deployed?.versionId);
       if (!siteId || !versionId) {
-        return await this.storeAndReport(record, failure("ambiguous", false, `deploy returned no usable ids; reconcile ${record.siteName}; files=${record.expectedFileCount}; bytes=${record.expectedUncompressedBytes}`));
+        const classified = { code: "provider_error", retryable: true, detail: "provider deploy response was invalid" };
+        await this.rememberDeployFailure(record, classified);
+        throw new Error("provider deploy response was invalid");
       }
       const normalizedSiteId = siteId;
       const normalizedVersionId = versionId;
@@ -238,20 +253,30 @@ export class HostingRunner {
   }
 
   async cleanupAndReportExpiryFailure(record) {
-    const cleanup = await this.cleanupSite(record.siteId).catch(() => ({ ok: false }));
+    const cleanup = await this.cleanupSite(record.siteId, record.siteName).catch(() => ({ ok: false }));
     if (!cleanup.ok) {
       return await this.storeAndReport(record, failure("ambiguous", false, `preview expiry failed; manual cleanup required for site ${record.siteId}`));
     }
     return await this.storeAndReport(record, record.result.failure ?? failure("provider_error", true, "preview expiry failed"));
   }
 
-  async cleanupSite(siteId) {
+  async rememberDeployFailure(record, classified) {
+    record.deployFailure = {
+      code: classified.code,
+      retryable: classified.retryable,
+      detail: String(classified.detail).slice(0, 200),
+    };
+    record.updatedAt = new Date(this.now()).toISOString();
+    await this.wal.write(record);
+  }
+
+  async cleanupSite(siteId, expectedName) {
     const site = await this.steppage.get(siteId).catch((error) => {
       if (isNotFound(error)) return null;
       throw error;
     });
     if (!site) return { ok: true };
-    if (!isManagedSite(site, siteId)) return { ok: false };
+    if (!isManagedSite(site, siteId, expectedName)) return { ok: false };
     await this.deleteSite(siteId);
     return { ok: true };
   }
@@ -315,7 +340,7 @@ export class HostingRunner {
         if (isNotFound(error)) return await this.storeAndReport(record, { outcome: "removed" });
         throw error;
       }
-      if (!isManagedSite(site, record.siteId)) {
+      if (!isManagedSite(site, record.siteId, record.siteName)) {
         return await this.storeAndReport(record, failure("internal", false, "site name is outside the managed prefix"));
       }
       record.phase = "intent";
@@ -339,7 +364,7 @@ export class HostingRunner {
   async recoverRemove(record) {
     try {
       const site = await this.steppage.get(record.siteId);
-      if (!isManagedSite(site, record.siteId)) {
+      if (!isManagedSite(site, record.siteId, record.siteName)) {
         await this.storeAndReport(record, failure("internal", false, "site name is outside the managed prefix"));
         return;
       }
@@ -355,32 +380,52 @@ export class HostingRunner {
   }
 
   async findInterruptedDeploy(record) {
+    const evidence = `site=${record.siteName}; files=${record.expectedFileCount}; bytes=${record.expectedUncompressedBytes}`;
     let listed;
     try {
       listed = await this.steppage.list();
     } catch {
-      return { ok: false, detail: `could not reconcile deploy for ${record.siteName}; files=${record.expectedFileCount}; bytes=${record.expectedUncompressedBytes}` };
+      return { kind: "ambiguous", detail: `could not list during deploy recovery; ${evidence}` };
     }
-    const candidates = (Array.isArray(listed?.sites) ? listed.sites : [])
-      .filter((site) => site?.name === record.siteName && typeof site.siteId === "string");
-    const matches = [];
-    for (const site of candidates) {
-      try {
-        const result = await this.steppage.versions(site.siteId);
-        for (const version of Array.isArray(result?.versions) ? result.versions : []) {
-          if (Number(version.fileCount) === Number(record.expectedFileCount) && Number(version.totalBytes) === Number(record.expectedUncompressedBytes)) {
-            matches.push({ siteId: String(site.siteId), versionId: String(version.versionId), previewUrl: validPreviewUrl(version.previewUrl, this.rules) });
-          }
-        }
-      } catch {
-        return { ok: false, detail: `could not inspect versions for ${record.siteName}; files=${record.expectedFileCount}; bytes=${record.expectedUncompressedBytes}` };
-      }
+    if (!Array.isArray(listed?.sites)) {
+      return { kind: "ambiguous", detail: `site list was not parseable during deploy recovery; ${evidence}` };
     }
-    if (matches.length !== 1 || !matches[0].previewUrl) {
-      const reason = matches.length === 0 ? "no matching remote version" : "multiple matching remote versions";
-      return { ok: false, detail: `${reason} for ${record.siteName}; files=${record.expectedFileCount}; bytes=${record.expectedUncompressedBytes}` };
+    const candidates = listed.sites.filter((site) => site?.name === record.siteName);
+    if (candidates.length === 0) {
+      return { kind: "absent", failure: record.deployFailure ?? failure("provider_error", true, "provider request failed") };
     }
-    return { ok: true, ...matches[0] };
+    if (candidates.length !== 1) {
+      return { kind: "ambiguous", detail: `multiple sites found during deploy recovery; ${evidence}` };
+    }
+    const siteId = stringId(candidates[0]?.siteId);
+    if (!siteId) return { kind: "ambiguous", detail: `site id was invalid during deploy recovery; ${evidence}` };
+
+    let versionResult;
+    try {
+      versionResult = await this.steppage.versions(siteId);
+    } catch {
+      return { kind: "ambiguous", detail: `could not inspect versions during deploy recovery; ${evidence}; siteId=${siteId}` };
+    }
+    if (!Array.isArray(versionResult?.versions)) {
+      return { kind: "ambiguous", detail: `versions response was not parseable during deploy recovery; ${evidence}; siteId=${siteId}` };
+    }
+    const matching = versionResult.versions.filter((version) =>
+      Number(version?.fileCount) === Number(record.expectedFileCount)
+      && Number(version?.totalBytes) === Number(record.expectedUncompressedBytes));
+    if (versionResult.versions.length === 0 || matching.length === 0) {
+      const reason = versionResult.versions.length === 0 ? "site has no versions" : "version stats do not match";
+      return { kind: "untrusted", siteId, reason };
+    }
+    if (matching.length > 1) {
+      return { kind: "ambiguous", detail: `multiple versions match during deploy recovery; ${evidence}; siteId=${siteId}` };
+    }
+    const version = matching[0];
+    const versionId = stringId(version.versionId);
+    const previewUrl = validPreviewUrl(version.previewUrl, this.rules);
+    if (!versionId || !previewUrl) {
+      return { kind: "ambiguous", detail: `matching version could not be safely adopted; ${evidence}; siteId=${siteId}` };
+    }
+    return { kind: "matched", siteId, versionId, previewUrl };
   }
 
   newRecord(job, siteName) {
@@ -509,8 +554,12 @@ function stringId(value) {
   return typeof value === "string" && /^\d{1,80}$/u.test(value) ? value : null;
 }
 
-function isManagedSite(site, siteId) {
-  return Boolean(site && String(site.siteId) === String(siteId) && typeof site.name === "string" && site.name.startsWith("zc-p"));
+function isManagedSite(site, siteId, expectedName = null) {
+  return Boolean(site
+    && String(site.siteId) === String(siteId)
+    && typeof site.name === "string"
+    && site.name.startsWith("zc-p")
+    && (expectedName === null || site.name === expectedName));
 }
 
 function isNotFound(error) {

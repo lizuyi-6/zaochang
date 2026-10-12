@@ -183,8 +183,8 @@ export async function startFakeWorker({ jobs = [], reportFailures = 0, claimFail
   };
 }
 
-export async function initSteppageFixture(sandbox, { sites = {}, failures = {}, nextSiteId = 5000, nextVersionId = 6000, deployMetadata = {} } = {}) {
-  await writeFile(sandbox.statePath, JSON.stringify({ sites, failures, nextSiteId, nextVersionId, deployMetadata }), { mode: 0o600 });
+export async function initSteppageFixture(sandbox, { sites = {}, failures = {}, responses = {}, rawStdout = {}, nextSiteId = 5000, nextVersionId = 6000, deployMetadata = {} } = {}) {
+  await writeFile(sandbox.statePath, JSON.stringify({ sites, failures, responses, rawStdout, nextSiteId, nextVersionId, deployMetadata }), { mode: 0o600 });
   await writeFile(sandbox.cliLogPath, "", { mode: 0o600 });
 }
 
