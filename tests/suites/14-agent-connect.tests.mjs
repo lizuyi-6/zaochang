@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { test } from "node:test";
+import { buildZip, entry } from "../helpers/zip-builder.mjs";
 import {
   adminEmail,
   baseUrl,
@@ -11,6 +13,8 @@ import {
   executeLocalD1,
   uploadScannerRequestCount,
 } from "../harness/preview.mjs";
+
+const hostingRules = JSON.parse(readFileSync(new URL("../../app/api/_lib/hosting-rules.json", import.meta.url), "utf8"));
 
 // 声明超限 content-length 但只发送一小段请求体,读到响应即断开。worker 入口按 content-length
 // 直接回 413(worker/request-body.ts 快路径,不读请求体);若真的写完 11 MiB,服务端回 413 后
@@ -105,6 +109,23 @@ async function makeKeyFor(email, name = "integration key") {
   const created = await response.json();
   assert.match(created.token, /^zc_[A-Za-z0-9_-]{43}$/);
   return { cookie, ...created };
+}
+
+async function grantHosting(email) {
+  const adminCookie = await login(adminEmail);
+  const response = await fetch(`${baseUrl}/api/admin/hosting-grants`, {
+    method: "POST",
+    headers: { cookie: adminCookie, origin: baseUrl, "content-type": "application/json" },
+    body: JSON.stringify({ email, maxSites: 3, note: "MCP hosting integration grant" }),
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.equal(body.grant.memberEmail, email);
+  assert.equal(body.grant.maxSites, 3);
+}
+
+function cleanHostingZip() {
+  return buildZip([entry("index.html", { data: "<!doctype html><title>Hosted</title>" })]);
 }
 
 const quoteSql = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -254,11 +275,40 @@ export function register() {
     assert.equal(listed.status, 200);
     const listedTools = (await listed.json()).result.tools;
     const toolNames = listedTools.map((entry) => entry.name);
-    assert.deepEqual(toolNames, ["list_my_products", "get_product", "create_product", "update_product", "upload_cover"]);
+    assert.deepEqual(toolNames, [
+      "list_my_products", "get_product", "create_product", "update_product", "upload_cover",
+      "begin_hosting_upload", "get_hosting_status", "remove_hosting",
+    ]);
     const categoryEnum = listedTools.find((entry) => entry.name === "create_product").inputSchema.properties.category.enum;
     assert.deepEqual(categoryEnum, ["效率工具", "互动体验", "声音影像", "生活方式", "开发工具"]);
     assert.match(listedTools.find((entry) => entry.name === "create_product").inputSchema.properties.demo_url.description, /cannot currently pass platform review/);
     assert.match(listedTools.find((entry) => entry.name === "update_product").inputSchema.properties.demo_url.description, /cannot currently pass platform review/);
+    const beginHosting = listedTools.find((entry) => entry.name === "begin_hosting_upload");
+    assert.equal(beginHosting.inputSchema.properties.product_id.type, "integer");
+    assert.equal(beginHosting.inputSchema.properties.product_id.minimum, 1);
+    assert.equal(beginHosting.inputSchema.required.includes("product_id"), true);
+    assert.equal(beginHosting.inputSchema.additionalProperties, false);
+    const limitsDescription = beginHosting.description;
+    assert.equal(limitsDescription.includes(`${hostingRules.bundle.maxZipBytes / (1024 * 1024)} MiB`), true);
+    assert.equal(limitsDescription.includes(`${hostingRules.bundle.maxEntries} archive entries maximum (directory entries count)`), true);
+    assert.equal(limitsDescription.includes(hostingRules.bundle.rootFile), true);
+    for (const extension of hostingRules.extensions.allowed) {
+      assert.equal(limitsDescription.includes(`.${extension}`), true, `description includes .${extension} from hosting-rules.json`);
+    }
+    assert.match(limitsDescription, /dotfiles/);
+    assert.match(limitsDescription, /\.env/);
+    assert.match(limitsDescription, /private keys/);
+    assert.match(limitsDescription, /node_modules/);
+    assert.match(limitsDescription, /invitation grant/);
+    assert.match(limitsDescription, /demo_url must be empty/);
+    assert.match(limitsDescription, /public only after platform review approval/);
+    for (const name of ["get_hosting_status", "remove_hosting"]) {
+      const definition = listedTools.find((entry) => entry.name === name);
+      assert.equal(definition.inputSchema.properties.product_id.type, "integer");
+      assert.equal(definition.inputSchema.properties.product_id.minimum, 1);
+      assert.equal(definition.inputSchema.required.includes("product_id"), true);
+      assert.equal(definition.inputSchema.additionalProperties, false);
+    }
     const methodNotAllowed = await fetch(`${baseUrl}/api/mcp`, { method: "GET" });
     assert.equal(methodNotAllowed.status, 405);
     assert.equal((await methodNotAllowed.json()).error, "method_not_allowed");
@@ -638,5 +688,256 @@ export function register() {
     assert.equal(failedRows[0].purpose, "product_cover");
     assert.equal(failedRows[0].scan_status, "error");
     assert.equal(failedRows[0].quarantine_key, null);
+  });
+
+  test("agent connect: ungranted begin_hosting_upload is audited and creates no token or hosting row", async () => {
+    const email = `agent-hosting-ungranted-${runId}@example.com`;
+    const { token, key } = await makeKeyFor(email, "hosting ungranted");
+    const product = await tool(token, "create_product", {
+      title: "Uninvited hosting product",
+      description: "This product has no hosting grant and must not receive an upload token.",
+      category: "开发工具",
+    });
+    assert.equal(product.isError, undefined);
+    const productId = Number(product.structuredContent.product.id);
+
+    const denied = await tool(token, "begin_hosting_upload", { product_id: productId });
+    assert.equal(denied.isError, true);
+    assert.equal(denied.structuredContent.error, "hosting_not_granted");
+    const audit = await queryLocalD1(
+      `SELECT credential_kind, credential_id, tool_name, product_id, result FROM mcp_write_audit
+       WHERE member_email = ${quoteSql(email)} AND tool_name = 'begin_hosting_upload'`,
+    );
+    assert.equal(audit.length, 1);
+    assert.equal(audit[0].credential_kind, "api_key");
+    assert.equal(audit[0].credential_id, key.id);
+    assert.equal(audit[0].tool_name, "begin_hosting_upload");
+    assert.equal(Number(audit[0].product_id), productId);
+    assert.equal(audit[0].result, "hosting_not_granted");
+    const tokens = await queryLocalD1(
+      `SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE member_email = ${quoteSql(email)} AND product_id = ${productId}`,
+    );
+    const hostings = await queryLocalD1(`SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ${productId}`);
+    assert.equal(Number(tokens[0].count), 0);
+    assert.equal(Number(hostings[0].count), 0);
+  });
+
+  test("agent connect: authorized MCP hosting uploads once, exposes queued status, and audits removal without token leakage", async () => {
+    const email = `agent-hosting-flow-${runId}@example.com`;
+    const { token, key } = await makeKeyFor(email, "hosting flow");
+    await grantHosting(email);
+    const product = await tool(token, "create_product", {
+      title: "MCP hosted product",
+      description: "A static site submitted using the one-time upload URL.",
+      category: "开发工具",
+    });
+    assert.equal(product.isError, undefined);
+    const productId = Number(product.structuredContent.product.id);
+
+    const begun = await tool(token, "begin_hosting_upload", { product_id: productId });
+    assert.equal(begun.isError, undefined);
+    const issued = begun.structuredContent;
+    const uploadUrl = new URL(issued.upload_url);
+    assert.equal(uploadUrl.origin, new URL(baseUrl).origin);
+    assert.equal(/^\/api\/hosting\/bundles\/[A-Za-z0-9_-]{43}$/.test(uploadUrl.pathname), true);
+    assert.equal(uploadUrl.search, "");
+    assert.equal(issued.method, "PUT");
+    assert.equal(issued.content_type, "application/zip");
+    assert.equal(issued.max_bytes, hostingRules.bundle.maxZipBytes);
+    const expiresAt = Date.parse(issued.expires_at);
+    assert.equal(Number.isNaN(expiresAt), false);
+    assert.equal(expiresAt > Date.now(), true);
+    assert.equal(expiresAt - Date.now() <= 15 * 60 * 1000, true);
+    const issuedToken = uploadUrl.pathname.split("/").at(-1);
+    assert.equal(/^[A-Za-z0-9_-]{43}$/.test(issuedToken), true);
+    assert.equal(issued.instructions.startsWith("curl --fail --show-error -sS -X PUT -H \"content-type: application/zip\" --data-binary @bundle.zip \""), true);
+    assert.equal(issued.instructions.includes(issued.upload_url), true);
+    assert.equal(issued.instructions.endsWith("\" # One-time URL; valid for 15 minutes; do not share."), true);
+
+    const zip = cleanHostingZip();
+    const firstUpload = await fetch(issued.upload_url, {
+      method: "PUT",
+      headers: { "content-type": "application/zip" },
+      body: zip,
+    });
+    const firstUploadBody = await firstUpload.json();
+    assert.equal(firstUpload.status, 201, JSON.stringify(firstUploadBody));
+    assert.equal(firstUploadBody.hosting.state, "queued");
+
+    const status = await tool(token, "get_hosting_status", { product_id: productId });
+    assert.equal(status.isError, undefined);
+    assert.equal(Number.isSafeInteger(status.structuredContent.reviewVersion), true);
+    assert.equal(Number.isSafeInteger(status.structuredContent.approvedVersion), true);
+    assert.equal(status.structuredContent.hosting.state, "queued");
+    assert.equal(status.structuredContent.hosting.desired, "staged");
+    assert.equal(typeof status.structuredContent.next_step, "string");
+    assert.match(status.structuredContent.next_step, /wait and poll/);
+    const statusAudit = await queryLocalD1(
+      `SELECT COUNT(*) AS count FROM mcp_write_audit WHERE member_email = ${quoteSql(email)} AND tool_name = 'get_hosting_status'`,
+    );
+    assert.equal(Number(statusAudit[0].count), 0);
+
+    const filesBeforeReplay = await queryLocalD1(
+      `SELECT COUNT(*) AS count FROM uploaded_files WHERE owner_email = ${quoteSql(email)} AND purpose = 'hosting_bundle'`,
+    );
+    const hostingBeforeReplay = await queryLocalD1(`SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ${productId}`);
+    const replay = await fetch(issued.upload_url, {
+      method: "PUT",
+      headers: { "content-type": "application/zip" },
+      body: zip,
+    });
+    const replayBody = await replay.json();
+    assert.equal(replay.status, 401);
+    assert.equal(replayBody.error, "invalid_upload_token");
+    const filesAfterReplay = await queryLocalD1(
+      `SELECT COUNT(*) AS count FROM uploaded_files WHERE owner_email = ${quoteSql(email)} AND purpose = 'hosting_bundle'`,
+    );
+    const hostingAfterReplay = await queryLocalD1(`SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ${productId}`);
+    assert.equal(Number(filesAfterReplay[0].count), Number(filesBeforeReplay[0].count));
+    assert.equal(Number(hostingAfterReplay[0].count), Number(hostingBeforeReplay[0].count));
+
+    const removed = await tool(token, "remove_hosting", { product_id: productId });
+    assert.equal(removed.isError, undefined);
+    assert.equal(removed.structuredContent.product_id, productId);
+    assert.equal(removed.structuredContent.requested, true);
+    const hosting = await queryLocalD1(`SELECT state, desired, site_id FROM product_hostings WHERE product_id = ${productId}`);
+    assert.equal(hosting.length, 1);
+    assert.equal(hosting[0].state, "removed");
+    assert.equal(hosting[0].desired, "removed");
+    assert.equal(hosting[0].site_id, null);
+    const statusAfterRemoval = await tool(token, "get_hosting_status", { product_id: productId });
+    assert.equal(statusAfterRemoval.isError, undefined);
+    assert.equal(statusAfterRemoval.structuredContent.hosting, null);
+    assert.equal(statusAfterRemoval.structuredContent.next_step.includes("does not expose removed rows or confirm remote cleanup"), true);
+    const beginAudit = await queryLocalD1(
+      `SELECT credential_kind, credential_id, tool_name, product_id, result FROM mcp_write_audit
+       WHERE member_email = ${quoteSql(email)} AND tool_name = 'begin_hosting_upload'`,
+    );
+    const removeAudit = await queryLocalD1(
+      `SELECT credential_kind, credential_id, tool_name, product_id, result FROM mcp_write_audit
+       WHERE member_email = ${quoteSql(email)} AND tool_name = 'remove_hosting'`,
+    );
+    assert.equal(beginAudit.length, 1);
+    assert.equal(beginAudit[0].credential_kind, "api_key");
+    assert.equal(beginAudit[0].credential_id, key.id);
+    assert.equal(beginAudit[0].tool_name, "begin_hosting_upload");
+    assert.equal(Number(beginAudit[0].product_id), productId);
+    assert.equal(beginAudit[0].result, "ok");
+    assert.equal(removeAudit.length, 1);
+    assert.equal(removeAudit[0].credential_kind, "api_key");
+    assert.equal(removeAudit[0].credential_id, key.id);
+    assert.equal(removeAudit[0].tool_name, "remove_hosting");
+    assert.equal(Number(removeAudit[0].product_id), productId);
+    assert.equal(removeAudit[0].result, "ok");
+
+    const allAuditText = await queryLocalD1("SELECT * FROM mcp_write_audit");
+    for (const row of allAuditText) {
+      for (const column of Object.keys(row)) {
+        if (typeof row[column] === "string") assert.equal(row[column].includes(issuedToken), false, `audit ${column} must not contain the upload token`);
+      }
+    }
+  });
+
+  test("agent connect: hosting begin masks non-owner products and rejects demo_url without creating tokens", async () => {
+    const email = `agent-hosting-ownership-${runId}@example.com`;
+    const { token } = await makeKeyFor(email, "hosting ownership");
+    await grantHosting(email);
+    const demoProduct = await tool(token, "create_product", {
+      title: "External demo conflict",
+      description: "A hosted project must not retain an external demo URL.",
+      category: "开发工具",
+      demo_url: "https://demo.example/hosted-conflict",
+    });
+    assert.equal(demoProduct.isError, undefined);
+    const demoProductId = Number(demoProduct.structuredContent.product.id);
+
+    const otherEmail = `agent-hosting-owner-${runId}@example.com`;
+    const other = await makeKeyFor(otherEmail, "other hosting owner");
+    const foreignProduct = await tool(other.token, "create_product", {
+      title: "Another member's product",
+      description: "This product belongs to a different member.",
+      category: "开发工具",
+    });
+    assert.equal(foreignProduct.isError, undefined);
+    const foreignProductId = Number(foreignProduct.structuredContent.product.id);
+
+    const demoDenied = await tool(token, "begin_hosting_upload", { product_id: demoProductId });
+    assert.equal(demoDenied.isError, true);
+    assert.equal(demoDenied.structuredContent.error, "hosting_demo_url_conflict");
+    const foreignDenied = await tool(token, "begin_hosting_upload", { product_id: foreignProductId });
+    const missingDenied = await tool(token, "begin_hosting_upload", { product_id: 2147483000 });
+    assert.equal(foreignDenied.isError, true);
+    assert.equal(missingDenied.isError, true);
+    assert.equal(foreignDenied.structuredContent.error, "product_not_found");
+    assert.equal(missingDenied.structuredContent.error, "product_not_found");
+    assert.equal(foreignDenied.structuredContent.error, missingDenied.structuredContent.error);
+
+    const audits = await queryLocalD1(
+      `SELECT tool_name, product_id, result FROM mcp_write_audit
+       WHERE member_email = ${quoteSql(email)} AND tool_name = 'begin_hosting_upload' ORDER BY rowid`,
+    );
+    assert.equal(audits.length, 3);
+    assert.equal(audits[0].tool_name, "begin_hosting_upload");
+    assert.equal(Number(audits[0].product_id), demoProductId);
+    assert.equal(audits[0].result, "hosting_demo_url_conflict");
+    assert.equal(Number(audits[1].product_id), foreignProductId);
+    assert.equal(audits[1].result, "product_not_found");
+    assert.equal(Number(audits[2].product_id), 2147483000);
+    assert.equal(audits[2].result, "product_not_found");
+    const tokens = await queryLocalD1(`SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE member_email = ${quoteSql(email)}`);
+    const hostings = await queryLocalD1(
+      `SELECT COUNT(*) AS count FROM product_hostings WHERE product_id IN (${demoProductId}, ${foreignProductId}, 2147483000)`,
+    );
+    assert.equal(Number(tokens[0].count), 0);
+    assert.equal(Number(hostings[0].count), 0);
+  });
+
+  test("agent connect: hosting upload token creation is capped at ten attempts per member per hour", async () => {
+    const email = `agent-hosting-rate-${runId}@example.com`;
+    const { token } = await makeKeyFor(email, "hosting token rate");
+    await grantHosting(email);
+    const product = await tool(token, "create_product", {
+      title: "Hosting token rate limit",
+      description: "This product exercises the separate member token-creation bucket.",
+      category: "开发工具",
+    });
+    assert.equal(product.isError, undefined);
+    const productId = Number(product.structuredContent.product.id);
+
+    for (let index = 0; index < 10; index += 1) {
+      const issued = await tool(token, "begin_hosting_upload", { product_id: productId });
+      assert.equal(issued.isError, undefined, `token attempt ${index + 1} is within the hourly cap`);
+      assert.equal(/^https?:\/\//.test(issued.structuredContent.upload_url), true);
+      await executeLocalD1(
+        `UPDATE hosting_upload_tokens SET used_at = CURRENT_TIMESTAMP
+         WHERE member_email = ${quoteSql(email)} AND used_at IS NULL`,
+      );
+    }
+    const beforeEleventh = await queryLocalD1(
+      `SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE member_email = ${quoteSql(email)}`,
+    );
+    assert.equal(Number(beforeEleventh[0].count), 10);
+
+    const denied = await tool(token, "begin_hosting_upload", { product_id: productId });
+    assert.equal(denied.isError, true);
+    assert.equal(denied.structuredContent.error, "rate_limit_exceeded");
+    const afterEleventh = await queryLocalD1(
+      `SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE member_email = ${quoteSql(email)}`,
+    );
+    assert.equal(Number(afterEleventh[0].count), Number(beforeEleventh[0].count));
+    const rateBucket = `hosting-token:${createHash("sha256").update(`hosting-token:${email}`).digest("hex")}`;
+    const windowStart = Math.floor(Math.floor(Date.now() / 1000) / 3600) * 3600;
+    const rateCounter = await queryLocalD1(
+      `SELECT request_count FROM api_rate_limits WHERE bucket = ${quoteSql(rateBucket)} AND window_start = ${windowStart}`,
+    );
+    assert.equal(rateCounter.length, 1);
+    assert.equal(Number(rateCounter[0].request_count), 11);
+    const audits = await queryLocalD1(
+      `SELECT product_id, result FROM mcp_write_audit
+       WHERE member_email = ${quoteSql(email)} AND tool_name = 'begin_hosting_upload' ORDER BY rowid`,
+    );
+    assert.equal(audits.length, 11);
+    assert.equal(Number(audits[10].product_id), productId);
+    assert.equal(audits[10].result, "rate_limit_exceeded");
   });
 }

@@ -1,11 +1,11 @@
 ---
 name: zaochang-agent-connect
-description: Use 造场 MCP tools to list, submit, and update projects owned by the signed-in user, and check their review status.
+description: Use 造场 MCP tools to list, submit, update, and check projects owned by the signed-in user, upload covers, and host authorized static sites.
 ---
 
 # 造场 Agent 接入
 
-Use this skill when the user asks you to submit a project to 造场, edit one of their projects, check its review status, or upload a project cover.
+Use this skill when the user asks you to submit a project to 造场, edit one of their projects, check its review status, upload a project cover, or host an authorized static site.
 
 ## Connect with OAuth (recommended)
 
@@ -101,9 +101,39 @@ curl -sS "https://aetherstudio.top/api/mcp" \
 
 - `list_my_products`: list only the signed-in user's projects, including `status`, `review_status`, `review_version`, and `approved_version`.
 - `get_product(id)`: read a project only when its `owner_email` matches the signed-in user.
-- `create_product(title, description, category, demo_url?, pricing_model?, price?, cover_theme?, cover_upload_key?)`: submit a new project. `category` is one of `效率工具`, `互动体验`, `声音影像`, `生活方式`, or `开发工具`. External experience links (`demo_url`) cannot currently pass platform review because review requires experience content that cannot be replaced in place. Until static hosting is available, leave `demo_url` blank and use the cover and description to present the project.
-- `update_product(id, title?, description?, category?, demo_url?, pricing_model?, price?, cover_theme?, cover_upload_key?)`: edit only the signed-in user's project. Editing an approved project sends the changed version back for review. The same `demo_url` review restriction applies to updates.
+- `create_product(title, description, category, demo_url?, pricing_model?, price?, cover_theme?, cover_upload_key?)`: submit a new project. `category` is one of `效率工具`, `互动体验`, `声音影像`, `生活方式`, or `开发工具`. External experience links (`demo_url`) cannot currently pass platform review because review requires experience content that cannot be replaced in place. If you have a hosting grant, use static hosting instead of an external link and keep `demo_url` empty.
+- `update_product(id, title?, description?, category?, demo_url?, pricing_model?, price?, cover_theme?, cover_upload_key?)`: edit only the signed-in user's project. Editing an approved project sends the changed version back for review. The same `demo_url` restriction applies; for a hosted project, keep `demo_url` empty.
 - `upload_cover(filename, mime_type, data_base64)`: submit a PNG, JPEG, or WebP cover for scanning. Use the returned `cover_upload_key` with `create_product` or `update_product`.
+- `begin_hosting_upload(product_id)`: for a product you own, create a one-time ZIP upload URL when your account has an invitation hosting grant and `demo_url` is empty.
+- `get_hosting_status(product_id)`: read hosting state, review state, the public hosted URL when available, and a suggested next step.
+- `remove_hosting(product_id)`: request removal of your hosted site. The current status API omits rows with `desired: removed`, so it cannot report removal progress or confirm remote cleanup.
+
+## Static hosting
+
+Static hosting accepts a ZIP bundle and serves static files only. The ZIP must be at most 10 MiB, contain no more than 500 archive entries (directory entries count), and have `index.html` at its root. Include only supported static asset types: HTML, CSS, JavaScript and modules, JSON and maps, text/XML/SVG, images, fonts, WebAssembly, PDF and media, Markdown, TSX, or JSX. Do not include dotfiles (including `.env`), private keys, `node_modules`, or server-side code. An invitation hosting grant is required. Keep the hosted product's `demo_url` empty; hosted links are public only after platform review approves the product.
+
+Follow this flow:
+
+1. Create the product with `create_product`, leaving `demo_url` omitted or empty. Hosting can only be requested for a product that already exists and belongs to the signed-in member.
+2. Build the production static output. Inspect the output directory and package only the files needed to serve the site. Put `index.html` directly at the ZIP root, then check the ZIP size, archive entry count (including directory entries), extensions, hidden files, and secret/key filenames.
+3. Call `begin_hosting_upload(product_id)`. The tool returns an absolute `upload_url`, `max_bytes`, an expiry, and a copyable shell command. The URL is one-time, expires after 15 minutes, and must not be shared. Token creation is limited to 10 attempts per member per hour.
+4. Use a local shell to upload the ZIP. Keep the archive bytes out of every MCP tool argument:
+
+   ```sh
+   curl --fail --show-error -sS -X PUT -H "content-type: application/zip" --data-binary @bundle.zip "<upload_url>"
+   ```
+
+   Replace `<upload_url>` with the returned URL and run the command once before it expires. A successful upload returns HTTP 201; the one-time URL cannot be replayed.
+5. Call `get_hosting_status(product_id)` every 10–20 seconds while `hosting.state` is `queued`, `deploying`, or `promoting`. Use `next_step` as guidance. `staged` means the bundle is waiting for platform review; pause rapid polling and check again later. `live` with a non-empty `hosting.hostedUrl` means the approved hosted link is public and the deployment polling loop can stop. For `failed`, stop polling and follow the `failureCode`; do not infer public availability from an upload or staged preview. The current REST status shape filters rows whose `desired` is `removed`, so `hosting: null` after a removal request does not confirm that the remote site has been deleted; ask the hosting operator to verify cleanup before creating another deployment.
+6. Handle common failures:
+   - `validation_bundle`: correct the ZIP structure, root `index.html`, size, archive entry count (including directories), path, or unsupported extension, then create a new upload URL.
+   - `validation_secret`: remove the detected secret or key from the static output, rebuild the ZIP, and create a new upload URL.
+   - `bundle_missing`: rebuild and upload the bundle again.
+   - `provider_quota`, `provider_auth`, `provider_audit_rejected`, `provider_error`, or `internal`: include `failureCode` and `failureDetail` when contacting the hosting operator; provider credentials and quota are operator-managed.
+   - `ambiguous`: remote state needs operator reconciliation. Do not upload another bundle until the site has been reconciled.
+7. Call `remove_hosting(product_id)` when the user asks to take down the site. Its success means the removal request was accepted. The status API omits rows with `desired: removed`, so it cannot report removal progress or prove remote cleanup; ask the hosting operator to verify cleanup. If a status response does expose `hosting.state: removed`, treat it as terminal.
+
+Never put ZIP bytes, base64 ZIP data, or file contents in an MCP argument. Only `begin_hosting_upload` returns the one-time URL; use it only from the shell command and do not paste or share it elsewhere.
 
 Business errors are returned in a tool result with `isError: true`. Do not retry by calling REST endpoints. After submitting or materially editing a project, use `get_product` or `list_my_products` to check its review status and wait for the 造场 review before treating it as published.
 
