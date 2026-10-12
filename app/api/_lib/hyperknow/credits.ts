@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import { database } from "../community";
-import { isFounderEmail } from "../admin";
+import { database, type MemberIdentity } from "../community";
+import { assertFounderRoleIdentityEligible, hasRole } from "../access-control";
 
 // hyperknow 独立积分与会员套餐(每日重置)。
 // - 每日额度根据会员套餐划分: FREE=20, PRO=100, MAX=500, 北京日界(UTC+8)零点整额续满;
@@ -15,6 +15,7 @@ export const HK_CHAT_COST = 2;
 export const HK_COURSE_COST = 10;
 
 export type SubscriptionTier = "FREE" | "PRO" | "MAX";
+type CreditIdentity = Pick<MemberIdentity, "email" | "authVia">;
 
 export const TIER_CONFIG: Record<SubscriptionTier, { maxCredits: number; label: string }> = {
   FREE: { maxCredits: 20, label: "FREE" },
@@ -23,8 +24,8 @@ export const TIER_CONFIG: Record<SubscriptionTier, { maxCredits: number; label: 
 };
 
 /** 解析用户的订阅等级：支持环境变量指定、指定名单，以及创始人号默认激活 MAX 套餐 */
-export function resolveUserTier(userEmail: string): SubscriptionTier {
-  const normEmail = userEmail.trim().toLowerCase();
+export function resolveUserTier(user: CreditIdentity): SubscriptionTier {
+  const normEmail = user.email.trim().toLowerCase();
   const values = env as unknown as Record<string, string | undefined>;
 
   // 1. 显式用户套餐映射: HK_USER_TIERS="2251213429@qq.com:MAX,other@x.com:PRO"
@@ -42,17 +43,20 @@ export function resolveUserTier(userEmail: string): SubscriptionTier {
   const maxUsers = (values.HK_MAX_USERS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   if (maxUsers.includes(normEmail)) return "MAX";
 
+  // Role-derived MAX cannot fall back to a shared same-day balance for an ineligible identity.
+  assertFounderRoleIdentityEligible(user);
+
   // 3. 创始人号天然默认享有 MAX 尊享套餐(环境变量 ZAOCHANG_FOUNDER_EMAIL,线上已配置;
   //    不在代码里硬编码账号——仓库里的硬编码邮箱是事实上的永久后门)
-  if (isFounderEmail(normEmail)) {
+  if (hasRole(user, "founder")) {
     return "MAX";
   }
 
   return "FREE";
 }
 
-export function dailyCreditsFor(userEmail: string): number {
-  const tier = resolveUserTier(userEmail);
+export function dailyCreditsFor(user: CreditIdentity): number {
+  const tier = resolveUserTier(user);
   return TIER_CONFIG[tier].maxCredits;
 }
 
@@ -63,8 +67,8 @@ export function beijingToday(): string {
 
 // 懒重置 + 确保行存在;返回今日余额。INSERT..ON CONFLICT 里用 reset_date 比对:
 // 已是今天 → 保留余额;落后 → 整额续满(excluded.balance 即每日额度)。
-async function ensureFreshRow(userEmail: string, today: string): Promise<void> {
-  const max = dailyCreditsFor(userEmail);
+async function ensureFreshRow(user: CreditIdentity, today: string): Promise<void> {
+  const max = dailyCreditsFor(user);
   await database()
     .prepare(
       `INSERT INTO hk_credits (user_email, balance, reset_date) VALUES (?, ?, ?)
@@ -73,39 +77,39 @@ async function ensureFreshRow(userEmail: string, today: string): Promise<void> {
          reset_date = excluded.reset_date,
          updated_at = CURRENT_TIMESTAMP`,
     )
-    .bind(userEmail, max, today)
+    .bind(user.email, max, today)
     .run();
 }
 
 export async function currentCredits(
-  userEmail: string,
+  user: CreditIdentity,
 ): Promise<{ remaining: number; max: number; tier: SubscriptionTier }> {
   const today = beijingToday();
-  const max = dailyCreditsFor(userEmail);
-  const tier = resolveUserTier(userEmail);
-  await ensureFreshRow(userEmail, today);
+  const max = dailyCreditsFor(user);
+  const tier = resolveUserTier(user);
+  await ensureFreshRow(user, today);
   const row = await database()
     .prepare(`SELECT balance FROM hk_credits WHERE user_email = ? AND reset_date = ?`)
-    .bind(userEmail, today)
+    .bind(user.email, today)
     .first<{ balance: number }>();
   return { remaining: row?.balance ?? max, max, tier };
 }
 
 // 条件扣减。成功返回扣后余额;余额不足(含 cost > 今日额度本身)返回 null。
-export async function consumeCredits(userEmail: string, cost: number): Promise<number | null> {
+export async function consumeCredits(user: CreditIdentity, cost: number): Promise<number | null> {
   const today = beijingToday();
-  await ensureFreshRow(userEmail, today);
+  await ensureFreshRow(user, today);
   const updated = await database()
     .prepare(
       `UPDATE hk_credits SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
        WHERE user_email = ? AND reset_date = ? AND balance >= ?`,
     )
-    .bind(cost, userEmail, today, cost)
+    .bind(cost, user.email, today, cost)
     .run();
   if (Number(updated.meta.changes ?? 0) === 0) return null;
   const row = await database()
     .prepare(`SELECT balance FROM hk_credits WHERE user_email = ?`)
-    .bind(userEmail)
+    .bind(user.email)
     .first<{ balance: number }>();
   return row?.balance ?? null;
 }
@@ -127,15 +131,19 @@ export function parseTimestampMs(val: string | null | undefined): number {
 // 此前 cost 参数被三元表达式无视,是个一踩就炸的陷阱),支持任务恢复/并发竞争时
 // 409 拦截与 D1 batch 事务一致
 export async function consumeCreditsIdempotent(
-  userEmail: string,
+  user: CreditIdentity,
   idempotencyKey?: string,
   leaseDurationMs: number = 60_000,
 ): Promise<ConsumeCreditsResult> {
+  // Check the identity before inspecting/updating an existing lease; an ineligible founder
+  // identity must not mutate a pending lease before its shared-balance request is rejected.
+  resolveUserTier(user);
+
   const fixedCost = HK_COURSE_COST;
   const key = idempotencyKey?.trim();
 
   if (!key) {
-    const remaining = await consumeCredits(userEmail, fixedCost);
+    const remaining = await consumeCredits(user, fixedCost);
     return { remaining, charged: remaining !== null, conflict: false };
   }
 
@@ -148,13 +156,13 @@ export async function consumeCreditsIdempotent(
   try {
     const existing = await database()
       .prepare(`SELECT key, cost, status, lease_token, lease_expires_at FROM hk_credit_charges WHERE key = ? AND user_email = ?`)
-      .bind(key, userEmail)
+      .bind(key, user.email)
       .first<{ key: string; cost: number; status: string; lease_token?: string; lease_expires_at?: string }>();
 
     if (existing) {
       if (existing.status === "completed") {
         // 已完成任务与计费：幂等放行，不重复扣费
-        const { remaining } = await currentCredits(userEmail);
+        const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
       }
 
@@ -172,10 +180,10 @@ export async function consumeCreditsIdempotent(
              SET lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
              WHERE key = ? AND user_email = ?`,
           )
-          .bind(leaseToken, leaseExpiresAt, key, userEmail)
+          .bind(leaseToken, leaseExpiresAt, key, user.email)
           .run();
 
-        const { remaining } = await currentCredits(userEmail);
+        const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
       }
 
@@ -188,10 +196,10 @@ export async function consumeCreditsIdempotent(
              SET status = 'pending', lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
              WHERE key = ? AND user_email = ? AND status = 'refunded'`,
           )
-          .bind(leaseToken, leaseExpiresAt, key, userEmail)
+          .bind(leaseToken, leaseExpiresAt, key, user.email)
           .run();
 
-        const { remaining } = await currentCredits(userEmail);
+        const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
       }
     }
@@ -199,14 +207,14 @@ export async function consumeCreditsIdempotent(
 
   // 2. 首次建课: D1 原子 batch 执行条件扣费与插入 pending 排他租约
   const today = beijingToday();
-  await ensureFreshRow(userEmail, today);
+  await ensureFreshRow(user, today);
 
   const deductStmt = database()
     .prepare(
       `UPDATE hk_credits SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
        WHERE user_email = ? AND reset_date = ? AND balance >= ?`,
     )
-    .bind(fixedCost, userEmail, today, fixedCost);
+    .bind(fixedCost, user.email, today, fixedCost);
 
   const insertStmt = database()
     .prepare(
@@ -214,7 +222,7 @@ export async function consumeCreditsIdempotent(
        SELECT ?, ?, ?, 'pending', ?, ?
        WHERE (SELECT balance FROM hk_credits WHERE user_email = ? AND reset_date = ?) >= 0`,
     )
-    .bind(key, userEmail, fixedCost, leaseToken, leaseExpiresAt, userEmail, today);
+    .bind(key, user.email, fixedCost, leaseToken, leaseExpiresAt, user.email, today);
 
   try {
     const [deductRes] = await database().batch([deductStmt, insertStmt]);
@@ -223,24 +231,24 @@ export async function consumeCreditsIdempotent(
       try {
         await database()
           .prepare(`DELETE FROM hk_credit_charges WHERE key = ? AND user_email = ? AND status = 'pending'`)
-          .bind(key, userEmail)
+          .bind(key, user.email)
           .run();
       } catch {}
       return { remaining: null, charged: false, conflict: false };
     }
 
-    const { remaining } = await currentCredits(userEmail);
+    const { remaining } = await currentCredits(user);
     return { remaining, charged: true, conflict: false };
   } catch (err: unknown) {
     // 捕获主键冲突（并发请求争抢相同 key）：D1 batch 自动事务回滚 deductStmt，保证积分不扣
     const check = await database()
       .prepare(`SELECT status, lease_expires_at FROM hk_credit_charges WHERE key = ? AND user_email = ?`)
-      .bind(key, userEmail)
+      .bind(key, user.email)
       .first<{ status: string; lease_expires_at?: string }>();
 
     if (check) {
       if (check.status === "completed") {
-        const { remaining } = await currentCredits(userEmail);
+        const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
       }
       if (check.status === "pending") {
@@ -256,9 +264,9 @@ export async function consumeCreditsIdempotent(
              SET lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
              WHERE key = ? AND user_email = ? AND status = 'pending'`,
           )
-          .bind(leaseToken, leaseExpiresAt, key, userEmail)
+          .bind(leaseToken, leaseExpiresAt, key, user.email)
           .run();
-        const { remaining } = await currentCredits(userEmail);
+        const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
       }
       if (check.status === "refunded") {
@@ -268,9 +276,9 @@ export async function consumeCreditsIdempotent(
              SET status = 'pending', lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
              WHERE key = ? AND user_email = ? AND status = 'refunded'`,
           )
-          .bind(leaseToken, leaseExpiresAt, key, userEmail)
+          .bind(leaseToken, leaseExpiresAt, key, user.email)
           .run();
-        const { remaining } = await currentCredits(userEmail);
+        const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
       }
     }

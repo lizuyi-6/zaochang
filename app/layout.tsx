@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { isAdminEmail, isFounderEmail } from "./api/_lib/access-control";
+import { hasRole } from "./api/_lib/access-control";
 import { database } from "./api/_lib/community";
 import { memberInitial } from "./lib/format";
 import { getChatGPTUser } from "./chatgpt-auth";
@@ -36,8 +36,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         email: user.email,
         displayName: user.displayName,
         initial: memberInitial(user.displayName),
-        isAdmin: isAdminEmail(user.email),
-        isFounder: isFounderEmail(user.email),
+        isAdmin: hasRole(user, "admin"),
+        isFounder: hasRole(user, "founder"),
         memberNumber,
       }
     : { signedIn: false, email: null, displayName: "游客", initial: "游", isAdmin: false, isFounder: false, memberNumber: null };

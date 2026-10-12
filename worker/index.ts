@@ -4,6 +4,7 @@ import handler from "vinext/server/app-router-entry";
 import { resolvePublicAppOrigin } from "../app/lib/public-origin";
 import { withSecurityHeaders } from "../app/lib/security-policy";
 import { oidcDiscoveryDocument } from "../app/api/_lib/oauth-discovery";
+import { mcpResourceMetadata, oauthAuthorizationServerMetadata } from "../app/api/_lib/oauth-resource";
 import { runPurgeRegistry } from "../app/api/_lib/purge";
 import { cleanupOrphanedHyperknowImages } from "../app/api/_lib/purge/hyperknow-images";
 import { scheduledPurgePlan } from "./purge-schedule";
@@ -111,6 +112,30 @@ const worker = {
         oidcDiscoveryDocument(origin),
         { headers: { "cache-control": "public, max-age=300" } },
       ), origin);
+    }
+
+    if (url.pathname === "/.well-known/oauth-protected-resource/api/mcp"
+      || url.pathname === "/.well-known/oauth-protected-resource") {
+      const headers = {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type",
+        "cache-control": "public, max-age=300",
+      };
+      if (request.method === "OPTIONS") return withSecurityHeaders(request, new Response(null, { status: 204, headers }), origin);
+      if (request.method !== "GET") {
+        return withSecurityHeaders(request, Response.json({ error: "method_not_allowed" }, { status: 405, headers: { ...headers, allow: "GET, OPTIONS" } }), origin);
+      }
+      return withSecurityHeaders(request, Response.json(mcpResourceMetadata(origin), { headers }), origin);
+    }
+
+    if (url.pathname === "/.well-known/oauth-authorization-server") {
+      if (request.method !== "GET") {
+        return withSecurityHeaders(request, Response.json({ error: "method_not_allowed" }, { status: 405, headers: { allow: "GET" } }), origin);
+      }
+      return withSecurityHeaders(request, Response.json(oauthAuthorizationServerMetadata(origin), {
+        headers: { "cache-control": "public, max-age=300" },
+      }), origin);
     }
 
     if (url.pathname === "/_vinext/image") {

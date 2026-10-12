@@ -39,7 +39,7 @@ test('chat: model history window and storage cap', () => {
   const route = read('app/api/hyperknow/chat/route.ts');
   assert.match(route, /history\.slice\(-40\)/, '发给模型的历史必须有窗口上限');
   assert.match(route, /\.slice\(-200\)/, '落库历史必须有上限');
-  assert.match(route, /max: dailyCreditsFor\(member\.email\)/, 'credit 帧的 max 必须按用户套餐而非恒 20');
+  assert.match(route, /max: dailyCreditsFor\(member\)/, 'credit 帧的 max 必须按携带身份的用户套餐而非恒 20');
 });
 
 test('llm: empty thinking-only response falls back instead of silent ""', () => {
@@ -111,7 +111,7 @@ test('timeout: course-generation stage budgets resolve through the test-only ove
 
 test('lease: credit lease duration must cover the whole Stage1 budget (C2)', () => {
   const route = read('app/api/hyperknow/course-generation/route.ts');
-  assert.match(route, /consumeCreditsIdempotent\(\s*member\.email,\s*idempotencyKey,\s*stage1BudgetMs \+ CREDIT_LEASE_MARGIN_MS,/, '计费租约必须 = Stage1 预算 + 余量——60s 默认租约短于蓝图生成耗时,同 key 重发会免费接管并双跑上游');
+  assert.match(route, /consumeCreditsIdempotent\(\s*member,\s*idempotencyKey,\s*stage1BudgetMs \+ CREDIT_LEASE_MARGIN_MS,/, '计费租约仍必须携带会员身份且 = Stage1 预算 + 余量——60s 默认租约短于蓝图生成耗时,同 key 重发会免费接管并双跑上游');
   const budgets = read('app/api/_lib/hyperknow/budgets.ts');
   assert.match(budgets, /CREDIT_LEASE_MARGIN_MS = 60_000/, '余量常量必须显式导出(可契约断言)');
 });

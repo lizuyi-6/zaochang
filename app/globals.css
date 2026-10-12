@@ -630,6 +630,8 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.012em; }
 .oauth-scope-list code { color: #777e88; font-size: 9px; }
 .oauth-payment-warning { align-items: flex-start; background: rgb(216 180 106 / 9%); border-left: 2px solid #d8b46a; color: #c9b98f !important; display: flex; gap: 8px; margin: 13px 0 0; padding: 11px 12px; }
 .oauth-payment-warning svg { flex: 0 0 auto; margin-top: 2px; }
+.oauth-payment-warning > span { flex: 1 1 auto; min-width: 0; }
+.oauth-redirect-uri { display: block; margin-top: 4px; overflow-wrap: anywhere; word-break: break-all; }
 .oauth-consent-actions { display: grid; gap: 9px; grid-template-columns: .75fr 1.25fr; margin-top: 20px; }
 .oauth-primary, .oauth-secondary { align-items: center; border-radius: 0; display: inline-flex; font-size: 12px; gap: 7px; justify-content: center; min-height: 42px; padding: 0 16px; }
 .oauth-primary { background: #d8b46a; color: #111418; }
@@ -1102,6 +1104,9 @@ body:has(.reading-ai-panel.open) .reading-ai-rail { display: none; }
 .api-key-secret-line button, .api-key-configs button { background: transparent; cursor: pointer; }
 .api-key-configs { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .api-key-configs > div { min-width: 0; }
+.api-key-configs > strong { font-size: 13px; grid-column: 1 / -1; }
+.api-key-configs > p { color: var(--muted); font-size: 11px; grid-column: 1 / -1; margin: 0; }
+.api-key-configs > p a { margin-left: 6px; }
 .api-key-configs pre { background: var(--paper); border: 1px solid var(--line); font-size: 9px; min-height: 92px; overflow: auto; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .api-key-manager ul { display: grid; gap: 9px; list-style: none; padding: 18px 0; }
 .api-key-manager li { align-items: center; border: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 16px minmax(0, 1fr) auto auto; padding: 12px 14px; }

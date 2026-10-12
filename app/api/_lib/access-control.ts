@@ -18,6 +18,7 @@
 import { optionalMember, requireMember, type MemberIdentity } from "./community";
 import { accessError } from "./errors";
 import { isFounderEmail, isAdminEmail } from "./admin";
+import { canHoldEmailWhitelistRole } from "./role-eligibility";
 
 export { optionalMember, requireMember };
 export { isAdminEmail, isFounderEmail };
@@ -41,11 +42,20 @@ export type AccessRule = {
 // 统一 coded error:jsonError 按形状识别。不要在路由里再手写 Object.assign(new Error...)。
 // (实现见 errors.ts,此处 re-export。)
 
-export function hasRole(member: MemberIdentity, role: AccessRole): boolean {
-  // 个人 API key 只代表 key 主人可以使用 MCP 暴露的项目工具,不继承其邮箱白名单角色。
-  if (member.authVia === "api_key") return false;
+export function hasRole(member: Pick<MemberIdentity, "email" | "authVia">, role: AccessRole): boolean {
+  if (!canHoldEmailWhitelistRole(member)) return false;
   if (role === "admin") return isAdminEmail(member.email);
   return isFounderEmail(member.email);
+}
+
+// credits 按邮箱共用余额;身份不合格的 founder 邮箱不能回退到 FREE 后继续读/花同日
+// 已由 founder session 建立的高余额。付费套餐映射由 credits 优先处理,不走此默认角色闸。
+export function assertFounderRoleIdentityEligible(
+  member: Pick<MemberIdentity, "email" | "authVia">,
+): void {
+  if (!canHoldEmailWhitelistRole(member) && isFounderEmail(member.email)) {
+    throw accessError("founder_forbidden", 403);
+  }
 }
 
 function roleDeniedCode(roles: readonly AccessRole[]): string {
@@ -92,7 +102,7 @@ export async function requireAdminOrAgent(): Promise<MemberIdentity> {
   // 按 email 字符串匹配会让"恰好同邮箱"的会话(如 dev-login 自选 agent@zaochang)
   // 平权获得管理通道——isAgent 只可能来自机器通道的 token 认证。
   if (member.isAgent) return member;
-  if (member.authVia === "api_key") throw accessError("admin_forbidden", 403);
+  if (!canHoldEmailWhitelistRole(member)) throw accessError("admin_forbidden", 403);
   if (!isAdminEmail(member.email)) throw accessError("admin_forbidden", 403);
   return member;
 }
@@ -106,7 +116,7 @@ export function requireFounder(): Promise<MemberIdentity> {
 export async function requireDocEditor(): Promise<MemberIdentity> {
   const member = await requireMember();
   if (member.isAgent) return member;
-  if (member.authVia === "api_key") throw accessError("founder_forbidden", 403);
+  if (!canHoldEmailWhitelistRole(member)) throw accessError("founder_forbidden", 403);
   if (isFounderEmail(member.email)) return member;
   throw accessError("founder_forbidden", 403);
 }

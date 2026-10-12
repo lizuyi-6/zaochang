@@ -74,10 +74,10 @@ export async function POST(request: Request) {
 
     // 扣费点与 /chat 真正一致:上游探活成功(拿到首帧)之后才扣——上游 503/超时
     // 返回干净 JSON 时用户不白扣 2 分。流中失败不退费(与 /chat 同语义)。
-    const remainingCredits = await consumeCredits(member.email, HK_CHAT_COST);
+    const remainingCredits = await consumeCredits(member, HK_CHAT_COST);
     if (remainingCredits === null) {
       void generator.return(undefined as never).catch(() => {}); // 收掉已启的上游流
-      const { remaining, max } = await currentCredits(member.email);
+      const { remaining, max } = await currentCredits(member);
       return Response.json(
         { error: "insufficient_credits", credit_info: { remaining, max } },
         { status: 402 },
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
               closed = true;
             }
           };
-          push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member.email) } });
+          push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member) } });
           try {
             for (let step = first; !step.done; step = await generator.next()) {
               const chunk = step.value;

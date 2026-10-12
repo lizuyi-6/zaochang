@@ -17,8 +17,15 @@ export type ApiKeyItem = {
 function configText(kind: "claude" | "codex" | "cursor", origin: string, token: string) {
   const endpoint = `${origin}/api/mcp`;
   if (kind === "claude") return `claude mcp add --transport http zaochang ${endpoint} --header "Authorization: Bearer ${token}"`;
-  if (kind === "codex") return `[mcp_servers.zaochang]\nurl = "${endpoint}"\nhttp_headers = { Authorization = "Bearer ${token}" }`;
+  if (kind === "codex") return `codex mcp add zaochang --url "${endpoint}" --bearer-token-env-var ZAOCHANG_API_KEY`;
   return JSON.stringify({ mcpServers: { zaochang: { url: endpoint, headers: { Authorization: `Bearer ${token}` } } } }, null, 2);
+}
+
+function oauthConfigText(kind: "claude" | "codex", origin: string) {
+  const endpoint = `${origin}/api/mcp`;
+  // 片段只放可直接粘进终端执行的命令；说明文字放在代码块外，否则「复制接入命令」会把中文句子一起复制进终端。
+  if (kind === "claude") return `claude mcp add --transport http zaochang "${endpoint}"\nclaude mcp login zaochang`;
+  return `codex mcp add zaochang --url "${endpoint}"\ncodex mcp login zaochang --oauth-client-registration dcr`;
 }
 
 export function ApiKeyManager({ initial, publicOrigin }: { initial: ApiKeyItem[]; publicOrigin: string }) {
@@ -86,10 +93,21 @@ export function ApiKeyManager({ initial, publicOrigin }: { initial: ApiKeyItem[]
         <div>
           <span>AGENT CONNECT / {String(items.length).padStart(2, "0")}</span>
           <h2>Agent API key</h2>
-          <p>为 Claude Code、Codex、Cursor 等 Agent 创建个人凭据。key 只能经 MCP 管理你自己的项目，并继续进入造场审核。</p>
+          <p>首选 OAuth 浏览器授权：Claude Code 或 Codex CLI 自动注册后，会打开造场登录与同意页；令牌只能管理你自己的项目。个人 API key 作为无浏览器环境与 CI 的备选，并继续进入造场审核。</p>
+          <p>OAuth 授权单独管理：<a href="/developers#authorized-apps">查看或撤销已授权应用</a>。</p>
         </div>
         <a className="api-key-skill-link" href="/skills/zaochang/SKILL.md" download>下载造场 Skill</a>
       </header>
+
+      <div className="api-key-configs api-key-oauth-configs">
+        <strong>OAuth 一键接入（推荐）</strong>
+        {(["claude", "codex"] as const).map((kind) => {
+          const label = kind === "claude" ? "Claude Code" : "Codex CLI";
+          const value = oauthConfigText(kind, origin);
+          return <div key={kind}><span>{label}</span><pre><code>{value}</code></pre><button type="button" onClick={() => void copy(`oauth-${kind}`, value)}><Copy size={13} />{copied === `oauth-${kind}` ? "已复制" : "复制接入命令"}</button></div>;
+        })}
+        <p>两条命令依次执行；第二条会打开浏览器，在造场登录并同意后即可使用。也可以在 Claude Code 会话里运行 <code>/mcp</code> 完成授权。<a href="/developers#authorized-apps">查看或撤销「已授权应用」</a></p>
+      </div>
 
       <form className="api-key-create" onSubmit={(event) => void createKey(event)}>
         <label>
@@ -116,10 +134,11 @@ export function ApiKeyManager({ initial, publicOrigin }: { initial: ApiKeyItem[]
             <code>{createdToken}</code>
             <button type="button" onClick={() => void copy("key", createdToken)}><Copy size={14} />{copied === "key" ? "已复制" : "复制 key"}</button>
           </div>
-          <p>建议写入本机环境变量 <code>ZAOCHANG_API_KEY</code>，不要粘贴进项目仓库文件。</p>
+          <p>API key 仅作为无浏览器环境与 CI 的备选。建议写入本机环境变量 <code>ZAOCHANG_API_KEY</code>，不要粘贴进项目仓库文件。</p>
           <div className="api-key-configs">
+            <strong>个人 API key 备选配置</strong>
             {(["claude", "codex", "cursor"] as const).map((kind) => {
-              const label = kind === "claude" ? "Claude Code" : kind === "codex" ? "Codex config.toml" : "Cursor / 通用 JSON";
+              const label = kind === "claude" ? "Claude Code" : kind === "codex" ? "Codex CLI" : "Cursor / 通用 JSON";
               const value = configText(kind, origin, createdToken);
               return <div key={kind}><span>{label}</span><pre><code>{value}</code></pre><button type="button" onClick={() => void copy(kind, value)}><Copy size={13} />{copied === kind ? "已复制" : "复制配置"}</button></div>;
             })}

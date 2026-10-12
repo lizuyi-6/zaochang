@@ -17,6 +17,7 @@ import { register as register_11_hyperknow } from "./suites/11-hyperknow.tests.m
 import { register as register_12_passkey } from "./suites/12-passkey.tests.mjs";
 import { register as register_13_qr_login } from "./suites/13-qr-login.tests.mjs";
 import { register as register_14_agent_connect } from "./suites/14-agent-connect.tests.mjs";
+import { register as register_15_mcp_oauth } from "./suites/15-mcp-oauth.tests.mjs";
 
 describe("造场社区集成流程", { concurrency: false }, () => {
   register_01_render();
@@ -33,4 +34,5 @@ describe("造场社区集成流程", { concurrency: false }, () => {
   register_12_passkey();
   register_13_qr_login();
   register_14_agent_connect();
+  register_15_mcp_oauth();
 });

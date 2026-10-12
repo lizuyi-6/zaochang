@@ -12,8 +12,9 @@ export type ChatGPTUser = {
   isAgent?: boolean;
   isAdmin?: boolean;
   isFounder?: boolean;
-  authVia?: "session" | "api_key" | "agent" | "legacy";
+  authVia?: "session" | "api_key" | "agent" | "legacy" | "oauth";
   apiKeyId?: string;
+  clientId?: string;
 };
 
 const USER_EMAIL_HEADER = "oai-authenticated-user-email";

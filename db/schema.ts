@@ -462,7 +462,7 @@ export const oauthProviderClients = sqliteTable(
   "oauth_provider_clients",
   {
     clientId: text("client_id").primaryKey(),
-    ownerEmail: text("owner_email").notNull().references(() => members.email),
+    ownerEmail: text("owner_email").references(() => members.email),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     websiteUrl: text("website_url").notNull(),
@@ -474,13 +474,25 @@ export const oauthProviderClients = sqliteTable(
     writeAccessApproved: integer("write_access_approved").notNull().default(0),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    registrationSource: text("registration_source").notNull().default("developer"),
+    allowedGrants: text("allowed_grants").notNull().default("authorization_code refresh_token"),
   },
   (table) => [
     index("oauth_provider_clients_owner_idx").on(table.ownerEmail, table.createdAt),
+    index("oauth_provider_clients_source_created_idx").on(table.registrationSource, table.createdAt),
     check("oauth_provider_clients_type_valid", sql`${table.clientType} in ('public', 'confidential')`),
     check("oauth_provider_clients_status_valid", sql`${table.status} in ('active', 'revoked')`),
     check("oauth_provider_clients_review_valid", sql`${table.reviewStatus} in ('unverified', 'verified', 'rejected')`),
     check("oauth_provider_clients_write_approval_valid", sql`${table.writeAccessApproved} in (0, 1)`),
+    check("oauth_provider_clients_registration_source_valid", sql`${table.registrationSource} in ('developer', 'dynamic')`),
+    check("oauth_provider_clients_grants_valid", sql`${table.allowedGrants} in ('authorization_code', 'authorization_code refresh_token')`),
+    check("oauth_provider_clients_registration_owner_guard", sql`(
+      (${table.registrationSource} = 'developer' and ${table.ownerEmail} is not null)
+      or (${table.registrationSource} = 'dynamic' and ${table.ownerEmail} is null
+        and ${table.clientType} = 'public' and ${table.writeAccessApproved} = 0
+        and ${table.reviewStatus} = 'unverified'
+        and ${table.allowedScopes} in ('mcp:projects', 'openid mcp:projects'))
+    )`),
   ],
 );
 
@@ -507,6 +519,7 @@ export const oauthProviderAuthorizationRequests = sqliteTable(
     codeChallenge: text("code_challenge").notNull(),
     expiresAt: text("expires_at").notNull(),
     usedAt: text("used_at"),
+    resource: text("resource"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [index("oauth_provider_requests_expiry_idx").on(table.expiresAt)],
@@ -525,6 +538,7 @@ export const oauthProviderAuthorizationCodes = sqliteTable(
     codeChallenge: text("code_challenge").notNull(),
     expiresAt: text("expires_at").notNull(),
     usedAt: text("used_at"),
+    resource: text("resource"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
@@ -544,6 +558,7 @@ export const oauthProviderAccessTokens = sqliteTable(
     refreshParentHash: text("refresh_parent_hash"),
     // 令牌家族(2026-10 审计 L2-L4):授权码直出与 refresh 轮换同族,谱系吊销按族连坐
     familyId: text("family_id"),
+    resource: text("resource"),
     expiresAt: text("expires_at").notNull(),
     revokedAt: text("revoked_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -567,6 +582,7 @@ export const oauthProviderRefreshTokens = sqliteTable(
     revokedAt: text("revoked_at"),
     replacedByHash: text("replaced_by_hash"),
     familyId: text("family_id").notNull(),
+    resource: text("resource"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
@@ -616,6 +632,26 @@ export const oauthProviderSigningKeys = sqliteTable(
       .on(table.status)
       .where(sql`${table.status} = 'active'`),
     check("oauth_provider_key_status_valid", sql`${table.status} in ('active', 'retired')`),
+  ],
+);
+
+export const mcpWriteAudit = sqliteTable(
+  "mcp_write_audit",
+  {
+    id: text("id").primaryKey(),
+    memberEmail: text("member_email").notNull().references(() => members.email),
+    credentialKind: text("credential_kind").notNull(),
+    credentialId: text("credential_id").notNull(),
+    toolName: text("tool_name").notNull(),
+    productId: integer("product_id"),
+    result: text("result").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("mcp_write_audit_created_idx").on(table.createdAt),
+    index("mcp_write_audit_member_created_idx").on(table.memberEmail, table.createdAt),
+    check("mcp_write_audit_credential_kind_valid", sql`${table.credentialKind} in ('api_key', 'oauth')`),
+    check("mcp_write_audit_tool_valid", sql`${table.toolName} in ('create_product', 'update_product', 'upload_cover')`),
   ],
 );
 

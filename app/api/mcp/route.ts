@@ -1,5 +1,5 @@
 import { requireMember } from "../_lib/access-control";
-import { jsonError } from "../_lib/community";
+import { database, jsonError, type MemberIdentity } from "../_lib/community";
 import { accessError } from "../_lib/errors";
 import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { PRODUCT_CATEGORIES, createProduct, getProduct, listMyProducts, updateProduct } from "../_lib/products";
@@ -7,6 +7,8 @@ import { MAX_UPLOAD_BYTES } from "../_lib/upload-security";
 import { storeScannedUpload } from "../_lib/upload-core";
 import { parseBearerToken } from "../_lib/agent-auth";
 import { assertSameOrigin } from "../_lib/request-origin";
+import { publicAppOrigin } from "../../oauth-session";
+import { requireMcpOAuthBearer } from "../_lib/oauth-provider";
 
 const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26"] as const;
 const MAX_MCP_REQUEST_BYTES = 11 * 1024 * 1024;
@@ -28,19 +30,38 @@ function rpcError(id: JsonRpcId, code: number, message: string, data?: unknown) 
   return Response.json({ jsonrpc: "2.0", id, error: { code, message, ...(data === undefined ? {} : { data }) } }, { headers: jsonHeaders });
 }
 
-function challengeRequired() {
+function mcpResourceMetadataUrl(request: Request) {
+  return `${publicAppOrigin(request)}/.well-known/oauth-protected-resource/api/mcp`;
+}
+
+function challengeRequired(request: Request, invalid = false) {
+  const metadata = mcpResourceMetadataUrl(request);
+  const challenge = invalid
+    ? `Bearer error="invalid_token", resource_metadata="${metadata}"`
+    : `Bearer resource_metadata="${metadata}"`;
   return Response.json({ error: "invalid_api_key" }, {
     status: 401,
-    headers: { "www-authenticate": "Bearer", "cache-control": "no-store" },
+    headers: { "www-authenticate": challenge, "cache-control": "no-store" },
   });
 }
 
-function withBearerChallenge(response: Response) {
+function withBearerChallenge(request: Request, response: Response) {
   if (response.status !== 401) return response;
   const headers = new Headers(response.headers);
-  headers.set("www-authenticate", "Bearer");
+  headers.set("www-authenticate", `Bearer error="invalid_token", resource_metadata="${mcpResourceMetadataUrl(request)}"`);
   headers.set("cache-control", "no-store");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function insufficientScope(request: Request) {
+  const metadata = mcpResourceMetadataUrl(request);
+  return Response.json({ error: "insufficient_scope" }, {
+    status: 403,
+    headers: {
+      "www-authenticate": `Bearer error="insufficient_scope", scope="mcp:projects", resource_metadata="${metadata}"`,
+      "cache-control": "no-store",
+    },
+  });
 }
 
 function errorToolResult(error: unknown): ToolResult {
@@ -68,12 +89,12 @@ type ToolInputSchema = {
 const tools = [
   {
     name: "list_my_products",
-    description: "列出当前 API key 主人的项目及审核状态。",
+    description: "列出当前授权会员自己的项目及审核状态。",
     inputSchema: inputSchema({}),
   },
   {
     name: "get_product",
-    description: "读取当前 API key 主人的一个项目。",
+    description: "读取当前授权会员自己的一个项目。",
     inputSchema: inputSchema({ id: { type: "integer", minimum: 1 } }, ["id"]),
   },
   {
@@ -92,7 +113,7 @@ const tools = [
   },
   {
     name: "update_product",
-    description: "修改当前 API key 主人的项目；修改已上架项目后会重新进入审核。",
+    description: "修改当前授权会员自己的项目；修改已上架项目后会重新进入审核。",
     inputSchema: inputSchema({
       id: { type: "integer", minimum: 1 },
       title: { type: "string" },
@@ -221,7 +242,7 @@ async function readMcpJson(request: Request): Promise<JsonRpcRequest> {
   return JSON.parse(new TextDecoder().decode(bytes)) as JsonRpcRequest;
 }
 
-async function callTool(name: string, args: Record<string, unknown>, member: Awaited<ReturnType<typeof requireMember>>): Promise<ToolResult> {
+async function callTool(name: string, args: Record<string, unknown>, member: MemberIdentity): Promise<ToolResult> {
   try {
     validateToolArguments(name, args);
     if (name === "list_my_products") {
@@ -267,6 +288,39 @@ async function callTool(name: string, args: Record<string, unknown>, member: Awa
   throw accessError("unknown_tool", 400);
 }
 
+type McpCredential = { kind: "api_key" | "oauth"; id: string };
+
+async function callWriteToolWithAudit(name: string, args: Record<string, unknown>, member: MemberIdentity, credential: McpCredential): Promise<ToolResult> {
+  const writeTool = name === "create_product" || name === "update_product" || name === "upload_cover";
+  if (!writeTool) return callTool(name, args, member);
+  const auditId = crypto.randomUUID();
+  const initialProductId = Number.isSafeInteger(args.id) && Number(args.id) > 0 ? Number(args.id) : null;
+  try {
+    await database().prepare(
+      `INSERT INTO mcp_write_audit (id, member_email, credential_kind, credential_id, tool_name, product_id, result)
+       VALUES (?, ?, ?, ?, ?, ?, 'audit_incomplete')`,
+    ).bind(auditId, member.email, credential.kind, credential.id, name, initialProductId).run();
+  } catch {
+    return errorToolResult(accessError("audit_unavailable", 503));
+  }
+  const result = await callTool(name, args, member);
+  const errorCode = result.isError ? String(result.structuredContent?.error ?? "server_error") : "ok";
+  const resultCode = /^[a-z0-9_]+$/.test(errorCode) ? errorCode : "server_error";
+  const product = result.structuredContent?.product;
+  const returnedProductId = product && typeof product === "object" && "id" in product
+    && Number.isSafeInteger((product as { id: unknown }).id)
+    ? Number((product as { id: number }).id)
+    : initialProductId;
+  try {
+    await database().prepare(
+      `UPDATE mcp_write_audit SET product_id = ?, result = ? WHERE id = ? AND member_email = ?`,
+    ).bind(returnedProductId, resultCode, auditId, member.email).run();
+  } catch {
+    return errorToolResult(accessError("audit_unavailable", 503));
+  }
+  return result;
+}
+
 export async function GET() {
   return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { allow: "POST", "cache-control": "no-store" } });
 }
@@ -280,15 +334,31 @@ export async function POST(request: Request) {
   }
 
   const bearer = parseBearerToken(request.headers.get("authorization"));
-  if (!bearer?.startsWith("zc_")) return challengeRequired();
+  if (!bearer) return challengeRequired(request);
 
-  let member;
+  let member: MemberIdentity;
+  let credential: McpCredential;
   try {
-    member = await requireMember();
-    if (member.authVia !== "api_key" || !member.apiKeyId) return challengeRequired();
-    await enforceRateLimit(await rateLimitKey("mcp-api-key", member.apiKeyId), 60, 60);
+    if (bearer.startsWith("zca_")) {
+      const oauthMember = await requireMcpOAuthBearer(request);
+      member = oauthMember;
+      credential = { kind: "oauth", id: oauthMember.clientId };
+      await enforceRateLimit(await rateLimitKey("mcp-oauth", `${oauthMember.clientId}:${oauthMember.email}`), 60, 60);
+    } else if (bearer.startsWith("zc_")) {
+      member = await requireMember();
+      if (member.authVia !== "api_key" || !member.apiKeyId) return challengeRequired(request, true);
+      credential = { kind: "api_key", id: member.apiKeyId };
+      await enforceRateLimit(await rateLimitKey("mcp-api-key", member.apiKeyId), 60, 60);
+    } else {
+      return challengeRequired(request, true);
+    }
+    await enforceRateLimit(await rateLimitKey("mcp-member", member.email), 120, 60);
   } catch (error) {
-    return withBearerChallenge(jsonError(error));
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+    if (code === "insufficient_scope") return insufficientScope(request);
+    const status = error && typeof error === "object" && "status" in error ? Number((error as { status: unknown }).status) : 500;
+    if (status === 401) return withBearerChallenge(request, jsonError(error));
+    return jsonError(error);
   }
 
   let body: JsonRpcRequest;
@@ -309,14 +379,29 @@ export async function POST(request: Request) {
   }
   if (id === undefined) return new Response(null, { status: 202, headers: { "cache-control": "no-store" } });
   if (body?.jsonrpc !== "2.0" || typeof body.method !== "string") return rpcError(id, -32600, "Invalid Request");
+  // Streamable HTTP:协商后的请求携带 MCP-Protocol-Version;无效/不支持的值必须 400。
+  // initialize 本身尚未协商,不校验该头。
+  const protocolHeader = request.headers.get("mcp-protocol-version");
+  if (body.method !== "initialize" && protocolHeader !== null
+    && !SUPPORTED_PROTOCOLS.includes(protocolHeader as typeof SUPPORTED_PROTOCOLS[number])) {
+    return Response.json(
+      { jsonrpc: "2.0", id, error: { code: -32600, message: "Unsupported MCP-Protocol-Version", data: { supported: SUPPORTED_PROTOCOLS } } },
+      { status: 400, headers: { "cache-control": "no-store" } },
+    );
+  }
 
   if (body.method === "initialize") {
     const params = plainObject(body.params) ? body.params : {};
-    if (typeof params.protocolVersion !== "string" || !SUPPORTED_PROTOCOLS.includes(params.protocolVersion as typeof SUPPORTED_PROTOCOLS[number])) {
-      return rpcError(id, -32602, "Unsupported protocolVersion", { supported: SUPPORTED_PROTOCOLS });
+    if (typeof params.protocolVersion !== "string") {
+      return rpcError(id, -32602, "Invalid protocolVersion", { supported: SUPPORTED_PROTOCOLS });
     }
+    // MCP 生命周期规范:客户端请求的版本不受支持时,服务端回复自己支持的最新版本,
+    // 由客户端决定是否继续——直接报错会让更新的客户端(如 Claude Code 2.1.x)无法接入。
+    const negotiated = SUPPORTED_PROTOCOLS.includes(params.protocolVersion as typeof SUPPORTED_PROTOCOLS[number])
+      ? params.protocolVersion
+      : SUPPORTED_PROTOCOLS[0];
     return rpcResponse(id, {
-      protocolVersion: params.protocolVersion,
+      protocolVersion: negotiated,
       capabilities: { tools: {} },
       serverInfo: { name: "zaochang", title: "造场 Agent 接入", version: "1.0.0" },
     });
@@ -328,7 +413,7 @@ export async function POST(request: Request) {
     const name = params.name;
     if (typeof name !== "string" || !tools.some((tool) => tool.name === name)) return rpcError(id, -32602, "Unknown tool");
     const args = plainObject(params.arguments) ? params.arguments : {};
-    return rpcResponse(id, await callTool(name, args, member));
+    return rpcResponse(id, await callWriteToolWithAudit(name, args, member, credential));
   }
   if (body.method.startsWith("notifications/")) return new Response(null, { status: 202, headers: { "cache-control": "no-store" } });
   return rpcError(id, -32601, "Method not found");

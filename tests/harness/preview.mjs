@@ -893,7 +893,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -926,7 +926,49 @@ before(async () => {
           FROM products WHERE owner_email = 'legacy-review-migration@example.com'
       `);
     }
+    if (migrationFile === "0031_mcp_oauth.sql") {
+      // 0031 重建被 9 张子表引用的 oauth_provider_clients。D1 恒开外键且在事务内忽略
+      // PRAGMA foreign_keys=OFF:空库能过不代表生产(已有客户端与令牌)能过——旧写法在有数据的库上
+      // 报 FOREIGN KEY constraint failed。此处先灌入既有开发者客户端及子表行,迁移后断言完好。
+      await executeLocalD1(`
+        INSERT INTO members (email, display_name) VALUES ('pre-0031-dev@example.com', '迁移前开发者'), ('pre-0031-user@example.com', '迁移前用户');
+        INSERT INTO oauth_provider_clients (client_id, owner_email, name, description, website_url, client_type, client_secret_hash, allowed_scopes, review_status, write_access_approved)
+          VALUES ('zc_pre_0031_app', 'pre-0031-dev@example.com', '迁移前应用', 'd', 'https://pre-0031.example', 'confidential', 'h', 'openid profile', 'verified', 0);
+        INSERT INTO oauth_provider_redirect_uris (client_id, redirect_uri) VALUES ('zc_pre_0031_app', 'https://pre-0031.example/cb');
+        INSERT INTO oauth_provider_subjects (client_id, user_email, subject) VALUES ('zc_pre_0031_app', 'pre-0031-user@example.com', 'zcsub_pre_0031');
+        INSERT INTO oauth_provider_consents (client_id, user_email, scope) VALUES ('zc_pre_0031_app', 'pre-0031-user@example.com', 'openid profile');
+        INSERT INTO oauth_provider_access_tokens (token_hash, client_id, user_email, scope, expires_at) VALUES ('pre-0031-at', 'zc_pre_0031_app', 'pre-0031-user@example.com', 'openid profile', datetime('now', '+1 hour'));
+        INSERT INTO oauth_provider_refresh_tokens (token_hash, client_id, user_email, scope, expires_at) VALUES ('pre-0031-rt', 'zc_pre_0031_app', 'pre-0031-user@example.com', 'openid profile', datetime('now', '+30 days'))
+      `);
+    }
     await executeLocalD1(readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"));
+    if (migrationFile === "0031_mcp_oauth.sql") {
+      assert.deepEqual(
+        (await queryLocalD1(`SELECT client_id, owner_email, registration_source, review_status, allowed_scopes FROM oauth_provider_clients WHERE client_id = 'zc_pre_0031_app'`)).map((row) => ({ ...row })),
+        [{ client_id: "zc_pre_0031_app", owner_email: "pre-0031-dev@example.com", registration_source: "developer", review_status: "verified", allowed_scopes: "openid profile" }],
+      );
+      assert.deepEqual(
+        (await queryLocalD1(`SELECT
+          (SELECT COUNT(*) FROM oauth_provider_redirect_uris WHERE client_id = 'zc_pre_0031_app') AS redirects,
+          (SELECT COUNT(*) FROM oauth_provider_subjects WHERE client_id = 'zc_pre_0031_app') AS subjects,
+          (SELECT COUNT(*) FROM oauth_provider_consents WHERE client_id = 'zc_pre_0031_app') AS consents,
+          (SELECT COUNT(*) FROM oauth_provider_access_tokens WHERE client_id = 'zc_pre_0031_app' AND resource IS NULL) AS access,
+          (SELECT COUNT(*) FROM oauth_provider_refresh_tokens WHERE client_id = 'zc_pre_0031_app' AND resource IS NULL) AS refresh`)).map((row) => ({ ...row })),
+        [{ redirects: 1, subjects: 1, consents: 1, access: 1, refresh: 1 }],
+      );
+      assert.deepEqual(await queryLocalD1("PRAGMA foreign_key_check"), [], "0031 must leave no dangling child rows");
+      const orphan = await executeLocalD1(`INSERT INTO oauth_provider_redirect_uris (client_id, redirect_uri) VALUES ('zc_missing_parent', 'https://x.example/cb')`, false);
+      assert.match(orphan, /FOREIGN KEY constraint failed/, "child FK must still point at the rebuilt oauth_provider_clients");
+      await executeLocalD1(`
+        DELETE FROM oauth_provider_refresh_tokens WHERE client_id = 'zc_pre_0031_app';
+        DELETE FROM oauth_provider_access_tokens WHERE client_id = 'zc_pre_0031_app';
+        DELETE FROM oauth_provider_consents WHERE client_id = 'zc_pre_0031_app';
+        DELETE FROM oauth_provider_subjects WHERE client_id = 'zc_pre_0031_app';
+        DELETE FROM oauth_provider_redirect_uris WHERE client_id = 'zc_pre_0031_app';
+        DELETE FROM oauth_provider_clients WHERE client_id = 'zc_pre_0031_app';
+        DELETE FROM members WHERE email IN ('pre-0031-dev@example.com', 'pre-0031-user@example.com')
+      `);
+    }
     if (migrationFile === "0008_noisy_jazinda.sql") {
       const bypassFailure = await executeLocalD1(
         `UPDATE products

@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { UPLOAD_KEY_PATTERN } from "../../_lib/upload-core";
-import { isAdminEmail, optionalMember } from "../../_lib/access-control";
+import { hasRole, optionalMember } from "../../_lib/access-control";
 import { database } from "../../_lib/community";
 import { PUBLISHED_PRODUCT_SQL } from "../../../lib/product-policy";
 
@@ -40,7 +40,7 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
       const imageUrl = `/api/uploads/${encodeURIComponent(key)}`;
       // M1(2026-10 审计):封面可被多个产品共用——"是否已批准产品的当前封面"必须
       // 用 EXISTS 全量判定;.first() 命中待审产品会把已批准产品共用的封面错判 403。
-      if (member !== null && isAdminEmail(member.email)) {
+      if (member !== null && hasRole(member, "admin")) {
         reviewer = Boolean(await database().prepare(
           `SELECT 1 AS pending FROM products WHERE image_url = ? AND review_status = 'pending_review'`,
         ).bind(imageUrl).first());

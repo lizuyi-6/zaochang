@@ -18,7 +18,7 @@ export async function GET() {
          FROM products WHERE review_status = 'pending_review'
          ORDER BY submitted_at ASC, id ASC LIMIT 100`,
       ).all(),
-      database().prepare(`SELECT client_id AS clientId, owner_email AS ownerEmail, name, website_url AS websiteUrl, allowed_scopes AS allowedScopes, review_status AS reviewStatus, write_access_approved AS writeAccessApproved, created_at AS createdAt FROM oauth_provider_clients WHERE status = 'active' AND (review_status <> 'verified' OR (allowed_scopes LIKE '%fruit:%' AND write_access_approved = 0)) ORDER BY created_at ASC LIMIT 100`).all(),
+      database().prepare(`SELECT client_id AS clientId, owner_email AS ownerEmail, name, website_url AS websiteUrl, allowed_scopes AS allowedScopes, review_status AS reviewStatus, write_access_approved AS writeAccessApproved, created_at AS createdAt FROM oauth_provider_clients WHERE registration_source = 'developer' AND status = 'active' AND (review_status <> 'verified' OR (allowed_scopes LIKE '%fruit:%' AND write_access_approved = 0)) ORDER BY created_at ASC LIMIT 100`).all(),
       database().prepare(`SELECT id, user_email AS userEmail, kind, severity, evidence, status, created_at AS createdAt FROM fruit_risk_events WHERE status = 'open' ORDER BY created_at ASC LIMIT 100`).all(),
     ]);
     return Response.json({ reports: reports.results, products: products.results, clients: clients.results, risks: risks.results });

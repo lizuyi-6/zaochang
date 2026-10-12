@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { USER_KEY_CAPABILITIES, isUserKeyCapabilityAllowed, userApiKeyIdentity } from "../app/api/_lib/user-api-key.ts";
+import { USER_KEY_CAPABILITIES, isUserApiKeyBearer, isUserKeyCapabilityAllowed, userApiKeyIdentity } from "../app/api/_lib/user-api-key.ts";
 import { AGENT_ADMIN_CAPABILITIES, AGENT_WRITE_CAPABILITIES } from "../app/api/_lib/agent-auth.ts";
 
 test("USER_KEY_CAPABILITIES is exactly POST /api/mcp and remains separate from agent tables", () => {
@@ -24,4 +24,9 @@ test("API-key identities never carry the owner's admin, founder, or agent flags"
   assert.equal(identity.isAdmin, false);
   assert.equal(identity.isFounder, false);
   assert.equal(identity.isAgent, false);
+});
+
+test("MCP OAuth zca_ Bearer prefix is not mistaken for a personal zc_ key", () => {
+  assert.equal(isUserApiKeyBearer(`Bearer zc_${"a".repeat(43)}`), true);
+  assert.equal(isUserApiKeyBearer(`Bearer zca_${"a".repeat(43)}`), false);
 });

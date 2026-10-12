@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ArrowUpRight, BadgeCheck, Boxes, FolderKanban, Orbit, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { isAdminEmail, requireFounder } from "../api/_lib/access-control";
+import { hasRole, requireFounder } from "../api/_lib/access-control";
 import { database } from "../api/_lib/community";
 import { FOUNDER_DISPLAY_NAME, products as showcaseProducts } from "../lib/community-data";
 import { reviewDisplayState } from "../lib/review-status";
@@ -31,7 +31,7 @@ export default async function FounderPage() {
   }
 
   const db = database();
-  const admin = isAdminEmail(founder.email);
+  const admin = hasRole(founder, "admin");
   const officialProducts = showcaseProducts.filter((product) => product.founderOwned);
   const [ownedResult, incubationCount, pendingProductCount, pendingProjectCount] = await Promise.all([
     db.prepare(

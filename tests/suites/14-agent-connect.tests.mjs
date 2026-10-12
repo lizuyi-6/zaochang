@@ -205,6 +205,20 @@ export function register() {
     assert.equal(initialized.result.serverInfo.name, "zaochang");
     const newest = await rpc(token, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "contract-test", version: "1" } });
     assert.equal((await newest.json()).result.protocolVersion, "2025-06-18");
+    // 更新的客户端请求未知版本时,服务端回落到自己支持的最新版本而不是报错(Claude Code 2.1.296 实测曾被 -32602 拒绝)。
+    const future = await rpc(token, "initialize", { protocolVersion: "2099-01-01", capabilities: {}, clientInfo: { name: "contract-test", version: "1" } });
+    assert.equal(future.status, 200);
+    const futureBody = await future.json();
+    assert.equal(futureBody.error, undefined);
+    assert.equal(futureBody.result.protocolVersion, "2025-06-18");
+    const missingVersion = await (await rpc(token, "initialize", { capabilities: {} })).json();
+    assert.equal(missingVersion.error.code, -32602);
+    const badHeader = await rpc(token, "tools/list", {}, { "mcp-protocol-version": "1999-01-01" });
+    assert.equal(badHeader.status, 400);
+    assert.equal((await badHeader.json()).error.message, "Unsupported MCP-Protocol-Version");
+    const goodHeader = await rpc(token, "tools/list", {}, { "mcp-protocol-version": "2025-06-18" });
+    assert.equal(goodHeader.status, 200);
+    assert.ok((await goodHeader.json()).result.tools.some((entry) => entry.name === "create_product"));
 
     const notification = await fetch(`${baseUrl}/api/mcp`, {
       method: "POST",
@@ -370,7 +384,8 @@ export function register() {
     assert.equal(revoke.status, 200);
     const revoked = await rpc(revokedCreated.token, "tools/list");
     assert.equal(revoked.status, 401);
-    assert.equal(revoked.headers.get("www-authenticate"), "Bearer");
+    assert.match(revoked.headers.get("www-authenticate") ?? "", /error="invalid_token"/);
+    assert.match(revoked.headers.get("www-authenticate") ?? "", /resource_metadata="http:\/\/127\.0\.0\.1:4179\/\.well-known\/oauth-protected-resource\/api\/mcp"/);
 
     const expiredCreated = await (await createKey(cookie, "expired key", 30)).json();
     await executeLocalD1(
@@ -378,7 +393,8 @@ export function register() {
     );
     const expired = await rpc(expiredCreated.token, "tools/list");
     assert.equal(expired.status, 401);
-    assert.equal(expired.headers.get("www-authenticate"), "Bearer");
+    assert.match(expired.headers.get("www-authenticate") ?? "", /error="invalid_token"/);
+    assert.match(expired.headers.get("www-authenticate") ?? "", /resource_metadata=/);
 
     const fallback = await fetch(`${baseUrl}/api/mcp`, {
       method: "POST",
@@ -386,7 +402,8 @@ export function register() {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
     });
     assert.equal(fallback.status, 401);
-    assert.equal(fallback.headers.get("www-authenticate"), "Bearer");
+    assert.match(fallback.headers.get("www-authenticate") ?? "", /error="invalid_token"/);
+    assert.match(fallback.headers.get("www-authenticate") ?? "", /resource_metadata=/);
     assert.equal((await fallback.json()).error, "invalid_api_key");
   });
 
@@ -398,7 +415,7 @@ export function register() {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
     });
     assert.equal(cookieOnly.status, 401);
-    assert.equal(cookieOnly.headers.get("www-authenticate"), "Bearer");
+    assert.match(cookieOnly.headers.get("www-authenticate") ?? "", /resource_metadata=/);
 
     const foreign = await rpc(token, "tools/list", {}, { origin: "https://attacker.example" });
     assert.equal(foreign.status, 403);

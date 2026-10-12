@@ -1,4 +1,4 @@
-import { isFounderEmail, optionalMember } from "../_lib/access-control";
+import { hasRole, optionalMember } from "../_lib/access-control";
 import { ensureMember, jsonError } from "../_lib/community";
 import { loadMemberCommunityState } from "../_lib/community-state";
 import { settleDueExternalFruit } from "../_lib/external-fruit";
@@ -37,7 +37,7 @@ export async function GET() {
       circleStats: publicState.circleStats,
       liveRoomStats: publicState.liveRoomStats,
       signedIn: Boolean(member),
-      isFounder: member ? isFounderEmail(member.email) : false,
+      isFounder: member ? hasRole(member, "founder") : false,
     });
   } catch (error) {
     return jsonError(error);
