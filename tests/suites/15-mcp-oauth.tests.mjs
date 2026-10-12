@@ -81,6 +81,19 @@ async function consent({ cookie, clientId, redirectUri, scope = "mcp:projects", 
   return { page, html, requestToken, verifier, challenge, state, url };
 }
 
+// 同意提交后返回中转页(meta refresh),不再 303:同意页 CSP 为 form-action 'self',浏览器会拦截
+// 表单提交后跳往客户端回调的重定向(2026-10-12 生产实测 Claude Code 登录卡住)。断言 CSP 未被放宽。
+async function consentCallback(response) {
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html/);
+  assert.equal(response.headers.get("location"), null);
+  assert.match(response.headers.get("content-security-policy") ?? "", /form-action 'self';/);
+  const html = await response.text();
+  const target = html.match(/<meta http-equiv="refresh" content="0;url=([^"]+)">/)?.[1];
+  assert.ok(target, html.slice(0, 300));
+  return new URL(target.replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&"));
+}
+
 async function approve({ cookie, requestToken, decision = "allow" }) {
   return fetch(`${baseUrl}/api/oauth/authorize`, {
     method: "POST",
@@ -123,8 +136,7 @@ async function oauthFlow({ email, name = `Flow client ${runId}`, redirectUri = `
   assert.equal(pending.page.status, 200);
   assert.ok(pending.requestToken);
   const allowed = await approve({ cookie, requestToken: pending.requestToken });
-  assert.equal(allowed.status, 303);
-  const callback = new URL(allowed.headers.get("location"));
+  const callback = await consentCallback(allowed);
   assert.equal(callback.origin, new URL(redirectUri).origin);
   assert.equal(callback.searchParams.get("state"), pending.state);
   const codeResponse = await exchangeCode({
@@ -176,8 +188,7 @@ async function authorizeDeveloperClient({ client, cookie, redirectUri, email }) 
   assert.equal(pending.page.status, 200);
   assert.ok(pending.requestToken);
   const allowed = await approve({ cookie, requestToken: pending.requestToken });
-  assert.equal(allowed.status, 303);
-  const callback = new URL(allowed.headers.get("location"));
+  const callback = await consentCallback(allowed);
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     client_id: client.clientId,
@@ -419,8 +430,7 @@ export function register() {
     assert.match(pending.html, /提交与修改都会重新审核/);
     assert.match(pending.html, /不能动果子、不能读邮箱/);
     const allowed = await approve({ cookie, requestToken: pending.requestToken });
-    assert.equal(allowed.status, 303);
-    const callback = new URL(allowed.headers.get("location"));
+    const callback = await consentCallback(allowed);
     assert.equal(callback.origin, new URL(redirectUri).origin);
     assert.equal(callback.searchParams.get("state"), pending.state);
     const wrongResourceTokenResponse = await exchangeCode({
@@ -645,7 +655,7 @@ export function register() {
       const pending = await consent({ cookie, ...clients[index], state: `cap-state-${index}-${runId}` });
       assert.equal(pending.page.status, 200);
       const allowed = await approve({ cookie, requestToken: pending.requestToken });
-      assert.equal(allowed.status, 303);
+      await consentCallback(allowed);
     }
     const eleventh = await consent({ cookie, ...clients[10], state: `cap-state-11-${runId}` });
     const denied = await approve({ cookie, requestToken: eleventh.requestToken });
@@ -658,13 +668,13 @@ export function register() {
 
     const sameClient = await consent({ cookie, ...clients[0], state: `cap-renew-${runId}` });
     const renewed = await approve({ cookie, requestToken: sameClient.requestToken });
-    assert.equal(renewed.status, 303);
+    await consentCallback(renewed);
     assert.equal(Number((await queryLocalD1(`SELECT COUNT(*) AS count FROM oauth_provider_consents WHERE user_email = ${quoteSql(email)} AND revoked_at IS NULL AND client_id IN (${clients.slice(0, 10).map((item) => quoteSql(item.clientId)).join(",")})`))[0].count), 10);
 
     await executeLocalD1(`UPDATE oauth_provider_consents SET revoked_at = CURRENT_TIMESTAMP WHERE user_email = ${quoteSql(email)} AND client_id = ${quoteSql(clients[0].clientId)}`);
     const replacement = await consent({ cookie, ...clients[10], state: `cap-replacement-${runId}` });
     const replacementAllowed = await approve({ cookie, requestToken: replacement.requestToken });
-    assert.equal(replacementAllowed.status, 303);
+    await consentCallback(replacementAllowed);
     const revokedReauth = await consent({ cookie, ...clients[0], state: `cap-revoked-reauth-${runId}` });
     const revokedReauthDenied = await approve({ cookie, requestToken: revokedReauth.requestToken });
     assert.equal(revokedReauthDenied.status, 403);
@@ -804,8 +814,7 @@ export function register() {
     assert.equal(dynamic.response.status, 201);
     const pending = await consent({ cookie, clientId: dynamic.body.client_id, redirectUri: dynamic.body.redirect_uris[0], state: `admin-role-${runId}` });
     const allowed = await approve({ cookie, requestToken: pending.requestToken });
-    assert.equal(allowed.status, 303);
-    const callback = new URL(allowed.headers.get("location"));
+    const callback = await consentCallback(allowed);
     const tokenResponse = await exchangeCode({ clientId: dynamic.body.client_id, code: callback.searchParams.get("code"), redirectUri: dynamic.body.redirect_uris[0], verifier: pending.verifier });
     assert.equal(tokenResponse.status, 200);
     const oauthToken = (await tokenResponse.json()).access_token;

@@ -14,6 +14,19 @@ import {
   reviewProduct,
 } from "../harness/preview.mjs";
 
+// 同意提交后返回中转页(meta refresh),不再 303:同意页 CSP 为 form-action 'self',浏览器会拦截
+// 表单提交后跳往客户端回调的重定向(2026-10-12 生产实测 Claude Code 登录卡住)。断言 CSP 未被放宽。
+async function consentCallback(response) {
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html/);
+  assert.equal(response.headers.get("location"), null);
+  assert.match(response.headers.get("content-security-policy") ?? "", /form-action 'self';/);
+  const html = await response.text();
+  const target = html.match(/<meta http-equiv="refresh" content="0;url=([^"]+)">/)?.[1];
+  assert.ok(target, html.slice(0, 300));
+  return new URL(target.replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&"));
+}
+
 export function register() {
 test("OIDC login and delegated fruit API require PKCE, scopes, and per-payment confirmation", async () => {
   const merchantEmail = `oidc-merchant-${runId}@example.com`;
@@ -95,8 +108,7 @@ test("OIDC login and delegated fruit API require PKCE, scopes, and per-payment c
     headers: { ...payerHeaders, "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ request_token: requestToken, decision: "allow" }),
   });
-  assert.equal(approveAuthorization.status, 303);
-  const authorizationRedirect = new URL(approveAuthorization.headers.get("location"));
+  const authorizationRedirect = await consentCallback(approveAuthorization);
   assert.equal(authorizationRedirect.origin, "https://client.example");
   assert.equal(authorizationRedirect.searchParams.get("state"), state);
   const authorizationCode = authorizationRedirect.searchParams.get("code");
@@ -136,8 +148,7 @@ test("OIDC login and delegated fruit API require PKCE, scopes, and per-payment c
     headers: { ...payerHeaders, "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ request_token: reconsentToken, decision: "allow" }),
   });
-  assert.equal(reapprove.status, 303);
-  const reauthorizationCode = new URL(reapprove.headers.get("location")).searchParams.get("code");
+  const reauthorizationCode = (await consentCallback(reapprove)).searchParams.get("code");
   const retokenResponse = await fetch(`${baseUrl}/api/oauth/token`, {
     method: "POST",
     headers: { authorization: basic, "content-type": "application/x-www-form-urlencoded" },
@@ -648,8 +659,7 @@ test("oauth token revocation cascades by family and PKCE accepts full unreserved
     headers: { ...payerHeaders, "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ request_token: requestToken, decision: "allow" }),
   });
-  assert.equal(approve.status, 303);
-  const code = new URL(approve.headers.get("location")).searchParams.get("code");
+  const code = (await consentCallback(approve)).searchParams.get("code");
   const tokenResponse = await fetch(`${baseUrl}/api/oauth/token`, {
     method: "POST",
     headers: { authorization: basic, "content-type": "application/x-www-form-urlencoded" },
