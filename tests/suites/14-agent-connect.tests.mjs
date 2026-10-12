@@ -12,22 +12,42 @@ import {
   uploadScannerRequestCount,
 } from "../harness/preview.mjs";
 
-function postOnIsolatedSocket(url, headers, body) {
+// 声明超限 content-length 但只发送一小段请求体,读到响应即断开。worker 入口按 content-length
+// 直接回 413(worker/request-body.ts 快路径,不读请求体);若真的写完 11 MiB,服务端回 413 后
+// 断开连接与客户端仍在写入之间存在竞态,偶发 write ECONNRESET(部署工作流 run 38192095578 实测)。
+// 独立 socket(agent:false),不污染 fetch 连接池。
+function postDeclaringOversizedBody(url, headers, declaredBytes) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const req = httpRequest(url, {
       method: "POST",
       agent: false,
-      headers: { ...headers, "content-length": Buffer.byteLength(body) },
+      headers: { ...headers, "content-length": declaredBytes },
     }, (res) => {
       let data = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => { data += chunk; });
-      res.on("end", () => { settled = true; resolve({ status: res.statusCode, body: data }); });
+      res.on("end", () => {
+        settled = true;
+        clearTimeout(timer);
+        resolve({ status: res.statusCode, body: data });
+        req.destroy();
+      });
     });
-    // 服务端提前回 413 后断开,剩余请求体写入会报 EPIPE/ECONNRESET;响应已到则忽略。
-    req.on("error", (error) => { if (!settled) reject(error); });
-    req.end(body);
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      req.destroy();
+      reject(new Error("no response to an oversized declared body within 15s"));
+    }, 15000);
+    req.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+    req.flushHeaders();
+    req.write(Buffer.alloc(64 * 1024, 0x78));
   });
 }
 
@@ -273,14 +293,11 @@ export function register() {
 
   test("agent connect: MCP rejects request bodies above 11 MiB", async () => {
     const { token } = await makeKeyFor(`agent-key-body-limit-${runId}@example.com`, "body limit");
-    const oversized = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping", padding: "x".repeat(11 * 1024 * 1024) });
-    // 独立 socket(agent:false):服务端 413 后会断开连接,若走 fetch 连接池,
-    // 被断开的 socket 会被下一个测试复用并报 ECONNRESET。
-    const response = await postOnIsolatedSocket(`${baseUrl}/api/mcp`, {
+    const response = await postDeclaringOversizedBody(`${baseUrl}/api/mcp`, {
       authorization: `Bearer ${token}`,
       origin: baseUrl,
       "content-type": "application/json",
-    }, oversized);
+    }, 11 * 1024 * 1024 + 1);
     assert.equal(response.status, 413);
     // worker 入口的 11 MiB 闸(worker/request-body.ts)先于 MCP 路由生效。
     assert.equal(JSON.parse(response.body).error, "request_too_large");
