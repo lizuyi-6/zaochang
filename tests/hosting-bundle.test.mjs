@@ -282,7 +282,8 @@ test("bounded shared vectors exactly match the current ZIP builder output", asyn
     if (!result.ok) assert.equal(result.code, vector.expect.code, `${vector.name} fixture code`);
   }
   const fixtureText = await readFile(new URL("./fixtures/hosting-bundle-vectors.json", import.meta.url), "utf8");
-  assert.equal(fixtureText, `${JSON.stringify(expected, null, 2)}\n`);
+  // Windows 检出可能把 JSON 转成 CRLF(core.autocrlf);比较前统一换行,不改变字节内容。
+  assert.equal(fixtureText.replaceAll("\r\n", "\n"), `${JSON.stringify(expected, null, 2)}\n`);
 });
 
 test("200 fixed-seed byte mutations never throw and always return a result shape", () => {
