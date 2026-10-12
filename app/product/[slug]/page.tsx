@@ -4,14 +4,15 @@ import { ProductCard } from "../../components/product-card";
 import { database } from "../../api/_lib/community";
 import { hostedUrlSelect } from "../../api/_lib/hosting-sql";
 import { findProduct, products, type Product } from "../../lib/community-data";
-import { hydrateProductRow, PUBLISHED_PRODUCT_SQL } from "../../lib/product-hydrate";
+import { hydrateProductRow, PUBLISHED_PRODUCT_SQL_QUALIFIED } from "../../lib/product-hydrate";
 import { ProductExperience } from "./product-experience";
 
 type PageProps = { params: Promise<{ slug: string }> };
+type LoadedProduct = Product & { hostedUrl: string | null };
 
-async function loadProduct(slug: string): Promise<Product | null> {
+async function loadProduct(slug: string): Promise<LoadedProduct | null> {
   const seeded = findProduct(slug);
-  if (seeded) return seeded;
+  if (seeded) return { ...seeded, hostedUrl: null };
   const id = Number(slug);
   if (!Number.isInteger(id)) return null;
   try {
@@ -23,7 +24,7 @@ async function loadProduct(slug: string): Promise<Product | null> {
        FROM products WHERE id = ? AND ${PUBLISHED_PRODUCT_SQL}`,
     ).bind(id).first<Record<string, unknown>>();
     if (!row) return null;
-    return hydrateProductRow(row, { release: "社区新作", tags: [String(row.category), "独立创作"] });
+    return { ...hydrateProductRow(row, { release: "社区新作", tags: [String(row.category), "独立创作"] }), hostedUrl: typeof row.hostedUrl === "string" ? row.hostedUrl : null };
   } catch {
     return null;
   }

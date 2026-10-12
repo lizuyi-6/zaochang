@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check, Coins, ExternalLink, Image as ImageIcon, Link2, PackageCheck, Play, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { HostingPanel } from "../../hosting/hosting-panel";
 import { normalizeProductTheme, normalizePricingModel, PRICING_MODELS, PRODUCT_THEMES, type PricingModel, type ProductTheme } from "../../lib/product-policy";
 
 const steps = ["基本信息", "体验设置", "提交预审"];
@@ -36,6 +37,7 @@ export function CreateProductFlow() {
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [createdProductId, setCreatedProductId] = useState<number | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem("zaochang-product-draft");
@@ -82,7 +84,13 @@ export function CreateProductFlow() {
         window.location.href = "/signin?return_to=%2Fstudio%2Fnew";
         return;
       }
-      if (response.ok) { localStorage.removeItem("zaochang-product-draft"); setSubmitted(true); return; }
+      if (response.ok) {
+        const result = await response.json().catch(() => null) as { product?: { id?: unknown } } | null;
+        if (Number.isSafeInteger(result?.product?.id)) setCreatedProductId(Number(result?.product?.id));
+        localStorage.removeItem("zaochang-product-draft");
+        setSubmitted(true);
+        return;
+      }
       setSubmitError("提交未成功，请重试");
     } catch {
       setSubmitError("网络异常，请检查连接后重试");
@@ -110,7 +118,7 @@ export function CreateProductFlow() {
   };
 
   if (submitted) {
-    return <motion.section className="publish-success" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}><motion.span initial={{ rotate: -25, scale: 0 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", delay: 0.15 }}><PackageCheck size={38} /></motion.span><small>SUBMITTED / PLATFORM REVIEW</small><h1>作品已提交平台预审</h1><p>审核通过前不会公开、体验或产生果子交易。审核结果和具体意见会出现在创作台。</p><div><Link className="primary-action" href="/studio">查看审核状态 <ArrowRight size={17} /></Link></div></motion.section>;
+    return <motion.section className="publish-success" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", delay: 0.15 }}><motion.span initial={{ rotate: -25, scale: 0 }} animate={{ rotate: 0, scale: 1 }}><PackageCheck size={38} /></motion.span><small>SUBMITTED / PLATFORM REVIEW</small><h1>作品已提交平台预审</h1><p>审核通过前不会公开、体验或产生果子交易。审核结果和具体意见会出现在创作台。</p>{createdProductId ? <div className="publish-hosting-next"><p>如果账号已获邀，可在下方为这个项目提交静态站点包；托管内容需通过平台审核后才会显示访问入口。</p><HostingPanel productId={createdProductId} productTitle={title} /></div> : <p>可在「我的项目」查看托管管理入口。</p>}<div><Link className="primary-action" href="/studio">查看审核状态 <ArrowRight size={17} /></Link><Link className="publish-profile-link" href="/profile">前往我的项目</Link></div></motion.section>;
   }
 
   return (
