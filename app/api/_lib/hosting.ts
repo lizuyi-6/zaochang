@@ -755,4 +755,3 @@ export async function openHostingBundle(id: number, lease: string): Promise<{ bo
     || object.customMetadata?.sha256 !== row.bundleSha256) fail("bundle_missing", 404);
   return { body: object.body, sha256: row.bundleSha256 };
 }
-
