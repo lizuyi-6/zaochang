@@ -243,7 +243,7 @@ export async function getHostingStatus(member: Pick<MemberIdentity, "email">, pr
      FROM products p
      LEFT JOIN product_hostings h ON h.id = (
        SELECT latest.id FROM product_hostings latest
-       WHERE latest.product_id = p.id AND latest.desired <> 'removed'
+       WHERE latest.product_id = p.id AND NOT (latest.desired = 'removed' AND latest.state = 'removed')
        ORDER BY latest.id DESC LIMIT 1
      )
      WHERE p.id = ? AND p.owner_email = ?`,

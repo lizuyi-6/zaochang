@@ -456,6 +456,7 @@ SELECT h.`product_id`, h.`live_url`
 FROM `product_hostings` h
 JOIN `products` p ON p.`id` = h.`product_id`
 WHERE h.`state` = 'live'
+  AND h.`desired` = 'live'
   AND p.`status` = 'published'
   AND p.`review_status` = 'approved'
   AND p.`approved_version` = p.`review_version`

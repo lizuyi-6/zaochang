@@ -349,6 +349,7 @@ test("I1 视图只暴露匹配批准版本的 live URL，并拒绝主机名污�
       { name: "product-version-mismatch", liveUrl: "https://version-site.page.stepcloud.com" },
       { name: "hosting-approved-mismatch", liveUrl: "https://approved-site.page.stepcloud.com" },
       { name: "hosting-revision-mismatch", liveUrl: "https://revision-version-site.page.stepcloud.com" },
+      { name: "desired-removed", liveUrl: "https://removal-site.page.stepcloud.com" },
       { name: "empty-url", liveUrl: "" },
       { name: "http-url", liveUrl: "http://safe-site.page.stepcloud.com" },
       { name: "evil-path-prefix", liveUrl: "https://evil.com/.page.stepcloud.com" },
@@ -368,6 +369,8 @@ test("I1 视图只暴露匹配批准版本的 live URL，并拒绝主机名污�
     });
 
     setState(db, rows.get("state-not-live").hostingId, "removing");
+    // 移除请求一发出(desired=removed)链接必须立刻对外消失,即使远端站点尚未删除、state 仍是 live。
+    db.prepare("UPDATE product_hostings SET desired = 'removed' WHERE id = ?").run(rows.get("desired-removed").hostingId);
     db.exec("DROP TRIGGER products_review_state_update_guard");
     db.prepare("UPDATE products SET status = 'pending_review' WHERE id = ?").run(rows.get("product-unpublished").productId);
     db.prepare("UPDATE products SET review_status = 'pending_review' WHERE id = ?").run(rows.get("product-unapproved").productId);
@@ -378,7 +381,7 @@ test("I1 视图只暴露匹配批准版本的 live URL，并拒绝主机名污�
       .run(rows.get("hosting-revision-mismatch").hostingId);
     for (const item of cases.filter((entry) => entry.name !== "good")) {
       if (["state-not-live", "product-unpublished", "product-unapproved", "product-version-mismatch",
-        "hosting-approved-mismatch", "hosting-revision-mismatch"].includes(item.name)) {
+        "hosting-approved-mismatch", "hosting-revision-mismatch", "desired-removed"].includes(item.name)) {
         assert.equal(viewRow(rows.get(item.name).productId), undefined, `${item.name} must not be exposed`);
       } else {
         db.prepare("UPDATE product_hostings SET live_url = ? WHERE id = ?")
