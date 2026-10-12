@@ -1,5 +1,6 @@
 import { PUBLISHED_PRODUCT_SQL } from "../../lib/product-policy";
 import { database } from "./community";
+import { hostedUrlSelect } from "./hosting-sql";
 
 type CircleCount = { slug: string; members?: number; recentDiscussions?: number };
 
@@ -55,7 +56,7 @@ export async function loadPublicCommunityState(): Promise<PublicCommunityState> 
     db
       .prepare(
         `SELECT id, owner_name AS ownerName, title, description, category,
-                demo_type AS demoType, demo_url AS demoUrl,
+                demo_type AS demoType, demo_url AS demoUrl, ${hostedUrlSelect("products")},
                 image_url AS imageUrl, cover_theme AS coverTheme, price,
                 pricing_model AS pricingModel, likes_count AS likes,
                 plays_count AS plays, created_at AS createdAt

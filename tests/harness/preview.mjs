@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -27,6 +27,7 @@ let uploadScannerBusyResponsesRemaining = 0;
 let uploadScannerErrorAfterBusy = null;
 export let output = "";
 export const scannerToken = `test-upload-scanner-${runId}-token`;
+export const hostingDeployerToken = `zch_${randomBytes(48).toString("base64url")}`;
 
 // 假 OpenAI 兼容上游(仿 startFakeUploadScanner 模式):校验 Bearer,把收到的
 // chat/completions 请求体存入 lastChatCompletion / aiUpstreamCount 供字段级断言;
@@ -654,6 +655,7 @@ export function previewServerArgs() {
     "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,
     "--var", `UPLOAD_SCANNER_TOKEN:${scannerToken}`,
     "--var", "ZAOCHANG_AGENT_TOKEN:test-agent-key",
+    "--var", `HOSTING_DEPLOYER_TOKEN:${hostingDeployerToken}`,
     "--var", `AI_CHAT_BASE_URL:http://127.0.0.1:${aiPort}/v1`,
     "--var", "AI_CHAT_API_KEY:test-ai-key",
     "--var", "AI_CHAT_MODEL:test-model-1",

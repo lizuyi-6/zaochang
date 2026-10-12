@@ -59,8 +59,10 @@ export async function storeScannedUpload(args: {
   visibility: "public" | "private";
   purpose: string;
   hyperknowImage?: boolean;
+  allowArchive?: boolean;
 }): Promise<StoredUpload> {
-  const inspected = await inspectUpload(args.file);
+  const allowArchive = args.allowArchive === true && args.purpose === "hosting_bundle";
+  const inspected = await inspectUpload(args.file, { allowArchive, purpose: args.purpose });
   if (args.hyperknowImage !== true) {
     await enforceRateLimit(
       await rateLimitKey("upload-global", "all"),

@@ -25,7 +25,12 @@ const acceptedTypes = new Map([
   ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", { extensions: ["docx"], matches: isDocx }],
 ]);
 
-export async function inspectUpload(file: File): Promise<AcceptedUpload> {
+const archiveUpload = { extensions: ["zip"], matches: isZip };
+
+export async function inspectUpload(
+  file: File,
+  options: { allowArchive?: boolean; purpose?: string } = {},
+): Promise<AcceptedUpload> {
   const originalName = file.name.trim();
   if (!originalName || originalName.length > 180 || /[\u0000-\u001f\u007f\\/]/.test(originalName)) {
     throw new UploadSecurityError("invalid_upload_name", 400);
@@ -33,7 +38,11 @@ export async function inspectUpload(file: File): Promise<AcceptedUpload> {
   if (file.size < 1 || file.size > MAX_UPLOAD_BYTES) {
     throw new UploadSecurityError("invalid_upload_size", 400);
   }
-  const config = acceptedTypes.get(file.type);
+  const config = file.type === "application/zip"
+    && options.allowArchive === true
+    && options.purpose === "hosting_bundle"
+    ? archiveUpload
+    : acceptedTypes.get(file.type);
   const extension = originalName.includes(".") ? originalName.split(".").pop()!.toLowerCase() : "";
   if (!config || !config.extensions.includes(extension)) {
     throw new UploadSecurityError("invalid_upload_type", 400);
@@ -202,4 +211,9 @@ function isDocx(bytes: Uint8Array) {
     && startsWith(bytes, [0x50, 0x4b, 0x03, 0x04])
     && containsAscii(bytes, "[Content_Types].xml")
     && containsAscii(bytes, "word/document.xml");
+}
+
+function isZip(bytes: Uint8Array) {
+  // 只接收带本地文件头的非空 ZIP;空归档以 PK\x05\x06 开始,不得借托管用途进入扫描管线。
+  return bytes.length >= 4 && startsWith(bytes, [0x50, 0x4b, 0x03, 0x04]);
 }

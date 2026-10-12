@@ -3,6 +3,7 @@ import { Award, BadgeCheck, Eye, Heart, Link2, LogIn, MapPin, MonitorSmartphone,
 import Link from "next/link";
 import { hasRole } from "../api/_lib/access-control";
 import { database, ensureMember } from "../api/_lib/community";
+import { hostedUrlSelect } from "../api/_lib/hosting-sql";
 import { getChatGPTUser } from "../chatgpt-auth";
 import { AnimatedNumber } from "../components/animated-number";
 import { ProductCard } from "../components/product-card";
@@ -25,7 +26,7 @@ export default async function ProfilePage() {
   const db = database();
   const [profile, productResult, followerResult, commentResult, circleResult] = await Promise.all([
     db.prepare("SELECT bio, location, website, reputation, joined_at AS joinedAt, member_number AS memberNumber FROM members WHERE email = ?").bind(user.email).first<{ bio: string; location: string; website: string; reputation: number; joinedAt: string; memberNumber: number | null }>(),
-    db.prepare(`SELECT id, owner_name AS ownerName, title, description, category, demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl, cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes, plays_count AS plays, created_at AS createdAt FROM products WHERE owner_email = ? AND ${PUBLISHED_PRODUCT_SQL} ORDER BY created_at DESC, id DESC`).bind(user.email).all<Record<string, unknown>>(),
+    db.prepare(`SELECT id, owner_name AS ownerName, title, description, category, demo_type AS demoType, demo_url AS demoUrl, ${hostedUrlSelect("products")}, image_url AS imageUrl, cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes, plays_count AS plays, created_at AS createdAt FROM products WHERE owner_email = ? AND ${PUBLISHED_PRODUCT_SQL} ORDER BY created_at DESC, id DESC`).bind(user.email).all<Record<string, unknown>>(),
     db.prepare("SELECT COUNT(*) AS count FROM community_actions WHERE kind = 'follow_creator' AND target_ref = ?").bind(name).first<{ count: number }>(),
     db.prepare("SELECT COUNT(*) AS count FROM comments WHERE user_email = ?").bind(user.email).first<{ count: number }>(),
     db.prepare("SELECT COUNT(*) AS count FROM community_actions WHERE user_email = ? AND kind = 'join_circle'").bind(user.email).first<{ count: number }>(),

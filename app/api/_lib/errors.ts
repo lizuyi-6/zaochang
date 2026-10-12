@@ -76,6 +76,10 @@ export function isExternalDemoImmutableError(error: unknown): boolean {
   return errorMessageIncludes(error, "external_demo_requires_immutable_package");
 }
 
+export function isHostingNotStagedError(error: unknown): boolean {
+  return errorMessageIncludes(error, "hosting_not_staged");
+}
+
 export function isProductReviewNotPendingError(error: unknown): boolean {
   return errorMessageIncludes(error, "product_review_not_pending");
 }
