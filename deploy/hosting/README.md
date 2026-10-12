@@ -6,7 +6,7 @@
 
 | 路径 | 所有者/权限 | 用途 |
 | --- | --- | --- |
-| `/opt/zaochang/current/deploy/hosting/` | 代码发布目录；具体发布用户与权限待确认 | 部署器代码、共享规则回退副本和校验和文件 |
+| `/opt/zaochang/hosting/` | `root:zaochang`, `0750`(文件 `0640`) | 部署器代码(`hosting-deployer.mjs`、`lib/`)、与入口同目录的 `hosting-rules.json`、`STEPPAGE_SHA256`;**独立于 `/opt/zaochang/current`**(它指向旧应用的历史发布目录,盒子只剩扫描器) |
 | `/opt/zaochang/hosting/steppage.mjs` | `root:zaochang`, `0750` | 固定版本的 StepFun Page CLI |
 | `/var/lib/zaochang/hosting` | `zaochang:zaochang`, `0700` | WAL、作业临时文件和 CLI `HOME`；WAL 文件为 `0600`，上报未确认时暂存 lease |
 | `/etc/zaochang/hosting.env` | `root:zaochang`, `0640` | 部署器环境变量；不得写入文档、工单或日志的值 |
@@ -43,7 +43,7 @@ sudo chmod 0640 /etc/zaochang/hosting.env
 
 ```sh
 install -o root -g zaochang -m 0750 /approved/path/steppage.mjs /opt/zaochang/hosting/steppage.mjs.new
-expected="$(cat /opt/zaochang/current/deploy/hosting/STEPPAGE_SHA256)"
+expected="$(cat /opt/zaochang/hosting/STEPPAGE_SHA256)"
 actual="$(sha256sum /opt/zaochang/hosting/steppage.mjs.new | cut -d ' ' -f 1)"
 test "$actual" = "$expected" || { rm -f /opt/zaochang/hosting/steppage.mjs.new; echo 'steppage checksum mismatch; service remains disabled' >&2; exit 1; }
 mv /opt/zaochang/hosting/steppage.mjs.new /opt/zaochang/hosting/steppage.mjs

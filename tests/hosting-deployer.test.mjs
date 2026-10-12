@@ -765,7 +765,8 @@ test("package registration, service hardening, runbook checksum reference, and c
     "ProtectSystem=strict", "ProtectHome=true", "ReadWritePaths=/var/lib/zaochang/hosting",
     "EnvironmentFile=/etc/zaochang/hosting.env", "Environment=HOME=/var/lib/zaochang/hosting/home",
     "MemoryMax=300M", "CPUQuota=50%", "TasksMax=64", "Restart=on-failure",
-    "ExecStart=/usr/bin/node /opt/zaochang/current/deploy/hosting/hosting-deployer.mjs",
+    "ExecStart=/usr/bin/node /opt/zaochang/hosting/hosting-deployer.mjs",
+    "WorkingDirectory=/opt/zaochang/hosting",
   ]) assert.equal(service.includes(directive), true, directive);
   const readme = await readFile(new URL("../deploy/hosting/README.md", import.meta.url), "utf8");
   assert.equal(readme.includes("deploy/hosting/STEPPAGE_SHA256"), true);

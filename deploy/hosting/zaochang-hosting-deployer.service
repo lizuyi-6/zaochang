@@ -6,11 +6,11 @@ After=network.target
 Type=simple
 User=zaochang
 Group=zaochang
-WorkingDirectory=/opt/zaochang/current
+WorkingDirectory=/opt/zaochang/hosting
 Environment=NODE_ENV=production
 EnvironmentFile=/etc/zaochang/hosting.env
 Environment=HOME=/var/lib/zaochang/hosting/home
-ExecStart=/usr/bin/node /opt/zaochang/current/deploy/hosting/hosting-deployer.mjs
+ExecStart=/usr/bin/node /opt/zaochang/hosting/hosting-deployer.mjs
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=30
