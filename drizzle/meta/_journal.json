@@ -225,6 +225,13 @@
       "when": 1791763587038,
       "tag": "0031_mcp_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1791777704790,
+      "tag": "0032_page_hosting",
+      "breakpoints": true
     }
   ]
 }
