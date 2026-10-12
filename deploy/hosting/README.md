@@ -105,7 +105,15 @@ sudo systemctl stop zaochang-hosting-deployer.service
 | `job.action=promote` | 先 `get` 检查 `zc-p` 前缀；按退出码执行 promote，再 `get` 核对 live 版本和 HTTPS 主机后缀；预览撤销失败只记通用日志 |
 | `job.action=remove` | 先 `get` 检查 `zc-p` 前缀，再按 site ID 单站点删除；明确 not found 作为已移除；不执行 list-delete |
 | `POST /api/hosting-worker/jobs/{id}/report` | 携带 lease 上报；成功与 `replayed:true` 都记为已报告；网络失败保留 WAL；`lease_mismatch` 标记放弃且不回滚远端 |
-| `failure_code` 与 `retryable` | 本地包拒绝使用 `validation_bundle` / `validation_secret`；CLI 错误映射到 `provider_auth`、`provider_quota`、`provider_audit_rejected`、`provider_error`；deploy 通用错误可能发生在远端创建之后，按 fail-closed 报 `ambiguous` 并保留站点名/文件数/字节数对账信息 |
+| `failure_code` 与 `retryable` | 本地包拒绝使用 `validation_bundle` / `validation_secret`；CLI 错误映射到 `provider_auth`、`provider_quota`、`provider_audit_rejected`、`provider_error`；deploy 结果未知时先在恢复路径 list：目标站点不存在则恢复原 stderr 分类，站点存在时按唯一版本统计采用或经 `get` 前缀校验后清理 |
+
+### deploy 意图恢复
+
+WAL 只有 deploy `intent` 且没有 `result` 时才调用 `list`。list 成功但没有精确 `siteName`，视为远端无副作用，按 WAL 中保存的 stderr 分类上报；崩溃发生在分类落 WAL 之前时使用可重试的 `provider_error`。list 失败、超时、响应结构不可解析、同名站点不唯一、版本查询不可用或多条版本统计匹配，均上报 `ambiguous, retryable=false` 并带站点名、预期文件数和字节数。
+
+唯一同名站点只有在 `versions --site` 中存在唯一匹配 `fileCount` 与 `totalBytes` 的版本时才可采用。版本为空或没有统计匹配时，部署器先 `get --site` 校验 site ID、名称等于本次 `siteName` 且以 `zc-p` 开头，再执行该站点的 `delete --yes`；清理成功后上报可重试失败，清理失败则上报含 site ID 的 `ambiguous`。多条版本统计匹配无法唯一识别部署结果，按 `ambiguous, retryable=false` 上报并保留站点，不执行删除。任何 `delete` 前都必须通过 `get` 校验 site ID、预期名称和 `zc-p` 前缀；`list` 不用于普通 deploy、promote 或 remove。
+
+部署器会展开所有成员(包括二进制文件和目录条目)，用声明大小限制每个 deflate 输出，并验证实际长度、CRC 和整包实际展开总量。大小或 CRC 不一致分别使用 detail 原因码 `size_mismatch`、`crc_mismatch`；超过声明边界使用 `expansion_exceeded`。detail 仅含清理后的路径与原因码，不包含归档内容。
 
 ## 待确认项
 
@@ -113,12 +121,13 @@ sudo systemctl stop zaochang-hosting-deployer.service
 - Worker token 轮换入口和 StepFun 管理端 key 轮换步骤待确认。
 - `HOSTING_API_BASE` 在生产的最终域名确认前保持默认值。
 - `steppage promote` 的 stdout 形态未实测；部署器不解析该 stdout，只以进程退出码判断命令是否成功，再用 `get` 校验 `liveVersionId` 和 live URL。
-- 部署器任务书的一般 CLI 错误映射要求 `provider_error, retryable=true`；本实现对 deploy 通用错误保留 WAL `intent` 并进入恢复对账，匹配唯一远端版本时采用真实 ID、设置预览过期并上报 staged；无唯一匹配时上报 `ambiguous, retryable=false`，不重发 deploy。当前轮次（工作包 D）的依据是任务书“远端已生效后失败必须报告真实 ID 或 ambiguous，禁止静默丢失”；该差异已由“deploy may create a remote site before a timeout”场景断言。契约与共享 rules 未改。
+- 工作包 D2 将 CLI 无 WAL result 的恢复拆为“站点不存在、唯一匹配、存在但包不可信、无法对账”四种结果；具体断言与向量差异记录在本轮交付报告中。契约与共享 rules 未改。
 
 ## 开发留痕
 
 - 2026-10-11，工作包 D，状态：部分完成。新增部署器、WAL、ZIP 校验、假 Worker/假 CLI 场景、systemd unit 与本手册；契约文件和共享 rules 未改。
 - 首次出现的场景产物：`tests/hosting-deployer.test.mjs`，SHA-256 `48B4839B051102112A54B5EAB08C98061936AB1E332B79705FC1A1AC3F399324`；本轮纯 Node 场景命令 `node --experimental-strip-types --test --test-isolation=none tests/hosting-deployer.test.mjs`，Node v24.13.1，退出码 0，`tests=22 / pass=22 / fail=0 / skipped=0 / todo=0`。本机测试 runner/子进程均遇到 `spawn EPERM`，因此该命令中的假 CLI adapter 在 EPERM 时调用共享 fake CLI 核心逻辑；没有证明本机 `execFile` 子进程边界。
 - 原始命令 `node --experimental-strip-types --test tests/hosting-deployer.test.mjs` 在加载测试文件前以 `spawn EPERM` 退出，统计 `tests=1 / pass=0 / fail=1 / skipped=0 / todo=0`。
-- 工作包 D 当前轮：通用 deploy CLI 错误保留 WAL `intent` 并走恢复对账，不重发 deploy；唯一匹配时采用远端 ID 并设置预览过期，无匹配或 list 不可用时报告 `ambiguous` 并附站点名、文件数和字节数。场景 `deploy may create a remote site before a timeout; recovery adopts it and sets expiry without redeploy` 覆盖唯一匹配；`deploy timeout with unavailable list reports ambiguous reconciliation data and does not retry` 覆盖无法对账时保留远端状态与人工对账信息。
+- 工作包 D 首轮：通用 deploy CLI 错误保留 WAL `intent` 并走恢复对账，不重发 deploy；当时无匹配和 list 不可用都报告 `ambiguous`。D2 将无同名站点改为按 WAL 保存的原 stderr 分类上报；唯一统计匹配仍采用远端 ID 并设置预览过期，无法对账仍报告 `ambiguous`。场景 `deploy may create a remote site before a timeout; recovery adopts it and sets expiry without redeploy` 覆盖唯一匹配；`an intent-only deploy with no same-name site reports retryable provider failure` 覆盖无副作用失败分类；`deploy timeout with unavailable list reports ambiguous reconciliation data and does not retry` 覆盖无法对账时保留远端状态与人工对账信息。
 - 未覆盖：真实 StepFun/Worker/生产 API、Ubuntu systemd 启停、Node v22.23.0 目标环境、`promote` stdout 形态、进程级 SIGTERM 投递，以及常驻 RSS 实测。
+- 2026-10-12，工作包 D2，状态：部分完成。本轮改动恢复对账分类、ZIP 实际展开/CRC 校验、共享向量一致性与真实子进程测试；实际命令与退出统计见本轮交付报告。共享向量中两条声明有效的 deflate 正例实际数据流无效，部署器按实际解压要求拒绝，作为 Worker/部署器严格度差异单列。

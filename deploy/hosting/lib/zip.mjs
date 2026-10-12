@@ -2,15 +2,20 @@ import { open, stat } from "node:fs/promises";
 import { inflateRawSync } from "node:zlib";
 
 const EOCD_SIGNATURE = 0x06054b50;
+const ZIP64_EOCD_LOCATOR_SIGNATURE = 0x07064b50;
 const CENTRAL_SIGNATURE = 0x02014b50;
 const LOCAL_SIGNATURE = 0x04034b50;
 const ZIP64_EXTRA_ID = 0x0001;
 
 export class ZipValidationError extends Error {
-  constructor(message) {
-    super(message);
+  constructor(message, { reasonCode = "zip_structure_invalid", path = null } = {}) {
+    const cleanPath = path === null ? null : String(path).replace(/[\u0000-\u001f\u007f-\u009f]/gu, "?").slice(0, 120);
+    super(cleanPath === null ? `reason=${reasonCode}` : `path=${cleanPath}; reason=${reasonCode}`);
     this.name = "ZipValidationError";
     this.code = "validation_bundle";
+    this.cause = message;
+    this.reasonCode = reasonCode;
+    this.path = cleanPath;
   }
 }
 
@@ -46,7 +51,11 @@ export async function inspectZip(filePath) {
     for (let i = tail.length - 22; i >= 0; i -= 1) {
       if (tail.readUInt32LE(i) === EOCD_SIGNATURE) {
         const commentLength = tail.readUInt16LE(i + 20);
-        if (i + 22 + commentLength === tail.length) {
+        const candidateEocdPosition = tailStart + i;
+        const candidateCentralSize = tail.readUInt32LE(i + 12);
+        const candidateCentralOffset = tail.readUInt32LE(i + 16);
+        if (i + 22 + commentLength === tail.length
+          && candidateCentralOffset + candidateCentralSize === candidateEocdPosition) {
           eocdAt = i;
           break;
         }
@@ -60,6 +69,9 @@ export async function inspectZip(filePath) {
     const centralSize = tail.readUInt32LE(eocdAt + 12);
     const centralOffset = tail.readUInt32LE(eocdAt + 16);
     const eocdPosition = tailStart + eocdAt;
+    if (eocdPosition >= 20 && (await readExact(handle, 4, eocdPosition - 20)).readUInt32LE(0) === ZIP64_EOCD_LOCATOR_SIGNATURE) {
+      throw new ZipValidationError("ZIP64 locator is not allowed", { reasonCode: "zip64_unsupported" });
+    }
     if (disk !== 0 || centralDisk !== 0 || entriesOnDisk !== entryCount) {
       throw new ZipValidationError("multi-disk zip is not allowed");
     }
@@ -118,6 +130,28 @@ export async function inspectZip(filePath) {
     }
     if (cursor !== centralOffset + centralSize) throw new ZipValidationError("central directory size mismatch");
 
+    const intervals = [];
+    for (const entry of entries) {
+      const local = await readExact(handle, 30, entry.localOffset);
+      if (local.readUInt32LE(0) !== LOCAL_SIGNATURE) {
+        throw new ZipValidationError("invalid local file header", { reasonCode: "local_header_invalid", path: entry.path });
+      }
+      const nameLength = local.readUInt16LE(26);
+      const extraLength = local.readUInt16LE(28);
+      const dataStart = entry.localOffset + 30 + nameLength + extraLength;
+      const dataEnd = dataStart + entry.compressedSize;
+      if (dataEnd < dataStart || dataEnd > centralOffset) {
+        throw new ZipValidationError("entry data outside archive payload", { reasonCode: "local_data_out_of_bounds", path: entry.path });
+      }
+      intervals.push({ start: entry.localOffset, end: dataEnd, path: entry.path });
+    }
+    intervals.sort((left, right) => left.start - right.start || left.end - right.end);
+    for (let index = 1; index < intervals.length; index += 1) {
+      if (intervals[index].start < intervals[index - 1].end) {
+        throw new ZipValidationError("local entry ranges overlap", { reasonCode: "overlapping_entries", path: intervals[index].path });
+      }
+    }
+
     return {
       entries,
       fileSize,
@@ -145,26 +179,47 @@ export async function inspectZip(filePath) {
         if (localFlags !== entry.flags || localMethod !== entry.compressionMethod) {
           throw new ZipValidationError("local and central headers disagree");
         }
-        if ((entry.flags & 0x08) === 0 && (localCrc !== entry.crc32 || localCompressedSize !== entry.compressedSize || localUncompressedSize !== entry.uncompressedSize)) {
-          throw new ZipValidationError("local and central sizes disagree");
+        if ((entry.flags & 0x08) === 0) {
+          if (localCrc !== entry.crc32 || localCompressedSize !== entry.compressedSize || localUncompressedSize !== entry.uncompressedSize) {
+            throw new ZipValidationError("local and central sizes disagree", { reasonCode: "local_header_mismatch", path: entry.path });
+          }
+        } else {
+          const validCrc = localCrc === 0 || localCrc === entry.crc32;
+          const validCompressed = localCompressedSize === 0 || localCompressedSize === entry.compressedSize;
+          const validUncompressed = localUncompressedSize === 0 || localUncompressedSize === entry.uncompressedSize;
+          if (!validCrc || !validCompressed || !validUncompressed) {
+            throw new ZipValidationError("data-descriptor local fields conflict with central metadata", { reasonCode: "local_header_mismatch", path: entry.path });
+          }
         }
         const dataOffset = entry.localOffset + 30 + localNameLength + localExtraLength;
         if (dataOffset + entry.compressedSize > centralOffset) throw new ZipValidationError("entry data overlaps central directory");
         const compressed = await readExact(handle, entry.compressedSize, dataOffset);
         let output;
         if (entry.compressionMethod === 0) {
+          if (compressed.length > entry.uncompressedSize) {
+            throw new ZipValidationError("expanded entry exceeds declared size", { reasonCode: "expansion_exceeded", path: entry.path });
+          }
           output = compressed;
         } else if (entry.compressionMethod === 8) {
           try {
-            output = inflateRawSync(compressed, { maxOutputLength });
-          } catch {
-            throw new ZipValidationError("entry decompression failed or exceeded limit");
+            // Node 不接受 0 作为 maxOutputLength；空声明最多试探 1 字节并立即拒绝任何输出。
+            output = inflateRawSync(compressed, { maxOutputLength: Math.max(1, maxOutputLength) });
+          } catch (error) {
+            const reasonCode = error?.code === "ERR_BUFFER_TOO_LARGE" ? "expansion_exceeded" : "decompression_failed";
+            throw new ZipValidationError("entry decompression failed", { reasonCode, path: entry.path });
           }
         } else {
-          throw new ZipValidationError("unsupported zip compression method");
+          throw new ZipValidationError("unsupported zip compression method", { reasonCode: "compression_method_unsupported", path: entry.path });
         }
-        if (output.length !== entry.uncompressedSize) throw new ZipValidationError("entry size mismatch");
-        if (crc32(output) !== entry.crc32) throw new ZipValidationError("entry checksum mismatch");
+        if (output.length > entry.uncompressedSize) {
+          throw new ZipValidationError("expanded entry exceeds declared size", { reasonCode: "expansion_exceeded", path: entry.path });
+        }
+        if (output.length !== entry.uncompressedSize) {
+          throw new ZipValidationError("entry size differs from declaration", { reasonCode: "size_mismatch", path: entry.path });
+        }
+        if (crc32(output) !== entry.crc32) {
+          throw new ZipValidationError("entry CRC differs from declaration", { reasonCode: "crc_mismatch", path: entry.path });
+        }
         return output;
       },
       close() {

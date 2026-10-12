@@ -19,6 +19,10 @@ export async function runFakeSteppage({ argv, env }) {
   if (injectedFailure && !(command === "deploy" && injectedFailure.afterSideEffect === true)) {
     return { stdout: "", stderr: String(injectedFailure.stderr ?? "Error: fake CLI failure"), exitCode: Number(injectedFailure.exitCode ?? 1) };
   }
+  if (Object.hasOwn(state.rawStdout ?? {}, command)) {
+    return { stdout: String(state.rawStdout[command]), stderr: "", exitCode: 0 };
+  }
+  if (Object.hasOwn(state.responses ?? {}, command)) return success(state.responses[command]);
 
   if (command === "deploy") {
     const zipPath = args[1];

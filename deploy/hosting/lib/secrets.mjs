@@ -11,7 +11,7 @@ export async function findSecret(archive, entries, rules) {
     if (!textExtensions.has(extension)) continue;
     let text;
     try {
-      text = decoder.decode(await archive.readEntry(entry, rules.bundle.maxFileBytes));
+      text = decoder.decode(await archive.readEntry(entry, entry.uncompressedSize));
     } catch (error) {
       if (error instanceof TypeError) throw Object.assign(new Error("text file is not valid UTF-8"), { code: "validation_bundle" });
       throw error;

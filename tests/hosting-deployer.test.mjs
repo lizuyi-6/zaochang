@@ -11,6 +11,7 @@ import { classifyCliFailure, HostingRunner } from "../deploy/hosting/lib/runner.
 import { Steppage, verifyPinnedScript } from "../deploy/hosting/lib/steppage.mjs";
 import { WriteAheadLog } from "../deploy/hosting/lib/wal.mjs";
 import { runFakeSteppage } from "./helpers/hosting-fake-steppage-core.mjs";
+import { buildZip, entry as zipEntry } from "./helpers/zip-builder.mjs";
 import {
   LEASE_TOKEN,
   STEP_KEY,
@@ -156,7 +157,7 @@ test("bundle hash, path traversal, compression ratio, and secret failures report
   }
 });
 
-test("five CLI error classes map to their base classification; uncertain deploy reports ambiguous", async () => {
+test("CLI error classes are preserved when recovery proves the site name is absent", async () => {
   const cases = [
     { stderr: 'Error: bundle rejected: forbidden extension "evil.php"', code: "validation_bundle", retryable: false },
     { stderr: "Error: [unauthenticated] API Key invalid", code: "provider_auth", retryable: false },
@@ -174,24 +175,24 @@ test("five CLI error classes map to their base classification; uncertain deploy 
     });
     const fixture = await createFixture({ attempts: 4, cliState: { failures: { deploy: { stderr: item.stderr } } } });
     try {
-      if (item.code === "provider_error") {
-        await fixture.makeRunner({ sleep: async () => undefined }).run({ maxCycles: 2 });
-      } else {
-        await fixture.run();
-      }
-      assert.deepEqual((await readCliCalls(fixture.sandbox.cliLogPath)).map((call) => call.command), item.code === "provider_error" ? ["deploy", "list"] : ["deploy"]);
-      const expectedCode = item.code === "provider_error" ? "ambiguous" : item.code;
-      const expectedRetryable = item.code === "provider_error" ? false : item.retryable;
+      await fixture.makeRunner({ sleep: async () => undefined }).run({ maxCycles: 1 });
+      const pending = JSON.parse(await readFile(fixture.wal.filePath(fixture.job.id), "utf8"));
+      assert.equal(pending.phase, "intent", item.code);
+      assert.equal(pending.deployFailure.code, item.code, item.code);
+      await fixture.makeRunner({ sleep: async () => undefined }).run({ maxCycles: 1 });
+      assert.deepEqual((await readCliCalls(fixture.sandbox.cliLogPath)).map((call) => call.command), ["deploy", "list"]);
       assert.deepEqual(fixture.worker.state.reports.at(-1).body, {
-        outcome: "failed", code: expectedCode, retryable: expectedRetryable,
-        detail: item.code === "provider_error"
-          ? `no matching remote version for ${fixture.job.siteName}; files=${fixture.job.bundleFileCount}; bytes=${zipMetadata(fixture.job.bundle).totalBytes}`
-          : item.code === "provider_auth" ? "provider authentication rejected"
+        outcome: "failed", code: item.code, retryable: item.retryable,
+        detail: item.code === "provider_auth" ? "provider authentication rejected"
             : item.code === "provider_quota" ? "provider quota rejected request"
               : item.code === "provider_audit_rejected" ? "provider audit rejected request"
-                : "provider rejected bundle",
+                : item.code === "validation_bundle" ? "provider rejected bundle"
+                  : "provider request failed",
       });
       assert.equal(fixture.worker.state.jobs[0].state, "failed");
+      const wal = JSON.parse(await readFile(fixture.wal.filePath(fixture.job.id), "utf8"));
+      assert.equal(wal.phase, "reported");
+      assert.equal(wal.reportBody.code, item.code);
       assert.deepEqual(Object.keys((await readSteppageState(fixture.sandbox.statePath)).sites), []);
     } finally {
       await fixture.cleanup();
@@ -235,7 +236,7 @@ test("deploy timeout with unavailable list reports ambiguous reconciliation data
     assert.deepEqual((await readCliCalls(fixture.sandbox.cliLogPath)).map((call) => call.command), ["deploy", "list"]);
     assert.deepEqual(fixture.worker.state.reports.at(-1).body, {
       outcome: "failed", code: "ambiguous", retryable: false,
-      detail: `could not reconcile deploy for ${fixture.job.siteName}; files=${fixture.job.bundleFileCount}; bytes=${zipMetadata(fixture.job.bundle).totalBytes}`,
+      detail: `could not list during deploy recovery; site=${fixture.job.siteName}; files=${fixture.job.bundleFileCount}; bytes=${zipMetadata(fixture.job.bundle).totalBytes}`,
     });
     assert.equal(fixture.worker.state.jobs[0].state, "failed");
     const sites = Object.values((await readSteppageState(fixture.sandbox.statePath)).sites);
@@ -357,8 +358,8 @@ test("an intent-only deploy is adopted from list and versions when one exact mat
   }
 });
 
-test("an intent-only deploy with no matching remote version reports ambiguous and never redeploys", async () => {
-  const fixture = await createFixture({ cliState: { sites: {} } });
+test("an intent-only deploy with no same-name site reports retryable provider failure", async () => {
+  const fixture = await createFixture({ attempts: 4, cliState: { sites: {} } });
   try {
     const claimed = await fixture.api.claim("test-worker");
     await fixture.wal.initialize();
@@ -371,12 +372,184 @@ test("an intent-only deploy with no matching remote version reports ambiguous an
     await fixture.makeRunner().run({ maxCycles: 1 });
     assert.deepEqual((await readCliCalls(fixture.sandbox.cliLogPath)).map((call) => call.command), ["list"]);
     assert.deepEqual(fixture.worker.state.reports.at(-1).body, {
-      outcome: "failed", code: "ambiguous", retryable: false,
-      detail: `no matching remote version for ${claimed.siteName}; files=${claimed.bundleFileCount}; bytes=${zipMetadata(fixture.job.bundle).totalBytes}`,
+      outcome: "failed", code: "provider_error", retryable: true, detail: "provider request failed",
     });
     assert.equal(fixture.worker.state.jobs[0].state, "failed");
+    const wal = JSON.parse(await readFile(fixture.wal.filePath(fixture.job.id), "utf8"));
+    assert.equal(wal.phase, "reported");
+    assert.equal(wal.reportBody.outcome, "failed");
+    assert.equal(wal.reportBody.code, "provider_error");
   } finally {
     await fixture.cleanup();
+  }
+});
+
+test("an untrusted same-name site is deleted after a prefix check before retryable failure is reported", async () => {
+  const cases = [
+    { name: "no versions", versions: [] },
+    { name: "statistics mismatch", versions: [{ siteId: "8100", versionId: "8200", fileCount: 1, totalBytes: "1", previewUrl: `https://p-${"d".repeat(32)}.preview.stepcloud.com` }] },
+  ];
+  for (const item of cases) {
+    const fixture = await createFixture({ attempts: 4, cliState: { sites: {
+      "8100": { ...site("8100", "zc-p5-h12", "0"), versions: item.versions },
+    } } });
+    try {
+      await writeIntentOnlyDeploy(fixture);
+      await fixture.makeRunner().run({ maxCycles: 1 });
+      assert.deepEqual((await readCliCalls(fixture.sandbox.cliLogPath)).map((call) => call.command), ["list", "versions", "get", "delete"], item.name);
+      const report = fixture.worker.state.reports.at(-1).body;
+      assert.deepEqual(report, { outcome: "failed", code: "provider_error", retryable: true, detail: "provider request failed" }, item.name);
+      assert.equal(fixture.worker.state.jobs[0].state, "failed", item.name);
+      assert.deepEqual(Object.keys((await readSteppageState(fixture.sandbox.statePath)).sites), [], item.name);
+      const wal = JSON.parse(await readFile(fixture.wal.filePath(fixture.job.id), "utf8"));
+      assert.equal(wal.phase, "reported", item.name);
+      assert.equal(wal.reportBody.retryable, true, item.name);
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+});
+
+test("cleanup failure, duplicate names, and unusable recovery lists report ambiguous with evidence", async () => {
+  const metadata = zipMetadata(defaultBundle());
+  const duplicateSites = {
+    "8100": site("8100", "zc-p5-h12", "0"),
+    "8101": site("8101", "zc-p5-h12", "0"),
+  };
+  const cases = [
+    { name: "cleanup failure", cliState: { sites: { "8100": { ...site("8100", "zc-p5-h12", "0"), versions: [] } }, failures: { delete: { stderr: "Error: delete failed" } } }, commands: ["list", "versions", "get", "delete"], detail: /siteId=8100/u },
+    { name: "get prefix mismatch", cliState: { sites: { "8100": { ...site("8100", "zc-p5-h12", "0"), versions: [] } }, responses: { get: site("8100", "foreign-name", "0") } }, commands: ["list", "versions", "get"], detail: /siteId=8100/u },
+    { name: "get different managed name", cliState: { sites: { "8100": { ...site("8100", "zc-p5-h12", "0"), versions: [] } }, responses: { get: site("8100", "zc-p5-h999", "0") } }, commands: ["list", "versions", "get"], detail: /siteId=8100/u },
+    { name: "duplicate matching versions", cliState: { sites: { "8100": { ...site("8100", "zc-p5-h12", "0"), versions: [
+      { siteId: "8100", versionId: "8200", fileCount: metadata.fileCount, totalBytes: String(metadata.totalBytes), previewUrl: `https://p-${"e".repeat(32)}.preview.stepcloud.com` },
+      { siteId: "8100", versionId: "8201", fileCount: metadata.fileCount, totalBytes: String(metadata.totalBytes), previewUrl: `https://p-${"f".repeat(32)}.preview.stepcloud.com` },
+    ] } } }, commands: ["list", "versions"], detail: /multiple versions match/u },
+    { name: "duplicate same-name sites", cliState: { sites: duplicateSites }, commands: ["list"], detail: /multiple sites/u },
+    { name: "non-array list response", cliState: { sites: {}, responses: { list: { sites: "invalid" } } }, commands: ["list"], detail: /not parseable/u },
+    { name: "invalid list JSON", cliState: { sites: {}, rawStdout: { list: "not-json" } }, commands: ["list"], detail: /could not list/u },
+  ];
+  for (const item of cases) {
+    const fixture = await createFixture({ cliState: item.cliState });
+    try {
+      await writeIntentOnlyDeploy(fixture);
+      await fixture.makeRunner().run({ maxCycles: 1 });
+      assert.deepEqual((await readCliCalls(fixture.sandbox.cliLogPath)).map((call) => call.command), item.commands, item.name);
+      const report = fixture.worker.state.reports.at(-1).body;
+      assert.equal(report.outcome, "failed", item.name);
+      assert.equal(report.code, "ambiguous", item.name);
+      assert.equal(report.retryable, false, item.name);
+      assert.match(report.detail, item.detail, item.name);
+      assert.equal(report.detail.includes(fixture.job.siteName), true, item.name);
+      assert.equal(fixture.worker.state.jobs[0].state, "failed", item.name);
+      const state = await readSteppageState(fixture.sandbox.statePath);
+      if (item.name === "cleanup failure" || item.name === "get prefix mismatch" || item.name === "get different managed name" || item.name === "duplicate matching versions") {
+        assert.equal(Boolean(state.sites["8100"]), true, item.name);
+      }
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+
+  const timedOut = await createFixture();
+  try {
+    await writeIntentOnlyDeploy(timedOut);
+    const runner = timedOut.makeRunner({ steppage: { list: async () => { throw Object.assign(new Error("list timeout"), { timedOut: true }); } } });
+    await runner.run({ maxCycles: 1 });
+    const report = timedOut.worker.state.reports.at(-1).body;
+    assert.equal(report.code, "ambiguous");
+    assert.equal(report.retryable, false);
+    assert.equal(timedOut.worker.state.jobs[0].state, "failed");
+  } finally {
+    await timedOut.cleanup();
+  }
+});
+
+test("malformed successful deploy output reconciles an empty list as provider_error", async () => {
+  const fixture = await createFixture({ attempts: 4, cliState: { rawStdout: { deploy: "not-json" }, sites: {} } });
+  try {
+    await fixture.makeRunner({ sleep: async () => undefined }).run({ maxCycles: 2 });
+    assert.deepEqual((await readCliCalls(fixture.sandbox.cliLogPath)).map((call) => call.command), ["deploy", "list"]);
+    assert.deepEqual(fixture.worker.state.reports.at(-1).body, {
+      outcome: "failed", code: "provider_error", retryable: true, detail: "provider request failed",
+    });
+    assert.equal(fixture.worker.state.jobs[0].state, "failed");
+    assert.deepEqual(Object.keys((await readSteppageState(fixture.sandbox.statePath)).sites), []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("actual ZIP expansion, CRC, encryption, links, ZIP64, headers, and overlap fail before CLI", async () => {
+  const nestedZip = Buffer.from(buildZip([zipEntry("a.txt", { data: Buffer.from("12345") })]));
+  const nestedLocalLength = 30 + Buffer.byteLength("a.txt") + 5;
+  const overlappingBytes = Buffer.concat([nestedZip.subarray(0, nestedLocalLength), Buffer.alloc(10, 0x41)]);
+  const cases = [
+    { name: "declared 100 actual 200", bytes: buildZip([zipEntry("index.html", { method: 8, data: Buffer.from("A".repeat(200)), uncompressedSize: 100 })]), reason: "expansion_exceeded", content: "A".repeat(200) },
+    { name: "declared zero actual one", bytes: buildZip([zipEntry("index.html", { method: 8, data: Buffer.from("Z"), uncompressedSize: 0 })]), reason: "expansion_exceeded", content: "Z" },
+    { name: "declared 100 actual 50", bytes: buildZip([zipEntry("index.html", { method: 8, data: Buffer.from("B".repeat(50)), uncompressedSize: 100 })]), reason: "size_mismatch", content: "B".repeat(50) },
+    { name: "CRC mismatch", bytes: buildZip([zipEntry("index.html", { data: Buffer.from("CRC_SECRET_CONTENT"), crc32: 0 })]), reason: "crc_mismatch", content: "CRC_SECRET_CONTENT" },
+    { name: "encrypted flag", bytes: buildZip([zipEntry("index.html", { flags: 0x0801, data: Buffer.from("ENCRYPTED_SECRET_CONTENT") })]), content: "ENCRYPTED_SECRET_CONTENT" },
+    { name: "symbolic link", bytes: buildZip([zipEntry("index.html", { externalAttributes: (0o120777 << 16) >>> 0, data: Buffer.from("SYMLINK_SECRET_CONTENT") })]), content: "SYMLINK_SECRET_CONTENT" },
+    { name: "ZIP64 extra marker", bytes: buildZip([zipEntry("index.html", { centralExtra: Buffer.from([1, 0, 0, 0]), data: Buffer.from("ZIP64_SECRET_CONTENT") })]), content: "ZIP64_SECRET_CONTENT" },
+    { name: "local name mismatch", bytes: buildZip([zipEntry("index.html", { localName: "other.html", data: Buffer.from("LOCAL_SECRET_CONTENT") })]), content: "LOCAL_SECRET_CONTENT" },
+    { name: "conflicting data descriptor fields", bytes: buildZip([zipEntry("index.html", { method: 8, flags: 0x0808, data: Buffer.from("DESCRIPTOR_SECRET_CONTENT"), localCrc32: 1 })]), content: "DESCRIPTOR_SECRET_CONTENT" },
+    { name: "C1 control character in path", bytes: buildZip([zipEntry("index.html"), zipEntry("bad\u0085.js", { data: Buffer.from("C1_SECRET_CONTENT") })]), content: "C1_SECRET_CONTENT" },
+    { name: "overlapping entries", bytes: buildZip([
+      zipEntry("index.html", { data: overlappingBytes }),
+      zipEntry("a.txt", { data: Buffer.from("12345"), centralLocalOffset: 30 + Buffer.byteLength("index.html") }),
+    ]) , content: "12345" },
+  ];
+  for (const item of cases) {
+    const fixture = await createFixture({ bundle: Buffer.from(item.bytes) });
+    try {
+      await fixture.run();
+      const report = fixture.worker.state.reports.at(-1).body;
+      assert.equal(report.outcome, "failed", item.name);
+      assert.equal(report.code, "validation_bundle", item.name);
+      assert.equal(report.retryable, false, item.name);
+      assert.deepEqual(await readCliCalls(fixture.sandbox.cliLogPath), [], item.name);
+      assert.equal(fixture.worker.state.jobs[0].state, "failed", item.name);
+      assert.deepEqual(Object.keys((await readSteppageState(fixture.sandbox.statePath)).sites), [], item.name);
+      if (item.reason) assert.equal(report.detail, `path=index.html; reason=${item.reason}`, item.name);
+      if (item.content) assert.equal(report.detail.includes(item.content), false, item.name);
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+});
+
+test("every shared secret pattern is rejected with id and path but without the matched string", async () => {
+  const secrets = {
+    pem_private_key: "-----BEGIN PRIVATE KEY-----",
+    aws_access_key_id: `AKIA${"A".repeat(16)}`,
+    github_token: `ghp_${"A".repeat(36)}`,
+    github_fine_grained_token: `github_pat_${"A".repeat(50)}`,
+    openai_style_secret_key: `sk-${"A".repeat(32)}`,
+    stripe_live_key: `sk_live_${"A".repeat(16)}`,
+    slack_token: `xoxb-${"A".repeat(10)}`,
+    google_api_key: `AIza${"A".repeat(35)}`,
+  };
+  for (const pattern of rules.secretPatterns) {
+    const secret = secrets[pattern.id];
+    assert.equal(typeof secret, "string", pattern.id);
+    const bundle = buildZip([
+      zipEntry("index.html", { data: Buffer.from("safe") }),
+      zipEntry("leak.js", { data: Buffer.from(`const key = '${secret}';`) }),
+    ]);
+    const fixture = await createFixture({ bundle: Buffer.from(bundle) });
+    try {
+      await fixture.run();
+      const report = fixture.worker.state.reports.at(-1).body;
+      assert.equal(report.outcome, "failed", pattern.id);
+      assert.equal(report.code, "validation_secret", pattern.id);
+      assert.equal(report.retryable, false, pattern.id);
+      assert.equal(report.detail, `pattern=${pattern.id}; file=leak.js`, pattern.id);
+      assert.equal(report.detail.includes(secret), false, pattern.id);
+      assert.deepEqual(await readCliCalls(fixture.sandbox.cliLogPath), [], pattern.id);
+      assert.equal(fixture.worker.state.jobs[0].state, "failed", pattern.id);
+    } finally {
+      await fixture.cleanup();
+    }
   }
 });
 
@@ -583,7 +756,9 @@ test("pinned CLI verification reads its expected SHA from the checksum file", as
 
 test("package registration, service hardening, runbook checksum reference, and checksum format are present", async () => {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
-  assert.equal(packageJson.scripts.test.endsWith("tests/hosting-deployer.test.mjs"), true);
+  assert.equal(packageJson.scripts.test.includes("tests/hosting-deployer.test.mjs"), true);
+  assert.equal(packageJson.scripts.test.includes("tests/hosting-deployer-conformance.test.mjs"), true);
+  assert.equal(packageJson.scripts.test.endsWith("tests/hosting-deployer-process.test.mjs"), true);
   const service = await readFile(new URL("../deploy/hosting/zaochang-hosting-deployer.service", import.meta.url), "utf8");
   for (const directive of [
     "User=zaochang", "Group=zaochang", "NoNewPrivileges=true", "PrivateTmp=true", "PrivateDevices=true",
@@ -623,7 +798,7 @@ async function createFixture({
   const api = new WorkerApi({ baseUrl: worker.baseUrl, token: worker.token });
   const wal = new WriteAheadLog(join(sandbox.dir, "state"));
   function makeRunner(options = {}) {
-    const steppage = new Steppage({
+    const steppage = options.steppage ?? new Steppage({
       command: [process.execPath, fakeCliPath],
       apiKey: STEP_KEY,
       baseDir: sandbox.dir,
@@ -666,6 +841,18 @@ async function createFixture({
       await sandbox.cleanup();
     },
   };
+}
+
+async function writeIntentOnlyDeploy(fixture) {
+  const claimed = await fixture.api.claim("recovery-test");
+  await fixture.wal.initialize();
+  await fixture.wal.write({
+    hostingId: String(claimed.id), phase: "intent", action: "deploy", siteName: claimed.siteName,
+    siteId: null, versionId: null, lease: claimed.lease, jobPreviewTtl: "7d",
+    expectedFileCount: claimed.bundleFileCount, expectedZipBytes: claimed.bundleZipBytes,
+    expectedUncompressedBytes: zipMetadata(fixture.job.bundle).totalBytes, result: null, reportBody: null,
+  });
+  return claimed;
 }
 
 function site(siteId, name, liveVersionId) {
