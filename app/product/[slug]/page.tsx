@@ -17,11 +17,11 @@ async function loadProduct(slug: string): Promise<LoadedProduct | null> {
   if (!Number.isInteger(id)) return null;
   try {
     const row = await database().prepare(
-      `SELECT id, owner_name AS ownerName, title, description, category,
-              demo_type AS demoType, demo_url AS demoUrl, ${hostedUrlSelect("products")}, image_url AS imageUrl,
-              cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
-              plays_count AS plays, created_at AS createdAt
-       FROM products WHERE id = ? AND ${PUBLISHED_PRODUCT_SQL}`,
+      `SELECT p.id, p.owner_name AS ownerName, p.title, p.description, p.category,
+              p.demo_type AS demoType, p.demo_url AS demoUrl, p.image_url AS imageUrl,
+              p.cover_theme AS coverTheme, p.price, p.pricing_model AS pricingModel, p.likes_count AS likes,
+              p.plays_count AS plays, p.created_at AS createdAt, ${hostedUrlSelect("p")}
+       FROM products p WHERE p.id = ? AND ${PUBLISHED_PRODUCT_SQL_QUALIFIED}`,
     ).bind(id).first<Record<string, unknown>>();
     if (!row) return null;
     return { ...hydrateProductRow(row, { release: "社区新作", tags: [String(row.category), "独立创作"] }), hostedUrl: typeof row.hostedUrl === "string" ? row.hostedUrl : null };
