@@ -1,0 +1,9 @@
+# 静态托管数据库工作账本
+
+| 日期 | 工作包 | 状态 | 本轮记录 |
+| --- | --- | --- | --- |
+| 2026-10-11 | S：数据库层 0032 | 部分完成 | 增加托管 schema、手写迁移与 SQLite 不变量测试；`node --experimental-strip-types --test-isolation=none --test tests/hosting-triggers.test.mjs` 输出 `# tests 12 / # pass 12 / # fail 0 / # skipped 0 / # todo 0`，退出码 0。Node 的 `--test` 默认隔离模式因沙箱 `spawn EPERM` 未能启动测试；Drizzle 模块导入因工作树没有 `drizzle-orm` 依赖未执行成功。按任务边界未安装依赖、未运行 `drizzle-kit generate`，快照与 journal 留给 Claude 统一生成。 |
+| 2026-10-11 | S：数据库层 0032（补充） | 部分完成 | `tests/worker-contracts.test.mjs` 在 `--test-isolation=none` 下 36/36 通过。`tests/migration-gate.test.mjs` 1/8 通过、7/8 失败；其用例通过 `spawnSync` 启动 `scripts/check-migrations.mjs`，沙箱拒绝子进程，标准输出/错误为空，因此该结果不证明 journal 内容正确或错误。 |
+| 2026-10-11 | S2：hosting_revision 与上传令牌 | 部分完成 | 将 `product_hostings` 批准/曝光绑定改为 `hosting_revision`，并增加 `hosting_upload_tokens` 与触发器；更新现有 0032 反例测试（17 项）。`node --experimental-strip-types --test tests/hosting-triggers.test.mjs` 退出码 1，Node 默认隔离因 `spawn EPERM` 中断，统计 `# tests 1 / # pass 0 / # fail 1 / # skipped 0 / # todo 0`；`node --experimental-strip-types --test-isolation=none --test tests/hosting-triggers.test.mjs` 退出码 0，统计 `# tests 17 / # pass 17 / # fail 0 / # skipped 0 / # todo 0`。`node --experimental-strip-types --check db/schema.ts` 与 `git diff --check` 均退出码 0。Drizzle runtime 导入和 `db:generate` 未运行（当前无 `node_modules/drizzle-orm`；不安装依赖、不改 `drizzle/meta/*`）。 |
+| 2026-10-11 | S2：I2 fail-closed 解释 | 部分完成 | CONTRACT 的 I2 以 `desired <> 'removed'` 描述 active 行，但 S2 反例还要求仅剩 `desired='removed' AND state='live'` 且 hosting_revision 过期时拒批；按更严格语义，将该残留 live 行纳入 `hosting_not_staged` 阻断条件，直到 state 进入 `removed`。未改共享 CONTRACT，疑问随 S2 交付报告列出。 |
+| 2026-10-11 | S2：契约 §7.1 缺失 | 部分完成 | 本 worktree 的 `deploy/hosting/CONTRACT.md` 标题仅到 §6，没有 §7.1 或 `hosting_upload_tokens` 定义；令牌表字段与触发器依本轮 S2 任务书的明确条目实现，未改共享契约，缺口列在交付报告。 |

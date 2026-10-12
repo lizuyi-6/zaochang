@@ -11,6 +11,7 @@ export type Product = {
   category: string;
   demoType: string;
   demoUrl?: string | null;
+  hostedUrl?: string | null;
   coverTheme: "coral" | "mint" | "blue" | "yellow" | "ink";
   price: number;
   pricingModel: "free" | "one_time" | "per_use";

@@ -99,7 +99,7 @@ token值只在内存，没有写入本机.env/持久凭据或报告；原Wrangle
 
 ## 2. 密钥(名称清单,值永不入库/不入对话)
 
-生产 Worker `zaochang` 的 14 个 secret(`npx wrangler secret list --config wrangler.prod.jsonc`):
+生产 Worker `zaochang` 的 14 个 secret(`npx wrangler secret list --config wrangler.prod.jsonc`;静态托管上线后另有第 15 个 `HOSTING_DEPLOYER_TOKEN`,见 §4b):
 
 ```
 PUBLIC_APP_ORIGIN            APP_ENV
@@ -202,6 +202,23 @@ cloudflared-zaochang.service     active  enabled   # tunnel
 zaochang.service                 inactive disabled # 旧 workerd(已退役)
 ```
 
+**更新盒子扫描器代码**（本任务未发布；执行前按发布授权操作）：service 从 `/opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs` 启动，新增队列模块必须与入口文件一起复制。先在仓库根目录执行备份、复制、语法检查和重启：
+
+```bash
+BOX='root@39.96.196.207'
+KEY="$HOME/.ssh/zaochang-deploy.pem"
+BACKUP="/opt/zaochang/current/deploy/server/.scanner-backup-$(date +%Y%m%d%H%M%S)"
+ssh -i "$KEY" "$BOX" "mkdir -m 700 '$BACKUP' && cp -p /opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs /opt/zaochang/current/deploy/server/scan-queue.mjs '$BACKUP/'"
+scp -i "$KEY" deploy/server/zaochang-upload-scanner.mjs deploy/server/scan-queue.mjs "$BOX:/opt/zaochang/current/deploy/server/"
+ssh -i "$KEY" "$BOX" 'node --check /opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs && node --check /opt/zaochang/current/deploy/server/scan-queue.mjs && systemctl restart zaochang-upload-scanner.service && systemctl --no-pager --full status zaochang-upload-scanner.service'
+```
+
+回滚时把 `$BACKUP` 中的两个旧文件复制回同一目录，再重启并检查 service：
+
+```bash
+ssh -i "$KEY" "$BOX" "cp -p '$BACKUP/zaochang-upload-scanner.mjs' /opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs && cp -p '$BACKUP/scan-queue.mjs' /opt/zaochang/current/deploy/server/scan-queue.mjs && systemctl restart zaochang-upload-scanner.service && systemctl --no-pager --full status zaochang-upload-scanner.service"
+```
+
 **重建 tunnel(若丢)**:
 ```bash
 ssh -i ~/.ssh/zaochang-deploy.pem root@39.96.196.207
@@ -221,6 +238,16 @@ cloudflared tunnel route dns --overwrite-dns zaochang-scanner-local scanner.aeth
 ```
 > cloudflared 的 `originRequest` **不支持注入自定义 header**(没有 `headers` 字段),
 > 所以 Bearer token 由 **Worker 侧**(`UPLOAD_SCANNER_TOKEN`)加,不在 tunnel 配。
+
+## 4b. 静态项目托管(StepFun Page)
+
+**形态**:被授权的会员把静态站点 zip 交给造场 → Worker 校验结构 + ClamAV 扫描 → 盒子上的**部署器**(`deploy/hosting/`)用 StepFun Page CLI 部署为暂存版本(不上线)→ 管理员在后台看预览并批准 → 部署器 `promote` 上线 → 产品页出现托管链接(`https://<slug>.page.stepcloud.com`,由 StepFun 运行,造场不运行用户代码)。契约/不变量/状态机见 `deploy/hosting/CONTRACT.md`;盒子运维见 `deploy/hosting/README.md`。
+
+- **数据库**:迁移 `0032_page_hosting.sql`(托管授权、托管行、上传令牌、`product_hosted_urls` 视图及触发器;同时放宽 `uploaded_files.purpose` 与 `mcp_write_audit.tool_name` 的 CHECK)。**公开页面只经视图取托管链接**(架构守卫测试 `tests/hosting-live-url-architecture.test.mjs`)。外链 `demo_url` 项目仍不能被批准(`product_review_external_demo_guard` 未动)。
+- **机密**:Worker secret `HOSTING_DEPLOYER_TOKEN`(`zch_` 开头、≥48 字符;只放行 4 条 `/api/hosting-worker/*` 路由,入口闸 fail-closed);盒子 `/etc/zaochang/hosting.env`(0640 root:zaochang)含同值 token 与 **Page 托管 API Key**(`STEPFUN_API_KEY`)。StepFun key 只在盒子上,Worker 不持有、不调用 StepFun。
+- **上线顺序(缺一不可)**:① 备份生产 D1(`wrangler d1 export`)并在副本重放 0032(导入导出副本须关外键);② 对生产手工执行 0032,回填 `d1_migrations`(hash=LF 归一 SQL 的 sha256,created_at=journal `when`;`PRAGMA foreign_key_check` 须为空)——CI 的 `scripts/check-migrations.mjs` 在迁移未应用时会拒绝部署;③ 生成 token,`wrangler secret put` 管道注入 + 写入盒子 env(两处同值);④ 盒子安装部署器到**独立目录 `/opt/zaochang/hosting/`**(不要装进 `/opt/zaochang/current`:它指向旧应用的历史发布目录):`deploy/hosting/` 的代码与 `lib/`、`hosting-rules.json`(与入口同目录)、`STEPPAGE_SHA256`、钉版本 `steppage.mjs`(sha256 与 `STEPPAGE_SHA256` 逐字相等才可用),unit 装到 `/etc/systemd/system/`,env 在 `/etc/zaochang/hosting.env`;**文件一律用 `git show HEAD:<path>` 取原始 LF blob 经 ssh 管道落盘**(`git archive` 在 Windows 会输出 CRLF;`install /dev/stdin <已存在的目标>` 会报 No such file,先写临时文件再 `install`);Worker 新版本部署完成后再 `systemctl enable --now zaochang-hosting-deployer`(否则它会对不存在的路由退避空转);扫描器 P0 文件(`deploy/server/zaochang-upload-scanner.mjs`、`scan-queue.mjs`)同法覆盖到 `/opt/zaochang/current/deploy/server/`,先备份旧文件为 `.bak-<日期>`,`systemctl restart zaochang-upload-scanner`,再用 `/health` 与一次真实扫描核对;⑤ 合并 → CI → 部署;⑥ 管理员授权测试账号,走一遍真生产端到端,删测试站;⑦ **轮换 StepFun key**(此前曾出现在对话里)。**盒子文件必须从 `git archive`/`git show` 取 LF 版本**,Windows 工作区检出可能是 CRLF,会破坏 systemd unit。
+- **排障**:托管卡在 `queued`→ 盒子 `journalctl -u zaochang-hosting-deployer`、`GET /api/hosting-worker/health`(带 token)是否 200、token 两处是否一致;`failed`+`ambiguous` → 按 `deploy/hosting/README.md` 人工对账(`steppage list` 只读查看 `zc-p<产品>-h<托管>` 站点,**绝不按前缀批量删除**);`failed`+`validation_*` → 让用户修包重传;`provider_auth` → 轮换/重填 key;管理员后台「移除托管」或撤销授权会把所有站点置为待移除,由部署器删除远端站点。
+- **已实测证据(本地)**:真 Worker + 真部署器进程 + 真钉版本 `steppage` CLI + 真 StepFun 账号:暂存(预览 7 天过期)→ 批准 → 上线(线上响应头含 `page.config.json` 自定义头 `x-zc-probe`,预览上不含)→ 部署器删除,账号回到原有 2 个站点。**未验证**:生产环境的同一链路、StepFun 站点/版本额度上限、托管第三方用户内容的条款。
 
 ## 5. 验证清单(改完必跑;一律经 CF 边缘,别信本地直连)
 
@@ -277,7 +304,8 @@ npx wrangler secret delete ZAOCHANG_AGENT_TOKEN --config wrangler.prod.jsonc
 | 症状 | 查 | 多半原因 |
 |---|---|---|
 | 上传 503 | `wrangler secret list` 有没有 `UPLOAD_SCANNER_URL/TOKEN`;token 是否==盒子 `SCANNER_TOKEN` | secret 缺失/不等 |
-| 上传 503 + tunnel 健康 | 盒子 `systemctl status zaochang-upload-scanner.service`、手动 `clamscan` 计时 | clamscan 慢(~10-13s/次,Worker 超时 112s 够) |
+| 上传 503 `scanner_busy` / `upload_scanner_unavailable` + tunnel 健康 | `GET /health` 查看 `busy`/`queued`;盒子 `systemctl status zaochang-upload-scanner.service`、手动 `clamscan` 计时 | `scanner_busy` 表示单飞扫描槽忙且等待队列已满/等待超时;Worker 只对这个 503 做最多 3 次退避重试(1/2/4 秒+抖动,受 `Retry-After`/110 秒总预算约束)。其他扫描错误不重试。单次 clamscan 曾测得 14.9 秒、峰值 RSS 977 MiB。 |
+| 上传 429 `upload_capacity_exceeded` | 检查 D1 `api_rate_limits` 中 `upload-global` 当前小时窗口计数;核对调用方先通过自己的会员限流 | 全站扫描容量桶为 120 次/小时;命中后不建 `uploaded_files` 行、不写 R2,`Retry-After` 指向窗口结束。Hyperknow 内部图片不计入此桶。 |
 | `scanner.aetherstudio.top` 530 | 盒子 `journalctl -u cloudflared-zaochang.service` 看 Registered | connector 没连上 |
 | 浏览器登录 GitHub 报「redirect_uri 无关联」 | 地址栏是 apex 还是 `*.workers.dev` | **在 staging 登录**(回调没注册);或 OAuth app 回调字符串不精确匹配 |
 | 本地 `curl aetherstudio.top` 怪(198.18.x.x / schannel 失败) | — | 本机 VPN 拦截,**别信**;一律用盒子 `--resolve` 到边缘 |

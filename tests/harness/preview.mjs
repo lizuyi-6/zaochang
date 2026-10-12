@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -23,8 +23,11 @@ export let server;
 export let scannerServer;
 export let scannerPort;
 export let uploadScannerRequestCount = 0;
+let uploadScannerBusyResponsesRemaining = 0;
+let uploadScannerErrorAfterBusy = null;
 export let output = "";
 export const scannerToken = `test-upload-scanner-${runId}-token`;
+export const hostingDeployerToken = `zch_${randomBytes(48).toString("base64url")}`;
 
 // 假 OpenAI 兼容上游(仿 startFakeUploadScanner 模式):校验 Bearer,把收到的
 // chat/completions 请求体存入 lastChatCompletion / aiUpstreamCount 供字段级断言;
@@ -556,6 +559,19 @@ export async function startFakeUploadScanner() {
       response.end(JSON.stringify({ error: "sha256_mismatch" }));
       return;
     }
+    if (uploadScannerBusyResponsesRemaining > 0) {
+      uploadScannerBusyResponsesRemaining -= 1;
+      response.writeHead(503, { "content-type": "application/json", "retry-after": "1" });
+      response.end(JSON.stringify({ error: "scanner_busy" }));
+      return;
+    }
+    if (uploadScannerErrorAfterBusy) {
+      const error = uploadScannerErrorAfterBusy;
+      uploadScannerErrorAfterBusy = null;
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error }));
+      return;
+    }
     if (body.includes(Buffer.from("SCANNER-UNAVAILABLE-TEST"))) {
       response.writeHead(503, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "scanner_unavailable" }));
@@ -575,6 +591,15 @@ export async function startFakeUploadScanner() {
     scannerServer.listen(0, "127.0.0.1", resolve);
   });
   scannerPort = scannerServer.address().port;
+}
+
+export function setUploadScannerBusyResponses(count, errorAfterBusy = null) {
+  if (!Number.isInteger(count) || count < 0) throw new RangeError("busy response count must be a non-negative integer");
+  if (errorAfterBusy !== null && !new Set(["scan_failed", "scanner_unavailable"]).has(errorAfterBusy)) {
+    throw new TypeError("unsupported post-busy scanner error");
+  }
+  uploadScannerBusyResponsesRemaining = count;
+  uploadScannerErrorAfterBusy = errorAfterBusy;
 }
 
 export function authHeaders(name, email) {
@@ -630,6 +655,7 @@ export function previewServerArgs() {
     "--var", `UPLOAD_SCANNER_URL:http://127.0.0.1:${scannerPort}/scan`,
     "--var", `UPLOAD_SCANNER_TOKEN:${scannerToken}`,
     "--var", "ZAOCHANG_AGENT_TOKEN:test-agent-key",
+    "--var", `HOSTING_DEPLOYER_TOKEN:${hostingDeployerToken}`,
     "--var", `AI_CHAT_BASE_URL:http://127.0.0.1:${aiPort}/v1`,
     "--var", "AI_CHAT_API_KEY:test-ai-key",
     "--var", "AI_CHAT_MODEL:test-model-1",
@@ -850,6 +876,32 @@ export async function queryLocalD1(sql) {
   }
 }
 
+// Inspect Miniflare's local R2 object metadata directly. The backing SQLite
+// table is the same object index used by the bound R2Bucket, so tests can
+// distinguish a deleted quarantine object from a row that is merely unreadable.
+export async function queryLocalR2Keys() {
+  const databaseFiles = readdirSync(stateDir, { recursive: true })
+    .filter((name) => typeof name === "string" && name.endsWith(".sqlite"));
+  const keys = [];
+  let foundObjectIndex = false;
+  for (const relativePath of databaseFiles) {
+    const localDatabase = new DatabaseSync(join(stateDir, relativePath));
+    try {
+      localDatabase.exec("PRAGMA busy_timeout = 5000;");
+      const table = localDatabase.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_mf_objects'`,
+      ).get();
+      if (!table) continue;
+      foundObjectIndex = true;
+      for (const row of localDatabase.prepare(`SELECT key FROM _mf_objects`).all()) keys.push(String(row.key));
+    } finally {
+      localDatabase.close();
+    }
+  }
+  assert.equal(foundObjectIndex, true, "expected Miniflare's local R2 object index");
+  return keys.sort();
+}
+
 export async function creditTestFruit(email, amount = 20, label = crypto.randomUUID()) {
   assert.match(email, /^[a-z0-9@._+-]+$/i);
   assert.equal(Number.isInteger(amount) && amount > 0, true);
@@ -893,7 +945,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql", "0032_page_hosting.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -941,7 +993,47 @@ before(async () => {
         INSERT INTO oauth_provider_refresh_tokens (token_hash, client_id, user_email, scope, expires_at) VALUES ('pre-0031-rt', 'zc_pre_0031_app', 'pre-0031-user@example.com', 'openid profile', datetime('now', '+30 days'))
       `);
     }
+    if (migrationFile === "0032_page_hosting.sql") {
+      // 0032 重建 uploaded_files(CHECK 变更)并给 products 加列。空库能过不代表生产(已有上传与产品)能过:
+      // 先灌入既有会员/上传/产品行,迁移后断言行完好、外键无悬空、触发器已按新定义重建。
+      await executeLocalD1(`
+        INSERT INTO members (email, display_name) VALUES ('pre-0032@example.com', '迁移前托管用户');
+        INSERT INTO uploaded_files (key, owner_email, original_name, media_type, byte_size, visibility, purpose, sha256, scan_status, scan_engine, quarantine_key, hyperknow_image)
+          VALUES ('pre-0032-file.png', 'pre-0032@example.com', 'pre-0032.png', 'image/png', 68, 'private', 'product_cover', '${"a".repeat(64)}', 'pending', NULL, 'quarantine/pre-0032', 0);
+        UPDATE uploaded_files SET scan_status = 'clean', scan_engine = 'pre-0032-engine', quarantine_key = NULL, scanned_at = CURRENT_TIMESTAMP WHERE key = 'pre-0032-file.png';
+        INSERT INTO products (owner_email, owner_name, title, description, category)
+          VALUES ('pre-0032@example.com', '迁移前托管用户', '迁移前产品', '用于验证 0032 迁移保留既有产品。', '开发工具');
+        INSERT INTO mcp_write_audit (id, member_email, credential_kind, credential_id, tool_name, product_id, result)
+          VALUES ('pre-0032-audit', 'pre-0032@example.com', 'api_key', 'pre-0032-key', 'create_product', NULL, 'ok')
+      `);
+    }
     await executeLocalD1(readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"));
+    if (migrationFile === "0032_page_hosting.sql") {
+      const preserved = (await queryLocalD1(`SELECT key, purpose, scan_status, scan_engine, sha256, hyperknow_image FROM uploaded_files WHERE key = 'pre-0032-file.png'`)).map((row) => ({ ...row }));
+      assert.deepEqual(preserved, [{ key: "pre-0032-file.png", purpose: "product_cover", scan_status: "clean", scan_engine: "pre-0032-engine", sha256: "a".repeat(64), hyperknow_image: 0 }]);
+      const productRows = (await queryLocalD1(`SELECT hosting_revision, review_version, review_status FROM products WHERE owner_email = 'pre-0032@example.com'`)).map((row) => ({ ...row }));
+      assert.deepEqual(productRows, [{ hosting_revision: 0, review_version: 1, review_status: "pending_review" }]);
+      assert.deepEqual(await queryLocalD1("PRAGMA foreign_key_check"), [], "0032 must leave no dangling child rows");
+      const triggers = (await queryLocalD1(`SELECT name FROM sqlite_master WHERE type = 'trigger' AND name IN ('uploaded_files_pending_insert_guard', 'uploaded_files_scan_transition_guard', 'uploaded_files_hosting_bundle_guard', 'product_material_change_requires_review', 'product_hostings_approval_staging_guard') ORDER BY name`)).map((row) => row.name);
+      assert.deepEqual(triggers, ["product_hostings_approval_staging_guard", "product_material_change_requires_review", "uploaded_files_hosting_bundle_guard", "uploaded_files_pending_insert_guard", "uploaded_files_scan_transition_guard"]);
+      // mcp_write_audit 的 tool_name CHECK 在 0032 里随托管工具放宽:旧行保留,新工具名可写,未知名仍拒绝。
+      const auditRows = (await queryLocalD1(`SELECT id, tool_name, result FROM mcp_write_audit WHERE id = 'pre-0032-audit'`)).map((row) => ({ ...row }));
+      assert.deepEqual(auditRows, [{ id: "pre-0032-audit", tool_name: "create_product", result: "ok" }]);
+      await executeLocalD1(`INSERT INTO mcp_write_audit (id, member_email, credential_kind, credential_id, tool_name, result) VALUES ('pre-0032-audit-2', 'pre-0032@example.com', 'oauth', 'c', 'begin_hosting_upload', 'ok'), ('pre-0032-audit-3', 'pre-0032@example.com', 'oauth', 'c', 'remove_hosting', 'ok')`);
+      const unknownTool = await executeLocalD1(`INSERT INTO mcp_write_audit (id, member_email, credential_kind, credential_id, tool_name, result) VALUES ('pre-0032-audit-4', 'pre-0032@example.com', 'oauth', 'c', 'delete_everything', 'ok')`, false);
+      assert.match(unknownTool, /CHECK constraint failed/, "unknown MCP write tool names must stay rejected");
+      await executeLocalD1(`DELETE FROM mcp_write_audit WHERE member_email = 'pre-0032@example.com'`);
+      const zipOutsideHosting = await executeLocalD1(
+        `INSERT INTO uploaded_files (key, owner_email, original_name, media_type, byte_size, visibility, purpose, sha256, scan_status) VALUES ('pre-0032-zip.zip', 'pre-0032@example.com', 'x.zip', 'application/zip', 10, 'private', 'general', '${"b".repeat(64)}', 'pending')`,
+        false,
+      );
+      assert.match(zipOutsideHosting, /uploaded_file_hosting_bundle_invalid/, "zip must be rejected outside the hosting_bundle purpose");
+      await executeLocalD1(`
+        DELETE FROM products WHERE owner_email = 'pre-0032@example.com';
+        DELETE FROM uploaded_files WHERE owner_email = 'pre-0032@example.com';
+        DELETE FROM members WHERE email = 'pre-0032@example.com'
+      `);
+    }
     if (migrationFile === "0031_mcp_oauth.sql") {
       assert.deepEqual(
         (await queryLocalD1(`SELECT client_id, owner_email, registration_source, review_status, allowed_scopes FROM oauth_provider_clients WHERE client_id = 'zc_pre_0031_app'`)).map((row) => ({ ...row })),

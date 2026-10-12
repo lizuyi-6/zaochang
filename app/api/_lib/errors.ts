@@ -24,7 +24,13 @@ export function jsonError(error: unknown): Response {
   if (error && typeof error === "object" && "code" in error && "status" in error) {
     const code = String((error as { code: unknown }).code);
     const status = Number((error as { status: unknown }).status);
-    return Response.json({ error: code }, { status: Number.isInteger(status) ? status : 500 });
+    const retryAfterSeconds = "retryAfterSeconds" in error
+      ? Number((error as { retryAfterSeconds: unknown }).retryAfterSeconds)
+      : NaN;
+    const headers = Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 1
+      ? { "retry-after": String(Math.floor(retryAfterSeconds)) }
+      : undefined;
+    return Response.json({ error: code }, { status: Number.isInteger(status) ? status : 500, headers });
   }
 
   const message = error instanceof Error ? error.message : "Unexpected error";
@@ -68,6 +74,10 @@ export function isWalletPendingError(error: unknown): boolean {
 
 export function isExternalDemoImmutableError(error: unknown): boolean {
   return errorMessageIncludes(error, "external_demo_requires_immutable_package");
+}
+
+export function isHostingNotStagedError(error: unknown): boolean {
+  return errorMessageIncludes(error, "hosting_not_staged");
 }
 
 export function isProductReviewNotPendingError(error: unknown): boolean {

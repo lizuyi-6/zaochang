@@ -408,10 +408,10 @@ function fakeD1(failLabels = []) {
   };
 }
 
-test("purge: retention statements register all 12 SQL labels in foreign-key-safe order", () => {
+test("purge: retention statements register all 15 SQL labels in foreign-key-safe order", () => {
   const db = fakeD1();
   const registry = purgeRegistry(db);
-  assert.equal(registry.length, 12);
+  assert.equal(registry.length, 15);
   assert.deepEqual(registry.map((entry) => entry.label), [
     "oauth.access_tokens",
     "oauth.refresh_tokens",
@@ -425,8 +425,17 @@ test("purge: retention statements register all 12 SQL labels in foreign-key-safe
     "sessions.auth_sessions",
     "webauthn.challenges_consumed",
     "webauthn.challenges_expired",
+    "hosting.upload_tokens",
+    "hosting.exhausted_jobs.deploy",
+    "hosting.exhausted_jobs.promote",
   ]);
-  assert.deepEqual(db.prepared.map((entry) => entry.sql), [
+  // 前 12 条逐字钉死;托管的 3 条(令牌清理 + 两条租约耗尽的状态收敛,语句较长)钉动作与目标表。
+  const hostingSql = db.prepared.map((entry) => entry.sql).slice(12);
+  assert.equal(hostingSql.length, 3);
+  assert.match(hostingSql[0], /^DELETE FROM hosting_upload_tokens\s/);
+  assert.match(hostingSql[1], /^UPDATE product_hostings SET state = 'failed'/);
+  assert.match(hostingSql[2], /^UPDATE product_hostings SET state = 'staged'/);
+  assert.deepEqual(db.prepared.map((entry) => entry.sql).slice(0, 12), [
     "DELETE FROM oauth_provider_access_tokens WHERE expires_at <= CURRENT_TIMESTAMP",
     "DELETE FROM oauth_provider_refresh_tokens WHERE expires_at <= CURRENT_TIMESTAMP",
     "DELETE FROM oauth_provider_authorization_codes WHERE expires_at <= CURRENT_TIMESTAMP OR EXISTS (SELECT 1 FROM oauth_provider_authorization_requests r WHERE r.request_hash = oauth_provider_authorization_codes.request_hash AND r.expires_at <= CURRENT_TIMESTAMP)",
@@ -448,13 +457,13 @@ test("purge: 单条失败不阻断后续,日志含 label 且返回计数", async
   const errors = [];
   const logger = { log: (message) => logs.push(message), error: (message) => errors.push(message) };
   const result = await runPurgeRegistry(db, logger);
-  assert.deepEqual(result, { ok: 11, failed: 1 });
+  assert.deepEqual(result, { ok: 14, failed: 1 });
   assert.equal(errors.length, 1);
   assert.ok(errors[0].startsWith("[cron-purge] failed oauth.authorization_codes:"));
-  assert.equal(logs.length, 11);
+  assert.equal(logs.length, 14);
   assert.ok(logs.every((message) => /^\[cron-purge\] ok [\w.-]+ changes=3$/.test(message)));
-  // 最后一条(webauthn challenges_expired)在失败之后仍执行——注册表顺序不受影响。
-  assert.ok(logs.at(-1).includes("webauthn.challenges_expired"));
+  // 最后一条(hosting.exhausted_jobs.promote)在失败之后仍执行——注册表顺序不受影响。
+  assert.ok(logs.at(-1).includes("hosting.exhausted_jobs.promote"));
 });
 
 function createHyperknowCleanupFixture({ status = "clean", afterCandidateRead, failRowDelete = false } = {}) {

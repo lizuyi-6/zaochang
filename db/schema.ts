@@ -259,6 +259,7 @@ export const products = sqliteTable(
     reviewStatus: text("review_status").notNull().default("pending_review"),
     reviewVersion: integer("review_version").notNull().default(1),
     approvedVersion: integer("approved_version").notNull().default(0),
+    hostingRevision: integer("hosting_revision").notNull().default(0),
     reviewedBy: text("reviewed_by").references(() => members.email),
     reviewedAt: text("reviewed_at"),
     reviewNote: text("review_note").notNull().default(""),
@@ -273,6 +274,7 @@ export const products = sqliteTable(
     check("products_pricing_model_valid", sql`${table.pricingModel} in ('free', 'one_time', 'per_use')`),
     check("products_review_status_valid", sql`${table.reviewStatus} in ('pending_review', 'approved', 'rejected')`),
     check("products_review_versions_valid", sql`${table.reviewVersion} >= 1 and ${table.approvedVersion} >= 0 and ${table.approvedVersion} <= ${table.reviewVersion}`),
+    check("products_hosting_revision_nonnegative", sql`${table.hostingRevision} >= 0`),
   ],
 );
 
@@ -295,6 +297,25 @@ export const productReviewDecisions = sqliteTable(
     uniqueIndex("product_review_decisions_version_idx").on(table.productId, table.reviewVersion),
     index("product_review_decisions_reviewer_idx").on(table.reviewerEmail, table.createdAt),
     check("product_review_decision_valid", sql`${table.decision} in ('approved', 'rejected')`),
+  ],
+);
+
+export const hostingGrants = sqliteTable(
+  "hosting_grants",
+  {
+    memberEmail: text("member_email")
+      .primaryKey()
+      .references(() => members.email),
+    maxSites: integer("max_sites").notNull().default(3),
+    grantedBy: text("granted_by")
+      .notNull()
+      .references(() => members.email),
+    note: text("note").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    check("hosting_grants_max_sites_valid", sql`${table.maxSites} between 1 and 20`),
   ],
 );
 
@@ -651,7 +672,7 @@ export const mcpWriteAudit = sqliteTable(
     index("mcp_write_audit_created_idx").on(table.createdAt),
     index("mcp_write_audit_member_created_idx").on(table.memberEmail, table.createdAt),
     check("mcp_write_audit_credential_kind_valid", sql`${table.credentialKind} in ('api_key', 'oauth')`),
-    check("mcp_write_audit_tool_valid", sql`${table.toolName} in ('create_product', 'update_product', 'upload_cover')`),
+    check("mcp_write_audit_tool_valid", sql`${table.toolName} in ('create_product', 'update_product', 'upload_cover', 'begin_hosting_upload', 'remove_hosting')`),
   ],
 );
 
@@ -909,8 +930,80 @@ export const uploadedFiles = sqliteTable(
     index("uploaded_files_hyperknow_cleanup_idx").on(table.hyperknowImage, table.scanStatus, table.createdAt),
     check("uploaded_files_size_valid", sql`${table.byteSize} between 1 and 10485760`),
     check("uploaded_files_visibility_valid", sql`${table.visibility} in ('public', 'private')`),
-    check("uploaded_files_purpose_valid", sql`${table.purpose} in ('general', 'product_cover', 'incubation_material', 'book_cover')`),
+    check("uploaded_files_purpose_valid", sql`${table.purpose} in ('general', 'product_cover', 'incubation_material', 'book_cover', 'hosting_bundle')`),
     check("uploaded_files_scan_status_valid", sql`${table.scanStatus} in ('pending', 'clean', 'infected', 'error')`),
+  ],
+);
+
+export const productHostings = sqliteTable(
+  "product_hostings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id),
+    ownerEmail: text("owner_email")
+      .notNull()
+      .references(() => members.email),
+    bundleKey: text("bundle_key")
+      .notNull()
+      .references(() => uploadedFiles.key),
+    bundleSha256: text("bundle_sha256").notNull(),
+    bundleZipBytes: integer("bundle_zip_bytes").notNull(),
+    bundleFileCount: integer("bundle_file_count").notNull(),
+    bundleUncompressedBytes: integer("bundle_uncompressed_bytes").notNull(),
+    reviewVersion: integer("review_version").notNull(),
+    hostingRevision: integer("hosting_revision").notNull(),
+    approvedVersion: integer("approved_version").notNull().default(0),
+    state: text("state").notNull().default("queued"),
+    desired: text("desired").notNull().default("staged"),
+    provider: text("provider").notNull().default("stepfun_page"),
+    siteId: text("site_id"),
+    versionId: text("version_id"),
+    previewUrl: text("preview_url"),
+    previewExpiresAt: text("preview_expires_at"),
+    liveUrl: text("live_url"),
+    failureCode: text("failure_code"),
+    failureDetail: text("failure_detail"),
+    leaseTokenHash: text("lease_token_hash"),
+    leaseExpiresAt: text("lease_expires_at"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("product_hostings_one_active_product_idx")
+      .on(table.productId)
+      .where(sql`${table.desired} <> 'removed'`),
+    index("product_hostings_state_desired_idx").on(table.state, table.desired),
+    index("product_hostings_owner_idx").on(table.ownerEmail),
+    check("product_hostings_bundle_sha256_valid", sql`length(${table.bundleSha256}) = 64 and ${table.bundleSha256} not glob '*[^0-9a-f]*'`),
+    check("product_hostings_bundle_sizes_valid", sql`${table.bundleZipBytes} >= 0 and ${table.bundleFileCount} >= 1 and ${table.bundleUncompressedBytes} >= 0`),
+    check("product_hostings_review_versions_valid", sql`${table.reviewVersion} >= 1 and ${table.approvedVersion} >= 0 and ${table.hostingRevision} >= 1`),
+    check("product_hostings_state_valid", sql`${table.state} in ('queued', 'deploying', 'staged', 'promoting', 'live', 'removing', 'removed', 'failed')`),
+    check("product_hostings_desired_valid", sql`${table.desired} in ('staged', 'live', 'removed')`),
+    check("product_hostings_provider_valid", sql`${table.provider} = 'stepfun_page'`),
+    check("product_hostings_failure_code_valid", sql`${table.failureCode} is null or ${table.failureCode} in ('validation_bundle', 'validation_secret', 'provider_quota', 'provider_audit_rejected', 'provider_error', 'provider_auth', 'ambiguous', 'bundle_missing', 'internal')`),
+    check("product_hostings_failure_detail_length_valid", sql`${table.failureDetail} is null or length(${table.failureDetail}) <= 200`),
+    check("product_hostings_lease_token_hash_valid", sql`${table.leaseTokenHash} is null or (length(${table.leaseTokenHash}) = 64 and ${table.leaseTokenHash} not glob '*[^0-9a-f]*')`),
+    check("product_hostings_attempts_nonnegative", sql`${table.attempts} >= 0`),
+  ],
+);
+
+export const hostingUploadTokens = sqliteTable(
+  "hosting_upload_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    memberEmail: text("member_email").notNull().references(() => members.email),
+    productId: integer("product_id").notNull().references(() => products.id),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("hosting_upload_tokens_member_active_idx").on(table.memberEmail, table.usedAt, table.expiresAt),
+    index("hosting_upload_tokens_expires_idx").on(table.expiresAt),
+    check("hosting_upload_tokens_token_hash_valid", sql`length(${table.tokenHash}) = 64 and ${table.tokenHash} not glob '*[^0-9a-f]*'`),
   ],
 );
 

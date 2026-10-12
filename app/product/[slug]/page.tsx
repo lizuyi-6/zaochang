@@ -2,27 +2,29 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProductCard } from "../../components/product-card";
 import { database } from "../../api/_lib/community";
+import { hostedUrlSelect } from "../../api/_lib/hosting-sql";
 import { findProduct, products, type Product } from "../../lib/community-data";
-import { hydrateProductRow, PUBLISHED_PRODUCT_SQL } from "../../lib/product-hydrate";
+import { hydrateProductRow, PUBLISHED_PRODUCT_SQL_QUALIFIED } from "../../lib/product-hydrate";
 import { ProductExperience } from "./product-experience";
 
 type PageProps = { params: Promise<{ slug: string }> };
+type LoadedProduct = Product & { hostedUrl: string | null };
 
-async function loadProduct(slug: string): Promise<Product | null> {
+async function loadProduct(slug: string): Promise<LoadedProduct | null> {
   const seeded = findProduct(slug);
-  if (seeded) return seeded;
+  if (seeded) return { ...seeded, hostedUrl: null };
   const id = Number(slug);
   if (!Number.isInteger(id)) return null;
   try {
     const row = await database().prepare(
-      `SELECT id, owner_name AS ownerName, title, description, category,
-              demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
-              cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
-              plays_count AS plays, created_at AS createdAt
-       FROM products WHERE id = ? AND ${PUBLISHED_PRODUCT_SQL}`,
+      `SELECT p.id, p.owner_name AS ownerName, p.title, p.description, p.category,
+              p.demo_type AS demoType, p.demo_url AS demoUrl, p.image_url AS imageUrl,
+              p.cover_theme AS coverTheme, p.price, p.pricing_model AS pricingModel, p.likes_count AS likes,
+              p.plays_count AS plays, p.created_at AS createdAt, ${hostedUrlSelect("p")}
+       FROM products p WHERE p.id = ? AND ${PUBLISHED_PRODUCT_SQL_QUALIFIED}`,
     ).bind(id).first<Record<string, unknown>>();
     if (!row) return null;
-    return hydrateProductRow(row, { release: "社区新作", tags: [String(row.category), "独立创作"] });
+    return { ...hydrateProductRow(row, { release: "社区新作", tags: [String(row.category), "独立创作"] }), hostedUrl: typeof row.hostedUrl === "string" ? row.hostedUrl : null };
   } catch {
     return null;
   }

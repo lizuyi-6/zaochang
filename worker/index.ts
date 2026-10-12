@@ -10,6 +10,11 @@ import { cleanupOrphanedHyperknowImages } from "../app/api/_lib/purge/hyperknow-
 import { scheduledPurgePlan } from "./purge-schedule";
 import { isAgentWriteAllowed, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
 import { isUserApiKeyBearer, isUserKeyCapabilityAllowed } from "../app/api/_lib/user-api-key";
+import {
+  isHostingWorkerBearer,
+  isHostingWorkerCapabilityAllowed,
+  isValidHostingWorkerToken,
+} from "../app/api/_lib/hosting-worker-auth";
 import { prepareRequestBody } from "./request-body";
 import { handleWithAnonCache } from "./anon-cache";
 import { isLatticePath, cookieValue, latticeGateRedirect } from "./lattice-gate";
@@ -22,6 +27,7 @@ interface Env {
   APP_ENV?: string;
   PUBLIC_APP_ORIGIN?: string;
   ZAOCHANG_AGENT_TOKEN?: string;
+  HOSTING_DEPLOYER_TOKEN?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -34,6 +40,12 @@ interface Env {
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
+}
+
+function noStore(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", "no-store");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 // Image security config. SVG sources with .svg extension auto-skip the
@@ -64,7 +76,30 @@ const worker = {
     if (isUserApiKeyBearer(request.headers.get("authorization"))
       && !isUserKeyCapabilityAllowed(request.method, url.pathname)) {
       await request.arrayBuffer().catch(() => {});
-      return withSecurityHeaders(request, Response.json({ error: "user_api_key_scope_forbidden" }, { status: 403 }), url.origin);
+      const hostingWorkerPath = url.pathname.startsWith("/api/hosting-worker/");
+      return noStore(withSecurityHeaders(request, Response.json(
+        hostingWorkerPath ? { error: "invalid_hosting_token" } : { error: "user_api_key_scope_forbidden" },
+        { status: hostingWorkerPath ? 401 : 403, headers: hostingWorkerPath ? { "cache-control": "no-store" } : undefined },
+      ), url.origin));
+    }
+    // 托管部署器的身份闸同样先于 origin 与路由。无效 zch_ 凭据绝不回落到 Cookie;
+    // scope 外请求先排空 body,避免未消费字节留在 keep-alive 连接上。
+    if (isHostingWorkerBearer(request.headers.get("authorization"))) {
+      const token = parseBearerToken(request.headers.get("authorization"));
+      if (!isValidHostingWorkerToken(token, env.HOSTING_DEPLOYER_TOKEN)) {
+        await request.arrayBuffer().catch(() => {});
+        return noStore(withSecurityHeaders(request, Response.json(
+          { error: "invalid_hosting_token" },
+          { status: 401, headers: { "cache-control": "no-store" } },
+        ), url.origin));
+      }
+      if (url.search || !isHostingWorkerCapabilityAllowed(request.method, url.pathname)) {
+        await request.arrayBuffer().catch(() => {});
+        return noStore(withSecurityHeaders(request, Response.json(
+          { error: "hosting_worker_scope_forbidden" },
+          { status: 403, headers: { "cache-control": "no-store" } },
+        ), url.origin));
+      }
     }
     // A9(2026-10 审计):生产缺 PUBLIC_APP_ORIGIN 时与 oauth-session 的 503 设计对齐
     // (public_app_origin_required),不再以裸 500 每请求打挂监控——仍 fail-closed。
@@ -72,7 +107,8 @@ const worker = {
     try {
       origin = resolvePublicAppOrigin(url.href, env.APP_ENV, env.PUBLIC_APP_ORIGIN);
     } catch {
-      return Response.json({ error: "origin_not_configured" }, { status: 503 });
+      const unavailable = Response.json({ error: "origin_not_configured" }, { status: 503 });
+      return url.pathname.startsWith("/api/hosting-worker/") ? noStore(unavailable) : unavailable;
     }
     // Agent 服务账户 scope 闸:agent 非 GET 请求必须命中能力表,否则 fail-closed 403。
     // 在所有路由之前,单一 chokepoint;token 未配置时整段不生效(零行为变化)。
@@ -90,7 +126,10 @@ const worker = {
       }
     }
     const prepared = await prepareRequestBody(request);
-    if (prepared instanceof Response) return withSecurityHeaders(request, prepared, origin);
+    if (prepared instanceof Response) {
+      const response = url.pathname.startsWith("/api/hosting-worker/") ? noStore(prepared) : prepared;
+      return withSecurityHeaders(request, response, origin);
+    }
 
     // 已登录访问登录页 → 直接 302 回到 return_to(经 safeReturnPath 校验)。
     // 主站会话全站通用(/lattice/ 门禁认同一 cookie),不该让已登录用户再登一次。
