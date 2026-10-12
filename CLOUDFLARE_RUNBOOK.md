@@ -99,7 +99,7 @@ token值只在内存，没有写入本机.env/持久凭据或报告；原Wrangle
 
 ## 2. 密钥(名称清单,值永不入库/不入对话)
 
-生产 Worker `zaochang` 的 14 个 secret(`npx wrangler secret list --config wrangler.prod.jsonc`):
+生产 Worker `zaochang` 的 14 个 secret(`npx wrangler secret list --config wrangler.prod.jsonc`;静态托管上线后另有第 15 个 `HOSTING_DEPLOYER_TOKEN`,见 §4b):
 
 ```
 PUBLIC_APP_ORIGIN            APP_ENV
@@ -238,6 +238,16 @@ cloudflared tunnel route dns --overwrite-dns zaochang-scanner-local scanner.aeth
 ```
 > cloudflared 的 `originRequest` **不支持注入自定义 header**(没有 `headers` 字段),
 > 所以 Bearer token 由 **Worker 侧**(`UPLOAD_SCANNER_TOKEN`)加,不在 tunnel 配。
+
+## 4b. 静态项目托管(StepFun Page)
+
+**形态**:被授权的会员把静态站点 zip 交给造场 → Worker 校验结构 + ClamAV 扫描 → 盒子上的**部署器**(`deploy/hosting/`)用 StepFun Page CLI 部署为暂存版本(不上线)→ 管理员在后台看预览并批准 → 部署器 `promote` 上线 → 产品页出现托管链接(`https://<slug>.page.stepcloud.com`,由 StepFun 运行,造场不运行用户代码)。契约/不变量/状态机见 `deploy/hosting/CONTRACT.md`;盒子运维见 `deploy/hosting/README.md`。
+
+- **数据库**:迁移 `0032_page_hosting.sql`(托管授权、托管行、上传令牌、`product_hosted_urls` 视图及触发器;同时放宽 `uploaded_files.purpose` 与 `mcp_write_audit.tool_name` 的 CHECK)。**公开页面只经视图取托管链接**(架构守卫测试 `tests/hosting-live-url-architecture.test.mjs`)。外链 `demo_url` 项目仍不能被批准(`product_review_external_demo_guard` 未动)。
+- **机密**:Worker secret `HOSTING_DEPLOYER_TOKEN`(`zch_` 开头、≥48 字符;只放行 4 条 `/api/hosting-worker/*` 路由,入口闸 fail-closed);盒子 `/etc/zaochang/hosting.env`(0640 root:zaochang)含同值 token 与 **Page 托管 API Key**(`STEPFUN_API_KEY`)。StepFun key 只在盒子上,Worker 不持有、不调用 StepFun。
+- **上线顺序(缺一不可)**:① 备份生产 D1(`wrangler d1 export`)并在副本重放 0032(导入导出副本须关外键);② 对生产手工执行 0032,回填 `d1_migrations`(hash=LF 归一 SQL 的 sha256,created_at=journal `when`;`PRAGMA foreign_key_check` 须为空)——CI 的 `scripts/check-migrations.mjs` 在迁移未应用时会拒绝部署;③ 生成 token,`wrangler secret put` 管道注入 + 写入盒子 env(两处同值);④ 盒子安装部署器(拷贝 `deploy/hosting/`、`app/api/_lib/hosting-rules.json`、钉版本 `steppage.mjs` 并校验 `STEPPAGE_SHA256`,`systemctl enable --now zaochang-hosting-deployer`);⑤ 合并 → CI → 部署;⑥ 管理员授权测试账号,走一遍真生产端到端,删测试站;⑦ **轮换 StepFun key**(此前曾出现在对话里)。**盒子文件必须从 `git archive`/`git show` 取 LF 版本**,Windows 工作区检出可能是 CRLF,会破坏 systemd unit。
+- **排障**:托管卡在 `queued`→ 盒子 `journalctl -u zaochang-hosting-deployer`、`GET /api/hosting-worker/health`(带 token)是否 200、token 两处是否一致;`failed`+`ambiguous` → 按 `deploy/hosting/README.md` 人工对账(`steppage list` 只读查看 `zc-p<产品>-h<托管>` 站点,**绝不按前缀批量删除**);`failed`+`validation_*` → 让用户修包重传;`provider_auth` → 轮换/重填 key;管理员后台「移除托管」或撤销授权会把所有站点置为待移除,由部署器删除远端站点。
+- **已实测证据(本地)**:真 Worker + 真部署器进程 + 真钉版本 `steppage` CLI + 真 StepFun 账号:暂存(预览 7 天过期)→ 批准 → 上线(线上响应头含 `page.config.json` 自定义头 `x-zc-probe`,预览上不含)→ 部署器删除,账号回到原有 2 个站点。**未验证**:生产环境的同一链路、StepFun 站点/版本额度上限、托管第三方用户内容的条款。
 
 ## 5. 验证清单(改完必跑;一律经 CF 边缘,别信本地直连)
 
