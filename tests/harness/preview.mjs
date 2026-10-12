@@ -943,7 +943,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql", "0032_page_hosting.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))
@@ -991,7 +991,38 @@ before(async () => {
         INSERT INTO oauth_provider_refresh_tokens (token_hash, client_id, user_email, scope, expires_at) VALUES ('pre-0031-rt', 'zc_pre_0031_app', 'pre-0031-user@example.com', 'openid profile', datetime('now', '+30 days'))
       `);
     }
+    if (migrationFile === "0032_page_hosting.sql") {
+      // 0032 重建 uploaded_files(CHECK 变更)并给 products 加列。空库能过不代表生产(已有上传与产品)能过:
+      // 先灌入既有会员/上传/产品行,迁移后断言行完好、外键无悬空、触发器已按新定义重建。
+      await executeLocalD1(`
+        INSERT INTO members (email, display_name) VALUES ('pre-0032@example.com', '迁移前托管用户');
+        INSERT INTO uploaded_files (key, owner_email, original_name, media_type, byte_size, visibility, purpose, sha256, scan_status, scan_engine, quarantine_key, hyperknow_image)
+          VALUES ('pre-0032-file.png', 'pre-0032@example.com', 'pre-0032.png', 'image/png', 68, 'private', 'product_cover', '${"a".repeat(64)}', 'pending', NULL, 'quarantine/pre-0032', 0);
+        UPDATE uploaded_files SET scan_status = 'clean', scan_engine = 'pre-0032-engine', quarantine_key = NULL, scanned_at = CURRENT_TIMESTAMP WHERE key = 'pre-0032-file.png';
+        INSERT INTO products (owner_email, owner_name, title, description, category)
+          VALUES ('pre-0032@example.com', '迁移前托管用户', '迁移前产品', '用于验证 0032 迁移保留既有产品。', '开发工具')
+      `);
+    }
     await executeLocalD1(readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"));
+    if (migrationFile === "0032_page_hosting.sql") {
+      const preserved = (await queryLocalD1(`SELECT key, purpose, scan_status, scan_engine, sha256, hyperknow_image FROM uploaded_files WHERE key = 'pre-0032-file.png'`)).map((row) => ({ ...row }));
+      assert.deepEqual(preserved, [{ key: "pre-0032-file.png", purpose: "product_cover", scan_status: "clean", scan_engine: "pre-0032-engine", sha256: "a".repeat(64), hyperknow_image: 0 }]);
+      const productRows = (await queryLocalD1(`SELECT hosting_revision, review_version, review_status FROM products WHERE owner_email = 'pre-0032@example.com'`)).map((row) => ({ ...row }));
+      assert.deepEqual(productRows, [{ hosting_revision: 0, review_version: 1, review_status: "pending_review" }]);
+      assert.deepEqual(await queryLocalD1("PRAGMA foreign_key_check"), [], "0032 must leave no dangling child rows");
+      const triggers = (await queryLocalD1(`SELECT name FROM sqlite_master WHERE type = 'trigger' AND name IN ('uploaded_files_pending_insert_guard', 'uploaded_files_scan_transition_guard', 'uploaded_files_hosting_bundle_guard', 'product_material_change_requires_review', 'product_hostings_approval_staging_guard') ORDER BY name`)).map((row) => row.name);
+      assert.deepEqual(triggers, ["product_hostings_approval_staging_guard", "product_material_change_requires_review", "uploaded_files_hosting_bundle_guard", "uploaded_files_pending_insert_guard", "uploaded_files_scan_transition_guard"]);
+      const zipOutsideHosting = await executeLocalD1(
+        `INSERT INTO uploaded_files (key, owner_email, original_name, media_type, byte_size, visibility, purpose, sha256, scan_status) VALUES ('pre-0032-zip.zip', 'pre-0032@example.com', 'x.zip', 'application/zip', 10, 'private', 'general', '${"b".repeat(64)}', 'pending')`,
+        false,
+      );
+      assert.match(zipOutsideHosting, /uploaded_file_hosting_bundle_invalid/, "zip must be rejected outside the hosting_bundle purpose");
+      await executeLocalD1(`
+        DELETE FROM products WHERE owner_email = 'pre-0032@example.com';
+        DELETE FROM uploaded_files WHERE owner_email = 'pre-0032@example.com';
+        DELETE FROM members WHERE email = 'pre-0032@example.com'
+      `);
+    }
     if (migrationFile === "0031_mcp_oauth.sql") {
       assert.deepEqual(
         (await queryLocalD1(`SELECT client_id, owner_email, registration_source, review_status, allowed_scopes FROM oauth_provider_clients WHERE client_id = 'zc_pre_0031_app'`)).map((row) => ({ ...row })),
