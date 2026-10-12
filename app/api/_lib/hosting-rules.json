@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "_comment": "静态托管的共享规则:Worker 的包结构校验(app/api/_lib/hosting-bundle.ts)与盒子上的部署器(deploy/hosting/)都读取本文件;改动须同步更新两侧一致性向量测试。上限与 ClamAV 扫描器参数对齐(--max-files=500 --max-scansize=24M --max-filesize=10M --max-recursion=8),保证包内每个文件都被扫到。扩展名清单来自 StepFun 静态托管官方文档(platform.stepfun.com/docs/zh/guides/page-hosting)。",
+  "bundle": {
+    "maxZipBytes": 10485760,
+    "maxEntries": 500,
+    "maxUncompressedBytes": 25165824,
+    "maxFileBytes": 10485760,
+    "maxCompressionRatio": 100,
+    "maxPathLength": 200,
+    "maxPathDepth": 8,
+    "rootFile": "index.html"
+  },
+  "extensions": {
+    "allowed": [
+      "html", "htm", "css", "js", "mjs", "json", "map", "txt", "xml", "svg", "ico",
+      "png", "jpg", "jpeg", "gif", "webp", "avif", "woff", "woff2", "ttf", "otf", "eot",
+      "wasm", "pdf", "mp4", "webm", "mp3", "wav", "md", "markdown", "jsonl", "tsx", "jsx"
+    ],
+    "forbidden": ["php", "py", "exe", "sh", "bat", "cmd", "dll", "so", "jsp", "asp", "aspx", "cgi", "pl"],
+    "textScannable": [
+      "html", "htm", "css", "js", "mjs", "json", "map", "txt", "xml", "svg", "md", "markdown", "jsonl", "tsx", "jsx"
+    ]
+  },
+  "rejectedPathRules": [
+    "任一路径段以 '.' 开头(含 .git、.env、.DS_Store、._*),一律拒绝",
+    "路径段为 __MACOSX 或 node_modules,一律拒绝",
+    "路径含反斜杠、控制字符、'..' 段、绝对路径(以 / 或盘符开头),一律拒绝",
+    "同一路径(不区分大小写)出现两次,一律拒绝",
+    "文件名(不含目录)匹配 id_rsa、id_ed25519、*.pem、*.key、*.p12、*.pfx,一律拒绝",
+    "条目为目录以外的符号链接(zip external attrs 高 16 位 S_IFLNK),一律拒绝",
+    "加密条目(general purpose flag bit0)、ZIP64、分卷压缩,一律拒绝"
+  ],
+  "secretPatterns": [
+    { "id": "pem_private_key", "regex": "-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----", "flags": "" },
+    { "id": "aws_access_key_id", "regex": "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b", "flags": "" },
+    { "id": "github_token", "regex": "\\bgh[pousr]_[A-Za-z0-9]{36,}\\b", "flags": "" },
+    { "id": "github_fine_grained_token", "regex": "\\bgithub_pat_[A-Za-z0-9_]{50,}\\b", "flags": "" },
+    { "id": "openai_style_secret_key", "regex": "\\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{32,}\\b", "flags": "" },
+    { "id": "stripe_live_key", "regex": "\\b(?:sk|rk)_live_[A-Za-z0-9]{16,}\\b", "flags": "" },
+    { "id": "slack_token", "regex": "\\bxox[abprs]-[A-Za-z0-9-]{10,}\\b", "flags": "" },
+    { "id": "google_api_key", "regex": "\\bAIza[0-9A-Za-z_-]{35}\\b", "flags": "" }
+  ],
+  "provider": {
+    "id": "stepfun_page",
+    "liveHostSuffix": ".page.stepcloud.com",
+    "previewHostSuffix": ".preview.stepcloud.com",
+    "siteNameMaxLength": 64
+  },
+  "failureCodes": [
+    "validation_bundle", "validation_secret", "provider_quota", "provider_audit_rejected",
+    "provider_error", "provider_auth", "ambiguous", "bundle_missing", "internal"
+  ]
+}
