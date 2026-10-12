@@ -86,6 +86,7 @@ removed   终态
 - `steppage --json get --site S` → `{"siteId":"…","name":"…","slug":"warm-cedar-df1c","liveUrl":"https://warm-cedar-df1c.page.stepcloud.com","status":1,"liveVersionId":"…","createdAt":"…","updatedAt":"…","servingMode":""}`(未上线站点 `liveUrl:""`、`liveVersionId:"0"`)。
 - `steppage --json versions --site S` → `{"versions":[{"versionId","siteId","label":"v1","status":0,"fileCount":3,"totalBytes":"406","isLive":false,"createdAt","previewToken","previewUrl","expiresAt","revoked":false,"auditStatus":2,"headerRules":[…],"headerRuleCount":2,"configRejected":false}]}`
 - `steppage --json list` → `{"sites":[{siteId,name,slug,liveUrl,status,liveVersionId,createdAt,updatedAt,servingMode}…],"total":"2"}`(账号下可能有与造场无关的站点,**部署器只许操作名称以 `zc-p` 开头且 siteId 记录在 product_hostings 里的站点**,绝不 list-delete)。
+  **唯一例外(2026-10-12 契约修订,依据 D2 审核)**:失败的首次 deploy 可能在 StepFun 侧留下尚未登记 site_id 的孤儿站点。部署器仅在同时满足 ①站点名与**当前已领取作业的 `siteName` 逐字相等**(且以 `zc-p` 开头)②`list` 中恰好一个同名站点 ③`get` 再次确认 ID 与名称 ④该站点无可信版本(`versions` 为空或文件数/字节数不符)时,才可 `delete --yes` 该站点 ID;任何其它情形(多个同名、名称不符、有可信版本)一律保留并上报 `ambiguous`。绝不按前缀批量清理。
 - `steppage --json delete --site S --yes` → `{"siteId":"…","name":"…","deleted":true}`。
 - 预览/线上域名解析到阿里云上海 ALB;预览响应带 `cache-control: no-store`;`page.config.json` 的自定义响应头在**预览上未生效**(线上未测,不得依赖)。
 
