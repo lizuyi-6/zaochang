@@ -11,7 +11,20 @@ import { refreshShellState } from "../../components/shell-state-sync";
 import { EmbeddedProduct, hasEmbeddedProduct } from "./embedded-product";
 import { FruitAccessGate } from "./fruit-access-gate";
 
-export function ProductExperience({ product }: { product: Product }) {
+type ProductWithHosting = Product & { hostedUrl?: string | null };
+
+function validateHostedUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !url.hostname.endsWith(".page.stepcloud.com")) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+export function ProductExperience({ product }: { product: ProductWithHosting }) {
   const router = useRouter();
   const reduced = useReducedMotion();
   const [running, setRunning] = useState(false);
@@ -30,6 +43,7 @@ export function ProductExperience({ product }: { product: Product }) {
   const tipKeyRef = useRef<string | null>(null);
   const productRef = String(product.slug ?? product.id);
   const embedded = hasEmbeddedProduct(productRef);
+  const hostedUrl = validateHostedUrl(product.hostedUrl);
 
   useEffect(() => {
     fetch(`/api/comments?targetType=product&targetRef=${encodeURIComponent(productRef)}`, { cache: "no-store" })
@@ -126,6 +140,8 @@ export function ProductExperience({ product }: { product: Product }) {
         <div className="product-identity"><span className={`deep-avatar ${product.coverTheme}`}>{product.ownerInitial}</span><span><small>{product.category} / {product.release}</small><h1>{product.title}</h1><p>{product.description}</p><div>{product.tags.map((tag) => <span key={tag}>{tag}</span>)}</div></span></div>
         <div className="product-head-stats"><span><Eye size={16} /><strong>{compactNumber(product.plays)}</strong><small>体验</small></span><span><Heart size={16} /><strong>{compactNumber(product.likes + localLikeDelta)}</strong><small>喜欢</small></span><button className={saved ? "liked" : ""} onClick={saveProduct} disabled={saved} aria-pressed={saved}><Bookmark size={18} fill={saved ? "currentColor" : "none"} /> {saved ? "已收藏" : "收藏"}</button><button className={liked ? "liked" : ""} onClick={like} aria-pressed={liked}><Heart size={18} fill={liked ? "currentColor" : "none"} /> {liked ? "已喜欢" : "喜欢"}</button></div>
       </header>
+
+      {hostedUrl && <div className="product-hosted-site"><a href={hostedUrl} target="_blank" rel="noopener noreferrer nofollow">访问托管站点 <ArrowUpRight size={15} /></a><small>该站点由作者托管在第三方平台，造场不运行其代码</small></div>}
 
       <div className="product-tabs">{["体验", "关于", "版本记录", "讨论"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "讨论" ? `讨论 ${comments.length}` : item}</button>)}</div>
 

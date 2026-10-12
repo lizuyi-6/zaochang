@@ -583,7 +583,8 @@ test("pinned CLI verification reads its expected SHA from the checksum file", as
 
 test("package registration, service hardening, runbook checksum reference, and checksum format are present", async () => {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
-  assert.equal(packageJson.scripts.test.endsWith("tests/hosting-deployer.test.mjs"), true);
+  assert.equal(packageJson.scripts.test.split(/\s+/u).includes("tests/hosting-deployer.test.mjs"), true);
+  assert.equal(packageJson.scripts.test.trim().endsWith("tests/hosting-ui-contracts.test.mjs"), true);
   const service = await readFile(new URL("../deploy/hosting/zaochang-hosting-deployer.service", import.meta.url), "utf8");
   for (const directive of [
     "User=zaochang", "Group=zaochang", "NoNewPrivileges=true", "PrivateTmp=true", "PrivateDevices=true",
