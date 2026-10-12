@@ -61,7 +61,7 @@ export async function resolveRulesPath(configuredPath) {
 
 export async function createService({ env = process.env, fetchImpl = fetch, execFileImpl } = {}) {
   const config = await loadConfig(env);
-  const api = new WorkerApi({ baseUrl: config.apiBase, token: config.apiToken, fetchImpl });
+  const api = new WorkerApi({ baseUrl: config.apiBase, token: config.apiToken, fetchImpl, retry: { tries: 4, baseMs: 1000 } });
   const steppage = new Steppage({ command: config.command, apiKey: config.apiKey, execFileImpl, baseDir: config.stateDir });
   const wal = new WriteAheadLog(config.stateDir);
   const runner = new HostingRunner({ api, steppage, wal, rules: config.rules, workerId: config.workerId, idleMs: config.idleMs });
