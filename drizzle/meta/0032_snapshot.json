@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "638371a2-3e59-46ab-af92-e8a1e8a32068",
+  "id": "7d5b34ac-14ea-4f38-8449-ca6500131bdd",
   "prevId": "a879607b-6fd0-479b-963c-0121061fe50a",
   "tables": {
     "admin_audit_events": {
@@ -3353,7 +3353,7 @@
         },
         "mcp_write_audit_tool_valid": {
           "name": "mcp_write_audit_tool_valid",
-          "value": "\"mcp_write_audit\".\"tool_name\" in ('create_product', 'update_product', 'upload_cover')"
+          "value": "\"mcp_write_audit\".\"tool_name\" in ('create_product', 'update_product', 'upload_cover', 'begin_hosting_upload', 'remove_hosting')"
         }
       }
     },

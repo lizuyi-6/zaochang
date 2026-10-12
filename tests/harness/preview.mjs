@@ -1000,7 +1000,9 @@ before(async () => {
           VALUES ('pre-0032-file.png', 'pre-0032@example.com', 'pre-0032.png', 'image/png', 68, 'private', 'product_cover', '${"a".repeat(64)}', 'pending', NULL, 'quarantine/pre-0032', 0);
         UPDATE uploaded_files SET scan_status = 'clean', scan_engine = 'pre-0032-engine', quarantine_key = NULL, scanned_at = CURRENT_TIMESTAMP WHERE key = 'pre-0032-file.png';
         INSERT INTO products (owner_email, owner_name, title, description, category)
-          VALUES ('pre-0032@example.com', '迁移前托管用户', '迁移前产品', '用于验证 0032 迁移保留既有产品。', '开发工具')
+          VALUES ('pre-0032@example.com', '迁移前托管用户', '迁移前产品', '用于验证 0032 迁移保留既有产品。', '开发工具');
+        INSERT INTO mcp_write_audit (id, member_email, credential_kind, credential_id, tool_name, product_id, result)
+          VALUES ('pre-0032-audit', 'pre-0032@example.com', 'api_key', 'pre-0032-key', 'create_product', NULL, 'ok')
       `);
     }
     await executeLocalD1(readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"));
@@ -1012,6 +1014,13 @@ before(async () => {
       assert.deepEqual(await queryLocalD1("PRAGMA foreign_key_check"), [], "0032 must leave no dangling child rows");
       const triggers = (await queryLocalD1(`SELECT name FROM sqlite_master WHERE type = 'trigger' AND name IN ('uploaded_files_pending_insert_guard', 'uploaded_files_scan_transition_guard', 'uploaded_files_hosting_bundle_guard', 'product_material_change_requires_review', 'product_hostings_approval_staging_guard') ORDER BY name`)).map((row) => row.name);
       assert.deepEqual(triggers, ["product_hostings_approval_staging_guard", "product_material_change_requires_review", "uploaded_files_hosting_bundle_guard", "uploaded_files_pending_insert_guard", "uploaded_files_scan_transition_guard"]);
+      // mcp_write_audit 的 tool_name CHECK 在 0032 里随托管工具放宽:旧行保留,新工具名可写,未知名仍拒绝。
+      const auditRows = (await queryLocalD1(`SELECT id, tool_name, result FROM mcp_write_audit WHERE id = 'pre-0032-audit'`)).map((row) => ({ ...row }));
+      assert.deepEqual(auditRows, [{ id: "pre-0032-audit", tool_name: "create_product", result: "ok" }]);
+      await executeLocalD1(`INSERT INTO mcp_write_audit (id, member_email, credential_kind, credential_id, tool_name, result) VALUES ('pre-0032-audit-2', 'pre-0032@example.com', 'oauth', 'c', 'begin_hosting_upload', 'ok'), ('pre-0032-audit-3', 'pre-0032@example.com', 'oauth', 'c', 'remove_hosting', 'ok')`);
+      const unknownTool = await executeLocalD1(`INSERT INTO mcp_write_audit (id, member_email, credential_kind, credential_id, tool_name, result) VALUES ('pre-0032-audit-4', 'pre-0032@example.com', 'oauth', 'c', 'delete_everything', 'ok')`, false);
+      assert.match(unknownTool, /CHECK constraint failed/, "unknown MCP write tool names must stay rejected");
+      await executeLocalD1(`DELETE FROM mcp_write_audit WHERE member_email = 'pre-0032@example.com'`);
       const zipOutsideHosting = await executeLocalD1(
         `INSERT INTO uploaded_files (key, owner_email, original_name, media_type, byte_size, visibility, purpose, sha256, scan_status) VALUES ('pre-0032-zip.zip', 'pre-0032@example.com', 'x.zip', 'application/zip', 10, 'private', 'general', '${"b".repeat(64)}', 'pending')`,
         false,

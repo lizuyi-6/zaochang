@@ -672,7 +672,7 @@ export const mcpWriteAudit = sqliteTable(
     index("mcp_write_audit_created_idx").on(table.createdAt),
     index("mcp_write_audit_member_created_idx").on(table.memberEmail, table.createdAt),
     check("mcp_write_audit_credential_kind_valid", sql`${table.credentialKind} in ('api_key', 'oauth')`),
-    check("mcp_write_audit_tool_valid", sql`${table.toolName} in ('create_product', 'update_product', 'upload_cover')`),
+    check("mcp_write_audit_tool_valid", sql`${table.toolName} in ('create_product', 'update_product', 'upload_cover', 'begin_hosting_upload', 'remove_hosting')`),
   ],
 );
 

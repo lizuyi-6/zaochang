@@ -116,6 +116,28 @@ CREATE TABLE `hosting_upload_tokens` (
 CREATE INDEX `hosting_upload_tokens_member_active_idx` ON `hosting_upload_tokens` (`member_email`, `used_at`, `expires_at`);--> statement-breakpoint
 CREATE INDEX `hosting_upload_tokens_expires_idx` ON `hosting_upload_tokens` (`expires_at`);--> statement-breakpoint
 
+-- MCP 托管工具要写审计:mcp_write_audit.tool_name 的 CHECK 只列了三个旧工具,SQLite 改 CHECK = 重建表。
+-- 该表没有任何入向外键(只有指向 members 的出向外键),直接重建即可,行原样保留。
+CREATE TABLE `__new_mcp_write_audit` (
+	`id` text PRIMARY KEY NOT NULL,
+	`member_email` text NOT NULL,
+	`credential_kind` text NOT NULL,
+	`credential_id` text NOT NULL,
+	`tool_name` text NOT NULL,
+	`product_id` integer,
+	`result` text NOT NULL,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`member_email`) REFERENCES `members`(`email`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "mcp_write_audit_credential_kind_valid" CHECK (`credential_kind` in ('api_key', 'oauth')),
+	CONSTRAINT "mcp_write_audit_tool_valid" CHECK (`tool_name` in ('create_product', 'update_product', 'upload_cover', 'begin_hosting_upload', 'remove_hosting'))
+);--> statement-breakpoint
+INSERT INTO `__new_mcp_write_audit` (`id`, `member_email`, `credential_kind`, `credential_id`, `tool_name`, `product_id`, `result`, `created_at`)
+SELECT `id`, `member_email`, `credential_kind`, `credential_id`, `tool_name`, `product_id`, `result`, `created_at` FROM `mcp_write_audit`;--> statement-breakpoint
+DROP TABLE `mcp_write_audit`;--> statement-breakpoint
+ALTER TABLE `__new_mcp_write_audit` RENAME TO `mcp_write_audit`;--> statement-breakpoint
+CREATE INDEX `mcp_write_audit_created_idx` ON `mcp_write_audit` (`created_at`);--> statement-breakpoint
+CREATE INDEX `mcp_write_audit_member_created_idx` ON `mcp_write_audit` (`member_email`, `created_at`);--> statement-breakpoint
+
 -- ===== TRIGGERS + VIEW =====
 -- I2: 若无此触发器，托管资料变更不会推进审核版本，旧批准可能继续覆盖新包。
 DROP TRIGGER `product_material_change_requires_review`;--> statement-breakpoint
