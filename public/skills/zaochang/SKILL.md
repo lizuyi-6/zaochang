@@ -106,7 +106,7 @@ curl -sS "https://aetherstudio.top/api/mcp" \
 - `upload_cover(filename, mime_type, data_base64)`: submit a PNG, JPEG, or WebP cover for scanning. Use the returned `cover_upload_key` with `create_product` or `update_product`.
 - `begin_hosting_upload(product_id)`: for a product you own, create a one-time ZIP upload URL when your account has an invitation hosting grant and `demo_url` is empty.
 - `get_hosting_status(product_id)`: read hosting state, review state, the public hosted URL when available, and a suggested next step.
-- `remove_hosting(product_id)`: request removal of your hosted site. The current status API omits rows with `desired: removed`, so it cannot report removal progress or confirm remote cleanup.
+- `remove_hosting(product_id)`: request removal of your hosted site. `get_hosting_status` reports `state: removing` while the deployer deletes the remote site, then returns `hosting: null` once the removal has completed.
 
 ## Static hosting
 
@@ -124,14 +124,14 @@ Follow this flow:
    ```
 
    Replace `<upload_url>` with the returned URL and run the command once before it expires. A successful upload returns HTTP 201; the one-time URL cannot be replayed.
-5. Call `get_hosting_status(product_id)` every 10–20 seconds while `hosting.state` is `queued`, `deploying`, or `promoting`. Use `next_step` as guidance. `staged` means the bundle is waiting for platform review; pause rapid polling and check again later. `live` with a non-empty `hosting.hostedUrl` means the approved hosted link is public and the deployment polling loop can stop. For `failed`, stop polling and follow the `failureCode`; do not infer public availability from an upload or staged preview. The current REST status shape filters rows whose `desired` is `removed`, so `hosting: null` after a removal request does not confirm that the remote site has been deleted; ask the hosting operator to verify cleanup before creating another deployment.
+5. Call `get_hosting_status(product_id)` every 10–20 seconds while `hosting.state` is `queued`, `deploying`, or `promoting`. Use `next_step` as guidance. `staged` means the bundle is waiting for platform review; pause rapid polling and check again later. `live` with a non-empty `hosting.hostedUrl` means the approved hosted link is public and the deployment polling loop can stop. For `failed`, stop polling and follow the `failureCode`; do not infer public availability from an upload or staged preview. Rows whose removal has completed (`state: removed`) are dropped from the status response, so `hosting: null` means either no site was ever uploaded for this project or a requested removal has finished; a removal still in progress is reported as `removing`.
 6. Handle common failures:
    - `validation_bundle`: correct the ZIP structure, root `index.html`, size, archive entry count (including directories), path, or unsupported extension, then create a new upload URL.
    - `validation_secret`: remove the detected secret or key from the static output, rebuild the ZIP, and create a new upload URL.
    - `bundle_missing`: rebuild and upload the bundle again.
    - `provider_quota`, `provider_auth`, `provider_audit_rejected`, `provider_error`, or `internal`: include `failureCode` and `failureDetail` when contacting the hosting operator; provider credentials and quota are operator-managed.
    - `ambiguous`: remote state needs operator reconciliation. Do not upload another bundle until the site has been reconciled.
-7. Call `remove_hosting(product_id)` when the user asks to take down the site. Its success means the removal request was accepted. The status API omits rows with `desired: removed`, so it cannot report removal progress or prove remote cleanup; ask the hosting operator to verify cleanup. If a status response does expose `hosting.state: removed`, treat it as terminal.
+7. Call `remove_hosting(product_id)` when the user asks to take down the site. Its success means the removal request was accepted. Poll `get_hosting_status` every 10–20 seconds: `hosting.state: removing` means the deployer is still deleting the remote site, and `hosting: null` means the removal has completed and the project can host a new bundle. If the state stays `removing` for several minutes, contact the hosting operator.
 
 Never put ZIP bytes, base64 ZIP data, or file contents in an MCP argument. Only `begin_hosting_upload` returns the one-time URL; use it only from the shell command and do not paste or share it elsewhere.
 

@@ -808,7 +808,9 @@ export function register() {
     const statusAfterRemoval = await tool(token, "get_hosting_status", { product_id: productId });
     assert.equal(statusAfterRemoval.isError, undefined);
     assert.equal(statusAfterRemoval.structuredContent.hosting, null);
-    assert.equal(statusAfterRemoval.structuredContent.next_step.includes("does not expose removed rows or confirm remote cleanup"), true);
+    assert.equal(statusAfterRemoval.structuredContent.next_step.includes("a requested removal has completed"), true);
+    assert.equal(statusAfterRemoval.structuredContent.next_step.includes("begin_hosting_upload"), true);
+    assert.equal(statusAfterRemoval.structuredContent.next_step.includes("ask the hosting operator to verify cleanup"), false);
     const beginAudit = await queryLocalD1(
       `SELECT credential_kind, credential_id, tool_name, product_id, result FROM mcp_write_audit
        WHERE member_email = ${quoteSql(email)} AND tool_name = 'begin_hosting_upload'`,

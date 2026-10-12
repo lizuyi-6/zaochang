@@ -262,7 +262,7 @@ export function HostingPanel({ productId, productTitle }: PanelProps) {
     {statusLoaded && hosting && <div className="hosting-panel-status">
       <div className="hosting-panel-current"><strong>{currentStatusLabel(hosting)}</strong><small>最近更新：{displayTime(hosting.updatedAt)}</small></div>
       {hosting.state === "failed" ? <div className="hosting-panel-error" role="status"><p>{hostingFailureMessage(hosting.failureCode)}</p>{unknownFailureCode && <small>错误码：{unknownFailureCode}</small>}</div> : <ol className="hosting-timeline" aria-label="托管状态进度">{progressLabels.map((label, index) => <li key={label} className={index < progressStep ? "is-done" : index === progressStep ? "is-current" : ""} aria-current={index === progressStep ? "step" : undefined}><span>{index + 1}</span><small>{label}</small></li>)}</ol>}
-      {hosting.previewUrl && <div className="hosting-panel-preview"><a href={hosting.previewUrl} target="_blank" rel="noreferrer noopener">打开审核预览</a><small>预览链接持有者可访问，仅用于你和审核员审阅；到期自动失效。</small><small>过期时间：{displayTime(hosting.previewExpiresAt)}</small></div>}
+      {hosting.previewUrl && (hosting.state === "staged" || hosting.state === "promoting") && <div className="hosting-panel-preview"><a href={hosting.previewUrl} target="_blank" rel="noreferrer noopener">打开审核预览</a><small>预览链接持有者可访问，仅用于你和审核员审阅；到期自动失效。</small><small>过期时间：{displayTime(hosting.previewExpiresAt)}</small></div>}
       {hostedUrl && <a className="hosting-panel-live-link" href={hostedUrl} target="_blank" rel="noopener noreferrer nofollow">访问托管站点</a>}
       {hosting.state !== "removed" && <button type="button" className="hosting-remove-button" onClick={() => void removeHosting()} disabled={removing || uploading}>{removing ? "正在提交移除…" : "移除托管"}</button>}
     </div>}

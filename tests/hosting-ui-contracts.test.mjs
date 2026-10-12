@@ -46,6 +46,12 @@ test("成员面板只为非终态安排轮询并清除未触发的定时器", ()
   assert.match(panel, /return \(\) => \{[\s\S]*if \(timer !== undefined\) window\.clearTimeout\(timer\);/);
 });
 
+test("成员面板只在待审核/上线中展示审核预览链接，上线后以正式链接取代", () => {
+  assert.match(panel, /\{hosting\.previewUrl && \(hosting\.state === "staged" \|\| hosting\.state === "promoting"\) && <div className="hosting-panel-preview"><a href=\{hosting\.previewUrl\}/);
+  // 正式链接不依赖预览链接是否出现
+  assert.match(panel, /\{hostedUrl && <a className="hosting-panel-live-link"/);
+});
+
 test("产品页按 p 别名查询视图，页面只使用返回的 hostedUrl", () => {
   assert.match(productPage, /hostedUrlSelect\("p"\)/);
   assert.match(productPage, /FROM products p WHERE p\.id = \? AND \$\{PUBLISHED_PRODUCT_SQL_QUALIFIED\}/);
