@@ -92,3 +92,18 @@ removed   终态
 - 写前日志(WAL,`HOSTING_STATE_DIR`,默认 `/var/lib/zaochang/hosting`):任何远端副作用调用前写 `intent`,调用后写 `result`;重启后对账——有 result 未上报则补报;只有 intent 则 `versions --site`/`list` 比对(site 名 `zc-p<product>-h<hosting>` + 文件数/字节数)后补报或上报 `failed/ambiguous`,**绝不盲目重发 deploy**。promote/remove 幂等(先 `get`)。
 - 远端已生效后失败 ≠ 远端未生效:两类各自有明确最终状态(见任务书断言)。
 - 部署前本地复核:sha256 == 作业给定值;包结构按 rules(含 `maxEntries`/`maxUncompressedBytes`/`maxCompressionRatio`/路径规则);对 `textScannable` 文件做 `secretPatterns` 扫描,命中 → `failed validation_secret`(不泄露命中内容,只报 pattern id 与文件路径);失败不触达 StepFun。
+
+---
+## 7. 增补(2026-10-12,Stage 2 前补充;S/B/D 三个工作包不依赖本节)
+### 7.1 `hosting_upload_tokens`(agent 一次性上传令牌,迁移 0032 由 Claude 在合并时补入)
+`token_hash TEXT PK`(SHA-256(256 位随机令牌 base64url),明文只返回一次);`member_email TEXT NOT NULL → members(email)`;`product_id INTEGER NOT NULL → products(id)`;`expires_at TEXT NOT NULL`(15 分钟);`used_at TEXT`;`created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP`。消费必须原子:`UPDATE … SET used_at=CURRENT_TIMESTAMP WHERE token_hash=? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP` 且 `meta.changes==1`;令牌一经消费即作废(无论后续校验/扫描是否成功,防重放)。每会员未使用的有效令牌 ≤3 个。
+
+### 7.2 机器令牌格式(修订 §4 的未配置语义)
+`HOSTING_DEPLOYER_TOKEN` 必须以 `zch_` 开头、总长 ≥48。Worker 入口(`worker/index.ts`,在 `isUserApiKeyBearer` 闸旁、先于公开 origin 解析与任何路由):任何以 `zch_` 开头的 Bearer ——未配置令牌或不匹配 → `401 invalid_hosting_token`(不回落 Cookie);匹配 → 仅放行 §4 的 4 条路由,其余一律 `403 hosting_worker_scope_forbidden`(并排空请求体)。该令牌不构成任何会员/管理员/agent 身份。
+
+### 7.3 成员侧接口(Stage 2 实现)
+- `POST /api/hosting/bundles`(会话 Cookie + 同源,multipart:`productId`、`file`)→ 校验(授权/属主/无 demo_url)→ `inspectBundleZip` → 全局/会员限流 → `storeScannedUpload(purpose='hosting_bundle', allowArchive)` → **扫描通过后**在**一个 batch** 里:`UPDATE products SET hosting_revision=hosting_revision+1`、旧有效托管行 `desired='removed'`、`INSERT product_hostings`(review_version 取更新后的产品值)。扫描失败**不得**触碰产品(不 bump、不隐藏已批准产品)。
+- `PUT /api/hosting/bundles/{token}`(原始 zip 体,`content-type: application/zip`;**不读取任何 Cookie/Key,仅凭令牌**)→ 原子消费令牌 → 同上流程。IP 限流 20/小时。
+- `GET /api/hosting/products/{id}`(属主)→ `{state,desired,reviewVersion,approvedVersion,failureCode,failureDetail,previewUrl,previewExpiresAt,hostedUrl}`(`hostedUrl` 只来自视图 `product_hosted_urls`);`DELETE` 同路径 → `desired='removed'`。
+- 管理员:`GET/POST/DELETE /api/admin/hosting-grants`(`requireAdmin`,写入 `adminAuditStatement`);审核队列载荷附 `hosting` 对象;`PATCH /api/admin/moderation` 新增动作 `remove_hosting`;批准遇 `hosting_not_staged` → 409 `{error:"hosting_not_staged"}`。以上**不加入** `AGENT_ADMIN_CAPABILITIES`。
+- MCP(P3):`begin_hosting_upload(product_id)` / `get_hosting_status(product_id)` / `remove_hosting(product_id)`;写类调用进 `mcp_write_audit`。
