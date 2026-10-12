@@ -458,7 +458,7 @@ export function register() {
 
     const tools = await mcp(tokens.access_token, "tools/list");
     assert.equal(tools.status, 200);
-    assert.deepEqual((await tools.json()).result.tools.map((tool) => tool.name), ["list_my_products", "get_product", "create_product", "update_product", "upload_cover"]);
+    assert.deepEqual((await tools.json()).result.tools.map((tool) => tool.name), ["list_my_products", "get_product", "create_product", "update_product", "upload_cover", "begin_hosting_upload", "get_hosting_status", "remove_hosting"]);
     const before = Number((await queryLocalD1(`SELECT COUNT(*) AS count FROM products WHERE owner_email = ${quoteSql(email)}`))[0].count);
     const created = await mcp(tokens.access_token, "tools/call", {
       name: "create_product",
