@@ -15,6 +15,29 @@ import {
 
 const quoteSql = (value) => `'${String(value).replaceAll("'", "''")}'`;
 
+// 全站上传桶(upload-global,120 次/小时)是跨用例共享的真实计数:把它钉到上限再断言拒绝之后,
+// 必须还原,否则同一小时窗口内后面所有套件(MCP OAuth、托管…)的上传都会被 429 误伤。
+// 返回还原函数:原先没有行就删除,有行就恢复原计数。
+async function pinGlobalUploadBucket() {
+  const bucket = `upload-global:${createHash("sha256").update("upload-global:all").digest("hex")}`;
+  const windowStart = Math.floor(Math.floor(Date.now() / 1000) / 3600) * 3600;
+  const previous = await queryLocalD1(
+    `SELECT request_count AS count FROM api_rate_limits WHERE bucket = ${quoteSql(bucket)} AND window_start = ${windowStart}`,
+  );
+  await executeLocalD1(
+    `INSERT INTO api_rate_limits (bucket, window_start, request_count, updated_at)
+     VALUES (${quoteSql(bucket)}, ${windowStart}, 120, CURRENT_TIMESTAMP)
+     ON CONFLICT(bucket, window_start) DO UPDATE SET request_count = 120, updated_at = CURRENT_TIMESTAMP`,
+  );
+  return async () => {
+    if (previous.length === 0) {
+      await executeLocalD1(`DELETE FROM api_rate_limits WHERE bucket = ${quoteSql(bucket)} AND window_start = ${windowStart}`);
+    } else {
+      await executeLocalD1(`UPDATE api_rate_limits SET request_count = ${Number(previous[0].count)} WHERE bucket = ${quoteSql(bucket)} AND window_start = ${windowStart}`);
+    }
+  };
+}
+
 function uploadForm(filename) {
   const form = new FormData();
   form.append("file", new Blob([onePixelPng], { type: "image/png" }), filename);
@@ -114,15 +137,9 @@ export function register() {
     assert.equal(rows[0].quarantine_key, null);
   });
 
-  test("scanner capacity: global hourly cap rejects before upload row or scanner side effect", async () => {
+  test("scanner capacity: global hourly cap rejects before upload row or scanner side effect", async (t) => {
     const email = `upload-global-cap-${runId}@example.com`;
-    const bucket = `upload-global:${createHash("sha256").update("upload-global:all").digest("hex")}`;
-    const windowStart = Math.floor(Math.floor(Date.now() / 1000) / 3600) * 3600;
-    await executeLocalD1(
-      `INSERT INTO api_rate_limits (bucket, window_start, request_count, updated_at)
-       VALUES (${quoteSql(bucket)}, ${windowStart}, 120, CURRENT_TIMESTAMP)
-       ON CONFLICT(bucket, window_start) DO UPDATE SET request_count = 120, updated_at = CURRENT_TIMESTAMP`,
-    );
+    t.after(await pinGlobalUploadBucket());
     const beforeRows = await queryLocalD1(
       `SELECT COUNT(*) AS count FROM uploaded_files WHERE owner_email = ${quoteSql(email)}`,
     );
@@ -141,7 +158,7 @@ export function register() {
     assert.deepEqual(await queryLocalR2Keys(), beforeR2Keys);
   });
 
-  test("scanner capacity: MCP upload reports capacity refusal as a readable isError result", async () => {
+  test("scanner capacity: MCP upload reports capacity refusal as a readable isError result", async (t) => {
     const email = `upload-global-mcp-cap-${runId}@example.com`;
     const login = await fetch(`${baseUrl}/api/auth/dev-login?email=${encodeURIComponent(email)}`, {
       headers: { origin: baseUrl },
@@ -158,13 +175,7 @@ export function register() {
     assert.equal(keyResponse.status, 201);
     const { token } = await keyResponse.json();
 
-    const bucket = `upload-global:${createHash("sha256").update("upload-global:all").digest("hex")}`;
-    const windowStart = Math.floor(Math.floor(Date.now() / 1000) / 3600) * 3600;
-    await executeLocalD1(
-      `INSERT INTO api_rate_limits (bucket, window_start, request_count, updated_at)
-       VALUES (${quoteSql(bucket)}, ${windowStart}, 120, CURRENT_TIMESTAMP)
-       ON CONFLICT(bucket, window_start) DO UPDATE SET request_count = 120, updated_at = CURRENT_TIMESTAMP`,
-    );
+    t.after(await pinGlobalUploadBucket());
     const beforeRows = await queryLocalD1(
       `SELECT COUNT(*) AS count FROM uploaded_files WHERE owner_email = ${quoteSql(email)}`,
     );
