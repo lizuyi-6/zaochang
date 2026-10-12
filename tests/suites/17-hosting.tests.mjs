@@ -800,6 +800,12 @@ export function register() {
     const removalRow = await hostingDb(liveId);
     assert.equal(removalRow.desired, "removed");
     assert.equal(removalRow.state, "removing");
+    // 成员状态接口在移除进行中必须仍可见(state=removing),SKILL/MCP 文案据此让 agent 轮询到 hosting=null。
+    const statusWhileRemoving = await hostingStatus(owner.cookie, liveProduct);
+    assert.equal(statusWhileRemoving.response.status, 200);
+    assert.equal(statusWhileRemoving.body.hosting.state, "removing");
+    assert.equal(statusWhileRemoving.body.hosting.desired, "removed");
+    assert.equal(statusWhileRemoving.body.hosting.hostedUrl, null);
     const removeJob = await (await workerClaim()).json();
     assert.equal(removeJob.job.action, "remove");
     assert.equal(removeJob.job.id, liveId);
@@ -808,6 +814,10 @@ export function register() {
     const finalRow = await hostingDb(liveId);
     assert.equal(finalRow.state, "removed");
     assert.equal(finalRow.live_url, null);
+    // 移除完成(state=removed)后记录从状态接口消失:hosting=null。
+    const statusAfterRemoved = await hostingStatus(owner.cookie, liveProduct);
+    assert.equal(statusAfterRemoved.response.status, 200);
+    assert.equal(statusAfterRemoved.body.hosting, null);
 
     const revokedProduct = await createProduct(owner.cookie, `grant-revoke-live-${runId}`);
     const revokedUpload = await submitBundle(owner.cookie, revokedProduct);

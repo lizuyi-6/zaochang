@@ -168,12 +168,12 @@ const tools = [
   },
   {
     name: "get_hosting_status",
-    description: "Read the signed-in owner's static-hosting and review status, including the next executable step. Rows with desired=removed are omitted by the shared REST status function; a null hosting field does not prove remote cleanup.",
+    description: "Read the signed-in owner's static-hosting and review status, including the next executable step. A removal in progress is reported with state `removing`; once it completes (state `removed`) the record is dropped from this view and `hosting` becomes null.",
     inputSchema: inputSchema({ product_id: { type: "integer", minimum: 1 } }, ["product_id"]),
   },
   {
     name: "remove_hosting",
-    description: "Request removal of the signed-in owner's hosted site. Removal is audited and may take time while the deployer removes the remote site; get_hosting_status omits desired=removed rows and cannot confirm remote cleanup.",
+    description: "Request removal of the signed-in owner's hosted site. Removal is audited and may take time while the deployer removes the remote site; poll get_hosting_status until hosting becomes null (it reports state `removing` while the removal is in progress).",
     inputSchema: inputSchema({ product_id: { type: "integer", minimum: 1 } }, ["product_id"]),
   },
 ];
@@ -202,7 +202,7 @@ function requiredProductId(args: Record<string, unknown>): number {
 
 function hostingNextStep(status: Awaited<ReturnType<typeof getHostingStatus>>): string {
   const hosting = status.hosting as Record<string, unknown> | null;
-  if (!hosting) return "No active hosting record is visible. If removal was just requested, this status API does not expose removed rows or confirm remote cleanup; ask the hosting operator to verify cleanup before creating another deployment.";
+  if (!hosting) return "No active hosting record is visible: either no site has been uploaded for this project, or a requested removal has completed (the record is dropped from this view once its state becomes removed). Call begin_hosting_upload to host a new bundle.";
 
   const state = typeof hosting.state === "string" ? hosting.state : "unknown";
   const desired = typeof hosting.desired === "string" ? hosting.desired : "unknown";
