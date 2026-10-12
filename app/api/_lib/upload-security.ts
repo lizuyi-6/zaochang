@@ -68,36 +68,70 @@ export async function scanUpload(bytes: Uint8Array, expectedSha256: string): Pro
     throw new UploadSecurityError("upload_scanner_misconfigured", 503);
   }
 
-  let response: Response;
-  try {
-    response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${scannerToken}`,
-        "content-type": "application/octet-stream",
-        "x-content-sha256": expectedSha256,
-      },
-      body: toArrayBuffer(bytes),
-      signal: AbortSignal.timeout(112_000),
-    });
-  } catch {
-    throw new UploadSecurityError("upload_scanner_unavailable", 503);
+  // Scanning is read-only and bound to this SHA-256. A scanner_busy response
+  // means no verdict was produced, so retrying cannot create an external side
+  // effect; only a later valid clean/infected verdict can leave pending, while
+  // budget exhaustion is handled by upload-core as error.
+  const deadline = Date.now() + 110_000;
+  let retries = 0;
+  while (true) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw new UploadSecurityError("upload_scanner_unavailable", 503);
+
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${scannerToken}`,
+          "content-type": "application/octet-stream",
+          "x-content-sha256": expectedSha256,
+        },
+        body: toArrayBuffer(bytes),
+        signal: AbortSignal.timeout(Math.max(1, Math.ceil(remainingMs))),
+      });
+    } catch {
+      throw new UploadSecurityError("upload_scanner_unavailable", 503);
+    }
+    const result = await response.json().catch(() => null) as null | {
+      engine?: unknown;
+      error?: unknown;
+      sha256?: unknown;
+      signature?: unknown;
+      verdict?: unknown;
+    };
+    if (Date.now() >= deadline) throw new UploadSecurityError("upload_scanner_unavailable", 503);
+
+    if (response.status === 503 && result?.error === "scanner_busy") {
+      if (retries >= 3) throw new UploadSecurityError("upload_scanner_unavailable", 503);
+      const backoffMs = [1_000, 2_000, 4_000][retries] + Math.floor(Math.random() * 251);
+      const retryAfterMs = retryAfterMilliseconds(response.headers.get("retry-after"), Date.now());
+      const delayMs = Math.min(15_000, Math.max(backoffMs, retryAfterMs));
+      const afterResponseMs = deadline - Date.now();
+      if (afterResponseMs <= delayMs) throw new UploadSecurityError("upload_scanner_unavailable", 503);
+      retries += 1;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      continue;
+    }
+
+    if (response.status !== 200 || !result || result.sha256 !== expectedSha256) {
+      throw new UploadSecurityError("upload_scanner_unavailable", 503);
+    }
+    if (result.verdict !== "clean" && result.verdict !== "infected") {
+      throw new UploadSecurityError("upload_scanner_invalid_response", 503);
+    }
+    const engine = typeof result.engine === "string" ? result.engine.slice(0, 120) : "unknown";
+    const signature = typeof result.signature === "string" ? result.signature.slice(0, 160) : null;
+    return { engine, signature, verdict: result.verdict };
   }
-  const result = await response.json().catch(() => null) as null | {
-    engine?: unknown;
-    sha256?: unknown;
-    signature?: unknown;
-    verdict?: unknown;
-  };
-  if (!response.ok || !result || result.sha256 !== expectedSha256) {
-    throw new UploadSecurityError("upload_scanner_unavailable", 503);
-  }
-  if (result.verdict !== "clean" && result.verdict !== "infected") {
-    throw new UploadSecurityError("upload_scanner_invalid_response", 503);
-  }
-  const engine = typeof result.engine === "string" ? result.engine.slice(0, 120) : "unknown";
-  const signature = typeof result.signature === "string" ? result.signature.slice(0, 160) : null;
-  return { engine, signature, verdict: result.verdict };
+}
+
+function retryAfterMilliseconds(value: string | null, nowMs: number) {
+  if (!value) return 0;
+  const seconds = Number(value.trim());
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
+  const dateMs = Date.parse(value);
+  return Number.isFinite(dateMs) ? Math.max(0, dateMs - nowMs) : 0;
 }
 
 export async function sha256Hex(bytes: Uint8Array) {

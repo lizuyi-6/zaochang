@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { ScanQueue } from "./scan-queue.mjs";
 
 const host = "127.0.0.1";
 const port = Number(process.env.SCANNER_PORT ?? 3311);
@@ -12,6 +13,8 @@ const maxBytes = 10 * 1024 * 1024;
 const clamscanPath = process.env.CLAMSCAN_PATH ?? "/usr/bin/clamscan";
 const flockPath = process.env.FLOCK_PATH ?? "/usr/bin/flock";
 const signatureLock = process.env.CLAMAV_LOCK_PATH ?? "/run/lock/zaochang-clamav.lock";
+const queueMax = positiveInteger(process.env.SCANNER_QUEUE_MAX, 3, 0);
+const queueWaitMs = positiveInteger(process.env.SCANNER_QUEUE_WAIT_MS, 45_000, 1);
 
 if (token.length < 32) throw new Error("SCANNER_TOKEN must contain at least 32 characters");
 const version = spawnSync(clamscanPath, ["--version"], { encoding: "utf8" });
@@ -19,10 +22,10 @@ if (version.status !== 0) throw new Error(`clamscan unavailable: ${version.stder
 const engine = version.stdout.trim().slice(0, 120);
 await mkdir(tempRoot, { recursive: true, mode: 0o700 });
 
-let busy = false;
+const scanQueue = new ScanQueue({ maxActive: 1, maxQueued: queueMax, waitMs: queueWaitMs });
 const server = createServer(async (request, response) => {
   if (request.method === "GET" && request.url === "/health") {
-    return sendJson(response, 200, { status: "ok", engine, busy });
+    return sendJson(response, 200, { status: "ok", engine, busy: scanQueue.busy, queued: scanQueue.queued });
   }
   if (request.method !== "POST" || request.url !== "/scan") {
     request.resume();
@@ -32,19 +35,34 @@ const server = createServer(async (request, response) => {
     request.resume();
     return sendJson(response, 401, { error: "unauthorized" });
   }
-  if (busy) {
-    request.resume();
-    return sendJson(response, 503, { error: "scanner_busy" });
-  }
-  const contentLength = Number(request.headers["content-length"] ?? 0);
-  if (!Number.isFinite(contentLength) || contentLength < 1 || contentLength > maxBytes) {
-    request.resume();
-    return sendJson(response, 413, { error: "invalid_size" });
+  const abortWaiting = new AbortController();
+  const onRequestAborted = () => abortWaiting.abort();
+  const onResponseClosed = () => {
+    if (!response.writableEnded) abortWaiting.abort();
+  };
+  request.once("aborted", onRequestAborted);
+  response.once("close", onResponseClosed);
+  if (request.aborted || response.destroyed) abortWaiting.abort();
+  const lease = await scanQueue.acquire(abortWaiting.signal);
+  request.removeListener("aborted", onRequestAborted);
+  response.removeListener("close", onResponseClosed);
+  if (!lease) {
+    if (!request.aborted && !response.destroyed) {
+      // Do not consume or buffer the body while queued. Once this request is
+      // rejected, drain it so an otherwise reusable keep-alive socket is clean.
+      request.resume();
+      return sendJson(response, 503, { error: "scanner_busy" }, { "retry-after": "1" });
+    }
+    return;
   }
 
-  busy = true;
   let scanDirectory = "";
   try {
+    const contentLength = Number(request.headers["content-length"] ?? 0);
+    if (!Number.isFinite(contentLength) || contentLength < 1 || contentLength > maxBytes) {
+      request.resume();
+      return sendJson(response, 413, { error: "invalid_size" });
+    }
     const chunks = [];
     let received = 0;
     for await (const chunk of request) {
@@ -68,11 +86,16 @@ const server = createServer(async (request, response) => {
     const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 503;
     return sendJson(response, Number.isInteger(status) ? status : 503, { error: status === 413 ? "body_too_large" : "scan_failed" });
   } finally {
-    if (scanDirectory) await rm(scanDirectory, { recursive: true, force: true }).catch(() => undefined);
-    busy = false;
+    try {
+      if (scanDirectory) await rm(scanDirectory, { recursive: true, force: true }).catch(() => undefined);
+    } finally {
+      lease.release();
+    }
   }
 });
 
+// requestTimeout covers the entire request-body receive window. A 45s queue
+// wait leaves 35s for the 10 MiB body before Node's 80s timeout closes it.
 server.requestTimeout = 80_000;
 server.headersTimeout = 10_000;
 server.listen(port, host, () => {
@@ -130,11 +153,18 @@ function runClamScan(filePath) {
   });
 }
 
-function sendJson(response, status, body) {
+function sendJson(response, status, body, extraHeaders = {}) {
+  if (response.destroyed || response.writableEnded) return;
   response.writeHead(status, {
     "cache-control": "no-store",
     "content-type": "application/json; charset=utf-8",
     "x-content-type-options": "nosniff",
+    ...extraHeaders,
   });
   response.end(JSON.stringify(body));
+}
+
+function positiveInteger(value, fallback, minimum) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
 }

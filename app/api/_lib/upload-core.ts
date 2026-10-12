@@ -2,11 +2,12 @@ import { env } from "cloudflare:workers";
 import { database } from "./community";
 import { inspectUpload, scanUpload, UploadSecurityError } from "./upload-security";
 import { completeScannedUploadSql, failScannedUploadSql } from "./hyperknow/image-upload-state";
+import { enforceRateLimit, rateLimitKey } from "./rate-limit";
 
 // 可复用的「扫描后入库」上传管线:与 app/api/uploads/route.ts 同源同安全语义。
 // 写库默认 'pending',ClamAV 扫描通过(clean)才置为 clean 并把对象从 quarantine
 // 提升到正式 key;infected/error 一律 fail-closed,绝不落为可读的 clean。
-// 该函数不做任何鉴权/限流——调用方必须先自行鉴权(成员/创始人),并按需限流。
+// 调用方负责鉴权与会员桶；本函数在验证文件后再执行全站扫描容量桶。
 
 // 上传对象 key 的合法形状(2026-10 审计重构 #9):uuid[.ext]。此前 uploads/incubation/
 // products/docs 四处各抄一份正则——key 校验是读取/引用安全边界,收敛为单一事实来源。
@@ -60,6 +61,14 @@ export async function storeScannedUpload(args: {
   hyperknowImage?: boolean;
 }): Promise<StoredUpload> {
   const inspected = await inspectUpload(args.file);
+  if (args.hyperknowImage !== true) {
+    await enforceRateLimit(
+      await rateLimitKey("upload-global", "all"),
+      120,
+      60 * 60,
+      { code: "upload_capacity_exceeded", includeRetryAfter: true },
+    );
+  }
   const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
   if (!bucket) throw new UploadSecurityError("uploads_unavailable", 503);
   const id = crypto.randomUUID();

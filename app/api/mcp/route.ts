@@ -13,6 +13,7 @@ import { requireMcpOAuthBearer } from "../_lib/oauth-provider";
 const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26"] as const;
 const MAX_MCP_REQUEST_BYTES = 11 * 1024 * 1024;
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+const EXTERNAL_DEMO_REVIEW_WARNING = "External experience links (demo_url) cannot currently pass platform review because review requires experience content that cannot be replaced in place. Until static hosting is available, leave demo_url blank and use the cover and description to present the project.";
 
 type JsonRpcId = string | number | null;
 type JsonRpcRequest = { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown };
@@ -22,8 +23,8 @@ type ToolResult = {
   isError?: boolean;
 };
 
-function rpcResponse(id: JsonRpcId, result: unknown, status = 200) {
-  return Response.json({ jsonrpc: "2.0", id, result }, { status, headers: jsonHeaders });
+function rpcResponse(id: JsonRpcId, result: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
+  return Response.json({ jsonrpc: "2.0", id, result }, { status, headers: { ...jsonHeaders, ...extraHeaders } });
 }
 
 function rpcError(id: JsonRpcId, code: number, message: string, data?: unknown) {
@@ -68,11 +69,32 @@ function errorToolResult(error: unknown): ToolResult {
   let code = "server_error";
   if (error && typeof error === "object" && "code" in error) code = String((error as { code: unknown }).code);
   else if (error instanceof Error && /^[a-z0-9_]+$/.test(error.message)) code = error.message;
-  return { isError: true, content: [{ type: "text", text: code }], structuredContent: { error: code } };
+  const retryAfterSeconds = error && typeof error === "object" && "retryAfterSeconds" in error
+    ? Number((error as { retryAfterSeconds: unknown }).retryAfterSeconds)
+    : NaN;
+  const contentText = Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 1
+    ? `${code} (retry after ${Math.floor(retryAfterSeconds)}s)`
+    : code;
+  return {
+    isError: true,
+    content: [{ type: "text", text: contentText }],
+    structuredContent: {
+      error: code,
+      ...(Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 1
+        ? { retryAfterSeconds: Math.floor(retryAfterSeconds) }
+        : {}),
+    },
+  };
 }
 
 function successToolResult(value: Record<string, unknown>): ToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value };
+}
+
+function demoUrlWarnings(args: Record<string, unknown>) {
+  return typeof args.demo_url === "string" && args.demo_url.trim()
+    ? [`demo_url_cannot_be_approved: ${EXTERNAL_DEMO_REVIEW_WARNING}`]
+    : [];
 }
 
 function inputSchema(properties: Record<string, unknown>, required: string[] = []) {
@@ -104,7 +126,7 @@ const tools = [
       title: { type: "string" },
       description: { type: "string" },
       category: { type: "string", enum: PRODUCT_CATEGORIES },
-      demo_url: { type: "string" },
+      demo_url: { type: "string", description: EXTERNAL_DEMO_REVIEW_WARNING },
       pricing_model: { type: "string", enum: ["free", "one_time", "per_use"] },
       price: { type: "integer", minimum: 0, maximum: 99 },
       cover_theme: { type: "string" },
@@ -119,7 +141,7 @@ const tools = [
       title: { type: "string" },
       description: { type: "string" },
       category: { type: "string", enum: PRODUCT_CATEGORIES },
-      demo_url: { type: "string" },
+      demo_url: { type: "string", description: EXTERNAL_DEMO_REVIEW_WARNING },
       pricing_model: { type: "string", enum: ["free", "one_time", "per_use"] },
       price: { type: "integer", minimum: 0, maximum: 99 },
       cover_theme: { type: "string" },
@@ -254,14 +276,14 @@ async function callTool(name: string, args: Record<string, unknown>, member: Mem
     if (name === "create_product") {
       const input = mapMcpProductInput(args);
       const product = await createProduct(member, input);
-      return successToolResult({ product, reward: 0 });
+      return successToolResult({ product, reward: 0, warnings: demoUrlWarnings(args) });
     }
     if (name === "update_product") {
       const id = requiredId(args);
       const input = mapMcpProductInput(args);
       delete input.id;
       const product = await updateProduct(member, id, input);
-      return successToolResult({ product });
+      return successToolResult({ product, warnings: demoUrlWarnings(args) });
     }
     if (name === "upload_cover") {
       await enforceRateLimit(await rateLimitKey("upload", member.email), 30, 60 * 60);
@@ -413,7 +435,18 @@ export async function POST(request: Request) {
     const name = params.name;
     if (typeof name !== "string" || !tools.some((tool) => tool.name === name)) return rpcError(id, -32602, "Unknown tool");
     const args = plainObject(params.arguments) ? params.arguments : {};
-    return rpcResponse(id, await callWriteToolWithAudit(name, args, member, credential));
+    const result = await callWriteToolWithAudit(name, args, member, credential);
+    const capacityExceeded = result.isError === true
+      && result.structuredContent?.error === "upload_capacity_exceeded";
+    const retryAfterSeconds = Number(result.structuredContent?.retryAfterSeconds);
+    return rpcResponse(
+      id,
+      result,
+      capacityExceeded ? 429 : 200,
+      capacityExceeded && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 1
+        ? { "retry-after": String(Math.floor(retryAfterSeconds)) }
+        : {},
+    );
   }
   if (body.method.startsWith("notifications/")) return new Response(null, { status: 202, headers: { "cache-control": "no-store" } });
   return rpcError(id, -32601, "Method not found");

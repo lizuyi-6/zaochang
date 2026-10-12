@@ -202,6 +202,23 @@ cloudflared-zaochang.service     active  enabled   # tunnel
 zaochang.service                 inactive disabled # 旧 workerd(已退役)
 ```
 
+**更新盒子扫描器代码**（本任务未发布；执行前按发布授权操作）：service 从 `/opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs` 启动，新增队列模块必须与入口文件一起复制。先在仓库根目录执行备份、复制、语法检查和重启：
+
+```bash
+BOX='root@39.96.196.207'
+KEY="$HOME/.ssh/zaochang-deploy.pem"
+BACKUP="/opt/zaochang/current/deploy/server/.scanner-backup-$(date +%Y%m%d%H%M%S)"
+ssh -i "$KEY" "$BOX" "mkdir -m 700 '$BACKUP' && cp -p /opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs /opt/zaochang/current/deploy/server/scan-queue.mjs '$BACKUP/'"
+scp -i "$KEY" deploy/server/zaochang-upload-scanner.mjs deploy/server/scan-queue.mjs "$BOX:/opt/zaochang/current/deploy/server/"
+ssh -i "$KEY" "$BOX" 'node --check /opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs && node --check /opt/zaochang/current/deploy/server/scan-queue.mjs && systemctl restart zaochang-upload-scanner.service && systemctl --no-pager --full status zaochang-upload-scanner.service'
+```
+
+回滚时把 `$BACKUP` 中的两个旧文件复制回同一目录，再重启并检查 service：
+
+```bash
+ssh -i "$KEY" "$BOX" "cp -p '$BACKUP/zaochang-upload-scanner.mjs' /opt/zaochang/current/deploy/server/zaochang-upload-scanner.mjs && cp -p '$BACKUP/scan-queue.mjs' /opt/zaochang/current/deploy/server/scan-queue.mjs && systemctl restart zaochang-upload-scanner.service && systemctl --no-pager --full status zaochang-upload-scanner.service"
+```
+
 **重建 tunnel(若丢)**:
 ```bash
 ssh -i ~/.ssh/zaochang-deploy.pem root@39.96.196.207
@@ -277,7 +294,8 @@ npx wrangler secret delete ZAOCHANG_AGENT_TOKEN --config wrangler.prod.jsonc
 | 症状 | 查 | 多半原因 |
 |---|---|---|
 | 上传 503 | `wrangler secret list` 有没有 `UPLOAD_SCANNER_URL/TOKEN`;token 是否==盒子 `SCANNER_TOKEN` | secret 缺失/不等 |
-| 上传 503 + tunnel 健康 | 盒子 `systemctl status zaochang-upload-scanner.service`、手动 `clamscan` 计时 | clamscan 慢(~10-13s/次,Worker 超时 112s 够) |
+| 上传 503 `scanner_busy` / `upload_scanner_unavailable` + tunnel 健康 | `GET /health` 查看 `busy`/`queued`;盒子 `systemctl status zaochang-upload-scanner.service`、手动 `clamscan` 计时 | `scanner_busy` 表示单飞扫描槽忙且等待队列已满/等待超时;Worker 只对这个 503 做最多 3 次退避重试(1/2/4 秒+抖动,受 `Retry-After`/110 秒总预算约束)。其他扫描错误不重试。单次 clamscan 曾测得 14.9 秒、峰值 RSS 977 MiB。 |
+| 上传 429 `upload_capacity_exceeded` | 检查 D1 `api_rate_limits` 中 `upload-global` 当前小时窗口计数;核对调用方先通过自己的会员限流 | 全站扫描容量桶为 120 次/小时;命中后不建 `uploaded_files` 行、不写 R2,`Retry-After` 指向窗口结束。Hyperknow 内部图片不计入此桶。 |
 | `scanner.aetherstudio.top` 530 | 盒子 `journalctl -u cloudflared-zaochang.service` 看 Registered | connector 没连上 |
 | 浏览器登录 GitHub 报「redirect_uri 无关联」 | 地址栏是 apex 还是 `*.workers.dev` | **在 staging 登录**(回调没注册);或 OAuth app 回调字符串不精确匹配 |
 | 本地 `curl aetherstudio.top` 怪(198.18.x.x / schannel 失败) | — | 本机 VPN 拦截,**别信**;一律用盒子 `--resolve` 到边缘 |

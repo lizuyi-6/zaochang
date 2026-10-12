@@ -23,6 +23,8 @@ export let server;
 export let scannerServer;
 export let scannerPort;
 export let uploadScannerRequestCount = 0;
+let uploadScannerBusyResponsesRemaining = 0;
+let uploadScannerErrorAfterBusy = null;
 export let output = "";
 export const scannerToken = `test-upload-scanner-${runId}-token`;
 
@@ -556,6 +558,19 @@ export async function startFakeUploadScanner() {
       response.end(JSON.stringify({ error: "sha256_mismatch" }));
       return;
     }
+    if (uploadScannerBusyResponsesRemaining > 0) {
+      uploadScannerBusyResponsesRemaining -= 1;
+      response.writeHead(503, { "content-type": "application/json", "retry-after": "1" });
+      response.end(JSON.stringify({ error: "scanner_busy" }));
+      return;
+    }
+    if (uploadScannerErrorAfterBusy) {
+      const error = uploadScannerErrorAfterBusy;
+      uploadScannerErrorAfterBusy = null;
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error }));
+      return;
+    }
     if (body.includes(Buffer.from("SCANNER-UNAVAILABLE-TEST"))) {
       response.writeHead(503, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "scanner_unavailable" }));
@@ -575,6 +590,15 @@ export async function startFakeUploadScanner() {
     scannerServer.listen(0, "127.0.0.1", resolve);
   });
   scannerPort = scannerServer.address().port;
+}
+
+export function setUploadScannerBusyResponses(count, errorAfterBusy = null) {
+  if (!Number.isInteger(count) || count < 0) throw new RangeError("busy response count must be a non-negative integer");
+  if (errorAfterBusy !== null && !new Set(["scan_failed", "scanner_unavailable"]).has(errorAfterBusy)) {
+    throw new TypeError("unsupported post-busy scanner error");
+  }
+  uploadScannerBusyResponsesRemaining = count;
+  uploadScannerErrorAfterBusy = errorAfterBusy;
 }
 
 export function authHeaders(name, email) {
@@ -848,6 +872,32 @@ export async function queryLocalD1(sql) {
   } finally {
     localDatabase.close();
   }
+}
+
+// Inspect Miniflare's local R2 object metadata directly. The backing SQLite
+// table is the same object index used by the bound R2Bucket, so tests can
+// distinguish a deleted quarantine object from a row that is merely unreadable.
+export async function queryLocalR2Keys() {
+  const databaseFiles = readdirSync(stateDir, { recursive: true })
+    .filter((name) => typeof name === "string" && name.endsWith(".sqlite"));
+  const keys = [];
+  let foundObjectIndex = false;
+  for (const relativePath of databaseFiles) {
+    const localDatabase = new DatabaseSync(join(stateDir, relativePath));
+    try {
+      localDatabase.exec("PRAGMA busy_timeout = 5000;");
+      const table = localDatabase.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_mf_objects'`,
+      ).get();
+      if (!table) continue;
+      foundObjectIndex = true;
+      for (const row of localDatabase.prepare(`SELECT key FROM _mf_objects`).all()) keys.push(String(row.key));
+    } finally {
+      localDatabase.close();
+    }
+  }
+  assert.equal(foundObjectIndex, true, "expected Miniflare's local R2 object index");
+  return keys.sort();
 }
 
 export async function creditTestFruit(email, amount = 20, label = crypto.randomUUID()) {

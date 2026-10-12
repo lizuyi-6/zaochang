@@ -1,7 +1,7 @@
 import { database } from "./community";
 
 export class RateLimitError extends Error {
-  constructor(public code = "rate_limit_exceeded", public status = 429) {
+  constructor(public code = "rate_limit_exceeded", public status = 429, public retryAfterSeconds?: number) {
     super(code);
   }
 }
@@ -20,7 +20,12 @@ export async function requestActorKey(request: Request, namespace: string) {
   return rateLimitKey(namespace, ip);
 }
 
-export async function enforceRateLimit(bucket: string, limit: number, windowSeconds: number) {
+export async function enforceRateLimit(
+  bucket: string,
+  limit: number,
+  windowSeconds: number,
+  options: { code?: string; includeRetryAfter?: boolean } = {},
+) {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const windowStart = Math.floor(nowSeconds / windowSeconds) * windowSeconds;
   const row = await database().prepare(
@@ -31,7 +36,14 @@ export async function enforceRateLimit(bucket: string, limit: number, windowSeco
        updated_at = CURRENT_TIMESTAMP
      RETURNING request_count AS requestCount`,
   ).bind(bucket, windowStart).first<{ requestCount: number }>();
-  if (Number(row?.requestCount ?? limit + 1) > limit) throw new RateLimitError();
+  if (Number(row?.requestCount ?? limit + 1) > limit) {
+    const retryAfterSeconds = Math.max(1, windowStart + windowSeconds - nowSeconds);
+    throw new RateLimitError(
+      options.code ?? "rate_limit_exceeded",
+      429,
+      options.includeRetryAfter ? retryAfterSeconds : undefined,
+    );
+  }
   if (crypto.getRandomValues(new Uint8Array(1))[0] < 4) {
     await database().prepare(`DELETE FROM api_rate_limits WHERE window_start < ?`).bind(nowSeconds - 7 * 24 * 60 * 60).run();
   }

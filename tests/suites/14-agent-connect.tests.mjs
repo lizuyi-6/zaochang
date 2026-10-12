@@ -257,6 +257,8 @@ export function register() {
     assert.deepEqual(toolNames, ["list_my_products", "get_product", "create_product", "update_product", "upload_cover"]);
     const categoryEnum = listedTools.find((entry) => entry.name === "create_product").inputSchema.properties.category.enum;
     assert.deepEqual(categoryEnum, ["效率工具", "互动体验", "声音影像", "生活方式", "开发工具"]);
+    assert.match(listedTools.find((entry) => entry.name === "create_product").inputSchema.properties.demo_url.description, /cannot currently pass platform review/);
+    assert.match(listedTools.find((entry) => entry.name === "update_product").inputSchema.properties.demo_url.description, /cannot currently pass platform review/);
     const methodNotAllowed = await fetch(`${baseUrl}/api/mcp`, { method: "GET" });
     assert.equal(methodNotAllowed.status, 405);
     assert.equal((await methodNotAllowed.json()).error, "method_not_allowed");
@@ -269,6 +271,7 @@ export function register() {
     });
     assert.equal(created.isError, undefined);
     assert.equal(created.structuredContent.product.pricingModel, "free");
+    assert.deepEqual(created.structuredContent.warnings, [], "a product without demo_url has no review warning");
     const productId = created.structuredContent.product.id;
     const rows = await queryLocalD1(
       `SELECT id, owner_email, review_status, status FROM products WHERE id = ${Number(productId)}`,
@@ -289,6 +292,30 @@ export function register() {
     assert.equal(ownGet.structuredContent.product.id, productId);
     const usage = await queryLocalD1(`SELECT last_used_at FROM api_keys WHERE id = ${quoteSql(key.id)}`);
     assert.equal(typeof usage[0].last_used_at, "string", "valid MCP requests update last_used_at");
+
+    const externalDemo = "https://demo.example/mcp-project";
+    const demoCreated = await tool(token, "create_product", {
+      title: "External demo warning",
+      description: "This project deliberately supplies an external demo link for the review warning test.",
+      category: "开发工具",
+      demo_url: `  ${externalDemo}  `,
+    });
+    assert.equal(demoCreated.isError, undefined);
+    assert.equal(demoCreated.structuredContent.warnings.length, 1);
+    assert.match(demoCreated.structuredContent.warnings[0], /^demo_url_cannot_be_approved: /);
+    const demoId = demoCreated.structuredContent.product.id;
+    const demoState = await queryLocalD1(
+      `SELECT demo_url, review_status FROM products WHERE id = ${Number(demoId)} AND owner_email = ${quoteSql(email)}`,
+    );
+    assert.deepEqual({ ...demoState[0] }, { demo_url: externalDemo, review_status: "pending_review" });
+
+    const demoUpdated = await tool(token, "update_product", {
+      id: demoId,
+      demo_url: "https://demo.example/updated-project",
+    });
+    assert.equal(demoUpdated.isError, undefined);
+    assert.equal(demoUpdated.structuredContent.warnings.length, 1);
+    assert.match(demoUpdated.structuredContent.warnings[0], /^demo_url_cannot_be_approved: /);
   });
 
   test("agent connect: MCP rejects request bodies above 11 MiB", async () => {
@@ -501,7 +528,11 @@ export function register() {
     const email = `agent-key-upload-limit-${runId}@example.com`;
     const { token } = await makeKeyFor(email, "upload limit");
     const bucket = `upload:${createHash("sha256").update(`upload:${email}`).digest("hex")}`;
+    const globalBucket = `upload-global:${createHash("sha256").update("upload-global:all").digest("hex")}`;
     const windowStart = Math.floor(Math.floor(Date.now() / 1000) / 3600) * 3600;
+    const globalBefore = await queryLocalD1(
+      `SELECT request_count FROM api_rate_limits WHERE bucket = ${quoteSql(globalBucket)} AND window_start = ${windowStart}`,
+    );
     await executeLocalD1(
       `INSERT INTO api_rate_limits (bucket, window_start, request_count, updated_at)
        VALUES (${quoteSql(bucket)}, ${windowStart}, 30, CURRENT_TIMESTAMP)
@@ -523,6 +554,11 @@ export function register() {
     );
     assert.equal(afterUploads[0].count, beforeUploads[0].count);
     assert.equal(uploadScannerRequestCount, scannerCallsBefore);
+    const globalAfter = await queryLocalD1(
+      `SELECT request_count FROM api_rate_limits WHERE bucket = ${quoteSql(globalBucket)} AND window_start = ${windowStart}`,
+    );
+    assert.equal(globalAfter[0]?.request_count ?? 0, globalBefore[0]?.request_count ?? 0,
+      "a rejected member upload does not consume the global upload bucket");
     const limitCounter = await queryLocalD1(
       `SELECT request_count FROM api_rate_limits WHERE bucket = ${quoteSql(bucket)} AND window_start = ${windowStart}`,
     );

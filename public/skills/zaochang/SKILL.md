@@ -101,8 +101,8 @@ curl -sS "https://aetherstudio.top/api/mcp" \
 
 - `list_my_products`: list only the signed-in user's projects, including `status`, `review_status`, `review_version`, and `approved_version`.
 - `get_product(id)`: read a project only when its `owner_email` matches the signed-in user.
-- `create_product(title, description, category, demo_url?, pricing_model?, price?, cover_theme?, cover_upload_key?)`: submit a new project. `category` is one of `效率工具`, `互动体验`, `声音影像`, `生活方式`, or `开发工具`.
-- `update_product(id, title?, description?, category?, demo_url?, pricing_model?, price?, cover_theme?, cover_upload_key?)`: edit only the signed-in user's project. Editing an approved project sends the changed version back for review.
+- `create_product(title, description, category, demo_url?, pricing_model?, price?, cover_theme?, cover_upload_key?)`: submit a new project. `category` is one of `效率工具`, `互动体验`, `声音影像`, `生活方式`, or `开发工具`. External experience links (`demo_url`) cannot currently pass platform review because review requires experience content that cannot be replaced in place. Until static hosting is available, leave `demo_url` blank and use the cover and description to present the project.
+- `update_product(id, title?, description?, category?, demo_url?, pricing_model?, price?, cover_theme?, cover_upload_key?)`: edit only the signed-in user's project. Editing an approved project sends the changed version back for review. The same `demo_url` review restriction applies to updates.
 - `upload_cover(filename, mime_type, data_base64)`: submit a PNG, JPEG, or WebP cover for scanning. Use the returned `cover_upload_key` with `create_product` or `update_product`.
 
 Business errors are returned in a tool result with `isError: true`. Do not retry by calling REST endpoints. After submitting or materially editing a project, use `get_product` or `list_my_products` to check its review status and wait for the 造场 review before treating it as published.
