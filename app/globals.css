@@ -630,6 +630,8 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.012em; }
 .oauth-scope-list code { color: #777e88; font-size: 9px; }
 .oauth-payment-warning { align-items: flex-start; background: rgb(216 180 106 / 9%); border-left: 2px solid #d8b46a; color: #c9b98f !important; display: flex; gap: 8px; margin: 13px 0 0; padding: 11px 12px; }
 .oauth-payment-warning svg { flex: 0 0 auto; margin-top: 2px; }
+.oauth-payment-warning > span { flex: 1 1 auto; min-width: 0; }
+.oauth-redirect-uri { display: block; margin-top: 4px; overflow-wrap: anywhere; word-break: break-all; }
 .oauth-consent-actions { display: grid; gap: 9px; grid-template-columns: .75fr 1.25fr; margin-top: 20px; }
 .oauth-primary, .oauth-secondary { align-items: center; border-radius: 0; display: inline-flex; font-size: 12px; gap: 7px; justify-content: center; min-height: 42px; padding: 0 16px; }
 .oauth-primary { background: #d8b46a; color: #111418; }
@@ -1081,4 +1083,47 @@ body:has(.reading-ai-panel.open) .reading-ai-rail { display: none; }
 .passkey-empty { color: var(--muted); font-size: 11px; padding: 18px 0 28px; }
 @media (max-width: 640px) {
   .passkey-manager > header { align-items: start; flex-direction: column; }
+}
+
+/* Personal API keys for MCP clients. */
+.api-key-manager { margin: 34px auto 0; max-width: 860px; }
+.api-key-manager > header { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 20px; justify-content: space-between; padding: 28px 0 18px; }
+.api-key-manager > header span, .api-key-configs > div > span { color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+.api-key-manager h2 { font-size: 22px; margin: 6px 0; }
+.api-key-manager header p, .api-key-created > p { color: var(--muted); font-size: 11px; max-width: 560px; }
+.api-key-skill-link, .api-key-secret-line button, .api-key-configs button { align-items: center; border: 1px solid var(--line); color: var(--ink); display: inline-flex; font-size: 9px; gap: 6px; padding: 8px 11px; text-decoration: none; }
+.api-key-create { align-items: end; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 12px; padding: 18px 0; }
+.api-key-create label { display: grid; gap: 6px; min-width: 180px; }
+.api-key-create label > span { color: var(--muted); font-size: 9px; }
+.api-key-create input, .api-key-create select { background: var(--surface); border: 1px solid var(--line); color: var(--ink); min-height: 38px; padding: 8px 10px; }
+.api-key-create .primary-action { min-height: 38px; }
+.api-key-created { background: var(--surface); border: 1px solid var(--line); margin: 18px 0; padding: 16px; }
+.api-key-created > strong { display: block; font-size: 11px; margin-bottom: 10px; }
+.api-key-secret-line { align-items: center; display: flex; gap: 10px; }
+.api-key-secret-line code { background: var(--paper); border: 1px solid var(--line); flex: 1; overflow-wrap: anywhere; padding: 10px; }
+.api-key-secret-line button, .api-key-configs button { background: transparent; cursor: pointer; }
+.api-key-configs { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.api-key-configs > div { min-width: 0; }
+.api-key-configs > strong { font-size: 13px; grid-column: 1 / -1; }
+.api-key-configs > p { color: var(--muted); font-size: 11px; grid-column: 1 / -1; margin: 0; }
+.api-key-configs > p a { margin-left: 6px; }
+.api-key-configs pre { background: var(--paper); border: 1px solid var(--line); font-size: 9px; min-height: 92px; overflow: auto; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.api-key-manager ul { display: grid; gap: 9px; list-style: none; padding: 18px 0; }
+.api-key-manager li { align-items: center; border: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 16px minmax(0, 1fr) auto auto; padding: 12px 14px; }
+.api-key-manager li > svg { color: var(--coral, #ff5c3d); }
+.api-key-metadata { display: grid; gap: 3px; grid-template-columns: auto 1fr; }
+.api-key-metadata > strong { font-size: 11px; }
+.api-key-metadata > code, .api-key-metadata > small { color: var(--muted); font-size: 9px; }
+.api-key-metadata > small { grid-column: 1 / -1; }
+.api-key-status { font-size: 9px; }
+.api-key-status-active { color: #27835c; }
+.api-key-status-expired, .api-key-status-revoked { color: var(--muted); }
+.api-key-manager li > button { align-items: center; background: transparent; border: 1px solid var(--line); color: var(--muted); cursor: pointer; display: flex; font-size: 9px; gap: 5px; padding: 7px 9px; }
+.api-key-empty, .api-key-notice { color: var(--muted); font-size: 10px; padding: 16px 0; }
+.api-key-notice { align-items: center; display: flex; gap: 6px; }
+@media (max-width: 640px) {
+  .api-key-manager > header { align-items: start; flex-direction: column; }
+  .api-key-configs { grid-template-columns: 1fr; }
+  .api-key-manager li { grid-template-columns: 16px minmax(0, 1fr) auto; }
+  .api-key-manager li > button { grid-column: 2 / -1; justify-self: start; }
 }

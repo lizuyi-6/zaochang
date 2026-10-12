@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Award, BadgeCheck, Eye, Heart, Link2, LogIn, MapPin, MonitorSmartphone, QrCode, Settings, ShieldCheck, Smartphone, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
-import { isAdminEmail, isFounderEmail } from "../api/_lib/access-control";
+import { hasRole } from "../api/_lib/access-control";
 import { database, ensureMember } from "../api/_lib/community";
 import { getChatGPTUser } from "../chatgpt-auth";
 import { AnimatedNumber } from "../components/animated-number";
@@ -18,8 +18,8 @@ export default async function ProfilePage() {
   if (!user) return <div className="profile-page"><section className="profile-cover"><div className="profile-cover-grid" /><span>CREATOR PROFILE / SIGN IN</span></section><section className="profile-signed-out"><LogIn size={30} /><h1>登录后查看你的创作者主页</h1><p>个人资料、作品数据、社区关系和创作记录会汇集在这里。</p><Link className="primary-action" href="/signin?return_to=%2Fprofile">登录造场</Link></section></div>;
 
   const name = user.displayName;
-  const founder = isFounderEmail(user.email);
-  const admin = isAdminEmail(user.email);
+  const founder = hasRole(user, "founder");
+  const admin = hasRole(user, "admin");
   const member = { ...user, initial: (name[0] || "造").toUpperCase() };
   await ensureMember(member);
   const db = database();

@@ -3,6 +3,8 @@ import { env } from "cloudflare:workers";
 import { database } from "./community";
 import { hashToken, publicAppOrigin, randomToken } from "../../oauth-session";
 import { AuthRequiredError } from "./errors";
+import { isLoopbackHttpRedirect, loopbackRedirectAllowed, type LoopbackRedirectPurpose, type LoopbackRegistrationSource } from "./loopback-redirect";
+import { MCP_PROJECT_SCOPE, MCP_RESOURCE_PATH } from "./oauth-resource";
 
 export const OAUTH_SCOPES = {
   openid: { label: "识别你的造场账号", description: "向应用提供一个只属于该应用的匿名账号标识。" },
@@ -11,6 +13,7 @@ export const OAUTH_SCOPES = {
   "fruit:balance": { label: "读取果子余额", description: "只读查看可用与待结算余额，不能扣除果子。" },
   "fruit:pay": { label: "发起果子支付", description: "应用只能创建待确认订单，每笔扣果仍需回到造场确认。" },
   "fruit:refund": { label: "申请订单退款", description: "仅能处理该应用创建且仍满足退款条件的订单。" },
+  "mcp:projects": { label: "管理你自己的项目", description: "通过 AI 助手查看、提交、修改你的项目并上传封面；提交与修改都会重新审核。不能动果子、不能读邮箱。" },
 } as const;
 
 export type OAuthScope = keyof typeof OAUTH_SCOPES;
@@ -24,7 +27,7 @@ const AUTHORIZATION_REQUEST_SECONDS = 10 * 60;
 
 type ClientRow = {
   clientId: string;
-  ownerEmail: string;
+  ownerEmail: string | null;
   name: string;
   description: string;
   websiteUrl: string;
@@ -34,6 +37,8 @@ type ClientRow = {
   status: "active" | "revoked";
   reviewStatus: "unverified" | "verified" | "rejected";
   writeAccessApproved: number;
+  registrationSource: "developer" | "dynamic";
+  allowedGrants: string;
 };
 
 type AuthorizationRequestRow = {
@@ -45,6 +50,7 @@ type AuthorizationRequestRow = {
   state: string;
   nonce: string | null;
   codeChallenge: string;
+  resource: string | null;
   expiresAt: string;
   usedAt: string | null;
 };
@@ -57,6 +63,7 @@ type AuthorizationCodeRow = {
   scope: string;
   nonce: string | null;
   codeChallenge: string;
+  resource: string | null;
   expiresAt: string;
   usedAt: string | null;
 };
@@ -65,12 +72,25 @@ type TokenIdentity = {
   tokenHash: string;
   clientId: string;
   clientName: string;
-  clientOwnerEmail: string;
+  clientOwnerEmail: string | null;
   userEmail: string;
   displayName: string;
   scope: string;
   subject: string;
   expiresAt: string;
+  resource: string | null;
+};
+
+export type OAuthMcpIdentity = {
+  email: string;
+  displayName: string;
+  fullName: string | null;
+  initial: string;
+  authVia: "oauth";
+  clientId: string;
+  isAdmin: false;
+  isFounder: false;
+  isAgent: false;
 };
 
 export class OAuthProviderError extends Error {
@@ -108,8 +128,9 @@ function hasScopes(granted: string, required: OAuthScope[]) {
   return required.every((scope) => values.has(scope));
 }
 
-function clientAllowsScopes(client: Pick<ClientRow, "allowedScopes" | "status" | "reviewStatus" | "writeAccessApproved">, scopes: OAuthScope[]) {
+function clientAllowsScopes(client: Pick<ClientRow, "allowedScopes" | "status" | "reviewStatus" | "writeAccessApproved" | "registrationSource">, scopes: OAuthScope[]) {
   if (client.status !== "active" || client.reviewStatus === "rejected" || !hasScopes(client.allowedScopes, scopes)) return false;
+  if (client.registrationSource === "dynamic" && (!scopes.includes(MCP_PROJECT_SCOPE) || scopes.some((scope) => scope !== "openid" && scope !== MCP_PROJECT_SCOPE))) return false;
   return !scopes.some((scope) => WRITE_SCOPES.has(scope)) || (client.reviewStatus === "verified" && client.writeAccessApproved === 1);
 }
 
@@ -129,7 +150,10 @@ function validClientText(value: unknown, min: number, max: number) {
   return text;
 }
 
-function validHttpsUrl(value: unknown, allowLocalhost = true) {
+function validHttpsUrl(
+  value: unknown,
+  context: { registrationSource?: LoopbackRegistrationSource; purpose?: LoopbackRedirectPurpose } = {},
+) {
   const raw = String(value ?? "").trim();
   let parsed: URL;
   try {
@@ -137,11 +161,10 @@ function validHttpsUrl(value: unknown, allowLocalhost = true) {
   } catch {
     throw new OAuthProviderError("invalid_client_metadata", 400, "网址格式无效。");
   }
-  // 生产环境禁 loopback HTTP 回跳:明文 http://localhost/127.0.0.1 会让授权码与
-  // 支付回跳参数走本机明文,削弱「HTTPS-only 回跳」立场。localhost 例外仅在非生产
-  // (dev/test)放行,供本地联调。
-  const isProduction = runtimeValues().APP_ENV === "production";
-  const local = allowLocalhost && !isProduction && parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
+  const source = context.registrationSource ?? "developer";
+  const purpose = context.purpose ?? "authorization";
+  const local = isLoopbackHttpRedirect(raw)
+    && loopbackRedirectAllowed({ appEnv: runtimeValues().APP_ENV, registrationSource: source, purpose });
   if ((parsed.protocol !== "https:" && !local) || parsed.username || parsed.password || parsed.hash) {
     throw new OAuthProviderError("invalid_client_metadata", 400, "仅允许 HTTPS。");
   }
@@ -157,22 +180,27 @@ async function clientById(clientId: string) {
     `SELECT client_id AS clientId, owner_email AS ownerEmail, name, description,
             website_url AS websiteUrl, client_type AS clientType,
             client_secret_hash AS clientSecretHash, allowed_scopes AS allowedScopes, status,
-            review_status AS reviewStatus, write_access_approved AS writeAccessApproved
+            review_status AS reviewStatus, write_access_approved AS writeAccessApproved,
+            registration_source AS registrationSource, allowed_grants AS allowedGrants
      FROM oauth_provider_clients WHERE client_id = ?`,
   ).bind(clientId).first<ClientRow>();
 }
 
-async function redirectRegistered(clientId: string, redirectUri: string) {
-  // 生产环境即使库中已注册,也拒绝 loopback HTTP 回跳(补 validHttpsUrl 只拦新注册的缺口)。
-  // 覆盖授权码 redirect_uri 与外部支付 return_uri 两条走此查询的路径。
-  if (runtimeValues().APP_ENV === "production") {
-    try {
-      const parsed = new URL(redirectUri);
-      if (parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname)) return false;
-    } catch {
-      return false;
-    }
-  }
+async function redirectRegistered(clientId: string, redirectUri: string, purpose: LoopbackRedirectPurpose = "authorization") {
+  const source = await database().prepare(
+    `SELECT registration_source AS registrationSource FROM oauth_provider_clients WHERE client_id = ?`,
+  ).bind(clientId).first<{ registrationSource: LoopbackRegistrationSource }>();
+  if (!source) return false;
+  let parsed: URL;
+  try { parsed = new URL(redirectUri); } catch { return false; }
+  const isLoopback = isLoopbackHttpRedirect(redirectUri);
+  const loopbackAllowed = loopbackRedirectAllowed({
+    appEnv: runtimeValues().APP_ENV,
+    registrationSource: source.registrationSource,
+    purpose,
+  });
+  if ((parsed.protocol !== "https:" && !(isLoopback && loopbackAllowed))
+    || (isLoopback && !loopbackAllowed)) return false;
   return Boolean(await database().prepare(
     `SELECT 1 AS valid FROM oauth_provider_redirect_uris
      WHERE client_id = ? AND redirect_uri = ?`,
@@ -180,7 +208,7 @@ async function redirectRegistered(clientId: string, redirectUri: string) {
 }
 
 export async function isClientRedirectUri(clientId: string, redirectUri: string) {
-  return redirectRegistered(clientId, redirectUri);
+  return redirectRegistered(clientId, redirectUri, "payment");
 }
 
 async function subjectFor(clientId: string, userEmail: string) {
@@ -260,6 +288,109 @@ export async function createDeveloperClient(ownerEmail: string, input: Record<st
   };
 }
 
+function dynamicClientName(value: unknown) {
+  if (value !== undefined && typeof value !== "string") throw new OAuthProviderError("invalid_client_metadata", 400);
+  const raw = typeof value === "string" ? value : "";
+  const name = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim().replace(/\s+/g, " ");
+  const nameLength = [...name].length;
+  if (value !== undefined && (nameLength < 1 || nameLength > 60)) throw new OAuthProviderError("invalid_client_metadata", 400);
+  const visibleName = value === undefined ? "未命名 AI 客户端" : name;
+  // MCP 客户端常把用户本地给服务器起的名字放进末尾括号(Claude Code 2.1.296 实测发
+  // "Claude Code (zaochang)");括号内是用户自己的配置而非客户端自称身份,防冒充只看括号前的
+  // 主名称。主名称为空(整名只有括号)时退回检查全名。同意页仍以「自称：」展示完整名称。
+  const primaryName = visibleName.replace(/\s*[（(][^（）()]*[)）]\s*$/u, "").trim() || visibleName;
+  const identity = primaryName.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
+  if (["造场", "zaochang", "aetherstudio", "官方", "official", "admin", "管理员"].some((term) => identity.includes(term))) {
+    throw new OAuthProviderError("invalid_client_metadata", 400, "应用名称不能冒充造场官方、管理员或平台名称。");
+  }
+  return visibleName;
+}
+
+function dynamicRedirectUri(value: unknown) {
+  if (typeof value !== "string" || !value || value !== value.trim()) throw new OAuthProviderError("invalid_client_metadata", 400, "回调地址必须是 HTTPS 或精确的本机 HTTP 地址。");
+  const raw = value;
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { throw new OAuthProviderError("invalid_client_metadata", 400, "回调地址格式无效。"); }
+  const local = isLoopbackHttpRedirect(raw)
+    && loopbackRedirectAllowed({ appEnv: runtimeValues().APP_ENV, registrationSource: "dynamic", purpose: "authorization" });
+  if ((parsed.protocol !== "https:" && !local) || parsed.username || parsed.password || parsed.hash) {
+    throw new OAuthProviderError("invalid_client_metadata", 400, "只允许 HTTPS 或 localhost、127.0.0.1、[::1] 的 HTTP 回调地址。");
+  }
+  return raw;
+}
+
+function dynamicMetadataArray(value: unknown, fallback: string[], allowed: readonly string[], field: string) {
+  if (value === undefined) return [...fallback];
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || !allowed.includes(item))) {
+    throw new OAuthProviderError("invalid_client_metadata", 400, `${field} 包含不支持的值。`);
+  }
+  return [...new Set(value as string[])];
+}
+
+export async function registerDynamicOAuthClient(input: Record<string, unknown>) {
+  const redirectInput = input.redirect_uris;
+  if (!Array.isArray(redirectInput) || redirectInput.length < 1 || redirectInput.length > 5) {
+    throw new OAuthProviderError("invalid_client_metadata", 400, "redirect_uris 必须包含 1 到 5 个地址。");
+  }
+  const redirectUris = [...new Set(redirectInput.map(dynamicRedirectUri))];
+  const authMethod = input.token_endpoint_auth_method === undefined ? "none" : input.token_endpoint_auth_method;
+  if (authMethod !== "none" || Object.prototype.hasOwnProperty.call(input, "client_secret")) {
+    throw new OAuthProviderError("invalid_client_metadata", 400, "动态注册只支持 token_endpoint_auth_method=none。");
+  }
+  const grantTypes = dynamicMetadataArray(input.grant_types, ["authorization_code", "refresh_token"], ["authorization_code", "refresh_token"], "grant_types");
+  if (!grantTypes.includes("authorization_code")) throw new OAuthProviderError("invalid_client_metadata", 400, "动态客户端必须支持 authorization_code。");
+  const responseTypes = dynamicMetadataArray(input.response_types, ["code"], ["code"], "response_types");
+  // RFC 7591 的 scope 可选;Codex CLI 0.162 等客户端会发空字符串,视同未提供,取默认 mcp:projects。
+  const scopeText = input.scope === undefined || input.scope === null ? "" : String(input.scope).trim();
+  const requestedScopes = scopeText === "" ? [MCP_PROJECT_SCOPE] : scopeText.split(/\s+/).filter(Boolean);
+  if (!requestedScopes.length || requestedScopes.some((scope) => scope !== "openid" && scope !== MCP_PROJECT_SCOPE)
+    || !requestedScopes.includes(MCP_PROJECT_SCOPE)) {
+    throw new OAuthProviderError("invalid_client_metadata", 400, "动态客户端只能申请 mcp:projects，可选附加 openid。");
+  }
+  const scopes = parseScopes(requestedScopes.join(" "));
+  const name = dynamicClientName(input.client_name);
+  const db = database();
+  const capacity = await db.prepare(
+    `SELECT COUNT(*) AS count FROM oauth_provider_clients c
+     WHERE c.registration_source = 'dynamic' AND c.created_at >= datetime('now', '-7 days')
+       AND NOT EXISTS (SELECT 1 FROM oauth_provider_consents x WHERE x.client_id = c.client_id)
+       AND NOT EXISTS (SELECT 1 FROM oauth_provider_access_tokens x WHERE x.client_id = c.client_id)
+       AND NOT EXISTS (SELECT 1 FROM oauth_provider_refresh_tokens x WHERE x.client_id = c.client_id)`,
+  ).first<{ count: number }>();
+  if (Number(capacity?.count ?? 0) >= 2000) throw new OAuthProviderError("registration_capacity_exceeded", 429);
+
+  const clientId = `zc_${randomToken(18)}`;
+  const allowedGrants = ["authorization_code", "refresh_token"].filter((grant) => grantTypes.includes(grant)).join(" ");
+  try {
+    await db.batch([
+      db.prepare(
+        `INSERT INTO oauth_provider_clients
+         (client_id, owner_email, name, description, website_url, client_type, client_secret_hash,
+          allowed_scopes, status, review_status, write_access_approved, registration_source, allowed_grants)
+         VALUES (?, NULL, ?, '', '', 'public', NULL, ?, 'active', 'unverified', 0, 'dynamic', ?)`,
+      ).bind(clientId, name, canonicalScopes(scopes), allowedGrants),
+      ...redirectUris.map((redirectUri) => db.prepare(
+        `INSERT INTO oauth_provider_redirect_uris (client_id, redirect_uri) VALUES (?, ?)`,
+      ).bind(clientId, redirectUri)),
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("registration_capacity_exceeded")) {
+      throw new OAuthProviderError("registration_capacity_exceeded", 429);
+    }
+    throw error;
+  }
+  return {
+    client_id: clientId,
+    client_id_issued_at: Math.floor(Date.now() / 1000),
+    client_name: name,
+    redirect_uris: redirectUris,
+    grant_types: grantTypes,
+    response_types: responseTypes,
+    token_endpoint_auth_method: "none",
+    scope: canonicalScopes(scopes),
+  };
+}
+
 export async function updateDeveloperClient(ownerEmail: string, clientId: string, action: string) {
   const db = database();
   const owned = await db.prepare(
@@ -289,12 +420,13 @@ export async function updateDeveloperClient(ownerEmail: string, clientId: string
 
 export async function listUserConsents(userEmail: string) {
   const rows = await database().prepare(
-    `SELECT c.client_id AS clientId, c.name, c.website_url AS websiteUrl,
+    `SELECT c.client_id AS clientId, c.name, NULLIF(c.website_url, '') AS websiteUrl,
+            c.registration_source AS registrationSource,
             x.scope, x.granted_at AS grantedAt
      FROM oauth_provider_consents x JOIN oauth_provider_clients c ON c.client_id = x.client_id
      WHERE x.user_email = ? AND x.revoked_at IS NULL AND c.status = 'active'
      ORDER BY x.granted_at DESC`,
-  ).bind(userEmail).all<{ clientId: string; name: string; websiteUrl: string; scope: string; grantedAt: string }>();
+  ).bind(userEmail).all<{ clientId: string; name: string; websiteUrl: string | null; registrationSource: "developer" | "dynamic"; scope: string; grantedAt: string }>();
   return rows.results;
 }
 
@@ -329,8 +461,23 @@ export async function createAuthorizationRequest(url: URL, userEmail: string) {
   if (url.searchParams.get("code_challenge_method") !== "S256" || !isValidPkce(challenge)) {
     throw new OAuthProviderError("invalid_request", 400, "必须使用 PKCE S256。");
   }
-  const scopes = parseScopes(url.searchParams.get("scope") ?? "");
-  if (!scopes.includes("openid")) throw new OAuthProviderError("invalid_scope", 400, "登录请求必须包含 openid。");
+  const requestedScope = (url.searchParams.get("scope") ?? "").trim();
+  // 动态客户端只为 MCP 注册;授权请求不带 scope 时按 RFC 6749 §3.3 取其默认 mcp:projects。
+  // 开发者客户端仍必须显式给出 scope(且须含 openid),行为不变。
+  const scopes = parseScopes(requestedScope === "" && client.registrationSource === "dynamic" ? MCP_PROJECT_SCOPE : requestedScope);
+  const isMcp = scopes.includes(MCP_PROJECT_SCOPE);
+  if (!isMcp && !scopes.includes("openid")) throw new OAuthProviderError("invalid_scope", 400, "登录请求必须包含 openid。");
+  const resources = url.searchParams.getAll("resource");
+  if (resources.length > 1) throw new OAuthProviderError("invalid_target", 400);
+  const origin = publicAppOrigin(new Request(url));
+  const expectedMcpResource = `${origin}${MCP_RESOURCE_PATH}`;
+  let resource: string | null = null;
+  if (isMcp) {
+    if (resources.length && resources[0] !== expectedMcpResource) throw new OAuthProviderError("invalid_target", 400);
+    resource = expectedMcpResource;
+  } else if (resources.length) {
+    throw new OAuthProviderError("invalid_target", 400);
+  }
   if (client.clientType === "public" && scopes.some((scope) => WRITE_SCOPES.has(scope))) {
     throw new OAuthProviderError("invalid_scope", 400, "公开客户端不能请求果子写权限。");
   }
@@ -341,10 +488,10 @@ export async function createAuthorizationRequest(url: URL, userEmail: string) {
   const requestToken = randomToken(32);
   await database().prepare(
     `INSERT INTO oauth_provider_authorization_requests
-     (request_hash, client_id, user_email, redirect_uri, scope, state, nonce, code_challenge, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(await hashToken(requestToken), clientId, userEmail, redirectUri, canonicalScopes(scopes), state, nonce, challenge, expiresIn(AUTHORIZATION_REQUEST_SECONDS)).run();
-  return { requestToken, client, scopes, redirectUri };
+     (request_hash, client_id, user_email, redirect_uri, scope, state, nonce, code_challenge, resource, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(await hashToken(requestToken), clientId, userEmail, redirectUri, canonicalScopes(scopes), state, nonce, challenge, resource, expiresIn(AUTHORIZATION_REQUEST_SECONDS)).run();
+  return { requestToken, client, scopes, redirectUri, resource };
 }
 
 function oauthRedirect(redirectUri: string, params: Record<string, string>) {
@@ -359,7 +506,7 @@ export async function decideAuthorization(userEmail: string, requestToken: strin
   const pending = await db.prepare(
     `SELECT request_hash AS requestHash, client_id AS clientId, user_email AS userEmail,
             redirect_uri AS redirectUri, scope, state, nonce,
-            code_challenge AS codeChallenge, expires_at AS expiresAt, used_at AS usedAt
+            code_challenge AS codeChallenge, resource, expires_at AS expiresAt, used_at AS usedAt
      FROM oauth_provider_authorization_requests WHERE request_hash = ?`,
   ).bind(requestHash).first<AuthorizationRequestRow>();
   if (!pending || pending.userEmail !== userEmail || pending.usedAt || Date.parse(`${pending.expiresAt}Z`) <= Date.now()) {
@@ -383,6 +530,23 @@ export async function decideAuthorization(userEmail: string, requestToken: strin
     throw new OAuthProviderError("unauthorized_client", 403, "应用状态或授权范围已经改变，请重新发起授权。");
   }
 
+  if (client.registrationSource === "dynamic") {
+    const previous = await db.prepare(
+      `SELECT 1 AS found FROM oauth_provider_consents WHERE client_id = ? AND user_email = ? AND revoked_at IS NULL`,
+    ).bind(pending.clientId, userEmail).first<{ found: number }>();
+    if (!previous) {
+      const activeCount = await db.prepare(
+        `SELECT COUNT(*) AS count FROM oauth_provider_consents x
+         JOIN oauth_provider_clients c ON c.client_id = x.client_id
+         WHERE x.user_email = ? AND x.revoked_at IS NULL
+           AND c.registration_source = 'dynamic' AND c.status = 'active'`,
+      ).bind(userEmail).first<{ count: number }>();
+      if (Number(activeCount?.count ?? 0) >= 10) {
+        throw new OAuthProviderError("dynamic_authorization_limit", 403, "每位会员最多同时授权 10 个自动注册客户端。请先到开发者接入中心的「已授权应用」撤销一个旧授权，再重试。");
+      }
+    }
+  }
+
   await subjectFor(pending.clientId, userEmail);
   const code = `zcc_${randomToken(32)}`;
   const codeHash = await hashToken(code);
@@ -394,9 +558,9 @@ export async function decideAuthorization(userEmail: string, requestToken: strin
       ).bind(requestHash),
       db.prepare(
         `INSERT INTO oauth_provider_authorization_codes
-         (code_hash, request_hash, client_id, user_email, redirect_uri, scope, nonce, code_challenge, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(codeHash, requestHash, pending.clientId, userEmail, pending.redirectUri, pending.scope, pending.nonce, pending.codeChallenge, expiresIn(AUTHORIZATION_CODE_SECONDS)),
+         (code_hash, request_hash, client_id, user_email, redirect_uri, scope, nonce, code_challenge, resource, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(codeHash, requestHash, pending.clientId, userEmail, pending.redirectUri, pending.scope, pending.nonce, pending.codeChallenge, pending.resource, expiresIn(AUTHORIZATION_CODE_SECONDS)),
       db.prepare(
         `INSERT INTO oauth_provider_consents (client_id, user_email, scope, revoked_at)
          VALUES (?, ?, ?, NULL)
@@ -404,7 +568,10 @@ export async function decideAuthorization(userEmail: string, requestToken: strin
            granted_at = CURRENT_TIMESTAMP, revoked_at = NULL`,
       ).bind(pending.clientId, userEmail, pending.scope),
     ]);
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("dynamic_authorization_limit")) {
+      throw new OAuthProviderError("dynamic_authorization_limit", 403, "每位会员最多同时授权 10 个自动注册客户端。请先到开发者接入中心的「已授权应用」撤销一个旧授权，再重试。");
+    }
     throw new OAuthProviderError("invalid_request", 400, "授权请求已经使用。");
   }
   return oauthRedirect(pending.redirectUri, { code, state: pending.state });
@@ -540,30 +707,33 @@ async function signIdToken(origin: string, clientId: string, userEmail: string, 
     .sign(key);
 }
 
-async function issueTokens(origin: string, client: ClientRow, userEmail: string, scope: string, nonce: string | null, source: { codeHash?: string; refreshHash?: string; refreshFamilyId?: string }) {
+async function issueTokens(origin: string, client: ClientRow, userEmail: string, scope: string, nonce: string | null, source: { codeHash?: string; refreshHash?: string; refreshFamilyId?: string; resource: string | null }) {
   const currentClient = await clientById(client.clientId);
   const tokenScopes = parseScopes(scope);
   if (!currentClient || !clientAllowsScopes(currentClient, tokenScopes)) throw new OAuthProviderError("unauthorized_client", 403);
   client = currentClient;
   const accessToken = `zca_${randomToken(32)}`;
-  const refreshToken = `zcr_${randomToken(48)}`;
+  const mayRefresh = client.allowedGrants.split(/\s+/).includes("refresh_token");
+  const refreshToken = mayRefresh ? `zcr_${randomToken(48)}` : null;
   const accessHash = await hashToken(accessToken);
-  const refreshHash = await hashToken(refreshToken);
+  const refreshHash = refreshToken ? await hashToken(refreshToken) : null;
   const refreshFamilyId = source.refreshFamilyId ?? `zcf_${randomToken(24)}`;
-  const idToken = await signIdToken(origin, client.clientId, userEmail, scope, nonce);
+  const idToken = scope.split(/\s+/).includes("openid")
+    ? await signIdToken(origin, client.clientId, userEmail, scope, nonce)
+    : null;
   const db = database();
   const statements = [
     db.prepare(
       `INSERT INTO oauth_provider_access_tokens
-       (token_hash, client_id, user_email, scope, authorization_code_hash, refresh_parent_hash, family_id, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(accessHash, client.clientId, userEmail, scope, source.codeHash ?? null, source.refreshHash ?? null, refreshFamilyId, expiresIn(ACCESS_TOKEN_SECONDS)),
-    db.prepare(
-      `INSERT INTO oauth_provider_refresh_tokens
-       (token_hash, client_id, user_email, scope, family_id, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).bind(refreshHash, client.clientId, userEmail, scope, refreshFamilyId, expiresIn(REFRESH_TOKEN_SECONDS)),
+       (token_hash, client_id, user_email, scope, authorization_code_hash, refresh_parent_hash, family_id, resource, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(accessHash, client.clientId, userEmail, scope, source.codeHash ?? null, source.refreshHash ?? null, refreshFamilyId, source.resource, expiresIn(ACCESS_TOKEN_SECONDS)),
   ];
+  if (refreshToken && refreshHash) statements.push(db.prepare(
+    `INSERT INTO oauth_provider_refresh_tokens
+     (token_hash, client_id, user_email, scope, family_id, resource, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(refreshHash, client.clientId, userEmail, scope, refreshFamilyId, source.resource, expiresIn(REFRESH_TOKEN_SECONDS)));
   if (source.codeHash) {
     statements.unshift(db.prepare(
       `UPDATE oauth_provider_authorization_codes SET used_at = CURRENT_TIMESTAMP
@@ -571,6 +741,7 @@ async function issueTokens(origin: string, client: ClientRow, userEmail: string,
     ).bind(source.codeHash));
   }
   if (source.refreshHash) {
+    if (!refreshHash) throw new OAuthProviderError("unauthorized_client", 403);
     statements.unshift(db.prepare(
       `UPDATE oauth_provider_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP, replaced_by_hash = ?
        WHERE token_hash = ? AND revoked_at IS NULL`,
@@ -581,9 +752,9 @@ async function issueTokens(origin: string, client: ClientRow, userEmail: string,
     access_token: accessToken,
     token_type: "Bearer",
     expires_in: ACCESS_TOKEN_SECONDS,
-    refresh_token: refreshToken,
+    ...(refreshToken ? { refresh_token: refreshToken } : {}),
     scope,
-    id_token: idToken,
+    ...(idToken ? { id_token: idToken } : {}),
   };
 }
 
@@ -591,7 +762,10 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
   const client = await authenticateTokenClient(request, params);
   const origin = publicAppOrigin(request);
   const grantType = params.get("grant_type");
+  const suppliedResources = params.getAll("resource");
+  if (suppliedResources.length > 1) throw new OAuthProviderError("invalid_target", 400);
   if (grantType === "authorization_code") {
+    if (!client.allowedGrants.split(/\s+/).includes("authorization_code")) throw new OAuthProviderError("unauthorized_client", 400);
     const code = params.get("code") ?? "";
     const verifier = params.get("code_verifier") ?? "";
     const redirectUri = params.get("redirect_uri") ?? "";
@@ -600,12 +774,13 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
     const row = await database().prepare(
       `SELECT code_hash AS codeHash, client_id AS clientId, user_email AS userEmail,
               redirect_uri AS redirectUri, scope, nonce, code_challenge AS codeChallenge,
-              expires_at AS expiresAt, used_at AS usedAt
+              resource, expires_at AS expiresAt, used_at AS usedAt
        FROM oauth_provider_authorization_codes WHERE code_hash = ?`,
     ).bind(codeHash).first<AuthorizationCodeRow>();
     if (!row || row.clientId !== client.clientId || row.redirectUri !== redirectUri || Date.parse(`${row.expiresAt}Z`) <= Date.now()) {
       throw new OAuthProviderError("invalid_grant", 400);
     }
+    if (suppliedResources.length && suppliedResources[0] !== row.resource) throw new OAuthProviderError("invalid_target", 400);
     if (row.usedAt) {
       /* RFC 6749 §4.1.2(SHOULD,审计 L3):授权码重放说明码可能被窃,该码换出的
        * 令牌族(access+refresh)必须连坐吊销——原实现只回 invalid_grant,已签发
@@ -626,7 +801,7 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
     if (!clientAllowsScopes(client, parseScopes(row.scope))) throw new OAuthProviderError("unauthorized_client", 403);
     if (await pkceChallenge(verifier) !== row.codeChallenge) throw new OAuthProviderError("invalid_grant", 400);
     try {
-      return await issueTokens(origin, client, row.userEmail, row.scope, row.nonce, { codeHash });
+      return await issueTokens(origin, client, row.userEmail, row.scope, row.nonce, { codeHash, resource: row.resource });
     } catch (error) {
       if (error instanceof OAuthProviderError) throw error;
       console.error("[oauth-provider] authorization_code issuance failed:", error);
@@ -634,13 +809,14 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
     }
   }
   if (grantType === "refresh_token") {
+    if (!client.allowedGrants.split(/\s+/).includes("refresh_token")) throw new OAuthProviderError("unauthorized_client", 400);
     const raw = params.get("refresh_token") ?? "";
     const refreshHash = await hashToken(raw);
     const row = await database().prepare(
-      `SELECT client_id AS clientId, user_email AS userEmail, scope, family_id AS familyId,
+      `SELECT client_id AS clientId, user_email AS userEmail, scope, family_id AS familyId, resource,
               expires_at AS expiresAt, revoked_at AS revokedAt, replaced_by_hash AS replacedByHash
        FROM oauth_provider_refresh_tokens WHERE token_hash = ?`,
-    ).bind(refreshHash).first<{ clientId: string; userEmail: string; scope: string; familyId: string; expiresAt: string; revokedAt: string | null; replacedByHash: string | null }>();
+    ).bind(refreshHash).first<{ clientId: string; userEmail: string; scope: string; familyId: string; resource: string | null; expiresAt: string; revokedAt: string | null; replacedByHash: string | null }>();
     if (row?.clientId === client.clientId && row.revokedAt && row.replacedByHash) {
       const db = database();
       await db.batch([
@@ -658,6 +834,7 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
     if (!row || row.clientId !== client.clientId || row.revokedAt || Date.parse(`${row.expiresAt}Z`) <= Date.now()) {
       throw new OAuthProviderError("invalid_grant", 400);
     }
+    if (suppliedResources.length && suppliedResources[0] !== row.resource) throw new OAuthProviderError("invalid_target", 400);
     let scope = row.scope;
     if (params.get("scope")) {
       const requested = parseScopes(params.get("scope") ?? "");
@@ -666,7 +843,7 @@ export async function exchangeToken(request: Request, params: URLSearchParams) {
     }
     if (!clientAllowsScopes(client, parseScopes(scope))) throw new OAuthProviderError("unauthorized_client", 403);
     try {
-      return await issueTokens(origin, client, row.userEmail, scope, null, { refreshHash, refreshFamilyId: row.familyId });
+      return await issueTokens(origin, client, row.userEmail, scope, null, { refreshHash, refreshFamilyId: row.familyId, resource: row.resource });
     } catch (error) {
       if (error instanceof OAuthProviderError) throw error;
       console.error("[oauth-provider] refresh_token issuance failed:", error);
@@ -698,7 +875,10 @@ export async function revokeOAuthToken(request: Request, params: URLSearchParams
   await db.batch(statements);
 }
 
-export async function requireBearer(request: Request, required: OAuthScope[]) {
+export async function requireBearer(
+  request: Request,
+  required: OAuthScope[],
+): Promise<Omit<TokenIdentity, "clientOwnerEmail"> & { clientOwnerEmail: string }> {
   const authorization = request.headers.get("authorization") ?? "";
   if (!authorization.startsWith("Bearer ")) throw new OAuthProviderError("invalid_token", 401);
   const tokenHash = await hashToken(authorization.slice(7));
@@ -706,20 +886,61 @@ export async function requireBearer(request: Request, required: OAuthScope[]) {
     `SELECT t.token_hash AS tokenHash, t.client_id AS clientId, c.name AS clientName,
              c.owner_email AS clientOwnerEmail, t.user_email AS userEmail,
              m.display_name AS displayName, t.scope, s.subject,
-             t.expires_at AS expiresAt, c.allowed_scopes AS allowedScopes,
+             t.expires_at AS expiresAt, t.resource, c.allowed_scopes AS allowedScopes,
              c.status, c.review_status AS reviewStatus,
-             c.write_access_approved AS writeAccessApproved
+             c.write_access_approved AS writeAccessApproved,
+             c.registration_source AS registrationSource
      FROM oauth_provider_access_tokens t
      JOIN oauth_provider_clients c ON c.client_id = t.client_id
      JOIN members m ON m.email = t.user_email
      JOIN oauth_provider_subjects s ON s.client_id = t.client_id AND s.user_email = t.user_email
      WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > CURRENT_TIMESTAMP
        AND c.status = 'active'`,
-  ).bind(tokenHash).first<TokenIdentity & Pick<ClientRow, "allowedScopes" | "status" | "reviewStatus" | "writeAccessApproved">>();
+  ).bind(tokenHash).first<TokenIdentity & Pick<ClientRow, "allowedScopes" | "status" | "reviewStatus" | "writeAccessApproved" | "registrationSource">>();
   if (!row) throw new OAuthProviderError("invalid_token", 401);
+  const clientOwnerEmail = row.clientOwnerEmail;
+  if (row.resource !== null || clientOwnerEmail === null) throw new OAuthProviderError("invalid_token", 401);
   if (!hasScopes(row.scope, required)) throw new OAuthProviderError("insufficient_scope", 403);
   if (!clientAllowsScopes(row, required)) throw new OAuthProviderError("invalid_token", 401);
-  return row;
+  return { ...row, clientOwnerEmail };
+}
+
+export async function requireMcpOAuthBearer(request: Request): Promise<OAuthMcpIdentity> {
+  const authorization = request.headers.get("authorization") ?? "";
+  if (!authorization.startsWith("Bearer ")) throw new OAuthProviderError("invalid_token", 401);
+  const token = authorization.slice(7);
+  if (!/^zca_[A-Za-z0-9_-]{43}$/.test(token)) throw new OAuthProviderError("invalid_token", 401);
+  const tokenHash = await hashToken(token);
+  const row = await database().prepare(
+    `SELECT t.client_id AS clientId, t.user_email AS userEmail, t.scope, t.resource,
+            m.display_name AS displayName, c.allowed_scopes AS allowedScopes,
+            c.status, c.review_status AS reviewStatus,
+            c.write_access_approved AS writeAccessApproved,
+            c.registration_source AS registrationSource
+     FROM oauth_provider_access_tokens t
+     JOIN oauth_provider_clients c ON c.client_id = t.client_id
+     JOIN members m ON m.email = t.user_email
+     WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > CURRENT_TIMESTAMP
+       AND c.status = 'active'`,
+  ).bind(tokenHash).first<Pick<ClientRow, "allowedScopes" | "status" | "reviewStatus" | "writeAccessApproved" | "registrationSource"> & {
+    clientId: string; userEmail: string; scope: string; resource: string | null; displayName: string;
+  }>();
+  if (!row) throw new OAuthProviderError("invalid_token", 401);
+  const expectedResource = `${publicAppOrigin(request)}${MCP_RESOURCE_PATH}`;
+  if (row.resource !== expectedResource) throw new OAuthProviderError("invalid_token", 401);
+  if (!hasScopes(row.scope, [MCP_PROJECT_SCOPE])) throw new OAuthProviderError("insufficient_scope", 403);
+  if (!clientAllowsScopes(row, [MCP_PROJECT_SCOPE])) throw new OAuthProviderError("invalid_token", 401);
+  return {
+    email: row.userEmail,
+    displayName: row.displayName,
+    fullName: row.displayName,
+    initial: (row.displayName.trim()[0] || row.userEmail[0] || "造").toUpperCase(),
+    authVia: "oauth",
+    clientId: row.clientId,
+    isAdmin: false,
+    isFounder: false,
+    isAgent: false,
+  };
 }
 
 export function oauthJsonError(error: unknown) {

@@ -408,15 +408,18 @@ function fakeD1(failLabels = []) {
   };
 }
 
-test("purge: 五域九条 statement 全部注册,SQL 与标签逐字固定", () => {
+test("purge: retention statements register all 12 SQL labels in foreign-key-safe order", () => {
   const db = fakeD1();
   const registry = purgeRegistry(db);
-  assert.equal(registry.length, 9);
+  assert.equal(registry.length, 12);
   assert.deepEqual(registry.map((entry) => entry.label), [
-    "oauth.authorization_requests",
-    "oauth.authorization_codes",
     "oauth.access_tokens",
     "oauth.refresh_tokens",
+    "oauth.authorization_codes",
+    "oauth.authorization_requests",
+    "oauth.dynamic_clients",
+    "mcp.write_audit",
+    "api-keys.expired-or-revoked",
     "external-fruit.payments",
     "email-codes.login_codes",
     "sessions.auth_sessions",
@@ -424,10 +427,13 @@ test("purge: 五域九条 statement 全部注册,SQL 与标签逐字固定", () 
     "webauthn.challenges_expired",
   ]);
   assert.deepEqual(db.prepared.map((entry) => entry.sql), [
+    "DELETE FROM oauth_provider_access_tokens WHERE expires_at <= CURRENT_TIMESTAMP",
+    "DELETE FROM oauth_provider_refresh_tokens WHERE expires_at <= CURRENT_TIMESTAMP",
+    "DELETE FROM oauth_provider_authorization_codes WHERE expires_at <= CURRENT_TIMESTAMP OR EXISTS (SELECT 1 FROM oauth_provider_authorization_requests r WHERE r.request_hash = oauth_provider_authorization_codes.request_hash AND r.expires_at <= CURRENT_TIMESTAMP)",
     "DELETE FROM oauth_provider_authorization_requests WHERE expires_at <= CURRENT_TIMESTAMP",
-    "DELETE FROM oauth_provider_authorization_codes WHERE expires_at <= CURRENT_TIMESTAMP",
-    "DELETE FROM oauth_provider_access_tokens WHERE expires_at <= CURRENT_TIMESTAMP AND revoked_at IS NULL",
-    "DELETE FROM oauth_provider_refresh_tokens WHERE expires_at <= CURRENT_TIMESTAMP AND revoked_at IS NULL AND replaced_by_hash IS NULL",
+    "DELETE FROM oauth_provider_clients WHERE registration_source = 'dynamic' AND created_at <= datetime('now', '-7 days') AND NOT EXISTS (SELECT 1 FROM oauth_provider_consents x WHERE x.client_id = oauth_provider_clients.client_id) AND NOT EXISTS (SELECT 1 FROM oauth_provider_access_tokens x WHERE x.client_id = oauth_provider_clients.client_id) AND NOT EXISTS (SELECT 1 FROM oauth_provider_refresh_tokens x WHERE x.client_id = oauth_provider_clients.client_id)",
+    "DELETE FROM mcp_write_audit WHERE created_at <= datetime('now', '-90 days')",
+    "DELETE FROM api_keys WHERE revoked_at IS NOT NULL OR expires_at <= datetime('now', '-90 days')",
     "DELETE FROM external_fruit_payments WHERE status IN ('expired', 'cancelled') AND expires_at <= datetime('now', '-7 days')",
     "DELETE FROM email_login_codes WHERE expires_at <= datetime('now', '-1 day') OR consumed_at IS NOT NULL",
     "DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP",
@@ -442,10 +448,10 @@ test("purge: 单条失败不阻断后续,日志含 label 且返回计数", async
   const errors = [];
   const logger = { log: (message) => logs.push(message), error: (message) => errors.push(message) };
   const result = await runPurgeRegistry(db, logger);
-  assert.deepEqual(result, { ok: 8, failed: 1 });
+  assert.deepEqual(result, { ok: 11, failed: 1 });
   assert.equal(errors.length, 1);
   assert.ok(errors[0].startsWith("[cron-purge] failed oauth.authorization_codes:"));
-  assert.equal(logs.length, 8);
+  assert.equal(logs.length, 11);
   assert.ok(logs.every((message) => /^\[cron-purge\] ok [\w.-]+ changes=3$/.test(message)));
   // 最后一条(webauthn challenges_expired)在失败之后仍执行——注册表顺序不受影响。
   assert.ok(logs.at(-1).includes("webauthn.challenges_expired"));
@@ -715,7 +721,7 @@ test("scheduled purge plan: 15-minute image cleanup and six-hour retention cron 
 
 // ---- OIDC discovery(轻量模块,worker 不再加载完整 provider)----
 
-test("oidc-discovery: 字段集与 endpoint 逐字固定,issuer 随 origin 注入", () => {
+test("oidc-discovery: 只新增动态注册 endpoint 与 MCP scope,原有 endpoint 和 claims 保留", () => {
   const doc = oidcDiscoveryDocument("https://aetherstudio.top");
   assert.deepEqual(doc, {
     issuer: "https://aetherstudio.top",
@@ -724,13 +730,14 @@ test("oidc-discovery: 字段集与 endpoint 逐字固定,issuer 随 origin 注�
     userinfo_endpoint: "https://aetherstudio.top/api/oauth/userinfo",
     jwks_uri: "https://aetherstudio.top/api/oauth/jwks",
     revocation_endpoint: "https://aetherstudio.top/api/oauth/revoke",
+    registration_endpoint: "https://aetherstudio.top/api/oauth/register",
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     subject_types_supported: ["pairwise"],
     id_token_signing_alg_values_supported: ["ES256"],
     token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"],
     code_challenge_methods_supported: ["S256"],
-    scopes_supported: ["openid", "profile", "email", "fruit:balance", "fruit:pay", "fruit:refund"],
+    scopes_supported: ["openid", "profile", "email", "fruit:balance", "fruit:pay", "fruit:refund", "mcp:projects"],
     claims_supported: ["sub", "name", "email", "email_verified"],
   });
   const staging = oidcDiscoveryDocument("https://zaochang-staging.example.workers.dev");

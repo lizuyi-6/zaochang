@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const member = await requireMember();
-    const credits = await currentCredits(member.email);
+    const credits = await currentCredits(member);
     return Response.json({
       success: true,
       data: {

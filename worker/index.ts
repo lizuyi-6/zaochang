@@ -4,10 +4,12 @@ import handler from "vinext/server/app-router-entry";
 import { resolvePublicAppOrigin } from "../app/lib/public-origin";
 import { withSecurityHeaders } from "../app/lib/security-policy";
 import { oidcDiscoveryDocument } from "../app/api/_lib/oauth-discovery";
+import { mcpResourceMetadata, oauthAuthorizationServerMetadata } from "../app/api/_lib/oauth-resource";
 import { runPurgeRegistry } from "../app/api/_lib/purge";
 import { cleanupOrphanedHyperknowImages } from "../app/api/_lib/purge/hyperknow-images";
 import { scheduledPurgePlan } from "./purge-schedule";
 import { isAgentWriteAllowed, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
+import { isUserApiKeyBearer, isUserKeyCapabilityAllowed } from "../app/api/_lib/user-api-key";
 import { prepareRequestBody } from "./request-body";
 import { handleWithAnonCache } from "./anon-cache";
 import { isLatticePath, cookieValue, latticeGateRedirect } from "./lattice-gate";
@@ -57,6 +59,13 @@ const worker = {
   },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    // 个人 API key 的 fail-closed scope 闸必须先于公开 origin 配置解析:即使
+    // 配置缺失,能力表外请求也稳定拒绝为 403,且不会进入任何应用路由。
+    if (isUserApiKeyBearer(request.headers.get("authorization"))
+      && !isUserKeyCapabilityAllowed(request.method, url.pathname)) {
+      await request.arrayBuffer().catch(() => {});
+      return withSecurityHeaders(request, Response.json({ error: "user_api_key_scope_forbidden" }, { status: 403 }), url.origin);
+    }
     // A9(2026-10 审计):生产缺 PUBLIC_APP_ORIGIN 时与 oauth-session 的 503 设计对齐
     // (public_app_origin_required),不再以裸 500 每请求打挂监控——仍 fail-closed。
     let origin: string;
@@ -103,6 +112,30 @@ const worker = {
         oidcDiscoveryDocument(origin),
         { headers: { "cache-control": "public, max-age=300" } },
       ), origin);
+    }
+
+    if (url.pathname === "/.well-known/oauth-protected-resource/api/mcp"
+      || url.pathname === "/.well-known/oauth-protected-resource") {
+      const headers = {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type",
+        "cache-control": "public, max-age=300",
+      };
+      if (request.method === "OPTIONS") return withSecurityHeaders(request, new Response(null, { status: 204, headers }), origin);
+      if (request.method !== "GET") {
+        return withSecurityHeaders(request, Response.json({ error: "method_not_allowed" }, { status: 405, headers: { ...headers, allow: "GET, OPTIONS" } }), origin);
+      }
+      return withSecurityHeaders(request, Response.json(mcpResourceMetadata(origin), { headers }), origin);
+    }
+
+    if (url.pathname === "/.well-known/oauth-authorization-server") {
+      if (request.method !== "GET") {
+        return withSecurityHeaders(request, Response.json({ error: "method_not_allowed" }, { status: 405, headers: { allow: "GET" } }), origin);
+      }
+      return withSecurityHeaders(request, Response.json(oauthAuthorizationServerMetadata(origin), {
+        headers: { "cache-control": "public, max-age=300" },
+      }), origin);
     }
 
     if (url.pathname === "/_vinext/image") {

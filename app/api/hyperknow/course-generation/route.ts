@@ -485,7 +485,7 @@ export async function POST(request: Request) {
     // 同 key 重发会在旧流仍在跑时免费接管、再启一路 Stage1(双倍上游调用);租约到期点
     // 晚于超时点后,超时路径退费、完成路径 markCompleted 都会显式清掉租约。
     const { remaining: remainingCredits, conflict, charged } = await consumeCreditsIdempotent(
-      member.email,
+      member,
       idempotencyKey,
       stage1BudgetMs + CREDIT_LEASE_MARGIN_MS,
     );
@@ -503,7 +503,7 @@ export async function POST(request: Request) {
     }
 
     if (remainingCredits === null) {
-      const { remaining, max } = await currentCredits(member.email);
+      const { remaining, max } = await currentCredits(member);
       return Response.json(
         { error: "insufficient_credits", credit_info: { remaining, max } },
         { status: 402 },
@@ -541,7 +541,7 @@ export async function POST(request: Request) {
           try {
             push({ type: "course_generation_step", step_id: "boot", status: "loading", title: "Starting course generation", placeholder: "Crafting Courses..." });
             push({ type: "course_generation_started", course_uuid: courseUuid, query });
-            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member.email) } });
+            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member) } });
 
             push({
               type: "course_generation_step",

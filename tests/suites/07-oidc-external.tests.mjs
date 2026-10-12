@@ -56,6 +56,8 @@ test("OIDC login and delegated fruit API require PKCE, scopes, and per-payment c
   assert.equal(discoveryBody.issuer, baseUrl);
   assert.equal(discoveryBody.code_challenge_methods_supported.includes("S256"), true);
   assert.equal(discoveryBody.scopes_supported.includes("fruit:pay"), true);
+  assert.equal(discoveryBody.registration_endpoint, `${baseUrl}/api/oauth/register`);
+  assert.equal(discoveryBody.scopes_supported.includes("mcp:projects"), true);
 
   const payerEmail = `oidc-payer-${runId}@example.com`;
   const payerHeaders = authHeaders("外部平台支付用户", payerEmail);

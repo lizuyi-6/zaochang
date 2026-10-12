@@ -39,7 +39,7 @@ test('chat: model history window and storage cap', () => {
   const route = read('app/api/hyperknow/chat/route.ts');
   assert.match(route, /history\.slice\(-40\)/, '发给模型的历史必须有窗口上限');
   assert.match(route, /\.slice\(-200\)/, '落库历史必须有上限');
-  assert.match(route, /max: dailyCreditsFor\(member\.email\)/, 'credit 帧的 max 必须按用户套餐而非恒 20');
+  assert.match(route, /max: dailyCreditsFor\(member\)/, 'credit 帧的 max 必须按携带身份的用户套餐而非恒 20');
 });
 
 test('llm: empty thinking-only response falls back instead of silent ""', () => {
@@ -111,7 +111,7 @@ test('timeout: course-generation stage budgets resolve through the test-only ove
 
 test('lease: credit lease duration must cover the whole Stage1 budget (C2)', () => {
   const route = read('app/api/hyperknow/course-generation/route.ts');
-  assert.match(route, /consumeCreditsIdempotent\(\s*member\.email,\s*idempotencyKey,\s*stage1BudgetMs \+ CREDIT_LEASE_MARGIN_MS,/, '计费租约必须 = Stage1 预算 + 余量——60s 默认租约短于蓝图生成耗时,同 key 重发会免费接管并双跑上游');
+  assert.match(route, /consumeCreditsIdempotent\(\s*member,\s*idempotencyKey,\s*stage1BudgetMs \+ CREDIT_LEASE_MARGIN_MS,/, '计费租约仍必须携带会员身份且 = Stage1 预算 + 余量——60s 默认租约短于蓝图生成耗时,同 key 重发会免费接管并双跑上游');
   const budgets = read('app/api/_lib/hyperknow/budgets.ts');
   assert.match(budgets, /CREDIT_LEASE_MARGIN_MS = 60_000/, '余量常量必须显式导出(可契约断言)');
 });
@@ -196,8 +196,11 @@ test('hyperknow-hardening: H1 task brief / H4 fixed search copy / H7 reading sam
 });
 
 test('community-hardening: storage/db failures are 503, docs images whitelisted, incubation add_material atomic (M2/M3/M4)', () => {
-  const products = read('app/api/products/route.ts');
-  assert.match(products, /storage_unavailable" \}, \{ status: 503 \}/, 'M2:bucket 缺失必须 503,不得混同对象不属主的 403');
+  // 项目创建逻辑已抽到共享的 _lib/products.ts(REST 与 MCP 共用),路由经 jsonError 原样透传 accessError 状态码。
+  const productsRoute = read('app/api/products/route.ts');
+  assert.match(productsRoute, /import \{ createProduct \} from "\.\.\/_lib\/products"/, 'M2:REST 创建必须走共享 createProduct');
+  const products = read('app/api/_lib/products.ts');
+  assert.match(products, /if \(check\.bucketMissing\) throw accessError\("storage_unavailable", 503\)/, 'M2:bucket 缺失必须 503,不得混同对象不属主的 403');
   const community = read('app/api/_lib/community.ts');
   assert.match(community, /accessError\("database_unavailable", 503\)/, 'M2:DB binding 缺失必须 503(不得裸 500)');
   // #11 拆分后写侧在 docs-write.ts;docs.ts re-export 保持路由 import 面。
