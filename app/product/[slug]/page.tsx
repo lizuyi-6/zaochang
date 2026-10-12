@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProductCard } from "../../components/product-card";
 import { database } from "../../api/_lib/community";
+import { hostedUrlSelect } from "../../api/_lib/hosting-sql";
 import { findProduct, products, type Product } from "../../lib/community-data";
 import { hydrateProductRow, PUBLISHED_PRODUCT_SQL } from "../../lib/product-hydrate";
 import { ProductExperience } from "./product-experience";
@@ -16,7 +17,7 @@ async function loadProduct(slug: string): Promise<Product | null> {
   try {
     const row = await database().prepare(
       `SELECT id, owner_name AS ownerName, title, description, category,
-              demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
+              demo_type AS demoType, demo_url AS demoUrl, ${hostedUrlSelect("products")}, image_url AS imageUrl,
               cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
               plays_count AS plays, created_at AS createdAt
        FROM products WHERE id = ? AND ${PUBLISHED_PRODUCT_SQL}`,

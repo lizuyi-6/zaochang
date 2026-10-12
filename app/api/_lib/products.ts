@@ -1,4 +1,5 @@
 import { database } from "./community";
+import { hostedUrlSelect } from "./hosting-sql";
 import { accessError } from "./errors";
 import { enforceRateLimit, rateLimitKey } from "./rate-limit";
 import { UPLOAD_KEY_URL_PATTERN, verifyScannedUpload } from "./upload-core";
@@ -71,14 +72,14 @@ export async function createProduct(member: MemberIdentity, input: ProductInputS
   const requestInput = typeof input === "function" ? await input() : input;
   const product = normalizeProduct(requestInput);
   await verifyProductCover(member, product.imageUrl);
-  return database().prepare(
+  const inserted = await database().prepare(
     `INSERT INTO products
      (owner_email, owner_name, title, description, category, demo_type,
       demo_url, image_url, cover_theme, price, pricing_model, status,
       moderation_status, review_status, review_version, approved_version)
      VALUES (?, ?, ?, ?, ?, 'prototype', ?, ?, ?, ?, ?,
              'pending_review', 'visible', 'pending_review', 1, 0)
-     RETURNING ${productReturning}`,
+     RETURNING id`,
   ).bind(
     member.email,
     member.displayName,
@@ -90,7 +91,12 @@ export async function createProduct(member: MemberIdentity, input: ProductInputS
     product.coverTheme,
     product.price,
     product.pricingModel,
-  ).first();
+  ).first<{ id: number }>();
+  if (!inserted) return null;
+  return database().prepare(
+    `SELECT ${productReturning}, ${hostedUrlSelect("products")}
+     FROM products WHERE id = ?`,
+  ).bind(inserted.id).first();
 }
 
 export async function listMyProducts(member: MemberIdentity) {
@@ -99,6 +105,7 @@ export async function listMyProducts(member: MemberIdentity) {
             demo_type AS demoType, demo_url AS demoUrl, image_url AS imageUrl,
             cover_theme AS coverTheme, price, pricing_model AS pricingModel,
             likes_count AS likes, plays_count AS plays, status, review_status,
+            ${hostedUrlSelect("products")},
             review_version, approved_version, submitted_at AS submittedAt, created_at AS createdAt
      FROM products WHERE owner_email = ? ORDER BY created_at DESC, id DESC`,
   ).bind(member.email).all();
@@ -107,7 +114,8 @@ export async function listMyProducts(member: MemberIdentity) {
 
 export async function getProduct(member: MemberIdentity, id: number) {
   const product = await database().prepare(
-    `SELECT owner_email AS ownerEmail, ${productReturning}, approved_version AS approvedVersion
+    `SELECT owner_email AS ownerEmail, ${productReturning}, approved_version AS approvedVersion,
+            ${hostedUrlSelect("products")}
      FROM products WHERE id = ?`,
   ).bind(id).first<{ id: number; ownerEmail: string }>();
   if (!product) throw accessError("not_found", 404);
@@ -157,6 +165,7 @@ export async function updateProduct(member: MemberIdentity, id: number, input: P
 
   // RETURNING on SQLite is evaluated before AFTER triggers; re-read to include the
   // product_material_change_requires_review trigger's review state transition.
-  return db.prepare(`SELECT ${productReturning}, approved_version AS approvedVersion FROM products WHERE id = ?`)
+  return db.prepare(`SELECT ${productReturning}, approved_version AS approvedVersion,
+                       ${hostedUrlSelect("products")} FROM products WHERE id = ?`)
     .bind(id).first();
 }

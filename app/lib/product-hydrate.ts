@@ -31,6 +31,7 @@ export type ProductRowLike = {
   category?: unknown;
   demoType?: unknown;
   demoUrl?: unknown;
+  hostedUrl?: unknown;
   coverTheme?: unknown;
   price?: unknown;
   pricingModel?: unknown;
@@ -59,6 +60,7 @@ export function hydrateProductRow(row: ProductRowLike, options: {
     category: String(row.category),
     demoType: String(row.demoType ?? "prototype"),
     demoUrl: row.demoUrl ? String(row.demoUrl) : null,
+    ...(row.hostedUrl !== undefined ? { hostedUrl: row.hostedUrl ? String(row.hostedUrl) : null } : {}),
     coverTheme: theme,
     price: Number(row.price ?? 0),
     pricingModel: normalizePricingModel(row.pricingModel),

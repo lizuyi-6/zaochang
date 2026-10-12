@@ -5,6 +5,7 @@ import type { MemberIdentity } from "./access-control";
 import { listRecentReading } from "./docs";
 import { getWalletOverview } from "./fruit";
 import { database } from "./community";
+import { hostedUrlSelect } from "./hosting-sql";
 
 export type MemberCommunityState = {
   wallet: unknown;
@@ -159,6 +160,7 @@ export async function loadMemberCommunityState(member: MemberIdentity): Promise<
                 cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes,
                 plays_count AS plays, status, review_status AS reviewStatus,
                 review_version AS reviewVersion, approved_version AS approvedVersion,
+                ${hostedUrlSelect("products")},
                 reviewed_at AS reviewedAt, review_note AS reviewNote,
                 submitted_at AS submittedAt, created_at AS createdAt
          FROM products WHERE owner_email = ?

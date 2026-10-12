@@ -5,8 +5,10 @@
 import type { MemberIdentity } from "./access-control";
 import { adminAuditStatement } from "./admin";
 import { database } from "./community";
+import { adminRemoveHosting } from "./hosting";
 import {
   isExternalDemoImmutableError,
+  isHostingNotStagedError,
   isModerationRemediationNotAllowedError,
   isProductReviewNotPendingError,
   isUniqueConstraintError,
@@ -18,6 +20,16 @@ type ModerationInput = Record<string, unknown>;
 export async function applyModerationAction(admin: MemberIdentity, input: ModerationInput): Promise<Response> {
   const action = String(input.action ?? "");
   const targetRef = String(input.targetRef ?? "").slice(0, 160);
+  if (action === "remove_hosting") {
+    if (admin.isAgent) return Response.json({ error: "admin_forbidden" }, { status: 403 });
+    const productId = Number(targetRef);
+    const note = String(input.note ?? "").trim().slice(0, 500);
+    if (!Number.isInteger(productId) || note.length < 4) {
+      return Response.json({ error: "invalid_hosting_removal" }, { status: 400 });
+    }
+    await adminRemoveHosting(admin, productId, note);
+    return Response.json({ updated: true });
+  }
   if (action === "approve_product" || action === "reject_product") {
     const productId = Number(targetRef);
     const note = String(input.note ?? "").trim().slice(0, 500);
@@ -57,6 +69,9 @@ export async function applyModerationAction(admin: MemberIdentity, input: Modera
     } catch (error) {
       if (isExternalDemoImmutableError(error)) {
         return Response.json({ error: "external_demo_requires_immutable_package" }, { status: 409 });
+      }
+      if (isHostingNotStagedError(error)) {
+        return Response.json({ error: "hosting_not_staged" }, { status: 409 });
       }
       if (isProductReviewNotPendingError(error) || isUniqueConstraintError(error)) {
         const decided = await db.prepare(

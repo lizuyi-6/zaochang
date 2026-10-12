@@ -9,6 +9,7 @@ import { externalFruitPurgeStatements } from "./external-fruit.ts";
 import { oauthProviderPurgeStatements } from "./oauth-provider.ts";
 import { sessionPurgeStatements } from "./sessions.ts";
 import { webauthnChallengePurgeStatements } from "./webauthn-challenges.ts";
+import { hostingPurgeStatements } from "./hosting.ts";
 
 export type PurgeStatement = { label: string; statement: D1PreparedStatement };
 
@@ -19,6 +20,7 @@ export function purgeRegistry(db: D1Database): PurgeStatement[] {
     ...emailCodePurgeStatements(db),
     ...sessionPurgeStatements(db),
     ...webauthnChallengePurgeStatements(db),
+    ...hostingPurgeStatements(db),
   ];
 }
 
