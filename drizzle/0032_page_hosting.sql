@@ -67,6 +67,7 @@ CREATE TABLE `product_hostings` (
 	`bundle_file_count` integer NOT NULL,
 	`bundle_uncompressed_bytes` integer NOT NULL,
 	`review_version` integer NOT NULL,
+	`hosting_revision` integer NOT NULL,
 	`approved_version` integer DEFAULT 0 NOT NULL,
 	`state` text DEFAULT 'queued' NOT NULL,
 	`desired` text DEFAULT 'staged' NOT NULL,
@@ -88,7 +89,7 @@ CREATE TABLE `product_hostings` (
 	FOREIGN KEY (`bundle_key`) REFERENCES `uploaded_files`(`key`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "product_hostings_bundle_sha256_valid" CHECK (length(`bundle_sha256`) = 64 AND `bundle_sha256` NOT GLOB '*[^0-9a-f]*'),
 	CONSTRAINT "product_hostings_bundle_sizes_valid" CHECK (`bundle_zip_bytes` >= 0 AND `bundle_file_count` >= 1 AND `bundle_uncompressed_bytes` >= 0),
-	CONSTRAINT "product_hostings_review_versions_valid" CHECK (`review_version` >= 1 AND `approved_version` >= 0 AND `approved_version` <= `review_version`),
+	CONSTRAINT "product_hostings_review_versions_valid" CHECK (`review_version` >= 1 AND `approved_version` >= 0 AND `hosting_revision` >= 1),
 	CONSTRAINT "product_hostings_state_valid" CHECK (`state` IN ('queued', 'deploying', 'staged', 'promoting', 'live', 'removing', 'removed', 'failed')),
 	CONSTRAINT "product_hostings_desired_valid" CHECK (`desired` IN ('staged', 'live', 'removed')),
 	CONSTRAINT "product_hostings_provider_valid" CHECK (`provider` = 'stepfun_page'),
@@ -101,7 +102,21 @@ CREATE UNIQUE INDEX `product_hostings_one_active_product_idx` ON `product_hostin
 CREATE INDEX `product_hostings_state_desired_idx` ON `product_hostings` (`state`, `desired`);--> statement-breakpoint
 CREATE INDEX `product_hostings_owner_idx` ON `product_hostings` (`owner_email`);--> statement-breakpoint
 
--- ===== TRIGGERS + VIEW (原样保留) =====
+CREATE TABLE `hosting_upload_tokens` (
+	`token_hash` text PRIMARY KEY NOT NULL,
+	`member_email` text NOT NULL,
+	`product_id` integer NOT NULL,
+	`expires_at` text NOT NULL,
+	`used_at` text,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`member_email`) REFERENCES `members`(`email`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "hosting_upload_tokens_token_hash_valid" CHECK (length(`token_hash`) = 64 AND `token_hash` NOT GLOB '*[^0-9a-f]*')
+);--> statement-breakpoint
+CREATE INDEX `hosting_upload_tokens_member_active_idx` ON `hosting_upload_tokens` (`member_email`, `used_at`, `expires_at`);--> statement-breakpoint
+CREATE INDEX `hosting_upload_tokens_expires_idx` ON `hosting_upload_tokens` (`expires_at`);--> statement-breakpoint
+
+-- ===== TRIGGERS + VIEW =====
 -- I2: 若无此触发器，托管资料变更不会推进审核版本，旧批准可能继续覆盖新包。
 DROP TRIGGER `product_material_change_requires_review`;--> statement-breakpoint
 CREATE TRIGGER `product_material_change_requires_review`
@@ -207,7 +222,7 @@ WHEN EXISTS (
 )
 BEGIN SELECT RAISE(ABORT, 'hosting_demo_url_conflict'); END;--> statement-breakpoint
 
--- I2/I4: 若无此触发器，包可能绑定错误审核版本/已批准产品，直接把 desired 改为 live 可绕过新包决议。
+-- I2/I4: 插入时 review_version 必须等于产品当前审核版本；该列只记录提交时版本，后续批准资格按 hosting_revision 判断。
 CREATE TRIGGER `product_hostings_review_binding_guard`
 BEFORE INSERT ON `product_hostings`
 WHEN NOT EXISTS (
@@ -215,6 +230,14 @@ WHEN NOT EXISTS (
   WHERE p.`id` = NEW.`product_id` AND p.`review_version` = NEW.`review_version`
 )
 BEGIN SELECT RAISE(ABORT, 'hosting_review_version_mismatch'); END;--> statement-breakpoint
+-- I2/I4: 若包绑定的 hosting_revision 不是产品当前上传代次，拒绝插入 hosting_revision_mismatch，避免旧包冒充最新包。
+CREATE TRIGGER `product_hostings_revision_binding_guard`
+BEFORE INSERT ON `product_hostings`
+WHEN NOT EXISTS (
+  SELECT 1 FROM `products` p
+  WHERE p.`id` = NEW.`product_id` AND p.`hosting_revision` = NEW.`hosting_revision`
+)
+BEGIN SELECT RAISE(ABORT, 'hosting_revision_mismatch'); END;--> statement-breakpoint
 CREATE TRIGGER `product_hostings_pending_review_guard`
 BEFORE INSERT ON `product_hostings`
 WHEN NOT EXISTS (
@@ -237,35 +260,91 @@ WHEN NOT EXISTS (
 )
 BEGIN SELECT RAISE(ABORT, 'hosting_bundle_invalid'); END;--> statement-breakpoint
 
--- I2/I4: 若无此触发器，审核员可批准未部署完成或不是本次审核版本的包。
+-- 上传令牌签发必须有当前授权；失败为 hosting_not_granted，令牌行不插入。
+CREATE TRIGGER `hosting_upload_tokens_grant_guard`
+BEFORE INSERT ON `hosting_upload_tokens`
+WHEN NOT EXISTS (
+  SELECT 1 FROM `hosting_grants` g
+  WHERE g.`member_email` = NEW.`member_email` AND g.`revoked_at` IS NULL
+)
+BEGIN SELECT RAISE(ABORT, 'hosting_not_granted'); END;--> statement-breakpoint
+
+-- 上传令牌只能绑定会员自己的产品；失败为 hosting_owner_mismatch，令牌行不插入。
+CREATE TRIGGER `hosting_upload_tokens_owner_guard`
+BEFORE INSERT ON `hosting_upload_tokens`
+WHEN NOT EXISTS (
+  SELECT 1 FROM `products` p
+  WHERE p.`id` = NEW.`product_id` AND p.`owner_email` = NEW.`member_email`
+)
+BEGIN SELECT RAISE(ABORT, 'hosting_owner_mismatch'); END;--> statement-breakpoint
+
+-- 带外链演示地址的产品不能取得托管上传令牌；失败为 hosting_demo_url_conflict。
+CREATE TRIGGER `hosting_upload_tokens_demo_url_guard`
+BEFORE INSERT ON `hosting_upload_tokens`
+WHEN EXISTS (
+  SELECT 1 FROM `products` p
+  WHERE p.`id` = NEW.`product_id` AND p.`demo_url` IS NOT NULL AND length(trim(p.`demo_url`)) > 0
+)
+BEGIN SELECT RAISE(ABORT, 'hosting_demo_url_conflict'); END;--> statement-breakpoint
+
+-- 仅统计未使用且未来到期的令牌；已有三枚时拒绝第 4 枚，失败为 hosting_token_limit。
+CREATE TRIGGER `hosting_upload_tokens_limit_guard`
+BEFORE INSERT ON `hosting_upload_tokens`
+WHEN (
+  SELECT COUNT(*) FROM `hosting_upload_tokens` t
+  WHERE t.`member_email` = NEW.`member_email`
+    AND t.`used_at` IS NULL
+    AND julianday(t.`expires_at`) > julianday('now')
+) >= 3
+BEGIN SELECT RAISE(ABORT, 'hosting_token_limit'); END;--> statement-breakpoint
+
+-- 只允许 used_at 从 NULL 一次性置为非 NULL；再次消费或改动其它列失败为 hosting_token_immutable。
+CREATE TRIGGER `hosting_upload_tokens_immutable_guard`
+BEFORE UPDATE ON `hosting_upload_tokens`
+WHEN OLD.`used_at` IS NOT NULL
+  OR NEW.`used_at` IS NULL
+  OR OLD.`token_hash` IS NOT NEW.`token_hash`
+  OR OLD.`member_email` IS NOT NEW.`member_email`
+  OR OLD.`product_id` IS NOT NEW.`product_id`
+  OR OLD.`expires_at` IS NOT NEW.`expires_at`
+  OR OLD.`created_at` IS NOT NEW.`created_at`
+BEGIN SELECT RAISE(ABORT, 'hosting_token_immutable'); END;--> statement-breakpoint
+
+-- I2: active 行或代次已过期但仍 state=live 的残留行若没有当前 hosting_revision 的 staged/live 行，批准失败为 hosting_not_staged。
 CREATE TRIGGER `product_hostings_approval_staging_guard`
 BEFORE INSERT ON `product_review_decisions`
 WHEN NEW.`decision` = 'approved'
   AND EXISTS (
     SELECT 1 FROM `product_hostings` h
-    WHERE h.`product_id` = NEW.`product_id` AND h.`desired` <> 'removed'
+    JOIN `products` p ON p.`id` = h.`product_id`
+    WHERE h.`product_id` = NEW.`product_id`
+      AND (h.`desired` <> 'removed'
+        OR (h.`state` = 'live' AND h.`hosting_revision` <> p.`hosting_revision`))
   )
   AND NOT EXISTS (
     SELECT 1 FROM `product_hostings` h
     WHERE h.`product_id` = NEW.`product_id`
       AND h.`desired` <> 'removed'
-      AND h.`state` = 'staged'
-      AND h.`review_version` = NEW.`review_version`
+      AND h.`state` IN ('staged', 'live')
+      AND h.`hosting_revision` = (
+        SELECT p.`hosting_revision` FROM `products` p WHERE p.`id` = h.`product_id`
+      )
   )
 BEGIN SELECT RAISE(ABORT, 'hosting_not_staged'); END;--> statement-breakpoint
 
--- I2/I5: 若无此触发器，托管包绑定列可在审核后改写，批准将不再指向已审核的字节。
+-- I2/I5: product_id、包字节、提交时 review_version 和 hosting_revision 不可改；改写任一绑定列失败为 hosting_bound_columns_immutable。
 CREATE TRIGGER `product_hostings_bound_columns_immutable`
-BEFORE UPDATE OF `product_id`, `owner_email`, `bundle_key`, `bundle_sha256`, `review_version`, `created_at` ON `product_hostings`
+BEFORE UPDATE OF `product_id`, `owner_email`, `bundle_key`, `bundle_sha256`, `review_version`, `hosting_revision`, `created_at` ON `product_hostings`
 WHEN OLD.`product_id` IS NOT NEW.`product_id`
   OR OLD.`owner_email` IS NOT NEW.`owner_email`
   OR OLD.`bundle_key` IS NOT NEW.`bundle_key`
   OR OLD.`bundle_sha256` IS NOT NEW.`bundle_sha256`
   OR OLD.`review_version` IS NOT NEW.`review_version`
+  OR OLD.`hosting_revision` IS NOT NEW.`hosting_revision`
   OR OLD.`created_at` IS NOT NEW.`created_at`
 BEGIN SELECT RAISE(ABORT, 'hosting_bound_columns_immutable'); END;--> statement-breakpoint
 
--- I2/I5: 若无此触发器，desired 可跳过 staged 审核直接变为 live，或从 removed 复活。
+-- I2/I5: staged→live 仅接受当前 hosting_revision 且存在同版本 approved 决议；非法变更及 removed 复活均失败为 hosting_invalid_transition。
 CREATE TRIGGER `product_hostings_desired_transition_guard`
 BEFORE UPDATE OF `desired` ON `product_hostings`
 WHEN OLD.`desired` IS NOT NEW.`desired`
@@ -275,19 +354,21 @@ WHEN OLD.`desired` IS NOT NEW.`desired`
     OR NEW.`desired` NOT IN ('staged', 'live', 'removed')
     OR (NEW.`desired` = 'live' AND NOT (
       OLD.`desired` = 'staged'
-      AND NEW.`approved_version` = NEW.`review_version`
+      AND NEW.`hosting_revision` = (
+        SELECT p.`hosting_revision` FROM `products` p WHERE p.`id` = NEW.`product_id`
+      )
       AND EXISTS (
         SELECT 1 FROM `product_review_decisions` d
         WHERE d.`product_id` = NEW.`product_id`
-          AND d.`review_version` = NEW.`review_version`
+          AND d.`review_version` = NEW.`approved_version`
           AND d.`decision` = 'approved'
       )
     ))
   )
 BEGIN SELECT RAISE(ABORT, 'hosting_invalid_transition'); END;--> statement-breakpoint
 
--- I3: 若无此触发器，部署器可在 desired 非 live、未批准或审核版本过期时公开站点。
--- I2: 任一不在状态迁移表中的跳转（包括 queued/deploying 直接到 live）同样 fail-closed。
+-- I3: promoting→live 若 desired、产品当前批准版本或 hosting_revision 不匹配，失败为 hosting_live_requires_approval。
+-- I2: promoting→removing 合法；其余不在状态迁移表中的跳转（包括 queued/deploying 直接到 live）失败为 hosting_invalid_transition。
 CREATE TRIGGER `product_hostings_state_transition_guard`
 BEFORE UPDATE OF `state` ON `product_hostings`
 BEGIN
@@ -297,7 +378,7 @@ BEGIN
         (OLD.`state` = 'queued' AND NEW.`state` IN ('deploying', 'removed', 'failed'))
         OR (OLD.`state` = 'deploying' AND NEW.`state` IN ('staged', 'failed'))
         OR (OLD.`state` = 'staged' AND NEW.`state` IN ('promoting', 'removing'))
-        OR (OLD.`state` = 'promoting' AND NEW.`state` IN ('live', 'staged'))
+        OR (OLD.`state` = 'promoting' AND NEW.`state` IN ('live', 'staged', 'removing'))
         OR (OLD.`state` = 'live' AND NEW.`state` = 'removing')
         OR (OLD.`state` = 'removing' AND NEW.`state` IN ('removing', 'removed'))
         OR (OLD.`state` = 'failed' AND NEW.`state` IN ('removing', 'removed'))
@@ -307,7 +388,6 @@ BEGIN
   SELECT CASE
     WHEN OLD.`state` = 'promoting' AND NEW.`state` = 'live' AND NOT (
       NEW.`desired` = 'live'
-      AND NEW.`approved_version` = NEW.`review_version`
       AND EXISTS (
         SELECT 1 FROM `products` p
         WHERE p.`id` = NEW.`product_id`
@@ -315,13 +395,14 @@ BEGIN
           AND p.`review_status` = 'approved'
           AND p.`approved_version` = p.`review_version`
           AND p.`approved_version` = NEW.`approved_version`
+          AND p.`hosting_revision` = NEW.`hosting_revision`
       )
     )
       THEN RAISE(ABORT, 'hosting_live_requires_approval')
   END;
 END;--> statement-breakpoint
 
--- I5: 若无此触发器，批准记录不会绑定托管行的 approved_version/desired，合法暂存包也无法按批准上线。
+-- I5: 批准当前上传代次的 staged/live 行，写 NEW.review_version 并将 desired 置 live；不匹配/非 staged-live 行保持原值。
 CREATE TRIGGER `product_hostings_approval_apply`
 AFTER INSERT ON `product_review_decisions`
 WHEN NEW.`decision` = 'approved'
@@ -331,8 +412,10 @@ BEGIN
       `desired` = 'live'
   WHERE `product_id` = NEW.`product_id`
     AND `desired` <> 'removed'
-    AND `state` = 'staged'
-    AND `review_version` = NEW.`review_version`;
+    AND `state` IN ('staged', 'live')
+    AND `hosting_revision` = (
+      SELECT p.`hosting_revision` FROM `products` p WHERE p.`id` = NEW.`product_id`
+    );
 END;--> statement-breakpoint
 
 -- I5: 若无此触发器，驳回后暂存/排队的远端包仍保持 active desired，部署器可能继续推进它。
@@ -355,7 +438,7 @@ WHERE h.`state` = 'live'
   AND p.`review_status` = 'approved'
   AND p.`approved_version` = p.`review_version`
   AND h.`approved_version` = p.`approved_version`
-  AND h.`review_version` = p.`approved_version`
+  AND h.`hosting_revision` = p.`hosting_revision`
   AND h.`live_url` LIKE 'https://%.page.stepcloud.com'
   AND substr(h.`live_url`, 1, 8) = 'https://'
   AND substr(h.`live_url`, length(h.`live_url`) - length('.page.stepcloud.com') + 1) = '.page.stepcloud.com'

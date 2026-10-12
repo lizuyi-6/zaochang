@@ -9,6 +9,7 @@ const migrationsDir = new URL("../drizzle/", import.meta.url);
 let nextProductKey = 0;
 let nextUploadKey = 0;
 let nextDecisionKey = 0;
+let nextTokenKey = 0;
 
 function migrationFiles() {
   return readdirSync(fileURLToPath(migrationsDir))
@@ -79,6 +80,11 @@ function addProduct(db, { ownerEmail = "owner@example.com", demoUrl = null, titl
   return Number(result.lastInsertRowid);
 }
 
+function prepareHostingSubmission(db, productId) {
+  db.prepare("UPDATE products SET hosting_revision = hosting_revision + 1 WHERE id = ?").run(productId);
+  return plain(db.prepare("SELECT hosting_revision, review_version FROM products WHERE id = ?").get(productId));
+}
+
 function addUpload(db, {
   ownerEmail = "owner@example.com",
   mediaType = "application/zip",
@@ -109,23 +115,42 @@ function addHosting(db, {
   ownerEmail = "owner@example.com",
   bundleKey,
   bundleSha256 = "a".repeat(64),
-  reviewVersion = 1,
+  reviewVersion,
+  hostingRevision,
 } = {}) {
+  const product = db.prepare("SELECT review_version, hosting_revision FROM products WHERE id = ?").get(productId);
   const result = db.prepare(`INSERT INTO product_hostings
     (product_id, owner_email, bundle_key, bundle_sha256, bundle_zip_bytes,
-     bundle_file_count, bundle_uncompressed_bytes, review_version)
-    VALUES (?, ?, ?, ?, 128, 2, 256, ?)`)
-    .run(productId, ownerEmail, bundleKey, bundleSha256, reviewVersion);
+     bundle_file_count, bundle_uncompressed_bytes, review_version, hosting_revision)
+    VALUES (?, ?, ?, ?, 128, 2, 256, ?, ?)`)
+    .run(productId, ownerEmail, bundleKey, bundleSha256,
+      reviewVersion ?? product.review_version, hostingRevision ?? product.hosting_revision);
   return Number(result.lastInsertRowid);
 }
 
-function addDecision(db, productId, decision = "approved", reviewVersion = 1) {
+function addDecision(db, productId, decision = "approved", reviewVersion) {
   const id = `hosting-decision-${++nextDecisionKey}`;
+  const currentReviewVersion = reviewVersion ?? db.prepare("SELECT review_version FROM products WHERE id = ?").get(productId).review_version;
   db.prepare(`INSERT INTO product_review_decisions
     (id, product_id, review_version, reviewer_email, decision, note)
     VALUES (?, ?, ?, 'reviewer@example.com', ?, 'reviewed bundle')`)
-    .run(id, productId, reviewVersion, decision);
+    .run(id, productId, currentReviewVersion, decision);
   return id;
+}
+
+function addUploadToken(db, {
+  memberEmail = "owner@example.com",
+  productId,
+  expiresAt = "2099-01-01T00:00:00Z",
+  usedAt = null,
+  tokenHash,
+} = {}) {
+  const hash = tokenHash ?? (++nextTokenKey).toString(16).padStart(64, "0");
+  db.prepare(`INSERT INTO hosting_upload_tokens
+    (token_hash, member_email, product_id, expires_at, used_at)
+    VALUES (?, ?, ?, ?, ?)`)
+    .run(hash, memberEmail, productId, expiresAt, usedAt);
+  return hash;
 }
 
 function expectAbort(run, code) {
@@ -145,13 +170,15 @@ function plain(row) {
 
 function makePendingHosting(db, options = {}) {
   const productId = addProduct(db, options);
+  const submission = prepareHostingSubmission(db, productId);
   const bundleKey = addUpload(db, options.upload);
   const hostingId = addHosting(db, {
     productId,
     bundleKey,
     ownerEmail: options.hostingOwner ?? options.ownerEmail ?? "owner@example.com",
     bundleSha256: options.bundleSha256,
-    reviewVersion: options.reviewVersion,
+    reviewVersion: options.reviewVersion ?? submission.review_version,
+    hostingRevision: options.hostingRevision ?? submission.hosting_revision,
   });
   return { productId, bundleKey, hostingId };
 }
@@ -224,6 +251,14 @@ test("0032 重建保留旧上传行、四个索引和 0026 cleanup 扫描字段"
       "uploaded_files_owner_idx",
       "uploaded_files_scan_status_idx",
     ]);
+
+    assert.deepEqual(plain(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'hosting_upload_tokens'").get()), {
+      name: "hosting_upload_tokens",
+    });
+    const tokenIndexNames = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'hosting_upload_tokens' ORDER BY name")
+      .all().map((row) => row.name);
+    assert.ok(tokenIndexNames.includes("hosting_upload_tokens_member_active_idx"));
+    assert.ok(tokenIndexNames.includes("hosting_upload_tokens_expires_idx"));
   }, { stopBefore: "0032_page_hosting.sql" });
 });
 
@@ -266,7 +301,7 @@ test("状态机允许契约列出的迁移并保持 promoting→live 的 I3 条�
       ["queued", "deploying"], ["queued", "removed"], ["queued", "failed"],
       ["deploying", "staged"], ["deploying", "failed"],
       ["staged", "promoting"], ["staged", "removing"],
-      ["promoting", "live"], ["promoting", "staged"],
+      ["promoting", "live"], ["promoting", "staged"], ["promoting", "removing"],
       ["live", "removing"],
       ["removing", "removing"], ["removing", "removed"],
       ["failed", "removing"], ["failed", "removed"],
@@ -313,7 +348,7 @@ test("I1 视图只暴露匹配批准版本的 live URL，并拒绝主机名污�
       { name: "product-unapproved", liveUrl: "https://review-site.page.stepcloud.com" },
       { name: "product-version-mismatch", liveUrl: "https://version-site.page.stepcloud.com" },
       { name: "hosting-approved-mismatch", liveUrl: "https://approved-site.page.stepcloud.com" },
-      { name: "hosting-review-mismatch", liveUrl: "https://review-version-site.page.stepcloud.com" },
+      { name: "hosting-revision-mismatch", liveUrl: "https://revision-version-site.page.stepcloud.com" },
       { name: "empty-url", liveUrl: "" },
       { name: "http-url", liveUrl: "http://safe-site.page.stepcloud.com" },
       { name: "evil-path-prefix", liveUrl: "https://evil.com/.page.stepcloud.com" },
@@ -339,11 +374,11 @@ test("I1 视图只暴露匹配批准版本的 live URL，并拒绝主机名污�
     db.prepare("UPDATE products SET approved_version = 0 WHERE id = ?").run(rows.get("product-version-mismatch").productId);
     db.prepare("UPDATE product_hostings SET approved_version = 0 WHERE id = ?").run(rows.get("hosting-approved-mismatch").hostingId);
     db.exec("DROP TRIGGER product_hostings_bound_columns_immutable");
-    db.prepare("UPDATE product_hostings SET review_version = review_version + 1 WHERE id = ?")
-      .run(rows.get("hosting-review-mismatch").hostingId);
+    db.prepare("UPDATE product_hostings SET hosting_revision = hosting_revision + 1 WHERE id = ?")
+      .run(rows.get("hosting-revision-mismatch").hostingId);
     for (const item of cases.filter((entry) => entry.name !== "good")) {
       if (["state-not-live", "product-unpublished", "product-unapproved", "product-version-mismatch",
-        "hosting-approved-mismatch", "hosting-review-mismatch"].includes(item.name)) {
+        "hosting-approved-mismatch", "hosting-revision-mismatch"].includes(item.name)) {
         assert.equal(viewRow(rows.get(item.name).productId), undefined, `${item.name} must not be exposed`);
       } else {
         db.prepare("UPDATE product_hostings SET live_url = ? WHERE id = ?")
@@ -354,18 +389,18 @@ test("I1 视图只暴露匹配批准版本的 live URL，并拒绝主机名污�
   });
 });
 
-test("I2 仅批准同版本 staged 包、驳回清理，且无托管行保持旧行为", () => {
+test("I2 批准当前 hosting_revision 的 staged 包、驳回清理，且无托管行保持旧行为", () => {
   withDb((db) => {
     seedMembers(db);
     const good = makePendingHosting(db);
     stage(db, good.hostingId);
     addDecision(db, good.productId);
     assert.deepEqual(plain(db.prepare(`SELECT approved_version, desired, state FROM product_hostings WHERE id = ?`)
-      .get(good.hostingId)), { approved_version: 1, desired: "live", state: "staged" });
+      .get(good.hostingId)), { approved_version: 2, desired: "live", state: "staged" });
     const goodProduct = plain(db.prepare("SELECT status, review_status, approved_version, review_version FROM products WHERE id = ?")
       .get(good.productId));
     assert.deepEqual(goodProduct, {
-      status: "published", review_status: "approved", approved_version: 1, review_version: 1,
+      status: "published", review_status: "approved", approved_version: 2, review_version: 2,
     });
 
     const rejected = makePendingHosting(db);
@@ -381,28 +416,120 @@ test("I2 仅批准同版本 staged 包、驳回清理，且无托管行保持旧
   });
 });
 
-test("I2 不满足 staged/版本条件时拒绝批准并保留 pending_review", () => {
+test("I2 queued/deploying/promoting/failed/removing 行不能通过批准且状态保留", () => {
   withDb((db) => {
     seedMembers(db);
-    const attempts = ["queued", "deploying", "failed", "promoting", "review-version-mismatch"];
+    const attempts = ["queued", "deploying", "failed", "promoting", "removing"];
     for (const state of attempts) {
       const row = makePendingHosting(db);
       if (state === "deploying") setState(db, row.hostingId, "deploying");
       if (state === "failed") setState(db, row.hostingId, "failed");
-      if (state === "promoting" || state === "review-version-mismatch") {
+      if (state === "promoting" || state === "removing") {
         stage(db, row.hostingId);
         if (state === "promoting") setState(db, row.hostingId, "promoting");
-      }
-      let reviewVersion = 1;
-      if (state === "review-version-mismatch") {
-        db.prepare("UPDATE products SET title = title || ' revised' WHERE id = ?").run(row.productId);
-        reviewVersion = 2;
+        if (state === "removing") setState(db, row.hostingId, "removing");
       }
       const before = db.prepare("SELECT status, review_status, review_version FROM products WHERE id = ?").get(row.productId);
-      expectAbort(() => addDecision(db, row.productId, "approved", reviewVersion), "hosting_not_staged");
+      const hostingBefore = db.prepare("SELECT state, desired, approved_version FROM product_hostings WHERE id = ?").get(row.hostingId);
+      expectAbort(() => addDecision(db, row.productId), "hosting_not_staged");
       assert.deepEqual(db.prepare("SELECT status, review_status, review_version FROM products WHERE id = ?").get(row.productId), before);
       assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_review_decisions WHERE product_id = ?").get(row.productId).count, 0);
+      assert.deepEqual(db.prepare("SELECT state, desired, approved_version FROM product_hostings WHERE id = ?").get(row.hostingId), hostingBefore);
     }
+  });
+});
+
+test("包已 staged 后编辑标题仍可批准当前包，不需要重新上传", () => {
+  withDb((db) => {
+    seedMembers(db);
+    const row = makePendingHosting(db);
+    stage(db, row.hostingId);
+    db.prepare("UPDATE products SET title = title || ' revised' WHERE id = ?").run(row.productId);
+    assert.deepEqual(plain(db.prepare("SELECT status, review_status, review_version, hosting_revision FROM products WHERE id = ?")
+      .get(row.productId)), {
+      status: "pending_review", review_status: "pending_review", review_version: 3, hosting_revision: 1,
+    });
+    assert.deepEqual(plain(db.prepare("SELECT state, review_version, hosting_revision, approved_version, desired FROM product_hostings WHERE id = ?")
+      .get(row.hostingId)), {
+      state: "staged", review_version: 2, hosting_revision: 1, approved_version: 0, desired: "staged",
+    });
+
+    addDecision(db, row.productId);
+    assert.deepEqual(plain(db.prepare("SELECT state, review_version, hosting_revision, approved_version, desired FROM product_hostings WHERE id = ?")
+      .get(row.hostingId)), {
+      state: "staged", review_version: 2, hosting_revision: 1, approved_version: 3, desired: "live",
+    });
+    assert.deepEqual(plain(db.prepare("SELECT status, review_status, approved_version, review_version FROM products WHERE id = ?")
+      .get(row.productId)), {
+      status: "published", review_status: "approved", approved_version: 3, review_version: 3,
+    });
+  });
+});
+
+test("live 托管行标题重审后重新出现在视图，hosting_revision 过期的旧 live 行被拒批", () => {
+  withDb((db) => {
+    seedMembers(db);
+    const reapproved = approveAndLive(db);
+    db.prepare("UPDATE products SET title = title || ' revised' WHERE id = ?").run(reapproved.productId);
+    assert.equal(db.prepare("SELECT product_id FROM product_hosted_urls WHERE product_id = ?").get(reapproved.productId), undefined);
+    assert.deepEqual(plain(db.prepare("SELECT state, hosting_revision, approved_version, desired FROM product_hostings WHERE id = ?")
+      .get(reapproved.hostingId)), {
+      state: "live", hosting_revision: 1, approved_version: 2, desired: "live",
+    });
+    addDecision(db, reapproved.productId);
+    assert.deepEqual(plain(db.prepare("SELECT state, hosting_revision, approved_version, desired FROM product_hostings WHERE id = ?")
+      .get(reapproved.hostingId)), {
+      state: "live", hosting_revision: 1, approved_version: 3, desired: "live",
+    });
+    assert.deepEqual(plain(db.prepare("SELECT product_id, live_url FROM product_hosted_urls WHERE product_id = ?")
+      .get(reapproved.productId)), {
+      product_id: reapproved.productId,
+      live_url: `https://site-${reapproved.productId}.page.stepcloud.com`,
+    });
+
+    const staleLive = approveAndLive(db);
+    db.prepare("UPDATE products SET hosting_revision = hosting_revision + 1 WHERE id = ?").run(staleLive.productId);
+    db.prepare("UPDATE product_hostings SET desired = 'removed' WHERE id = ?").run(staleLive.hostingId);
+    assert.equal(db.prepare("SELECT product_id FROM product_hosted_urls WHERE product_id = ?").get(staleLive.productId), undefined);
+    const productBefore = db.prepare("SELECT status, review_status, review_version, approved_version, hosting_revision FROM products WHERE id = ?")
+      .get(staleLive.productId);
+    const hostingBefore = db.prepare("SELECT state, desired, hosting_revision, approved_version FROM product_hostings WHERE id = ?")
+      .get(staleLive.hostingId);
+    expectAbort(() => addDecision(db, staleLive.productId), "hosting_not_staged");
+    assert.deepEqual(db.prepare("SELECT status, review_status, review_version, approved_version, hosting_revision FROM products WHERE id = ?")
+      .get(staleLive.productId), productBefore);
+    assert.deepEqual(db.prepare("SELECT state, desired, hosting_revision, approved_version FROM product_hostings WHERE id = ?")
+      .get(staleLive.hostingId), hostingBefore);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_review_decisions WHERE product_id = ?").get(staleLive.productId).count, 1);
+  });
+});
+
+test("换包推进 hosting_revision 后旧 live 行隐藏，批准只绑定新 staged 行", () => {
+  withDb((db) => {
+    seedMembers(db);
+    const old = approveAndLive(db);
+    db.prepare("UPDATE products SET hosting_revision = hosting_revision + 1 WHERE id = ?").run(old.productId);
+    db.prepare("UPDATE product_hostings SET desired = 'removed' WHERE id = ?").run(old.hostingId);
+    assert.deepEqual(plain(db.prepare("SELECT state, desired, hosting_revision FROM product_hostings WHERE id = ?")
+      .get(old.hostingId)), { state: "live", desired: "removed", hosting_revision: 1 });
+    assert.equal(db.prepare("SELECT product_id FROM product_hosted_urls WHERE product_id = ?").get(old.productId), undefined);
+
+    const product = plain(db.prepare("SELECT review_version, hosting_revision FROM products WHERE id = ?").get(old.productId));
+    const newBundle = addUpload(db);
+    const newHostingId = addHosting(db, {
+      productId: old.productId,
+      bundleKey: newBundle,
+      reviewVersion: product.review_version,
+      hostingRevision: product.hosting_revision,
+    });
+    stage(db, newHostingId);
+    addDecision(db, old.productId);
+    assert.deepEqual(plain(db.prepare("SELECT state, review_version, hosting_revision, approved_version, desired FROM product_hostings WHERE id = ?")
+      .get(newHostingId)), {
+      state: "staged", review_version: 3, hosting_revision: 2, approved_version: 3, desired: "live",
+    });
+    assert.deepEqual(plain(db.prepare("SELECT state, desired, hosting_revision FROM product_hostings WHERE id = ?")
+      .get(old.hostingId)), { state: "live", desired: "removed", hosting_revision: 1 });
   });
 });
 
@@ -428,7 +555,7 @@ test("I3 promoting→live 必须由当前批准、desired=live 且版本一致�
     assert.equal(db.prepare("SELECT state FROM product_hostings WHERE id = ?").get(productNotApproved.hostingId).state, "promoting");
     assert.deepEqual(plain(db.prepare("SELECT status, review_status, approved_version, review_version FROM products WHERE id = ?")
       .get(productNotApproved.productId)), {
-      status: "pending_review", review_status: "pending_review", approved_version: 0, review_version: 1,
+      status: "pending_review", review_status: "pending_review", approved_version: 0, review_version: 2,
     });
     assert.equal(db.prepare("SELECT desired FROM product_hostings WHERE id = ?").get(productNotApproved.hostingId).desired, "live");
 
@@ -450,6 +577,20 @@ test("I3 promoting→live 必须由当前批准、desired=live 且版本一致�
     expectAbort(() => setState(db, productVersionMismatch.hostingId, "live", "https://wrong-product-version.page.stepcloud.com"),
       "hosting_live_requires_approval");
     assert.equal(db.prepare("SELECT state FROM product_hostings WHERE id = ?").get(productVersionMismatch.hostingId).state, "promoting");
+
+    const hostingRevisionMismatch = makePendingHosting(db);
+    stage(db, hostingRevisionMismatch.hostingId);
+    addDecision(db, hostingRevisionMismatch.productId);
+    setState(db, hostingRevisionMismatch.hostingId, "promoting");
+    db.exec("DROP TRIGGER product_hostings_bound_columns_immutable");
+    db.prepare("UPDATE product_hostings SET hosting_revision = hosting_revision + 1 WHERE id = ?")
+      .run(hostingRevisionMismatch.hostingId);
+    expectAbort(() => setState(db, hostingRevisionMismatch.hostingId, "live", "https://wrong-hosting-revision.page.stepcloud.com"),
+      "hosting_live_requires_approval");
+    assert.deepEqual(plain(db.prepare("SELECT state, live_url, hosting_revision FROM product_hostings WHERE id = ?")
+      .get(hostingRevisionMismatch.hostingId)), {
+      state: "promoting", live_url: null, hosting_revision: 2,
+    });
   });
 });
 
@@ -458,6 +599,7 @@ test("I4 授权、撤销、配额、属主、demo_url、审核版本与 bundle �
     seedMembers(db, { grantOwner: null });
 
     const noGrantProduct = addProduct(db, { ownerEmail: "other@example.com" });
+    prepareHostingSubmission(db, noGrantProduct);
     const noGrantBundle = addUpload(db, { ownerEmail: "other@example.com" });
     expectAbort(() => addHosting(db, {
       productId: noGrantProduct, ownerEmail: "other@example.com", bundleKey: noGrantBundle,
@@ -466,6 +608,7 @@ test("I4 授权、撤销、配额、属主、demo_url、审核版本与 bundle �
 
     addGrant(db, "other@example.com", 20, "2026-10-01T00:00:00Z");
     const revokedProduct = addProduct(db, { ownerEmail: "other@example.com" });
+    prepareHostingSubmission(db, revokedProduct);
     const revokedBundle = addUpload(db, { ownerEmail: "other@example.com" });
     expectAbort(() => addHosting(db, {
       productId: revokedProduct, ownerEmail: "other@example.com", bundleKey: revokedBundle,
@@ -475,6 +618,7 @@ test("I4 授权、撤销、配额、属主、demo_url、审核版本与 bundle �
     addGrant(db, "owner@example.com", 1);
     const quotaFirst = makePendingHosting(db);
     const quotaSecondProduct = addProduct(db);
+    prepareHostingSubmission(db, quotaSecondProduct);
     const quotaSecondBundle = addUpload(db);
     expectAbort(() => addHosting(db, { productId: quotaSecondProduct, bundleKey: quotaSecondBundle }), "hosting_quota_exceeded");
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(quotaSecondProduct).count, 0);
@@ -485,6 +629,7 @@ test("I4 授权、撤销、配额、属主、demo_url、审核版本与 bundle �
 
     db.prepare("UPDATE hosting_grants SET max_sites = 20, revoked_at = NULL WHERE member_email = 'other@example.com'").run();
     const ownerMismatchProduct = addProduct(db);
+    prepareHostingSubmission(db, ownerMismatchProduct);
     const otherOwnedBundle = addUpload(db, { ownerEmail: "other@example.com" });
     expectAbort(() => addHosting(db, {
       productId: ownerMismatchProduct, ownerEmail: "other@example.com", bundleKey: otherOwnedBundle,
@@ -492,26 +637,31 @@ test("I4 授权、撤销、配额、属主、demo_url、审核版本与 bundle �
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(ownerMismatchProduct).count, 0);
 
     const demoProduct = addProduct(db, { demoUrl: "https://demo.example.com" });
+    prepareHostingSubmission(db, demoProduct);
     const demoBundle = addUpload(db);
     expectAbort(() => addHosting(db, { productId: demoProduct, bundleKey: demoBundle }), "hosting_demo_url_conflict");
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(demoProduct).count, 0);
 
     const unscannedProduct = addProduct(db);
+    prepareHostingSubmission(db, unscannedProduct);
     const unscannedBundle = addUpload(db, { scanStatus: "pending" });
     expectAbort(() => addHosting(db, { productId: unscannedProduct, bundleKey: unscannedBundle }), "hosting_bundle_invalid");
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(unscannedProduct).count, 0);
 
     const wrongPurposeProduct = addProduct(db);
+    prepareHostingSubmission(db, wrongPurposeProduct);
     const wrongPurposeBundle = addUpload(db, { mediaType: "application/octet-stream", purpose: "general" });
     expectAbort(() => addHosting(db, { productId: wrongPurposeProduct, bundleKey: wrongPurposeBundle }), "hosting_bundle_invalid");
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(wrongPurposeProduct).count, 0);
 
     const wrongBundleOwnerProduct = addProduct(db);
+    prepareHostingSubmission(db, wrongBundleOwnerProduct);
     const wrongOwnerBundle = addUpload(db, { ownerEmail: "other@example.com" });
     expectAbort(() => addHosting(db, { productId: wrongBundleOwnerProduct, bundleKey: wrongOwnerBundle }), "hosting_bundle_invalid");
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(wrongBundleOwnerProduct).count, 0);
 
     const wrongShaProduct = addProduct(db);
+    prepareHostingSubmission(db, wrongShaProduct);
     const correctShaBundle = addUpload(db);
     expectAbort(() => addHosting(db, {
       productId: wrongShaProduct, bundleKey: correctShaBundle, bundleSha256: "f".repeat(64),
@@ -519,16 +669,105 @@ test("I4 授权、撤销、配额、属主、demo_url、审核版本与 bundle �
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(wrongShaProduct).count, 0);
 
     const wrongReviewProduct = addProduct(db);
+    prepareHostingSubmission(db, wrongReviewProduct);
     const wrongReviewBundle = addUpload(db);
-    expectAbort(() => addHosting(db, { productId: wrongReviewProduct, bundleKey: wrongReviewBundle, reviewVersion: 2 }),
+    expectAbort(() => addHosting(db, { productId: wrongReviewProduct, bundleKey: wrongReviewBundle, reviewVersion: 3 }),
       "hosting_review_version_mismatch");
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(wrongReviewProduct).count, 0);
 
+    const wrongRevisionProduct = addProduct(db);
+    prepareHostingSubmission(db, wrongRevisionProduct);
+    const wrongRevisionBundle = addUpload(db);
+    expectAbort(() => addHosting(db, {
+      productId: wrongRevisionProduct, bundleKey: wrongRevisionBundle, hostingRevision: 2,
+    }), "hosting_revision_mismatch");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(wrongRevisionProduct).count, 0);
+
     const approvedProduct = addProduct(db);
+    prepareHostingSubmission(db, approvedProduct);
     addDecision(db, approvedProduct);
     const approvedBundle = addUpload(db);
     expectAbort(() => addHosting(db, { productId: approvedProduct, bundleKey: approvedBundle }), "hosting_product_not_pending");
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_hostings WHERE product_id = ?").get(approvedProduct).count, 0);
+  });
+});
+
+test("上传令牌拒绝无授权、属主不符、demo_url 冲突、第 4 枚未用令牌和非法哈希", () => {
+  withDb((db) => {
+    seedMembers(db);
+
+    const noGrantProduct = addProduct(db, { ownerEmail: "other@example.com" });
+    expectAbort(() => addUploadToken(db, { memberEmail: "other@example.com", productId: noGrantProduct }), "hosting_not_granted");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE product_id = ?").get(noGrantProduct).count, 0);
+
+    addGrant(db, "other@example.com");
+    const ownerProduct = addProduct(db);
+    expectAbort(() => addUploadToken(db, { memberEmail: "other@example.com", productId: ownerProduct }), "hosting_owner_mismatch");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE product_id = ?").get(ownerProduct).count, 0);
+
+    const demoProduct = addProduct(db, { demoUrl: "https://demo.example.com" });
+    expectAbort(() => addUploadToken(db, { productId: demoProduct }), "hosting_demo_url_conflict");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE product_id = ?").get(demoProduct).count, 0);
+
+    const tokenProduct = addProduct(db);
+    addUploadToken(db, { productId: tokenProduct, expiresAt: "2000-01-01T00:00:00Z" });
+    const activeTokens = [];
+    for (let index = 0; index < 3; index += 1) {
+      activeTokens.push(addUploadToken(db, { productId: tokenProduct }));
+    }
+    expectAbort(() => addUploadToken(db, { productId: tokenProduct }), "hosting_token_limit");
+    assert.equal(db.prepare(`SELECT COUNT(*) AS count FROM hosting_upload_tokens
+      WHERE member_email = 'owner@example.com' AND used_at IS NULL
+        AND julianday(expires_at) > julianday('now')`).get().count, 3);
+    db.prepare("UPDATE hosting_upload_tokens SET used_at = '2026-10-11T00:00:00Z' WHERE token_hash = ?")
+      .run(activeTokens[0]);
+    const replacementToken = addUploadToken(db, { productId: tokenProduct });
+    assert.equal(db.prepare("SELECT used_at FROM hosting_upload_tokens WHERE token_hash = ?").get(activeTokens[0]).used_at,
+      "2026-10-11T00:00:00Z");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE member_email = 'owner@example.com' AND used_at IS NULL AND julianday(expires_at) > julianday('now')").get().count, 3);
+    assert.equal(db.prepare("SELECT used_at FROM hosting_upload_tokens WHERE token_hash = ?").get(replacementToken).used_at, null);
+
+    const hashProduct = addProduct(db, { ownerEmail: "other@example.com" });
+    expectAbort(() => addUploadToken(db, {
+      memberEmail: "other@example.com", productId: hashProduct, tokenHash: "G".repeat(64),
+    }),
+      "CHECK constraint failed: hosting_upload_tokens_token_hash_valid");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM hosting_upload_tokens WHERE token_hash = ?").get("G".repeat(64)).count, 0);
+  });
+});
+
+test("上传令牌只允许一次性置 used_at，数据库允许消费过期令牌", () => {
+  withDb((db) => {
+    seedMembers(db);
+    const productId = addProduct(db);
+    const otherProduct = addProduct(db);
+    const tokenHash = addUploadToken(db, {
+      productId,
+      expiresAt: "2000-01-01T00:00:00Z",
+    });
+    const before = plain(db.prepare("SELECT * FROM hosting_upload_tokens WHERE token_hash = ?").get(tokenHash));
+    const mutations = [
+      ["token_hash", "f".repeat(64)],
+      ["member_email", "other@example.com"],
+      ["product_id", otherProduct],
+      ["expires_at", "2099-01-01T00:00:00Z"],
+      ["created_at", "2026-10-11T01:02:03Z"],
+      ["used_at", null],
+    ];
+    for (const [column, value] of mutations) {
+      expectAbort(() => db.prepare(`UPDATE hosting_upload_tokens SET ${column} = ? WHERE token_hash = ?`)
+        .run(value, tokenHash), "hosting_token_immutable");
+      assert.deepEqual(plain(db.prepare("SELECT * FROM hosting_upload_tokens WHERE token_hash = ?").get(tokenHash)), before);
+    }
+
+    db.prepare("UPDATE hosting_upload_tokens SET used_at = '2026-10-11T00:00:00Z' WHERE token_hash = ?").run(tokenHash);
+    const consumed = plain(db.prepare("SELECT * FROM hosting_upload_tokens WHERE token_hash = ?").get(tokenHash));
+    assert.equal(consumed.used_at, "2026-10-11T00:00:00Z");
+    expectAbort(() => db.prepare("UPDATE hosting_upload_tokens SET used_at = '2026-10-11T00:00:01Z' WHERE token_hash = ?")
+      .run(tokenHash), "hosting_token_immutable");
+    expectAbort(() => db.prepare("UPDATE hosting_upload_tokens SET expires_at = '2099-01-01T00:00:00Z' WHERE token_hash = ?")
+      .run(tokenHash), "hosting_token_immutable");
+    assert.deepEqual(plain(db.prepare("SELECT * FROM hosting_upload_tokens WHERE token_hash = ?").get(tokenHash)), consumed);
   });
 });
 
@@ -559,7 +798,7 @@ test("hosting_grants 配额 CHECK、唯一有效托管和 desired 迁移均由�
     assert.equal(db.prepare("SELECT desired FROM product_hostings WHERE id = ?").get(row.hostingId).desired, "removed");
 
     const immutable = makePendingHosting(db);
-    const before = db.prepare("SELECT product_id, owner_email, bundle_key, bundle_sha256, review_version, created_at FROM product_hostings WHERE id = ?")
+    const before = db.prepare("SELECT product_id, owner_email, bundle_key, bundle_sha256, review_version, hosting_revision, created_at FROM product_hostings WHERE id = ?")
       .get(immutable.hostingId);
     const otherProduct = addProduct(db);
     const otherBundle = addUpload(db, { ownerEmail: "other@example.com" });
@@ -568,13 +807,14 @@ test("hosting_grants 配额 CHECK、唯一有效托管和 desired 迁移均由�
       ["owner_email", "other@example.com"],
       ["bundle_key", otherBundle],
       ["bundle_sha256", "e".repeat(64)],
-      ["review_version", 2],
+      ["review_version", 3],
+      ["hosting_revision", 2],
       ["created_at", "2026-10-11T01:02:03Z"],
     ];
     for (const [column, value] of boundMutations) {
       expectAbort(() => db.prepare(`UPDATE product_hostings SET ${column} = ? WHERE id = ?`)
         .run(value, immutable.hostingId), "hosting_bound_columns_immutable");
-      assert.deepEqual(db.prepare("SELECT product_id, owner_email, bundle_key, bundle_sha256, review_version, created_at FROM product_hostings WHERE id = ?")
+      assert.deepEqual(db.prepare("SELECT product_id, owner_email, bundle_key, bundle_sha256, review_version, hosting_revision, created_at FROM product_hostings WHERE id = ?")
         .get(immutable.hostingId), before, `${column} remains bound after rejection`);
     }
 

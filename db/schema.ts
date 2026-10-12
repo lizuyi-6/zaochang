@@ -953,6 +953,7 @@ export const productHostings = sqliteTable(
     bundleFileCount: integer("bundle_file_count").notNull(),
     bundleUncompressedBytes: integer("bundle_uncompressed_bytes").notNull(),
     reviewVersion: integer("review_version").notNull(),
+    hostingRevision: integer("hosting_revision").notNull(),
     approvedVersion: integer("approved_version").notNull().default(0),
     state: text("state").notNull().default("queued"),
     desired: text("desired").notNull().default("staged"),
@@ -978,7 +979,7 @@ export const productHostings = sqliteTable(
     index("product_hostings_owner_idx").on(table.ownerEmail),
     check("product_hostings_bundle_sha256_valid", sql`length(${table.bundleSha256}) = 64 and ${table.bundleSha256} not glob '*[^0-9a-f]*'`),
     check("product_hostings_bundle_sizes_valid", sql`${table.bundleZipBytes} >= 0 and ${table.bundleFileCount} >= 1 and ${table.bundleUncompressedBytes} >= 0`),
-    check("product_hostings_review_versions_valid", sql`${table.reviewVersion} >= 1 and ${table.approvedVersion} >= 0 and ${table.approvedVersion} <= ${table.reviewVersion}`),
+    check("product_hostings_review_versions_valid", sql`${table.reviewVersion} >= 1 and ${table.approvedVersion} >= 0 and ${table.hostingRevision} >= 1`),
     check("product_hostings_state_valid", sql`${table.state} in ('queued', 'deploying', 'staged', 'promoting', 'live', 'removing', 'removed', 'failed')`),
     check("product_hostings_desired_valid", sql`${table.desired} in ('staged', 'live', 'removed')`),
     check("product_hostings_provider_valid", sql`${table.provider} = 'stepfun_page'`),
@@ -986,6 +987,23 @@ export const productHostings = sqliteTable(
     check("product_hostings_failure_detail_length_valid", sql`${table.failureDetail} is null or length(${table.failureDetail}) <= 200`),
     check("product_hostings_lease_token_hash_valid", sql`${table.leaseTokenHash} is null or (length(${table.leaseTokenHash}) = 64 and ${table.leaseTokenHash} not glob '*[^0-9a-f]*')`),
     check("product_hostings_attempts_nonnegative", sql`${table.attempts} >= 0`),
+  ],
+);
+
+export const hostingUploadTokens = sqliteTable(
+  "hosting_upload_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    memberEmail: text("member_email").notNull().references(() => members.email),
+    productId: integer("product_id").notNull().references(() => products.id),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("hosting_upload_tokens_member_active_idx").on(table.memberEmail, table.usedAt, table.expiresAt),
+    index("hosting_upload_tokens_expires_idx").on(table.expiresAt),
+    check("hosting_upload_tokens_token_hash_valid", sql`length(${table.tokenHash}) = 64 and ${table.tokenHash} not glob '*[^0-9a-f]*'`),
   ],
 );
 
