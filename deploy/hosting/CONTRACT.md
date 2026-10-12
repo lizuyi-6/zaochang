@@ -20,8 +20,9 @@
 | `bundle_key TEXT NOT NULL → uploaded_files(key)` | 已扫描 clean 的 zip,`purpose='hosting_bundle'`,同属主,`private` |
 | `bundle_sha256 TEXT NOT NULL` | 64 位小写十六进制,必须等于 uploaded_files.sha256 |
 | `bundle_zip_bytes / bundle_file_count / bundle_uncompressed_bytes INTEGER NOT NULL` | 提交时 Worker 校验得出 |
-| `review_version INTEGER NOT NULL` | 提交该包时产品的 review_version(提交批里先 +1 再取值) |
-| `approved_version INTEGER NOT NULL DEFAULT 0` | 批准该包时写入(= 决议的 review_version) |
+| `review_version INTEGER NOT NULL` | 提交该包时产品的 review_version(提交批里先 +1 再取值);**仅作信息**,不再参与批准/曝光/live 判定 |
+| `hosting_revision INTEGER NOT NULL` | 提交该包时 `products.hosting_revision`(提交批里先 +1 再取值);已绑定列、不可变;**批准覆盖的是「当前最新上传的包」,以它而非 review_version 绑定**(与包无关的编辑不应使批准失效) |
+| `approved_version INTEGER NOT NULL DEFAULT 0` | 批准时写入(= 决议的 review_version);重审后可大于行内 review_version |
 | `state TEXT NOT NULL DEFAULT 'queued'` | `queued,deploying,staged,promoting,live,removing,removed,failed` |
 | `desired TEXT NOT NULL DEFAULT 'staged'` | `staged,live,removed`;Worker 侧意图,部署器据 state≠desired 行动 |
 | `provider TEXT NOT NULL DEFAULT 'stepfun_page'` | |
@@ -43,7 +44,7 @@
 queued    → deploying | removed(无远端站点时) | failed
 deploying → staged | failed
 staged    → promoting | removing
-promoting → live | staged(提升失败,附 failure_*)
+promoting → live | staged(提升失败或被移除取代,附 failure_*) | removing
 live      → removing
 removing  → removed | (停留 removing,记录失败后重试)
 failed    → removing | removed(无远端站点时)
@@ -52,11 +53,11 @@ removed   终态
 `desired` 只由 Worker 写:提交=staged;批准决议触发器 → live;下架/驳回/产品被隐藏/用户移除 → removed。
 
 ## 3. 不变量(均须有数据库层实现与反例测试)
-- **I1 对外曝光**:视图 `product_hosted_urls(product_id, live_url)` 仅当:`state='live'` ∧ `products.status='published' AND review_status='approved' AND approved_version=review_version` ∧ `hosting.approved_version = products.approved_version` ∧ `hosting.review_version = products.approved_version` ∧ `live_url` 以 `https://` 开头且主机后缀为 `rules.provider.liveHostSuffix` 时才有行。所有公开页面一律经此视图取托管链接,禁止直接读 `product_hostings.live_url`。
-- **I2 批准须绑定已暂存的包**:`BEFORE INSERT ON product_review_decisions WHEN decision='approved'`:若该产品存在 `desired <> 'removed'` 的托管行,则必须有一行 `state='staged' AND review_version = NEW.review_version`,否则 `RAISE(ABORT,'hosting_not_staged')`。无托管行的产品行为与现状完全一致。驳回决议:`AFTER INSERT` 把其托管行 `desired` 置 `removed`。
-- **I3 live 须有批准**:`UPDATE state→'live'` 的触发器要求 `desired='live'` ∧ 产品当前已批准(同 I1 的产品条件)∧ `approved_version = review_version`;否则 `RAISE(ABORT,'hosting_live_requires_approval')`(即使部署器令牌泄露,也无法绕过批准)。
+- **I1 对外曝光**:视图 `product_hosted_urls(product_id, live_url)` 仅当:`state='live'` ∧ `products.status='published' AND review_status='approved' AND approved_version=review_version` ∧ `hosting.approved_version = products.approved_version` ∧ `hosting.hosting_revision = products.hosting_revision` ∧ `live_url` 以 `https://` 开头且主机后缀为 `rules.provider.liveHostSuffix` 时才有行。所有公开页面一律经此视图取托管链接,禁止直接读 `product_hostings.live_url`。
+- **I2 批准须绑定已暂存的包**:`BEFORE INSERT ON product_review_decisions WHEN decision='approved'`:若该产品存在 `desired <> 'removed'` 的托管行,则必须有一行 `state IN ('staged','live') AND hosting_revision = products.hosting_revision`(即批准覆盖当前最新上传的包;已 live 的包在编辑后重审也满足,无需重传),否则 `RAISE(ABORT,'hosting_not_staged')`。无托管行的产品行为与现状完全一致。驳回决议:`AFTER INSERT` 把其托管行 `desired` 置 `removed`。
+- **I3 live 须有批准**:`UPDATE state→'live'` 的触发器要求 `desired='live'` ∧ 产品当前已批准(同 I1 的产品条件)∧ `hosting.approved_version = products.approved_version` ∧ `hosting.hosting_revision = products.hosting_revision`;否则 `RAISE(ABORT,'hosting_live_requires_approval')`(即使部署器令牌泄露,也无法绕过批准)。
 - **I4 提交约束**(`BEFORE INSERT ON product_hostings`):授权有效且未满 `max_sites`(统计 `desired<>'removed'` 的行);`products.owner_email = owner_email`;`products.demo_url` 为空;bundle 行存在、`scan_status='clean'`、`purpose='hosting_bundle'`、同属主、sha 一致。
-- **I5 批准时写入**:`AFTER INSERT ON product_review_decisions WHEN decision='approved'` 且存在 staged 行 → `approved_version=NEW.review_version, desired='live'`。
+- **I5 批准时写入**:`AFTER INSERT ON product_review_decisions WHEN decision='approved'` 且存在 staged 或 live 的当前代次行 → `approved_version=NEW.review_version, desired='live'`。
 - **I6 外链规则不放宽**:带 `demo_url` 的产品仍不可批准(原守卫不动)。
 
 ## 4. 部署器机器 API(Worker 提供,鉴权:`Authorization: Bearer <HOSTING_DEPLOYER_TOKEN>`,常量时间比较,令牌未配置则整组路由 404;worker 入口闸 fail-closed:该令牌只放行下列 4 条路由,其它路径 403 `hosting_worker_scope_forbidden`,且该令牌不得作为任何会员/管理员/agent 身份)
@@ -75,7 +76,7 @@ removed   终态
    - deploy 成功:`{"outcome":"staged","siteId":"…","versionId":"…","previewUrl":"https://p-….preview.stepcloud.com","previewExpiresAt":"ISO"}`
    - promote 成功:`{"outcome":"live","liveUrl":"https://<slug>.page.stepcloud.com"}`(Worker 校验 URL 后缀;I3 在 DB 层再兜一次)
    - remove 成功:`{"outcome":"removed"}`
-   - 失败:`{"outcome":"failed","code":"<rules.failureCodes>","detail":"≤200字","retryable":true|false}`;deploy 失败且 retryable=true 且 attempts<5 → 回到可领取;promote 失败 → state 回 `staged` 并记 failure_*;remove 失败 → 保持 removing 记 failure_* 待重领。
+   - 失败:`{"outcome":"failed","code":"<rules.failureCodes>","detail":"≤200字","retryable":true|false}`;deploy 失败且 retryable=true 且 attempts<5 → 回到可领取;promote 失败 → state 回 `staged` 并记 failure_*;**promote 成功回报 live 但此时 desired≠live(被移除取代)→ Worker 按 `promoting→staged` 处理(failure_code=internal,detail='promote superseded'),返回 `200 {"ok":true,"applied":"staged"}`,随后由 remove 作业删除远端站点**;remove 失败 → 保持 removing 记 failure_* 待重领。`deploying` 租约过期且 `desired='removed'` 的行**不得**重领为 deploy(远端可能已存在):置 `failed`/`ambiguous` 待人工对账。
 
 ## 5. StepFun Page CLI 观测形态(2026-10-12 实测,`steppage` 1.0.0;部署器据此实现,测试用假 CLI 复现)
 - 鉴权:环境变量 `STEPFUN_API_KEY`。失败:stderr `Error: [unauthenticated] API Key 无效或已失效…`,退出码非 0。
