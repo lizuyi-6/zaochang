@@ -4,6 +4,10 @@ export type Product = {
   official?: boolean;
   founderOwned?: boolean;
   ownerName: string;
+  // M1(2026-10 审计):创作者身份键 = member_number(公开、唯一)。follow 的客户端
+  // 契约改用它匹配/上报,服务端归一为 email 落库;预置作品无 DB 行时缺省,
+  // 客户端回落显示名(服务端按"唯一显示名"解析,重名 400)。
+  ownerNumber?: string | null;
   ownerInitial: string;
   title: string;
   description: string;
@@ -29,6 +33,8 @@ export const FOUNDER_INITIAL = "A";
 export type CommunityPost = {
   id: string | number;
   ownerName: string;
+  // 与 Product.ownerNumber 同源:feed「关注」过滤按它匹配(见 public-community.ts)。
+  ownerNumber?: string | null;
   ownerInitial: string;
   role: string;
   content: string;

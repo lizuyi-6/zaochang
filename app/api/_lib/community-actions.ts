@@ -144,10 +144,27 @@ const mark_notifications_read_action: MemberActionHandler = async (member, input
 };
 const toggle_action_action: MemberActionHandler = async (member, input, db) => {
   const kind = String(input.kind ?? "");
-  const targetRef = String(input.targetRef ?? "").trim().slice(0, 120);
+  let targetRef = String(input.targetRef ?? "").trim().slice(0, 120);
   const allowedKinds = ["follow_creator", "join_circle", "like_post", "like_comment"];
   if (!allowedKinds.includes(kind) || !targetRef) {
     return Response.json({ error: "invalid_action" }, { status: 400 });
+  }
+  if (kind === "follow_creator") {
+    // M1(2026-10 审计):follow 的 target_ref 此前直接存显示名——members.display_name
+    // 无唯一约束,重名用户会互相冒领关注/粉丝数/通知。落库前把目标归一为成员
+    // email(唯一身份键)。客户端契约改发 member_number(公开、唯一、不可逆推
+    // email),同时兼容 email 与唯一显示名(预置作品页只有静态显示名)三种输入;
+    // 重名显示名 fail-closed 400,绝不猜。
+    const target = await db.prepare(
+      `SELECT email FROM members
+       WHERE email = ?
+          OR CAST(member_number AS TEXT) = ?
+          OR (display_name = ? AND (SELECT COUNT(*) FROM members m2 WHERE m2.display_name = ?) = 1)`,
+    ).bind(targetRef, targetRef, targetRef, targetRef).first<{ email: string }>();
+    if (!target?.email) {
+      return Response.json({ error: "invalid_follow_target" }, { status: 400 });
+    }
+    targetRef = target.email;
   }
   const existing = await db
     .prepare("SELECT 1 AS found FROM community_actions WHERE user_email = ? AND kind = ? AND target_ref = ?")
@@ -161,7 +178,7 @@ const toggle_action_action: MemberActionHandler = async (member, input, db) => {
   await db.prepare("INSERT INTO community_actions (user_email, kind, target_ref) VALUES (?, ?, ?)")
     .bind(member.email, kind, targetRef).run();
   return Response.json({ active: true });
- 
+
 };
 const create_collection_action: MemberActionHandler = async (member, input, db) => {
   const name = String(input.name ?? "").trim().slice(0, 24);

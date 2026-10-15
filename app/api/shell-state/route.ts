@@ -3,6 +3,7 @@ import { ensureMember, database, jsonError } from "../_lib/community";
 import { listMemberNotifications, listReadNotificationRefs } from "../_lib/community-state";
 import { settleDueExternalFruit } from "../_lib/external-fruit";
 import { settleDueFruit, getWalletOverview } from "../_lib/fruit";
+import { enforceRateLimit, rateLimitKey } from "../_lib/rate-limit";
 import { countVisiblePosts, loadCircleStats } from "../_lib/public-community";
 
 export const dynamic = "force-dynamic";
@@ -27,10 +28,13 @@ export async function GET() {
     let hasUnread = false;
     if (member) {
       await ensureMember(member);
+      // M4(2026-10 审计):站壳每次硬加载都拉本接口,登录侧叠加双结算;360/h
+      // (每 10 秒一次)高于任何正常轮询,同时把连续刷接口的写放大封顶。
+      await enforceRateLimit(await rateLimitKey("shell-state-read", member.email), 360, 60 * 60);
       await Promise.all([settleDueFruit(member.email), settleDueExternalFruit(member.email)]);
       const overview = await getWalletOverview(member.email);
       const [notifications, read] = await Promise.all([
-        listMemberNotifications(db, member.email, member.displayName),
+        listMemberNotifications(db, member.email),
         listReadNotificationRefs(db, member.email),
       ]);
       hasUnread = notifications.some((notification) => !read.has(String(notification.id)));

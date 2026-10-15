@@ -144,14 +144,15 @@ test("enforces upload visibility and ownership", async () => {
   assert.equal(ownerDownload.status, 200);
   assert.equal(await ownerDownload.text(), "private project material");
 
+  // L6(2026-10 审计):非属主一律 404——403 会向持 key 探测者泄露"存在且 clean"
   const anonymousDownload = await fetch(`${baseUrl}${privateBody.url}`);
-  assert.equal(anonymousDownload.status, 403);
+  assert.equal(anonymousDownload.status, 404);
 
   const otherHeaders = authHeaders("其他用户", `upload-other-${runId}@example.com`);
   const otherDownload = await fetch(`${baseUrl}${privateBody.url}`, { headers: otherHeaders });
-  assert.equal(otherDownload.status, 403);
+  assert.equal(otherDownload.status, 404);
   const adminPrivateDownload = await fetch(`${baseUrl}${privateBody.url}`, { headers: authHeaders("发布审核管理员", adminEmail) });
-  assert.equal(adminPrivateDownload.status, 403);
+  assert.equal(adminPrivateDownload.status, 404);
 
   const otherProjectResponse = await fetch(`${baseUrl}/api/incubation`, { method: "POST", headers: otherHeaders, body: JSON.stringify({ name: "越权资料项目", projectType: "开发者项目", oneLiner: "验证其他用户不能把不属于自己的私有文件挂进项目。", problem: "对象链接可能被复制，但所有权不能随链接转移。", progress: "安全验证", team: "个人项目", need: "技术架构与开发", contact: "security@example.com" }) });
   assert.equal(otherProjectResponse.status, 201);
@@ -248,8 +249,9 @@ test("enforces upload visibility and ownership", async () => {
   const coverBody = await coverUpload.json();
   assert.equal(coverBody.visibility, "private");
   assert.equal(coverBody.purpose, "product_cover");
-  assert.equal((await fetch(`${baseUrl}${coverBody.url}`)).status, 403);
-  assert.equal((await fetch(`${baseUrl}${coverBody.url}`, { headers: authHeaders("发布审核管理员", adminEmail) })).status, 403);
+  // L6(2026-10 审计):非属主(含尚未挂到待审产品的 admin reviewer 场景)一律 404
+  assert.equal((await fetch(`${baseUrl}${coverBody.url}`)).status, 404);
+  assert.equal((await fetch(`${baseUrl}${coverBody.url}`, { headers: authHeaders("发布审核管理员", adminEmail) })).status, 404);
 
   const stolenCover = await fetch(`${baseUrl}/api/products`, {
     method: "POST",
@@ -268,7 +270,8 @@ test("enforces upload visibility and ownership", async () => {
   const pendingCoverProductBody = await pendingCoverProduct.json();
   assert.equal(pendingCoverProductBody.product.imageUrl, coverBody.url);
   assert.equal(pendingCoverProductBody.product.reviewStatus, "pending_review");
-  assert.equal((await fetch(`${baseUrl}${coverBody.url}`)).status, 403);
+  // L6:待审期封面对公众按不存在处理(404);admin reviewer 走 200(下方)
+  assert.equal((await fetch(`${baseUrl}${coverBody.url}`)).status, 404);
   assert.equal((await fetch(`${baseUrl}${coverBody.url}`, { headers: authHeaders("发布审核管理员", adminEmail) })).status, 200);
   await reviewProduct(pendingCoverProductBody.product.id);
   const approvedCover = await fetch(`${baseUrl}${coverBody.url}`);

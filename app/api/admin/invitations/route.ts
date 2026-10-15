@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   try {
     const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
     if (guarded instanceof Response) return guarded;
-    const input = await request.json() as Record<string, unknown>;
+    const input = await request.json().catch(() => ({})) as Record<string, unknown>;
     return await createInvitation(guarded.member, input);
   } catch (error) {
     return jsonError(error);
@@ -29,7 +29,7 @@ export async function PATCH(request: Request) {
   try {
     const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
     if (guarded instanceof Response) return guarded;
-    const input = await request.json() as Record<string, unknown>;
+    const input = await request.json().catch(() => ({})) as Record<string, unknown>;
     return await revokeInvitation(guarded.member, input);
   } catch (error) {
     return jsonError(error);

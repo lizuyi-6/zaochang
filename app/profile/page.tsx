@@ -29,7 +29,9 @@ export default async function ProfilePage() {
     db.prepare("SELECT bio, location, website, reputation, joined_at AS joinedAt, member_number AS memberNumber FROM members WHERE email = ?").bind(user.email).first<{ bio: string; location: string; website: string; reputation: number; joinedAt: string; memberNumber: number | null }>(),
     db.prepare(`SELECT id, owner_name AS ownerName, title, description, category, demo_type AS demoType, demo_url AS demoUrl, ${hostedUrlSelect("products")}, image_url AS imageUrl, cover_theme AS coverTheme, price, pricing_model AS pricingModel, likes_count AS likes, plays_count AS plays, created_at AS createdAt FROM products WHERE owner_email = ? AND ${PUBLISHED_PRODUCT_SQL} ORDER BY created_at DESC, id DESC`).bind(user.email).all<Record<string, unknown>>(),
     db.prepare("SELECT id, title, status, moderation_status AS moderationStatus, review_status AS reviewStatus, approved_version AS approvedVersion, review_version AS reviewVersion, created_at AS createdAt FROM products WHERE owner_email = ? ORDER BY created_at DESC, id DESC").bind(user.email).all<Record<string, unknown>>(),
-    db.prepare("SELECT COUNT(*) AS count FROM community_actions WHERE kind = 'follow_creator' AND target_ref = ?").bind(name).first<{ count: number }>(),
+    // M1(2026-10 审计):关注者数按 email 统计——follow 落库侧已从显示名归一为
+    // email(重名显示名会互相冒领粉丝数)。
+    db.prepare("SELECT COUNT(*) AS count FROM community_actions WHERE kind = 'follow_creator' AND target_ref = ?").bind(user.email).first<{ count: number }>(),
     db.prepare("SELECT COUNT(*) AS count FROM comments WHERE user_email = ?").bind(user.email).first<{ count: number }>(),
     db.prepare("SELECT COUNT(*) AS count FROM community_actions WHERE user_email = ? AND kind = 'join_circle'").bind(user.email).first<{ count: number }>(),
   ]);

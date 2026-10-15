@@ -550,9 +550,11 @@ test("dev-login: flag-gated simulated login issues a real working session", asyn
   assert.equal(sessionRows[0].provider, "email");
 
   // 会话真实可用:带 cookie 打需登录端点,应越过 401 命中业务校验(400 invalid_product)
+  // L3/L4(2026-10 审计):会话真实可用性按真实浏览器形态带同源 Origin;
+  // 裸 cookie + 零浏览器证据的 POST 已被写端点 fail-closed 拦截。
   const authed = await fetch(`${baseUrl}/api/products`, {
     method: "POST",
-    headers: { accept: "application/json", "content-type": "application/json", cookie: `zaochang_session=${token}` },
+    headers: { accept: "application/json", "content-type": "application/json", cookie: `zaochang_session=${token}`, origin: baseUrl },
     body: JSON.stringify({ title: "x" }),
   });
   assert.equal(authed.status, 400);

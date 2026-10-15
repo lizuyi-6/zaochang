@@ -9,7 +9,7 @@ const rules = JSON.parse(await readFile(new URL("../app/api/_lib/hosting-rules.j
 const vectors = JSON.parse(await readFile(new URL("./fixtures/hosting-bundle-vectors.json", import.meta.url), "utf8"));
 
 test("deployer ZIP results are no more permissive than all shared Worker vectors", async () => {
-  assert.equal(vectors.length, 54, "the shared conformance set must include every bounded Worker vector");
+  assert.equal(vectors.length, 55, "the shared conformance set must include every bounded Worker vector");
   const directory = await mkdtemp(join(tmpdir(), "hosting-deployer-vectors-"));
   const zipPath = join(directory, "vector.zip");
   const stricterBecauseActualDeflateIsInvalid = new Map([

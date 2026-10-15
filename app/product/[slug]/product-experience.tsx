@@ -59,14 +59,16 @@ export function ProductExperience({ product }: { product: ProductWithHosting }) 
           productLikes?: { productId: number }[];
         } | null;
         const actions = payload?.actions ?? [];
-        setFollowed(actions.some((item) => item.kind === "follow_creator" && item.targetRef === product.ownerName));
+        // M1(2026-10 审计):follow 匹配键从显示名换成 ownerNumber(member_number,
+        // 唯一);预置作品无 DB 行时回落显示名,服务端按唯一显示名解析。
+        setFollowed(actions.some((item) => item.kind === "follow_creator" && item.targetRef === (product.ownerNumber ?? product.ownerName)));
         setSaved((payload?.collectionItems ?? []).some((item) => item.productRef === productRef));
         setLiked(typeof product.id === "number"
           ? (payload?.productLikes ?? []).some((item) => item.productId === product.id)
           : actions.some((item) => item.kind === "like_showcase" && item.targetRef === productRef));
       })
       .catch(() => undefined);
-  }, [product.id, product.ownerName, productRef]);
+  }, [product.id, product.ownerName, product.ownerNumber, productRef]);
 
   const like = async () => {
     try {
@@ -110,9 +112,10 @@ export function ProductExperience({ product }: { product: ProductWithHosting }) 
   };
 
   const toggleFollow = async () => {
-    const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "toggle_action", kind: "follow_creator", targetRef: product.ownerName }) });
+    const response = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "toggle_action", kind: "follow_creator", targetRef: product.ownerNumber ?? product.ownerName }) });
     if (response.status === 401) { router.push(`/signin?return_to=${encodeURIComponent(`/product/${productRef}`)}`); return; }
     if (response.ok) { const data = await response.json() as { active: boolean }; setFollowed(data.active); setNotice(data.active ? "已关注创作者" : "已取消关注"); }
+    else setNotice("暂时无法关注");
   };
 
   const saveProduct = async () => {

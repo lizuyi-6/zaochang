@@ -182,9 +182,6 @@ export async function POST(request: Request) {
     const explicitKey = typeof input.idempotencyKey === "string" && input.idempotencyKey.trim()
       ? input.idempotencyKey.trim().slice(0, 128)
       : null;
-    const idempotencyKey = explicitKey
-      ? explicitKey
-      : (resumeUuid ?? undefined);
     const action = typeof input.action === "string" ? input.action.trim() : undefined;
     const requireConfirmation = Boolean(input.requireConfirmation);
     const selectedUnits = Array.isArray(input.selectedUnits) ? input.selectedUnits.map(String) : undefined;
@@ -372,6 +369,10 @@ export async function POST(request: Request) {
     }
 
     // ── 分支 2: 任务恢复检查 (已有完整课程或已有未完成任务) ──────────────────────
+    // M2(2026-10 审计):恢复流落入分支 3 时,计费幂等键必须沿用任务行落库的
+    // creditKey——此前按 resumeUuid 另起一笔,断线恢复双扣 10 积分、原键的计费行
+    // 永久 pending。这里把任务行的 creditKey 带到扣费点(见下方 chargeKey)。
+    let resumeTaskCreditKey: string | null = null;
     if (resumeUuid) {
       const existingCourse = await getCourse(resumeUuid, member.email);
       if (existingCourse) return replayCompletedCourse(resumeUuid, existingCourse.course);
@@ -381,6 +382,7 @@ export async function POST(request: Request) {
         // A supplied UUID is strictly a resume request, never a new-task identifier.
         return Response.json({ error: "course_task_not_found" }, { status: 404 });
       }
+      resumeTaskCreditKey = existingTask.creditKey;
       if (existingTask.leaseToken && existingTask.leaseExpiresAt
         && Date.parse(existingTask.leaseExpiresAt) > Date.now()) {
         return Response.json({ error: "concurrent_operation_in_progress" }, { status: 409 });
@@ -414,6 +416,16 @@ export async function POST(request: Request) {
     const courseUuid = resumeUuid || (explicitKey
       ? await taskUuidForKey(member.email, explicitKey)
       : crypto.randomUUID());
+    // M2(2026-10 审计):计费幂等键归一,四个来源按序取一:
+    //   1. 恢复流 → 任务行落库的 creditKey(首扣就是此键;租约过期时
+    //      consumeCreditsIdempotent 对同键是"接管租约不重复扣费");
+    //   2. 新建流 → explicitKey;
+    //   3. 无 explicitKey 的恢复(旧任务 creditKey 为 NULL 的历史行)→ resumeUuid;
+    //   4. 无 explicitKey 的新建 → courseUuid。此前第 4 类完全没有幂等面
+    //      (consumeCreditsIdempotent 收到 undefined 直接现金式扣减不留行),
+    //      断线后 resume 必然二次扣费;现在键=任务 UUID,同键 resume 免费接管。
+    // chargeKey 同时是任务行 credit_key 的落库值与完成/退费的定位键,三处同源。
+    const chargeKey = resumeTaskCreditKey ?? explicitKey ?? resumeUuid ?? courseUuid;
     if (!resumeUuid && explicitKey) {
       const task = await getCourseTask(courseUuid, member.email);
       if (task) {
@@ -486,7 +498,7 @@ export async function POST(request: Request) {
     // 晚于超时点后,超时路径退费、完成路径 markCompleted 都会显式清掉租约。
     const { remaining: remainingCredits, conflict, charged } = await consumeCreditsIdempotent(
       member,
-      idempotencyKey,
+      chargeKey,
       stage1BudgetMs + CREDIT_LEASE_MARGIN_MS,
     );
 
@@ -510,12 +522,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // 持久化任务表初始状态
+    // 持久化任务表初始状态(creditKey 用归一后的 chargeKey:恢复流重放任务行时
+    // upsert 的 WHERE 要求新旧 credit_key 一致,同键才不会 409 owner_conflict)
     await createCourseTask({
       id: courseUuid,
       userEmail: member.email,
       query,
-      creditKey: explicitKey,
+      creditKey: chargeKey,
       briefJson: brief ? JSON.stringify(brief) : null,
       status: "pending",
     });
@@ -797,7 +810,7 @@ export async function POST(request: Request) {
 
             await saveCourse(courseUuid, member.email, course as unknown as Record<string, unknown>, autoLeaseToken!);
             await markCourseTaskStatus(courseUuid, member.email, "completed", undefined, autoLeaseToken!);
-            await markCreditChargeCompleted(idempotencyKey ?? courseUuid, member.email);
+            await markCreditChargeCompleted(chargeKey, member.email);
 
             push({ type: "course_structure_ready", course_uuid: courseUuid, course });
           } catch (error) {
@@ -817,7 +830,7 @@ export async function POST(request: Request) {
               /* 失败退费:只退本次真正扣过费(charged)的请求;接管/恢复重跑(charged=false)
                * 不退——钱属于最初那次扣费,由它自己的失败路径退。 */
               if (charged) {
-                await refundCreditCharge(idempotencyKey ?? null, member.email);
+                await refundCreditCharge(chargeKey, member.email);
               }
               push({ type: "course_generation_error", message: "Course generation failed" });
             }

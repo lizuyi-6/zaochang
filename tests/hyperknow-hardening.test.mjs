@@ -12,7 +12,10 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 
 test('refund: course-generation failure refunds only the charging request', () => {
   const route = read('app/api/hyperknow/course-generation/route.ts');
-  assert.match(route, /if \(charged\) \{\s*await refundCreditCharge\(idempotencyKey \?\? null, member\.email\);/, '失败 catch 必须在实际扣过费(charged)时退费');
+  // M2(2026-10 审计):幂等键归一为 chargeKey(resume 沿用任务行 creditKey,
+  // 新建恒有键),退费/完成/落库三处同源引用同一变量。
+  assert.match(route, /if \(charged\) \{\s*await refundCreditCharge\(chargeKey, member\.email\);/, '失败 catch 必须在实际扣过费(charged)时退费');
+  assert.match(route, /const chargeKey = resumeTaskCreditKey \?\? explicitKey \?\? resumeUuid \?\? courseUuid;/, 'resume 落入分支 3 必须沿用任务行 creditKey 归一幂等键(断线恢复双扣修复)');
   assert.match(route, /from "\.\.\/\.\.\/_lib\/hyperknow\/credits";[\s\S]*?refundCreditCharge/, 'refundCreditCharge 必须被导入并调用');
 });
 
@@ -111,7 +114,7 @@ test('timeout: course-generation stage budgets resolve through the test-only ove
 
 test('lease: credit lease duration must cover the whole Stage1 budget (C2)', () => {
   const route = read('app/api/hyperknow/course-generation/route.ts');
-  assert.match(route, /consumeCreditsIdempotent\(\s*member,\s*idempotencyKey,\s*stage1BudgetMs \+ CREDIT_LEASE_MARGIN_MS,/, '计费租约仍必须携带会员身份且 = Stage1 预算 + 余量——60s 默认租约短于蓝图生成耗时,同 key 重发会免费接管并双跑上游');
+  assert.match(route, /consumeCreditsIdempotent\(\s*member,\s*chargeKey,\s*stage1BudgetMs \+ CREDIT_LEASE_MARGIN_MS,/, '计费租约仍必须携带会员身份且 = Stage1 预算 + 余量——60s 默认租约短于蓝图生成耗时,同 key 重发会免费接管并双跑上游');
   const budgets = read('app/api/_lib/hyperknow/budgets.ts');
   assert.match(budgets, /CREDIT_LEASE_MARGIN_MS = 60_000/, '余量常量必须显式导出(可契约断言)');
 });

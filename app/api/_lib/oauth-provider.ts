@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { database } from "./community";
 import { hashToken, publicAppOrigin, randomToken } from "../../oauth-session";
 import { AuthRequiredError } from "./errors";
+import { RateLimitError } from "./rate-limit";
 import { isLoopbackHttpRedirect, loopbackRedirectAllowed, type LoopbackRedirectPurpose, type LoopbackRegistrationSource } from "./loopback-redirect";
 import { MCP_PROJECT_SCOPE, MCP_RESOURCE_PATH } from "./oauth-resource";
 
@@ -950,6 +951,12 @@ export function oauthJsonError(error: unknown) {
   if (!current && error instanceof AuthRequiredError) {
     current = new OAuthProviderError("auth_required", 401);
   }
+  // M4(2026-10 审计):v1 读端点补限流后,RateLimitError 若落进 server_error 500,
+  // 第三方客户端会把它当服务端故障重试,放大而非退避。
+  const rateLimited = !current && error instanceof RateLimitError ? error : null;
+  if (rateLimited) {
+    current = new OAuthProviderError(rateLimited.code, 429);
+  }
   if (!current) current = new OAuthProviderError("server_error", 500);
   return Response.json(
     { error: current.code, ...(current.description ? { error_description: current.description } : {}) },
@@ -959,6 +966,7 @@ export function oauthJsonError(error: unknown) {
         "cache-control": "no-store",
         pragma: "no-cache",
         ...(current.status === 401 ? { "www-authenticate": `Bearer error="${current.code}"` } : {}),
+        ...(rateLimited?.retryAfterSeconds ? { "retry-after": String(Math.floor(rateLimited.retryAfterSeconds)) } : {}),
         "access-control-allow-origin": "*",
       },
     },

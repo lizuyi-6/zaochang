@@ -17,6 +17,11 @@ export async function GET(request: Request) {
     const targetType = url.searchParams.get("targetType") ?? "";
     const targetRef = url.searchParams.get("targetRef") ?? "";
     if (!targetType || !targetRef) return Response.json({ error: "invalid_target" }, { status: 400 });
+    // L6(2026-10 审计):白名单此前只声明未执行——任意 targetType 直达 SQL,变成
+    // 任意行的评论枚举器。与 POST 侧共用同一把白名单。
+    if (!COMMENT_TARGET_TYPES.includes(targetType)) {
+      return Response.json({ error: "invalid_target" }, { status: 400 });
+    }
     if (targetType === "product" && !(await productIsPublic(targetRef))) {
       return Response.json({ error: "product_not_found" }, { status: 404 });
     }

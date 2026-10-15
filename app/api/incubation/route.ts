@@ -38,14 +38,21 @@ export async function POST(request: Request) {
   try {
     const member = await requireMember();
     await enforceRateLimit(await rateLimitKey("incubation-write", member.email), 30, 24 * 60 * 60);
-    const input = await request.json() as Record<string, unknown>;
+    const input = await request.json().catch(() => ({})) as Record<string, unknown>;
     if (input.action === "add_material") {
       const projectId = Number(input.projectId);
       const name = String(input.name ?? "").trim().slice(0, 120);
       const url = String(input.url ?? "").trim().slice(0, 500);
       const kind = String(input.kind ?? "FILE").trim().slice(0, 12) || "FILE";
       if (!Number.isInteger(projectId) || !name || !url.startsWith("/api/uploads/")) return Response.json({ error: "invalid_material" }, { status: 400 });
-      const key = decodeURIComponent(url.slice("/api/uploads/".length));
+      // L5(2026-10 审计):畸形百分号序列会让 decodeURIComponent 抛 URIError → 500;
+      // 与其余输入校验同标准落 400。
+      let key: string;
+      try {
+        key = decodeURIComponent(url.slice("/api/uploads/".length));
+      } catch {
+        return Response.json({ error: "invalid_material" }, { status: 400 });
+      }
       if (!UPLOAD_KEY_PATTERN.test(key)) return Response.json({ error: "invalid_material" }, { status: 400 });
       const check = await verifyScannedUpload({ key, ownerEmail: member.email, expectedPurpose: "incubation_material" });
       if (check.bucketMissing) return Response.json({ error: "uploads_unavailable" }, { status: 503 });

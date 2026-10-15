@@ -238,10 +238,11 @@ export async function resolveBookRootSlug(rootSlug: string, member: MemberIdenti
   return row;
 }
 
-// 可见性规则(委托至 access-control.canViewContent 通用内容闸,语义不变):
-// public 人人可见;members/private 需登录(后续可再细分创始人可见)。
+// 可见性规则(委托至 access-control.canViewContent 通用内容闸):
+// public 人人可见;members 登录可见;private = 作者本人 + founder/agent
+// (L7,2026-10 审计:此前 private 与 members 等价,与 UI 的「私有」标注矛盾)。
 export function canViewDoc(doc: DocMeta, member: MemberIdentity | null): boolean {
-  return canViewContent(doc, member);
+  return canViewContent({ visibility: doc.visibility, authorEmail: doc.authorEmail }, member);
 }
 
 // 只保留对当前访问者可见的文档,再组装成目录树。

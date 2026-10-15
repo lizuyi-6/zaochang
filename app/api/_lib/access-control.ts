@@ -123,12 +123,20 @@ export async function requireDocEditor(): Promise<MemberIdentity> {
 
 // ---- 通用内容可见性闸 ----
 // 任何内容类型(文档/书籍/产品/未来新类型)复用同一 visibility 语义:
-//   public → 人人可见;members/private → 需登录(当前两者等价,细分属后续产品决策)。
+//   public → 人人可见;members → 登录可见;private → 作者本人 + 站点策展人
+//   (founder/agent)。L7(2026-10 审计):private 此前与 members 等价(任意登录
+//   成员可读全文,实测),而 UI 与文档管理器都标「私有」——语义按 UI 收紧。
+//   docs 的作者本就只能是 founder/agent(requireDocEditor 门),private 即
+//   "策展人草稿,不含普通成员"。
 // fail-closed 语义由调用方保证:不可见时对外表现与"不存在"一致(404,不泄露存在性)。
 export type ContentVisibility = "public" | "members" | "private";
-export type GatedContent = { visibility: ContentVisibility };
+export type GatedContent = { visibility: ContentVisibility; authorEmail?: string | null };
 
 export function canViewContent(content: GatedContent, member: MemberIdentity | null): boolean {
   if (content.visibility === "public") return true;
+  if (content.visibility === "private") {
+    return member !== null
+      && (member.email === content.authorEmail || member.isAgent === true || hasRole(member, "founder"));
+  }
   return member !== null;
 }

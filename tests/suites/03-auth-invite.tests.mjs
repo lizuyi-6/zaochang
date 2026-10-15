@@ -616,9 +616,12 @@ test("logout deletes the server session so a copied cookie cannot be replayed", 
   const tokenHash = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawToken))).toString("hex");
   await executeLocalD1(`INSERT INTO auth_sessions (token_hash, user_email, provider, expires_at) VALUES ('${tokenHash}', '${email}', 'github', datetime('now', '+1 day'))`);
   const cookie = `zaochang_session=${rawToken}`;
+  // L3/L4(2026-10 审计):写端点对「cookie 且零浏览器证据(无 Origin/sec-fetch-site/
+  // Referer)」fail-closed——复制出的 cookie 裸奔正是该拦截形状。此处验证的是
+  // "会话本身有效",按真实浏览器形态补同源 Origin。
   const authenticated = await fetch(`${baseUrl}/api/products`, {
     method: "POST",
-    headers: { accept: "application/json", "content-type": "application/json", cookie },
+    headers: { accept: "application/json", "content-type": "application/json", cookie, origin: baseUrl },
     body: JSON.stringify({ title: "x" }),
   });
   assert.equal(authenticated.status, 400);

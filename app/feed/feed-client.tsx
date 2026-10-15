@@ -39,6 +39,7 @@ function hydratePost(post: Record<string, unknown>): CommunityPost {
   return {
     id,
     ownerName: name,
+    ownerNumber: post.ownerNumber === undefined || post.ownerNumber === null ? undefined : String(post.ownerNumber),
     ownerInitial: name[0],
     role: "社区创作者",
     content: String(post.content),
@@ -138,7 +139,8 @@ export function FeedClient() {
         .filter((post) => !hidden.has(post.id))
         .filter((post) => {
           if (filter === "全部") return true;
-          if (filter === "关注") return followed.has(post.ownerName);
+          // M1(2026-10 审计):关注过滤按 member_number 匹配(显示名重名会互串)。
+          if (filter === "关注") return typeof post.ownerNumber === "string" && followed.has(post.ownerNumber);
           return (
             post.postType === filter ||
             (filter === "版本发布" && Boolean(post.productSlug))

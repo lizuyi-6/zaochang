@@ -1,4 +1,9 @@
+import { env } from "cloudflare:workers";
 import { database } from "./community";
+
+function envValues(): Record<string, string | undefined> {
+  return env as unknown as Record<string, string | undefined>;
+}
 
 // 果子账本的资金路径共享原语(2026-10 审计重构 #7):此前 fruit.ts 与 external-fruit.ts
 // 各持一份同款 wallet/assertWalletIntegrity/validIdempotencyKey/sqliteTimestamp,三处
@@ -16,6 +21,35 @@ export type WalletOverviewRow = {
   ledgerBalance: number;
   ledgerPendingBalance: number;
 };
+
+// M4(2026-10 审计):结算节流。settleDueFruit / settleDueExternalFruit 是
+// 「读出到期项 + 条件写批次」的物化例程,被 wallet/community/shell-state 等读端点
+// 每次调用都触发——0 限流时是免费的 D1 读写放大入口(实测 120 连打无一个 429)。
+// 到期结算的最小时间粒度是小时级(available_at = T+24h),isolate 内存 60s 节流让
+// 每个 isolate 对每个用户至多每分钟真跑一次;节流状态刻意不落库——落库本身就是
+// 要消灭的写放大。多 isolate 各自节流,放大上限 = isolate 数,仍远低于现状。
+// 结算不承载资金正确性(支付/退款路径的可用性由 SQL 守卫强制),晚 ≤60s 物化无影响。
+const SETTLE_THROTTLE_MS = 60_000;
+const lastSettleAttemptAt = new Map<string, number>();
+
+/** 记录本次结算尝试;true = 60s 内已尝试过,调用方应直接跳过结算。
+ * APP_ENV=test 下禁用(返回恒 false):集成测试惯用 SQL 快进 available_at/
+ * created_at 后立即断言物化余额,60s 节流会让结算最多晚一分钟——生产语义允许
+ * (到期粒度是小时级),测试需要确定性;与 HK_COURSE_GEN_TIMEOUT_MS 的
+ * test-only 覆盖同款约定。env 在调用时读取,不落在模块初始化。 */
+export function settleThrottled(email: string): boolean {
+  const throttleMs = envValues().APP_ENV === "test" ? 0 : SETTLE_THROTTLE_MS;
+  const now = Date.now();
+  const last = lastSettleAttemptAt.get(email) ?? 0;
+  if (now - last < throttleMs) return true;
+  if (lastSettleAttemptAt.size > 5_000) {
+    for (const [key, at] of lastSettleAttemptAt) {
+      if (now - at >= throttleMs) lastSettleAttemptAt.delete(key);
+    }
+  }
+  lastSettleAttemptAt.set(email, now);
+  return false;
+}
 
 export function validIdempotencyKey(value: string) {
   return /^[A-Za-z0-9:_-]{8,120}$/.test(value);

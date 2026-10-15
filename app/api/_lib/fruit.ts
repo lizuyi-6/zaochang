@@ -1,5 +1,5 @@
 import { database } from "./community";
-import { assertWalletIntegrity, pendingToAvailableStatements, validIdempotencyKey, walletOverview, type WalletOverviewRow } from "./fruit-core";
+import { assertWalletIntegrity, pendingToAvailableStatements, settleThrottled, validIdempotencyKey, walletOverview, type WalletOverviewRow } from "./fruit-core";
 // D1 约束嗅探的事实来源在 errors.ts;本地沿用旧短名(调用点 20 处,重命名导入保 diff 最小)。
 import {
   errorMessageIncludes as errorIncludes,
@@ -163,6 +163,7 @@ function publicOrder(row: OrderRow) {
 }
 
 export async function settleDueFruit(sellerEmail: string) {
+  if (settleThrottled(sellerEmail)) return;
   const db = database();
   const sellerWallet = await wallet(sellerEmail);
   if (!sellerWallet || sellerWallet.status !== "active") return;

@@ -21,17 +21,22 @@ export async function saveConversation(input: {
   title: string;
   history: Array<{ role: string; content: string }>;
 }): Promise<void> {
-  await database()
+  const result = await database()
     .prepare(
+      // L6(2026-10 审计):upsert 补归属条件——id 是服务端生成的 UUID,当前不可达,
+      // 但"不可达"只由调用方约定保证;WHERE 保证他账号 Knowing id 也只能拿到
+      // 0 行更新(归属不符时静默不写,与"越权写入"之间没有第三态)。
       `INSERT INTO hk_conversations (id, user_email, title, history_json, updated_at)
        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(id) DO UPDATE SET
          title = excluded.title,
          history_json = excluded.history_json,
-         updated_at = CURRENT_TIMESTAMP`,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE hk_conversations.user_email = excluded.user_email`,
     )
     .bind(input.id, input.userEmail, input.title, JSON.stringify(input.history))
     .run();
+  if (Number(result.meta.changes ?? 0) === 0) throw new Error("conversation_owner_conflict");
 }
 
 function rowToConversation(row: { id: string; title: string; starred: number; created_at: string; updated_at: string; history_json: string }): StoredConversation {

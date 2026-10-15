@@ -979,7 +979,8 @@ export function register() {
     const strangerRead = await fetch(`${baseUrl}${genData.url}`, {
       headers: strangerHeaders,
     });
-    assert.equal(strangerRead.status, 403, "私有资产陌生人读取必须 403");
+    // L6(2026-10 审计):非属主按不存在处理(404),不泄露键存在性
+    assert.equal(strangerRead.status, 404, "私有资产陌生人读取必须 404");
 
     // 二次调用同节同 Prompt: DB 租约与缓存命中, 不再打上游
     const cacheRes = await fetch(`${baseUrl}/api/hyperknow/whiteboard/image`, {

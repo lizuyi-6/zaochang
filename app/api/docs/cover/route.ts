@@ -3,6 +3,7 @@ import { auditAdminAction } from "../../_lib/admin";
 import { database, jsonError } from "../../_lib/community";
 import { invalidateDocDataCache } from "../../_lib/docs";
 import { enforceRateLimit, rateLimitKey } from "../../_lib/rate-limit";
+import { assertSameOrigin } from "../../_lib/request-origin";
 import { storeScannedUpload } from "../../_lib/upload-core";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +13,13 @@ export const dynamic = "force-dynamic";
 // 与通用上传不同的是:这里允许 visibility=public(封面要对匿名读者可见),
 // 并把返回的公开图片地址写回目标书根的 docs.cover_image / docs.banner_image。
 // slot=cover(竖版,书架卡片) | banner(横版,封面页横幅),缺省 cover。
-// purpose 固定 book_cover,使 /api/uploads/[key] 的私有门控对这类上传天然 403(public 才放行)。
+// purpose 固定 book_cover,使 /api/uploads/[key] 的私有门控对非属主按不存在处理(L6 起 404;public 才放行)。
 export async function POST(request: Request) {
   try {
     const founder = await requireFounder();
+    // L4(2026-10 审计):封面上传写 docs 表 + R2,补同源断言与其余写端点对齐。
+    const originError = assertSameOrigin(request);
+    if (originError) return originError;
     await enforceRateLimit(await rateLimitKey("book-cover", founder.email), 20, 60 * 60);
     const form = await request.formData();
     const file = form.get("file");

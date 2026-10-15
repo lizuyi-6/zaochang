@@ -69,7 +69,7 @@ export async function PATCH(request: Request) {
   try {
     const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
     if (guarded instanceof Response) return guarded;
-    const input = await request.json() as Record<string, unknown>;
+    const input = await request.json().catch(() => ({})) as Record<string, unknown>;
     return await applyModerationAction(guarded.member, input);
   } catch (error) {
     return jsonError(error);

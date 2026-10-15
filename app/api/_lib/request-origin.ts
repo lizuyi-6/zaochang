@@ -9,17 +9,20 @@ import { resolvePublicAppOrigin } from "../../lib/public-origin";
 // 规则:
 // - sec-fetch-site: cross-site → 403(跨站请求永远不该改状态;与 dev-login/logout 同款守卫)。
 // - Origin 与公开源一致 → 放行(浏览器同源 fetch/表单都会带 Origin)。
-// - Origin 缺失 → 放行:非浏览器调用(集成测试、curl、agent 服务账户的 POST /api/docs)
-//   不带 Origin,拒绝会破坏既有合法调用方;此时的防线是凭据本身(token/session)。
 // - Origin 存在但不匹配 → 403。
+// - Origin 缺失 → 三级回退(L3,2026-10 审计:此前"Origin 缺失一律放行",旧浏览器
+//   既无 sec-fetch-site 又无 Origin 时完全押注 SameSite=Lax 补偿,是 fail-open):
+//     1) sec-fetch-site 在场且非 cross-site → 放行(浏览器声明了非跨站);
+//     2) Referer 在场 → 按同源基准判定(跨源/畸形 → 403);
+//     3) 三证据全缺且请求携带 cookie → 403(fail-closed)。非浏览器调用方(集成
+//        测试的 oai-* 身份头、agent 的 Authorization)不带 cookie,不受影响;
+//        需要带 cookie 的手工调试补一个 Origin 头即可。
 //
 // 返回 Response 时调用方直接 return;返回 null 表示通过。
 export function assertSameOrigin(request: Request): Response | null {
   if ((request.headers.get("sec-fetch-site") ?? "").toLowerCase() === "cross-site") {
     return Response.json({ error: "invalid_origin" }, { status: 403 });
   }
-  const requestOrigin = request.headers.get("origin");
-  if (!requestOrigin) return null;
   // 允许两个基准:配置的公开源,以及请求自身的 host(生产同时挂 apex 与 www,
   // www 页面的同源 fetch Origin 是 https://www.aetherstudio.top,不能被误杀)。
   // CSRF 语义上 Origin 必然等于浏览器所见页面的源 = 请求 Host,二者一致才有效。
@@ -30,7 +33,27 @@ export function assertSameOrigin(request: Request): Response | null {
   } catch {
     // 公开源未配置(非生产):URL origin 基准已足够。
   }
-  if (!allowed.has(requestOrigin)) {
+  const requestOrigin = request.headers.get("origin");
+  if (requestOrigin) {
+    if (!allowed.has(requestOrigin)) {
+      return Response.json({ error: "invalid_origin" }, { status: 403 });
+    }
+    return null;
+  }
+  const fetchSite = (request.headers.get("sec-fetch-site") ?? "").toLowerCase();
+  if (fetchSite) return null;
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      return allowed.has(new URL(referer).origin)
+        ? null
+        : Response.json({ error: "invalid_origin" }, { status: 403 });
+    } catch {
+      // 畸形 Referer 一律视为跨站。
+      return Response.json({ error: "invalid_origin" }, { status: 403 });
+    }
+  }
+  if (request.headers.has("cookie")) {
     return Response.json({ error: "invalid_origin" }, { status: 403 });
   }
   return null;

@@ -66,7 +66,12 @@ export async function loadPublicCommunityState(): Promise<PublicCommunityState> 
       .all<Record<string, unknown>>(),
     db
       .prepare(
-        `SELECT id, owner_name AS ownerName, content, product_id AS productId,
+        // M1(2026-10 审计):ownerNumber = 发帖人 member_number(公开、唯一)。feed 的
+        // 「关注」过滤此前按显示名匹配(重名互串);现在 actions 载荷的 follow targetRef
+        // 翻译为同一 member_number,客户端按 ownerNumber 匹配,email 不出服务端。
+        `SELECT id, owner_name AS ownerName,
+                CAST((SELECT m.member_number FROM members m WHERE m.email = posts.owner_email) AS TEXT) AS ownerNumber,
+                content, product_id AS productId,
                 linked_product_ref AS linkedProductRef, image_url AS imageUrl,
                 post_type AS postType,
                 likes_count AS likes, comments_count AS comments,

@@ -17,7 +17,9 @@ async function loadProduct(slug: string): Promise<LoadedProduct | null> {
   if (!Number.isInteger(id)) return null;
   try {
     const row = await database().prepare(
-      `SELECT p.id, p.owner_name AS ownerName, p.title, p.description, p.category,
+      `SELECT p.id, p.owner_name AS ownerName,
+              CAST((SELECT m.member_number FROM members m WHERE m.email = p.owner_email) AS TEXT) AS ownerNumber,
+              p.title, p.description, p.category,
               p.demo_type AS demoType, p.demo_url AS demoUrl, p.image_url AS imageUrl,
               p.cover_theme AS coverTheme, p.price, p.pricing_model AS pricingModel, p.likes_count AS likes,
               p.plays_count AS plays, p.created_at AS createdAt, ${hostedUrlSelect("p")}

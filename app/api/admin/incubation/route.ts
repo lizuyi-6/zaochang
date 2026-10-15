@@ -25,7 +25,7 @@ export async function PATCH(request: Request) {
     const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
     if (guarded instanceof Response) return guarded;
     const admin = guarded.member;
-    const input = await request.json() as Record<string, unknown>;
+    const input = await request.json().catch(() => ({})) as Record<string, unknown>;
     const projectId = Number(input.projectId);
     const status = String(input.status ?? "");
     const currentTask = String(input.currentTask ?? "").trim().slice(0, 160);

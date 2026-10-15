@@ -50,7 +50,10 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
       ).bind(imageUrl).first());
     }
     if (!owner && !reviewer && !approvedProductCover) {
-      return new Response("Forbidden", { status: 403 });
+      // L6(2026-10 审计):非属主一律 404 而非 403——403 会向持 key 的探测者泄露
+      // "该上传键存在且已 clean",构成存在性预言机;与 docs 的 fail-closed 语义
+      // (不可见 = 不存在)对齐。
+      return new Response("Not found", { status: 404 });
     }
   }
   const headers = new Headers();

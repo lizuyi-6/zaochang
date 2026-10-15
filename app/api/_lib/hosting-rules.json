@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "静态托管的共享规则:Worker 的包结构校验(app/api/_lib/hosting-bundle.ts)与盒子上的部署器(deploy/hosting/)都读取本文件;改动须同步更新两侧一致性向量测试。上限与 ClamAV 扫描器参数对齐(--max-files=500 --max-scansize=24M --max-filesize=10M --max-recursion=8),保证包内每个文件都被扫到。扩展名清单来自 StepFun 静态托管官方文档(platform.stepfun.com/docs/zh/guides/page-hosting)。",
+  "_comment": "静态托管的共享规则:Worker 的包结构校验(app/api/_lib/hosting-bundle.ts)与盒子上的部署器(deploy/hosting/)都读取本文件;改动须同步更新两侧一致性向量测试。上限与 ClamAV 扫描器参数对齐(--max-files=500 --max-scansize=24M --max-filesize=10M --max-recursion=8),保证包内每个文件都被扫到。扩展名清单来自 StepFun 静态托管官方文档(platform.stepfun.com/docs/zh/guides/page-hosting)。 L6(2026-10 审计):svg 从 allowed/textScannable 移除——image/svg+xml 是可执行活动内容(脚本内嵌),托管域直接导航即执行;pdf 保留(被动文档,官方文档亦允许)。",
   "bundle": {
     "maxZipBytes": 10485760,
     "maxEntries": 500,
@@ -13,13 +13,69 @@
   },
   "extensions": {
     "allowed": [
-      "html", "htm", "css", "js", "mjs", "json", "map", "txt", "xml", "svg", "ico",
-      "png", "jpg", "jpeg", "gif", "webp", "avif", "woff", "woff2", "ttf", "otf", "eot",
-      "wasm", "pdf", "mp4", "webm", "mp3", "wav", "md", "markdown", "jsonl", "tsx", "jsx"
+      "html",
+      "htm",
+      "css",
+      "js",
+      "mjs",
+      "json",
+      "map",
+      "txt",
+      "xml",
+      "ico",
+      "png",
+      "jpg",
+      "jpeg",
+      "gif",
+      "webp",
+      "avif",
+      "woff",
+      "woff2",
+      "ttf",
+      "otf",
+      "eot",
+      "wasm",
+      "pdf",
+      "mp4",
+      "webm",
+      "mp3",
+      "wav",
+      "md",
+      "markdown",
+      "jsonl",
+      "tsx",
+      "jsx"
     ],
-    "forbidden": ["php", "py", "exe", "sh", "bat", "cmd", "dll", "so", "jsp", "asp", "aspx", "cgi", "pl"],
+    "forbidden": [
+      "php",
+      "py",
+      "exe",
+      "sh",
+      "bat",
+      "cmd",
+      "dll",
+      "so",
+      "jsp",
+      "asp",
+      "aspx",
+      "cgi",
+      "pl"
+    ],
     "textScannable": [
-      "html", "htm", "css", "js", "mjs", "json", "map", "txt", "xml", "svg", "md", "markdown", "jsonl", "tsx", "jsx"
+      "html",
+      "htm",
+      "css",
+      "js",
+      "mjs",
+      "json",
+      "map",
+      "txt",
+      "xml",
+      "md",
+      "markdown",
+      "jsonl",
+      "tsx",
+      "jsx"
     ]
   },
   "rejectedPathRules": [
@@ -32,14 +88,46 @@
     "加密条目(general purpose flag bit0)、ZIP64、分卷压缩,一律拒绝"
   ],
   "secretPatterns": [
-    { "id": "pem_private_key", "regex": "-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----", "flags": "" },
-    { "id": "aws_access_key_id", "regex": "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b", "flags": "" },
-    { "id": "github_token", "regex": "\\bgh[pousr]_[A-Za-z0-9]{36,}\\b", "flags": "" },
-    { "id": "github_fine_grained_token", "regex": "\\bgithub_pat_[A-Za-z0-9_]{50,}\\b", "flags": "" },
-    { "id": "openai_style_secret_key", "regex": "\\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{32,}\\b", "flags": "" },
-    { "id": "stripe_live_key", "regex": "\\b(?:sk|rk)_live_[A-Za-z0-9]{16,}\\b", "flags": "" },
-    { "id": "slack_token", "regex": "\\bxox[abprs]-[A-Za-z0-9-]{10,}\\b", "flags": "" },
-    { "id": "google_api_key", "regex": "\\bAIza[0-9A-Za-z_-]{35}\\b", "flags": "" }
+    {
+      "id": "pem_private_key",
+      "regex": "-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----",
+      "flags": ""
+    },
+    {
+      "id": "aws_access_key_id",
+      "regex": "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b",
+      "flags": ""
+    },
+    {
+      "id": "github_token",
+      "regex": "\\bgh[pousr]_[A-Za-z0-9]{36,}\\b",
+      "flags": ""
+    },
+    {
+      "id": "github_fine_grained_token",
+      "regex": "\\bgithub_pat_[A-Za-z0-9_]{50,}\\b",
+      "flags": ""
+    },
+    {
+      "id": "openai_style_secret_key",
+      "regex": "\\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{32,}\\b",
+      "flags": ""
+    },
+    {
+      "id": "stripe_live_key",
+      "regex": "\\b(?:sk|rk)_live_[A-Za-z0-9]{16,}\\b",
+      "flags": ""
+    },
+    {
+      "id": "slack_token",
+      "regex": "\\bxox[abprs]-[A-Za-z0-9-]{10,}\\b",
+      "flags": ""
+    },
+    {
+      "id": "google_api_key",
+      "regex": "\\bAIza[0-9A-Za-z_-]{35}\\b",
+      "flags": ""
+    }
   ],
   "provider": {
     "id": "stepfun_page",
@@ -48,7 +136,14 @@
     "siteNameMaxLength": 64
   },
   "failureCodes": [
-    "validation_bundle", "validation_secret", "provider_quota", "provider_audit_rejected",
-    "provider_error", "provider_auth", "ambiguous", "bundle_missing", "internal"
+    "validation_bundle",
+    "validation_secret",
+    "provider_quota",
+    "provider_audit_rejected",
+    "provider_error",
+    "provider_auth",
+    "ambiguous",
+    "bundle_missing",
+    "internal"
   ]
 }

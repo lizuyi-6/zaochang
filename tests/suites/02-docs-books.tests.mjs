@@ -414,8 +414,9 @@ test("/api/shell-state: 站壳轻量聚合的匿名/登录形状与未读语义"
     // 先触发一次登录态(ensureMember 建钱包/欢迎交易),确立基线:无未读。
     assert.equal((await (await fetch(`${baseUrl}/api/shell-state`, { headers: ownerHeaders })).json()).hasUnread, false, "基线:新成员应无未读");
     await executeLocalD1(`
+      -- M1(2026-10 审计):follow_creator 的 target_ref 落库为 email(唯一身份键)
       INSERT INTO community_actions (user_email, kind, target_ref)
-        VALUES ('${memberEmail}', 'follow_creator', '通知接收者');
+        VALUES ('${memberEmail}', 'follow_creator', '${notifyOwner}');
     `);
     const unread = await (await fetch(`${baseUrl}/api/shell-state`, { headers: ownerHeaders })).json();
     assert.equal(unread.hasUnread, true, "被他人关注后 hasUnread 应为 true");

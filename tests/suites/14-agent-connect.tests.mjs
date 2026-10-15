@@ -387,7 +387,7 @@ export function register() {
     for (let index = 0; index < 9; index += 1) {
       const response = await fetch(`${baseUrl}/api/products`, {
         method: "POST",
-        headers: { cookie, "content-type": "application/json" },
+        headers: { cookie, "content-type": "application/json", origin: baseUrl },
         body: JSON.stringify({
           title: `REST project ${index}`,
           description: "A valid REST project used to verify the shared daily submission limit.",
@@ -418,7 +418,7 @@ export function register() {
     const cookie = await login(email);
     const response = await fetch(`${baseUrl}/api/products`, {
       method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      headers: { cookie, "content-type": "application/json", origin: baseUrl },
       body: JSON.stringify({
         title: "REST image alias regression",
         description: "A snake_case cover field must remain ignored by the REST product API.",

@@ -1,5 +1,5 @@
 import { database } from "./community";
-import { assertWalletIntegrity, pendingToAvailableStatements, sqliteTimestamp, validIdempotencyKey, walletOverview, type WalletOverviewRow } from "./fruit-core";
+import { assertWalletIntegrity, pendingToAvailableStatements, settleThrottled, sqliteTimestamp, validIdempotencyKey, walletOverview, type WalletOverviewRow } from "./fruit-core";
 import {
   errorMessageIncludes as errorIncludes,
   isUniqueConstraintError as isUniqueError,
@@ -208,7 +208,14 @@ export async function decideExternalPayment(userEmail: string, paymentId: string
     await db.prepare(`UPDATE external_fruit_payments SET status = 'cancelled', approval_challenge_hash = NULL WHERE id = ? AND status = 'pending'`).bind(paymentId).run();
     throw new ExternalFruitError("client_not_authorized", 403);
   }
-  if (row.status !== "pending") return { payment: publicPayment(row), replayed: true, returnUri: row.returnUri };
+  if (row.status !== "pending") {
+    // L2(2026-10 审计):已决单不二次扣款,但 approve 也不能退化成"无凭据的状态
+    // 查询"——挑战码在 pending 态下方强校验;重放态(hash 已随支付清空,无法再
+    // 强校验)至少要求挑战码非空,把"持任意字符串探状态"挡在门外。合法重放来自
+    // 确认表单重提,表单里始终带着当初下发的挑战码。
+    if (!challenge.trim()) throw new ExternalFruitError("invalid_approval_challenge", 403);
+    return { payment: publicPayment(row), replayed: true, returnUri: row.returnUri };
+  }
   if (Date.parse(`${row.expiresAt}Z`) <= Date.now()) {
     await db.prepare(`UPDATE external_fruit_payments SET status = 'expired' WHERE id = ? AND status = 'pending'`).bind(paymentId).run();
     throw new ExternalFruitError("payment_expired", 409);
@@ -315,10 +322,26 @@ export async function getExternalPayment(identity: ExternalIdentity, paymentId: 
 }
 
 export async function refundExternalPayment(identity: Pick<ExternalIdentity, "clientId" | "userEmail">, paymentId: string, idempotencyKey: string) {
-  if (!validIdempotencyKey(idempotencyKey)) throw new ExternalFruitError("invalid_idempotency_key", 400);
-  const db = database();
   const row = await paymentById(paymentId);
   if (!row || row.clientId !== identity.clientId || row.payerEmail !== identity.userEmail) throw new ExternalFruitError("payment_not_found", 404);
+  return executeExternalRefund(row, idempotencyKey);
+}
+
+// L1(2026-10 审计):会员自助退款通道。授权面 = 会话 + payer 归属(上方
+// payerEmail 比对),刻意不校验客户端授权态——客户端被平台驳回后,买家更要能把
+// 钱拿回来(买家保护语义);与 API 侧(token 随驳回吊销 → 401)的差异是发起通道
+// 不同,不是策略矛盾。此前这里伪造 { clientId: row.clientId } 去复用 client 通道
+// 的鉴权形状,令 refundExternalPayment 的 clientId 比对恒真——看起来像校验、实际
+// 无约束力;现在两通道各自显式声明授权面,共用同一套退款执行体。
+export async function refundExternalPaymentForMember(userEmail: string, paymentId: string, idempotencyKey: string) {
+  const row = await paymentById(paymentId);
+  if (!row || row.payerEmail !== userEmail) throw new ExternalFruitError("payment_not_found", 404);
+  return executeExternalRefund(row, idempotencyKey);
+}
+
+async function executeExternalRefund(row: PaymentRow, idempotencyKey: string) {
+  if (!validIdempotencyKey(idempotencyKey)) throw new ExternalFruitError("invalid_idempotency_key", 400);
+  const db = database();
   if (row.status === "refunded") return { payment: publicPayment(row), replayed: true };
   if (row.pricingModel !== "one_time") throw new ExternalFruitError("per_use_not_refundable", 409);
   if (row.status !== "paid" || !row.purchaseOperationId || !row.refundableUntil || Date.parse(`${row.refundableUntil}Z`) <= Date.now()) {
@@ -329,11 +352,11 @@ export async function refundExternalPayment(identity: Pick<ExternalIdentity, "cl
   const [payerWalletRow, merchantWalletRow] = await Promise.all([wallet(row.payerEmail), wallet(row.merchantEmail)]);
   await assertIntegrity(row.payerEmail, payerWalletRow);
   await assertIntegrity(row.merchantEmail, merchantWalletRow);
-  const replayKey = `external-refund:${identity.clientId}:${identity.userEmail}:${idempotencyKey}`;
+  const replayKey = `external-refund:${row.clientId}:${row.payerEmail}:${idempotencyKey}`;
   const prior = await db.prepare(
     `SELECT reference_id AS referenceId FROM fruit_operations WHERE idempotency_key = ?`,
   ).bind(replayKey).first<{ referenceId: string }>();
-  if (prior && prior.referenceId !== paymentId) throw new ExternalFruitError("idempotency_conflict", 409);
+  if (prior && prior.referenceId !== row.id) throw new ExternalFruitError("idempotency_conflict", 409);
 
   const operationId = `external-refund:${randomToken(20)}`;
   try {
@@ -342,7 +365,7 @@ export async function refundExternalPayment(identity: Pick<ExternalIdentity, "cl
         `INSERT INTO fruit_operations
          (id, kind, idempotency_key, actor_email, target_email, amount, reference_type, reference_id, related_operation_id, description)
          VALUES (?, 'external_refund', ?, ?, ?, ?, 'external_payment', ?, ?, '外部应用一次解锁退款')`,
-      ).bind(operationId, replayKey, row.merchantEmail, row.payerEmail, row.amount, paymentId, row.purchaseOperationId),
+      ).bind(operationId, replayKey, row.merchantEmail, row.payerEmail, row.amount, row.id, row.purchaseOperationId),
       db.prepare(
         `UPDATE wallets SET balance = balance + ?,
            lifetime_spent = MAX(0, lifetime_spent - ?), updated_at = CURRENT_TIMESTAMP WHERE user_email = ?`,
@@ -356,33 +379,28 @@ export async function refundExternalPayment(identity: Pick<ExternalIdentity, "cl
       db.prepare(
         `UPDATE external_fruit_payments SET status = 'refunded', refund_operation_id = ?, refunded_at = CURRENT_TIMESTAMP
          WHERE id = ? AND status = 'paid'`,
-      ).bind(operationId, paymentId),
+      ).bind(operationId, row.id),
       db.prepare(
         `UPDATE external_fruit_entitlements SET status = 'revoked', revoked_at = CURRENT_TIMESTAMP
          WHERE client_id = ? AND payer_email = ? AND external_reference = ? AND payment_id = ?`,
-      ).bind(row.clientId, row.payerEmail, row.externalReference, paymentId),
-      db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'external_refund', '外部应用一次解锁退款', ?)`).bind(row.payerEmail, row.amount, paymentId),
+      ).bind(row.clientId, row.payerEmail, row.externalReference, row.id),
+      db.prepare(`INSERT INTO transactions (user_email, delta, type, description, reference_id) VALUES (?, ?, 'external_refund', '外部应用一次解锁退款', ?)`).bind(row.payerEmail, row.amount, row.id),
     ]);
   } catch (error) {
     if (isPendingError(error)) throw new ExternalFruitError("refund_reserve_unavailable", 409);
     if (isUniqueError(error) || errorIncludes(error, "external_refund_not_payable")) {
-      const current = await paymentById(paymentId);
+      const current = await paymentById(row.id);
       if (current?.status === "refunded") return { payment: publicPayment(current), replayed: true };
     }
     throw error;
   }
-  const refunded = await paymentById(paymentId);
+  const refunded = await paymentById(row.id);
   if (!refunded) throw new ExternalFruitError("payment_not_found", 404);
   return { payment: publicPayment(refunded), replayed: false };
 }
 
-export async function refundExternalPaymentForMember(userEmail: string, paymentId: string, idempotencyKey: string) {
-  const row = await paymentById(paymentId);
-  if (!row || row.payerEmail !== userEmail) throw new ExternalFruitError("payment_not_found", 404);
-  return refundExternalPayment({ clientId: row.clientId, userEmail }, paymentId, idempotencyKey);
-}
-
 export async function settleDueExternalFruit(merchantEmail: string) {
+  if (settleThrottled(`external:${merchantEmail}`)) return;
   const db = database();
   const merchantWallet = await wallet(merchantEmail);
   if (!merchantWallet || merchantWallet.status !== "active") return;

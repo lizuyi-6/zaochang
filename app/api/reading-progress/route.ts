@@ -1,6 +1,7 @@
 import { requireMember, type MemberIdentity } from "../_lib/access-control";
 import { database, jsonError } from "../_lib/community";
 import { canViewDoc, listAllDocMetas, type DocMeta } from "../_lib/docs";
+import { assertSameOrigin } from "../_lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,10 @@ async function validateProgressTarget(
 export async function POST(req: Request) {
   try {
     const member = await requireMember();
+    // L4(2026-10 审计):阅读进度 upsert 虽是低敏感数据,但它是不设防的写入口
+    // (实测跨站 POST 可达);补同源断言与其余写端点对齐。
+    const originError = assertSameOrigin(req);
+    if (originError) return originError;
     const body = (await req.json().catch(() => ({}))) as { bookId?: string; chapterId?: string; paragraph?: number };
     const bookId = String(body.bookId ?? "");
     const chapterId = String(body.chapterId ?? "");
@@ -64,8 +69,8 @@ export async function POST(req: Request) {
 }
 
 // 返回当前用户所有书的阅读进度(最近阅读列表),按 updated_at 倒序。
-// JOIN docs 自动排除已删除的书;登录用户对其进度中所有书均可见
-// (canViewDoc 对 member 非空恒真),故无需应用层再过滤。
+// JOIN docs 自动排除已删除的书;L7(2026-10 审计)起 private 书仅作者+策展人可见,
+// 曾在 members 期读过、后转私有的书不得再泄露书名/封面——按 canViewDoc 过滤。
 export async function GET() {
   try {
     const member = await requireMember();
@@ -76,7 +81,8 @@ export async function GET() {
                   rp.last_paragraph AS lastParagraph, rp.updated_at AS updatedAt,
                   b.slug AS bookSlug, b.title AS bookTitle,
                   b.cover_hue AS coverHue, b.cover_image AS coverImage,
-                  c.slug AS chapterSlug, c.title AS chapterTitle
+                  c.slug AS chapterSlug, c.title AS chapterTitle,
+                  b.visibility AS bookVisibility, b.author_email AS bookAuthorEmail
            FROM reading_progress rp
            JOIN docs b ON b.id = rp.book_id
            LEFT JOIN docs c ON c.id = rp.last_chapter_id
@@ -86,7 +92,21 @@ export async function GET() {
         .bind(member.email)
         .all()
     ).results;
-    return Response.json({ progress: rows });
+    const visible = rows
+      .filter((row) => canViewDoc({ ...row, visibility: row.bookVisibility, authorEmail: row.bookAuthorEmail } as unknown as DocMeta, member))
+      .map((row) => ({
+        bookId: row.bookId,
+        lastChapterId: row.lastChapterId,
+        lastParagraph: row.lastParagraph,
+        updatedAt: row.updatedAt,
+        bookSlug: row.bookSlug,
+        bookTitle: row.bookTitle,
+        coverHue: row.coverHue,
+        coverImage: row.coverImage,
+        chapterSlug: row.chapterSlug,
+        chapterTitle: row.chapterTitle,
+      }));
+    return Response.json({ progress: visible });
   } catch (error) {
     return jsonError(error);
   }

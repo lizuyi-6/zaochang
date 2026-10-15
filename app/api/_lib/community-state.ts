@@ -27,15 +27,25 @@ export type MemberCommunityState = {
 export async function listMemberActions(
   db: ReturnType<typeof database>,
   email: string,
-): Promise<{ kind: string; targetRef: string; createdAt: string }[]> {
+): Promise<{ kind: string; targetRef: string | null; createdAt: string }[]> {
   return (
     await db
       .prepare(
-        `SELECT kind, target_ref AS targetRef, created_at AS createdAt
+        // M1(2026-10 审计):follow_creator 的 target_ref 落库为 email(身份唯一键),
+        // 但不能把被关注者的 email 原文发给客户端——按读翻译为目标成员的
+        // member_number(公开、唯一、与 posts/products 载荷里的 ownerNumber 对齐,
+        // 客户端凭它匹配「关注」过滤)。目标成员行已删除时子查询为 NULL,客户端
+        // 自然跳过。其余 kind 的 target_ref 语义不变(帖子 id/圈子 slug 等)。
+        `SELECT kind,
+           CASE WHEN kind = 'follow_creator'
+             THEN CAST((SELECT m.member_number FROM members m WHERE m.email = community_actions.target_ref) AS TEXT)
+             ELSE target_ref
+           END AS targetRef,
+           created_at AS createdAt
          FROM community_actions WHERE user_email = ?`,
       )
       .bind(email)
-      .all<{ kind: string; targetRef: string; createdAt: string }>()
+      .all<{ kind: string; targetRef: string | null; createdAt: string }>()
   ).results;
 }
 
@@ -57,10 +67,11 @@ export async function listReadNotificationRefs(
 }
 
 // 成员通知 UNION 流(评论/点赞/关注/交易):同上,两处共用一份 SQL。
+// M1(2026-10 审计):关注分支按 target_ref=email 匹配(落库侧已归一),不再用
+// 显示名——重名用户会收到别人的关注通知。
 export async function listMemberNotifications(
   db: ReturnType<typeof database>,
   email: string,
-  displayName: string,
 ): Promise<{ id: string; type: string; title: string; detail: string; createdAt: string; href: string }[]> {
   return (
     await db
@@ -99,7 +110,7 @@ export async function listMemberNotifications(
          WHERE t.user_email = ? AND t.type <> 'welcome'
          ORDER BY createdAt DESC LIMIT 20`,
       )
-      .bind(email, email, email, email, displayName, email, email)
+      .bind(email, email, email, email, email, email, email)
       .all<{ id: string; type: string; title: string; detail: string; createdAt: string; href: string }>()
   ).results;
 }
@@ -202,7 +213,7 @@ export async function loadMemberCommunityState(member: MemberIdentity): Promise<
   const orders = [...internalOrders, ...externalOrders]
     .sort((left, right) => String((right as { purchasedAt?: string }).purchasedAt ?? "").localeCompare(String((left as { purchasedAt?: string }).purchasedAt ?? "")))
     .slice(0, 20);
-  const notifications = await listMemberNotifications(db, member.email, member.displayName);
+  const notifications = await listMemberNotifications(db, member.email);
   const recentReading = await listRecentReading(member);
   // 当前账户名下的书(is_book=1 且 author_email 匹配)。章节数用递归 CTE 统计
   // 该书根的全部后代,与书架前台 listBooks 的 chapterCount 同语义。

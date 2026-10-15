@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const member = await requireMember();
+    // M4(2026-10 审计):GET 内部走 getFruitPaymentState → settleDueFruit,与 POST
+    // 同动作却无同款限流;240/h(每 15 秒一次)覆盖购买按钮的状态轮询。
+    await enforceRateLimit(await rateLimitKey("payments-read", member.email), 240, 60 * 60);
     const productId = Number(new URL(request.url).searchParams.get("productId"));
     if (!Number.isInteger(productId)) return Response.json({ error: "invalid_product" }, { status: 400 });
     return Response.json(await getFruitPaymentState(member.email, productId));

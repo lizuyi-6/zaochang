@@ -26,6 +26,7 @@ export type { PricingModel, ProductTheme } from "./product-policy.ts";
 export type ProductRowLike = {
   id?: unknown;
   ownerName?: unknown;
+  ownerNumber?: unknown;
   title?: unknown;
   description?: unknown;
   category?: unknown;
@@ -53,6 +54,9 @@ export function hydrateProductRow(row: ProductRowLike, options: {
   return {
     id: Number(row.id),
     ownerName,
+    ...(row.ownerNumber !== undefined && row.ownerNumber !== null
+      ? { ownerNumber: String(row.ownerNumber) }
+      : {}),
     ownerInitial: options.ownerInitial ?? ownerName[0],
     title: String(row.title),
     description: String(row.description),

@@ -13,7 +13,7 @@ function typicalEntries() {
     entry("index.html", { data: Buffer.from("<h1>ok</h1>") }),
     entry("assets/", { data: Buffer.alloc(0) }),
     entry("assets/site.css", { method: 8, data: Buffer.from("body{}") }),
-    entry("数据/图标.svg", { method: 8, data: Buffer.from("<svg/>") }),
+    entry("数据/图标.webp", { method: 8, data: Buffer.from([0x52, 0x49, 0x46, 0x46]) }),
     entry("app.wasm", { data: Buffer.from([0, 97, 115, 109]) }),
     entry("page.config.json", { data: Buffer.from("{}") }),
     entry("app.js", { flags: 0x0808, localCompressedSize: 0, localUncompressedSize: 0, localCrc32: 0, method: 8, data: Buffer.from("console.log(1)") }),
@@ -116,6 +116,8 @@ function corruptLocalSignature() {
 
 const rejectionCases = [
   { name: "plain bytes are not a ZIP", code: "bundle_not_zip", make: () => new Uint8Array([1, 2, 3, 4]) },
+  // L6(2026-10 审计):svg 是可执行活动内容,从 allowed 移除后必须被拒。
+  { name: "svg active content", code: "bundle_extension_unknown", make: () => buildZip([entry("index.html"), entry("图标.svg", { method: 8, data: Buffer.from("<svg/>") })]) },
   { name: "empty ZIP has no root page", code: "bundle_missing_index", make: () => buildZip([]) },
   { name: "truncated end record", code: "bundle_structure_corrupt", make: () => buildZip([entry("index.html")], { truncateBytes: 2 }) },
   { name: "garbage after end record", code: "bundle_structure_corrupt", make: () => buildZip([entry("index.html")], { appendGarbage: Buffer.from("tail") }) },
@@ -187,9 +189,9 @@ test("typical static site returns exact summary and accepts the permitted specia
   if (!result.ok) return;
   assert.deepEqual(result.summary, {
     fileCount: 7,
-    uncompressedBytes: 47,
+    uncompressedBytes: 45,
     zipBytes: bytes.length,
-    entries: ["index.html", "assets/", "assets/site.css", "数据/图标.svg", "app.wasm", "page.config.json", "app.js", "x.php.txt"],
+    entries: ["index.html", "assets/", "assets/site.css", "数据/图标.webp", "app.wasm", "page.config.json", "app.js", "x.php.txt"],
   });
 });
 
