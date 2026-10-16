@@ -116,9 +116,16 @@ export let aiUpstreamMissingModel = null;
  * auth_failed 回 401(2026-10 审计第 5 批:MCP 成功路径此前无集成测试)。 */
 export let mcpUpstreamCount = 0;
 export let mcpMockOutcome = "success";
-/** 置对象后,非流式 Messages 调用(llm.chat)以该对象的 JSON 串作为回复文本
+/** 置对象后,Messages/chat-completions 调用(流式与非流式)以该对象的 JSON 串作为回复文本
  * (白板讲座计划 quick_check/diagram 透传断言用);resetAiUpstream 会复位。 */
 export let aiUpstreamJsonOverride = null;
+/** 置数字后,流式调用只吐出覆盖正文的前 N 个字符,随后以 stop_reason=max_tokens 收尾
+ * (测讲稿流式截断后的步骤抢救);resetAiUpstream 会复位。 */
+export let aiUpstreamStreamTruncateAt = null;
+
+export function setAiUpstreamStreamTruncateAt(n) {
+  aiUpstreamStreamTruncateAt = Number.isInteger(n) ? n : null;
+}
 
 export function setAiUpstreamForceFail(value) {
   aiUpstreamForceFail = Boolean(value);
@@ -162,6 +169,7 @@ export function resetAiUpstream() {
   mcpUpstreamCount = 0;
   mcpMockOutcome = "success";
   aiUpstreamJsonOverride = null;
+  aiUpstreamStreamTruncateAt = null;
   unitResponseDelayMs = 0;
   imageResponseDelayMs = 0;
 }
@@ -457,28 +465,35 @@ export async function startFakeAiUpstream() {
       return;
     }
     response.writeHead(200, { "content-type": "text/event-stream" });
+    // 覆盖正文(讲稿透传断言)在流式通道同样生效:切成 4 段验证跨帧拼接;可选截断模拟 max_tokens
+    const overrideText = aiUpstreamJsonOverride === null ? null
+      : aiUpstreamStreamTruncateAt === null ? aiUpstreamJsonOverride : aiUpstreamJsonOverride.slice(0, aiUpstreamStreamTruncateAt);
+    const streamPieces = overrideText === null ? sseChunks
+      : [0, 1, 2, 3].map((i) => overrideText.slice(Math.floor((i * overrideText.length) / 4), Math.floor(((i + 1) * overrideText.length) / 4)));
+    const truncated = overrideText !== null && aiUpstreamStreamTruncateAt !== null;
     if (isMessages) {
       // Anthropic Messages 流:先 thinking 块再 text 块。thinking_delta 里故意夹带与正文
       // 相同的文字——若解析器把思维链当正文,客户端拼接会翻倍、断言即失败(可证伪)。
       response.write(`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg_fake", model: body.model } })}\n\n`);
       response.write(`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } })}\n\n`);
-      for (const piece of sseChunks) {
+      for (const piece of streamPieces) {
         response.write(`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: piece } })}\n\n`);
       }
       response.write(`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 1, content_block: { type: "text", text: "" } })}\n\n`);
-      for (const piece of sseChunks) {
+      for (const piece of streamPieces) {
         response.write(`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 1, delta: { type: "text_delta", text: piece } })}\n\n`);
       }
-      response.write(`event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "end_turn" } })}\n\n`);
+      response.write(`event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: truncated ? "max_tokens" : "end_turn" } })}\n\n`);
       response.write(`event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`);
       response.end();
       return;
     }
-    for (let i = 0; i < sseChunks.length; i += 1) {
+    for (let i = 0; i < streamPieces.length; i += 1) {
       // 首帧夹带未知字段 echo:证明服务端/客户端解析器只取 delta.content、忽略其余。
-      const payload = i === 0 ? { t: sseChunks[i], echo: lastChatCompletion } : { t: sseChunks[i] };
-      response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: sseChunks[i] } }], echoPayload: payload })}\n\n`);
+      const payload = i === 0 ? { t: streamPieces[i], echo: lastChatCompletion } : { t: streamPieces[i] };
+      response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: streamPieces[i] } }], echoPayload: payload })}\n\n`);
     }
+    if (truncated) response.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: "length" }] })}\n\n`);
     response.end("data: [DONE]\n\n");
   });
   await new Promise((resolve, reject) => {

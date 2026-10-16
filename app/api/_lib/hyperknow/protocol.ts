@@ -153,6 +153,22 @@ export async function* consumeChatCompletionsSse(body: ReadableStream<Uint8Array
   }
 }
 
+/** 长 JSON 生成(白板讲稿)专用:把增量流收成正文,只取 text、丢弃思维链。流中途断开、
+ * 预算中止、max_tokens 截断(消费器抛 ai_upstream_incomplete)都不抛出,而是连同已收到的
+ * 正文一起交回——非流式调用遇到这些情况会整段丢失,讲稿只能落模板降级课;半截 JSON
+ * 交给 parseLecturePlan 抢救完整步骤。error 为 null 表示流正常结束。 */
+export async function collectStreamText(chunks: AsyncIterable<StreamChunk>): Promise<{ text: string; error: unknown }> {
+  let text = "";
+  try {
+    for await (const chunk of chunks) {
+      if (chunk.type === "text") text += chunk.text;
+    }
+    return { text, error: null };
+  } catch (error) {
+    return { text, error: error ?? new Error("stream_failed") };
+  }
+}
+
 // 白板单步讲解节奏:正文字数 × 180ms,最少 4 秒(原 whiteboardWs.js deliverStep 逐字一致)。
 // 服务端 setTimeout 链已改为客户端驱动播放,这个公式同时用于服务端(无)与客户端(适配器),
 // 放在纯模块保证两端节奏一致。

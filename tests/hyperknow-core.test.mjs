@@ -698,6 +698,81 @@ test("parseLecturePlan: 模型 JSON 小瑕疵先修复/抢救,不再整份作废
   assert.deepEqual(parse(JSON.stringify(ok), "t"), ok);
 });
 
+test("parseLecturePlan: JSON 字符串里的 ```mermaid 不被当成外层围栏(2026-10-16 直连对照 17 路完整输出 2 路因此整课降级)", async () => {
+  const { parseLecturePlan: parse } = await import("../app/api/_lib/hyperknow/prompts.ts");
+  const plan = {
+    steps: [
+      { step_id: "step_1", spoken_text: "先看时间线。", board_action: { type: "diagram", code: "```mermaid\ngraph TD\n  A[1947 一号洞] --> B[1956 十一号洞]\n```" } },
+      { step_id: "step_2", spoken_text: "再看代码块。", board_action: { type: "card", content: "<pre>```js\nconst x = {a: 1};\n```</pre>" } },
+      { step_id: "step_3", spoken_text: "收尾。", board_action: { type: "card", title: "小结" } },
+    ],
+  };
+  const raw = JSON.stringify(plan, null, 2);
+  // 1) 裸 JSON(无外层围栏),字段里带 ```mermaid —— 旧实现切出 "mermaid\ngraph..." 解析失败
+  assert.deepEqual(parse(raw, "t"), plan);
+  // 2) 外层 ```json 围栏里套内层围栏 —— 旧实现在内层开头处截断
+  assert.deepEqual(parse("```json\n" + raw + "\n```", "t"), plan);
+  // 3) 外层围栏后还跟一段带花括号的说明 —— 只取围栏内
+  assert.deepEqual(parse("下面是讲稿:\n```json\n" + raw + "\n```\n注:{可按需调整}", "t"), plan);
+  // 4) 模型漏写步骤对象的左花括号(`},\n "step_id": ...`):补回后完整保留;合法讲稿里
+  //    step_id 排在 board_action 之后的写法不受影响
+  const stepsObj = Array.from({ length: 5 }, (_, i) => ({ step_id: `step_${i + 1}`, spoken_text: `讲解 ${i + 1}`, board_action: { type: "card", title: `T${i + 1}` } }));
+  const missingOpeners = JSON.stringify({ steps: stepsObj }, null, 2).replace(/\},\n {4}\{\n {6}"step_id"/g, '},\n      "step_id"');
+  assert.throws(() => JSON.parse(missingOpeners));
+  const restored = parse(missingOpeners, "t");
+  assert.equal(restored.degraded, undefined);
+  assert.deepEqual(restored.steps, stepsObj);
+  const reordered = stepsObj.map(({ step_id, ...rest }) => ({ ...rest, step_id }));
+  assert.deepEqual(parse(JSON.stringify({ steps: reordered }).replace('"step_5"}', '"step_5",}'), "t").steps, reordered, "尾逗号修复时不得误补花括号");
+  // 修过才能解析但只有 3 步 → 仍降级(与抢救同一门槛)
+  const shortBroken = JSON.stringify({ steps: stepsObj.slice(0, 3) }, null, 2).replace(/\},\n {4}\{\n {6}"step_id"/g, '},\n      "step_id"');
+  assert.equal(parse(shortBroken, "t").degraded, true);
+  // 5) 外层围栏被截断(无收尾围栏)时整段交给修复/抢救,不因找不到收尾而丢内容
+  const truncated = parse("```json\n" + JSON.stringify({ steps: [...plan.steps, ...plan.steps] }).slice(0, -30), "t");
+  assert.equal(truncated.degraded, undefined, "截断但 ≥4 个完整步骤 → 抢救");
+  assert.ok(truncated.steps.length >= 4);
+});
+
+test("collectStreamText: 流式讲稿只收正文;max_tokens 截断/断流时交回已收到的正文而不是抛掉", async () => {
+  const { collectStreamText, consumeMessagesSse } = await import("../app/api/_lib/hyperknow/protocol.ts");
+  // 逐次 pull 吐一帧,最后关闭或报错(start 里 enqueue 后立刻 error 会清空队列,模拟不了"收到一半再断")
+  const sse = (frames, { error } = {}) => {
+    let i = 0;
+    return new ReadableStream({
+      pull(c) {
+        if (i < frames.length) c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(frames[i++])}\n\n`));
+        else if (error) c.error(new Error(error));
+        else c.close();
+      },
+    });
+  };
+  const think = { type: "content_block_delta", delta: { type: "thinking_delta", thinking: "想很久" } };
+  const text = (t) => ({ type: "content_block_delta", delta: { type: "text_delta", text: t } });
+
+  const done = await collectStreamText(consumeMessagesSse(sse([think, text('{"steps":'), text("[]}"),
+    { type: "message_delta", delta: { stop_reason: "end_turn" } }, { type: "message_stop" }])));
+  assert.equal(done.text, '{"steps":[]}', "思维链不得混入正文");
+  assert.equal(done.error, null);
+
+  const cut = await collectStreamText(consumeMessagesSse(sse([think, text('{"steps":[{"a":1}'),
+    { type: "message_delta", delta: { stop_reason: "max_tokens" } }])));
+  assert.equal(cut.text, '{"steps":[{"a":1}', "截断前的正文必须保留");
+  assert.equal(cut.error?.message, "ai_upstream_incomplete");
+
+  const dropped = await collectStreamText(consumeMessagesSse(sse([text("半截")], { error: "disconnected" })));
+  assert.equal(dropped.text, "半截");
+  assert.ok(dropped.error);
+
+  const ctrl = new AbortController();
+  const aborted = await collectStreamText((async function* () {
+    yield { type: "text", text: "预算内" };
+    ctrl.abort();
+    ctrl.signal.throwIfAborted();
+  })());
+  assert.equal(aborted.text, "预算内", "预算中止时已收到的正文交给解析器抢救");
+  assert.ok(aborted.error);
+});
+
 test("parseCourseBlueprint: 重复 unitId 确定性改名(否则确认门永远 400 卡死);JSON 小瑕疵先修复", async () => {
   const { parseCourseBlueprint } = await import("../app/api/_lib/hyperknow/prompts.ts");
   const bp = parseCourseBlueprint(JSON.stringify({

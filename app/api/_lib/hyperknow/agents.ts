@@ -3,7 +3,7 @@
 // LLM 编排。四个编排面是无状态单例、只依赖 llm 客户端——
 // 会话历史由路由层从 D1 读出再传入(连接级内存 history 数组随 WS 一起退役)。
 
-import { chat, streamChat, streamChatOpenAI, type LlmMessage } from "./llm";
+import { chat, streamChat, streamChatOpenAI, HyperknowNotConfiguredError, HyperknowUpstreamError, type LlmMessage } from "./llm";
 import {
   CONTENT_GENERATOR_SYSTEM_PROMPT,
   COURSE_INQUIRY_PROMPT,
@@ -34,6 +34,7 @@ import {
   type NextStepsData,
 } from "./prompts";
 import {
+  collectStreamText,
   formatCourseBrief,
   getDepthScaleBudget,
   normalizeCourseDepth,
@@ -240,27 +241,46 @@ export async function planLecture(
   const nameNote = learnerName
     ? `\nThe learner's name is "${learnerName}". Address them by this name in 2-3 narration lines only (e.g. the opening greeting and the closing line); never write the name into board card/diagram text.`
     : "";
-  const jsonStr = await chat(
-    [
-      { role: "system", content: WHITEBOARD_INSTRUCTOR_PROMPT },
-      {
-        role: "user",
-        content: `Create a step-by-step whiteboard lecture for: "${topic}"${langNote}${nameNote}${buildLectureContextNote(context)}`,
-      },
-    ],
-    /* maxTokens 16384:混合推理模型先思考后写——细腻化提示词(课程上下文+3-5句旁白
-     * 微结构)显著加长思考链,8192 会被推理耗尽致正文为空(parse 报 Unexpected end
-     * of JSON input→静默降级模板课)。与课程蓝图同一量级取双倍保险。 */
-    { jsonMode: true, signal, maxTokens: 16384 },
-  ).catch((error) => {
-    // 上游故障留痕后落语言一致的 fallback;不能让中文课程静默变成英文模板课。
+  const messages: LlmMessage[] = [
+    { role: "system", content: `${WHITEBOARD_INSTRUCTOR_PROMPT}\nIMPORTANT: You must respond in valid JSON format only.` },
+    {
+      role: "user",
+      content: `Create a step-by-step whiteboard lecture for: "${topic}"${langNote}${nameNote}${buildLectureContextNote(context)}`,
+    },
+  ];
+  /* 流式而非一次性 chat():2026-10-16 生产日志与直连对照实验——
+   * ① 推理链长度极不稳定(思考 0.9K~32K 字),约三成请求在 max_tokens 处被截断,
+   *    非流式只能拿到半截 JSON 或整段丢失 → 模板降级课(生产 14 天 22/44 降级);
+   * ② 非流式长连接 72~104s 无字节时上游回 520,随后的兼容通道重试必然撞上路由预算。
+   * 流式下字节持续到达;截断、断流、预算中止都保留已收到的正文,由 parseLecturePlan
+   * 抢救完整步骤(≥4 步才采用,否则仍降级)。 */
+  const startedAt = Date.now();
+  let { text, error } = await collectStreamText(streamChat(messages, { signal, maxTokens: LECTURE_PLAN_MAX_TOKENS }));
+  const retryable = !(error instanceof HyperknowNotConfiguredError)
+    && !(error instanceof HyperknowUpstreamError && error.code !== "ai_upstream_error");
+  if (error && retryable && !signal?.aborted && text.length < 200 && Date.now() - startedAt < LECTURE_PLAN_RETRY_WINDOW_MS) {
+    // 开流即断(Worker 出口走 /messages 偶发秒断流,见 llm.ts streamChatOpenAI 注释):换兼容通道重来一次
+    console.warn(`[hyperknow] planLecture stream dropped early for "${topic}", retrying via chat/completions:`, errorMessage(error));
+    ({ text, error } = await collectStreamText(streamChatOpenAI(messages, { signal, maxTokens: LECTURE_PLAN_MAX_TOKENS })));
+  }
+  if (error) {
+    // 留痕:上游故障 / 截断 / 预算中止都要能从日志区分;已收到的正文仍交给解析器抢救
     console.warn(
-      `[hyperknow] planLecture upstream failed for "${topic}" (${effLang}), using fallback:`,
-      error instanceof Error ? error.message : error,
+      `[hyperknow] planLecture stream ended early for "${topic}" (${effLang}) after ${Math.round((Date.now() - startedAt) / 1000)}s, kept ${text.length} chars:`,
+      errorMessage(error),
     );
-    return "";
-  });
-  return parseLecturePlan(jsonStr, topic, learnerName, effLang);
+  }
+  return parseLecturePlan(text, topic, learnerName, effLang);
+}
+
+/** 讲稿生成的 token 上限:混合推理模型的思维链计入 max_tokens。16384 下思考 26K 字的请求
+ * ~100s 就被截断;32768 实测同类请求 125s 正常结束。再长的由路由 130s 预算收口,流式保留正文。 */
+const LECTURE_PLAN_MAX_TOKENS = 32768;
+/** 开流后这么短时间内就断且几乎没有正文,才值得换通道重试;再晚重试也赶不上路由预算 */
+const LECTURE_PLAN_RETRY_WINDOW_MS = 30_000;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export async function answerInterjection(

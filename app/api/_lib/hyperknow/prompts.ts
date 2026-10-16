@@ -381,8 +381,20 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
 // 模型还经常在字符串值里直接写裸换行/制表符(mermaid 代码段尤其多),这在 JSON 里
 // 是非法控制字符——做一次"仅在字符串内转义控制字符"的清扫,否则整个计划被误判作废。
 function sliceJsonPayload(jsonStr: string): string {
-  const fenced = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-  let payload = (fenced ? fenced[1] : jsonStr).trim();
+  let payload = jsonStr.trim();
+  /* 只认包住整段 JSON 的外层围栏(出现在第一个 { 之前)。旧写法用惰性正则取第一对 ```:
+   * 板书 diagram/code 字段里的 ```mermaid 会被误当外层,切出 "mermaid\n..." 必然解析
+   * 失败;外层 ```json 里套内层围栏时又会在内层开头处截断。2026-10-16 直连上游对照实验
+   * 复现:end_turn 的完整讲稿因此整课降级。 */
+  const opener = payload.match(/```(?:json)?[ \t]*\r?\n?/i);
+  const braceAt = payload.indexOf('{');
+  if (opener?.index !== undefined && (braceAt === -1 || opener.index < braceAt)) {
+    payload = payload.slice(opener.index + opener[0].length);
+    // 外层收尾围栏独占一行;JSON 字符串里的内层围栏带语言名或紧跟引号,不会匹配。没有收尾=被截断,整段留给修复/抢救
+    const close = payload.match(/\r?\n```[ \t]*(?:\r?\n|$)/);
+    if (close?.index !== undefined) payload = payload.slice(0, close.index);
+  }
+  payload = payload.trim();
   const firstBrace = payload.indexOf('{');
   const lastBrace = payload.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -540,6 +552,12 @@ export function salvageLectureSteps(src: string): LecturePlan["steps"] {
 /** 抢救出的步骤少于此数就不如模板课结构完整,仍降级 */
 const MIN_SALVAGED_LECTURE_STEPS = 4;
 
+/** 模型偶发漏写步骤对象的左花括号:`},\n  "step_id": "step_2", ...`(2026-10-16 直连对照
+ * 24 路中 1 路,其后各步全部错位)。只补"上一对象收尾 + 逗号"后紧跟 step_id 键的位置。 */
+function restoreMissingStepOpeners(src: string): string {
+  return src.replace(/(\}\s*,\s*)("step_id"\s*:)/g, "$1{$2");
+}
+
 export function parseLecturePlan(jsonStr: string, topic: string, learnerName = "", language = ""): LecturePlan {
   try {
     let parsed: LecturePlan | undefined;
@@ -550,11 +568,23 @@ export function parseLecturePlan(jsonStr: string, topic: string, learnerName = "
       strictError = error;
     }
     if (parsed === undefined) {
-      const repaired = repairLooseJson(sliceJsonPayload(jsonStr));
-      try {
-        parsed = JSON.parse(repaired) as LecturePlan;
-      } catch {
-        const steps = salvageLectureSteps(repaired);
+      const sliced = sliceJsonPayload(jsonStr);
+      // 第二候选只在第一候选修不好时才用:合法讲稿里 step_id 也可能排在 board_action 之后
+      const candidates = [repairLooseJson(sliced), repairLooseJson(restoreMissingStepOpeners(sliced))];
+      for (const repaired of candidates) {
+        try {
+          const plan = JSON.parse(repaired) as LecturePlan;
+          // 修过才能解析的讲稿与抢救同一门槛:又坏又短(如 3 步无快测)不如模板课 + 重新备课
+          if (Array.isArray(plan?.steps) && plan.steps.length >= MIN_SALVAGED_LECTURE_STEPS) {
+            parsed = plan;
+            break;
+          }
+        } catch {
+          /* 试下一个候选 */
+        }
+      }
+      if (parsed === undefined) {
+        const steps = candidates.map(salvageLectureSteps).reduce((best, s) => (s.length > best.length ? s : best), [] as LecturePlan["steps"]);
         if (steps.length >= MIN_SALVAGED_LECTURE_STEPS) parsed = { steps };
       }
       if (parsed === undefined) throw strictError;
