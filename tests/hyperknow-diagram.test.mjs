@@ -93,3 +93,19 @@ C --> D`;
     assert.ok(measureText(t) <= LABEL_MAX_W, `标签行超宽(${measureText(t)}px): ${t}`);
   }
 });
+
+test("Mermaid 带引号标签:引号是语法,不得作为节点/边文字上板(旧实现每个节点多出孤立引号行)", async () => {
+  const { parseMermaid, unquoteLabel } = await import("../hyperknow-spa/src/lattice/whiteboard/diagram.ts");
+  const g = parseMermaid(`graph TD
+  Context["现实背景与核心情境"] --> Mechanism["核心概念与关键机制"]
+  Mechanism -->|"驱动"| Stadium(["体育场形"])`);
+  assert.ok(g);
+  assert.deepEqual(g.nodes.map((n) => n.label), ["现实背景与核心情境", "核心概念与关键机制", "体育场形"]);
+  assert.equal(g.edges[1].label, "驱动");
+  for (const n of g.nodes) assert.ok(!n.lines.some((l) => l.includes('"')), `节点 ${n.id} 折行后仍含引号: ${n.lines}`);
+  // 无引号标签与内部引号保持原样
+  assert.equal(unquoteLabel("f(x) 的导数"), "f(x) 的导数");
+  assert.equal(unquoteLabel('"他说"好"的那天"'), '他说"好"的那天');
+  const rendered = renderDiagram(`graph TD\n  A["甲"] --> B["乙"]`);
+  assert.ok(rendered && !/>"|"</.test(rendered.svg.replace(/="[^"]*"/g, "")), "SVG 文本节点不得出现引号");
+});

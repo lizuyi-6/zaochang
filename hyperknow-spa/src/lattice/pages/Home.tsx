@@ -29,7 +29,9 @@ import {
   Check,
 } from 'lucide-react';
 import type { PageProps } from '../types';
-import { placeholders, newsFeed, homeCourses } from '../data';
+import { placeholders, newsFeed, homeCourses, type CourseCard } from '../data';
+import { buildGeneratedCourse } from '../generate';
+import { courseJoinKey, isCourseJoined } from '../courseJoinMemory';
 import { fetchDailyFeed, type DailyFeedItem } from '../backend';
 import { Logo, PlanetDoodle, CourseCover, Handshake, WelcomeReader, Ufo } from '../illustrations';
 import { DarkPill } from '../ui';
@@ -101,10 +103,14 @@ export const Home = ({ state, set }: PageProps) => {
   // 会让用户每次刷新都被全屏层拦住,误以为按钮失灵)
   useEffect(() => {
     if (!state.welcomeBack) return;
-    if (sessionStorage.getItem('hk-welcome-shown')) {
-      set({ welcomeBack: false });
-    } else {
-      sessionStorage.setItem('hk-welcome-shown', '1');
+    try {
+      if (sessionStorage.getItem('hk-welcome-shown')) {
+        set({ welcomeBack: false });
+      } else {
+        sessionStorage.setItem('hk-welcome-shown', '1');
+      }
+    } catch {
+      /* 隐私模式/禁存储下访问 sessionStorage 即抛:欢迎层照常弹,只是不能记住已弹过 */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -165,15 +171,37 @@ export const Home = ({ state, set }: PageProps) => {
     };
   }, []);
 
+  /** 首页课程卡:后端有同名课程(官方样例/本人课程)就直接打开那门课的预览,
+   * 否则才落到集市总览——旧实现每张卡都只跳集市,学员点了「社会学导论」还得再找一遍 */
+  const openHomeCourse = (c: CourseCard) => {
+    const live = state.marketCourses?.find((m) => m.uuid && m.title.trim() === c.title.trim());
+    if (!live?.uuid) {
+      set({ screen: 'marketplace' });
+      return;
+    }
+    set({
+      screen: 'coursePreview',
+      generated: { ...buildGeneratedCourse(c.title), cover: c.cover },
+      courseJoined: isCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(live.uuid)),
+      lectureDone: false,
+      activeCourseUuid: live.uuid,
+      courseLoading: true,
+      courseError: null,
+    });
+  };
+
   const shuffleNews = async () => {
     // 有真实动态源:换一批 = 拉取新轮(新检索词出新内容);失败退回池内轮转
     if (liveNews && liveNews.length > 0) {
       setFeedLoading(true);
-      const next = await fetchDailyFeed(feedRound + 1);
+      /* 服务端每日只有 round 0-5 六批(超出按 5 夹住且命中缓存):游标在 0-5 间循环,
+       * 否则第 6 次起永远拿到同一批却仍提示"已刷新" */
+      const nextRound = (feedRound + 1) % 6;
+      const next = await fetchDailyFeed(nextRound);
       setFeedLoading(false);
       if (next && next.length > 0) {
         setLiveNews(next);
-        setFeedRound((r) => r + 1);
+        setFeedRound(nextRound);
         setNewsOffset(0);
         toast(L('Trends refreshed', '趋势已刷新'));
         return;
@@ -425,7 +453,7 @@ export const Home = ({ state, set }: PageProps) => {
               </div>
               <div className="hm-market-grid">
                 {homeCourses().map((c) => (
-                  <div className="hm-course" key={c.id} onClick={() => set({ screen: 'marketplace' })}>
+                  <div className="hm-course" key={c.id} onClick={() => openHomeCourse(c)}>
                     <div className="hm-course-cover">
                       <CourseCover kind={c.cover} seed={c.id} />
                     </div>

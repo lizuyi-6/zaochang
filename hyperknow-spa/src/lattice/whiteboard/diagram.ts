@@ -163,6 +163,14 @@ interface NodeSpec {
   shape: DiagNode['shape'];
 }
 
+/** Mermaid 带引号标签 A["文本"] / A(["文本"]) / 边标签 |"文本"|:引号是语法不是内容。
+ * 旧实现原样保留,每个节点多出孤立引号(折行后还会单独占一行)——liveLesson 把结构化
+ * 节点转 Mermaid 时本身就生成 ["label"],故所有结构化图都中招。 */
+export function unquoteLabel(s: string): string {
+  const q = s.trim().match(/^[([{/\\]?\s*"([\s\S]*)"\s*[)\]}/\\]?$/);
+  return q ? q[1].trim() : s.trim();
+}
+
 function parseNodeSpec(spec: string): NodeSpec[] {
   const out: NodeSpec[] = [];
   const re = /([A-Za-z0-9_.-]+)\s*(\[[^\]]*\]|\([^)]*\)|\{[^}]*\})?/g;
@@ -175,7 +183,7 @@ function parseNodeSpec(spec: string): NodeSpec[] {
     let shape: DiagNode['shape'] = 'rect';
     if (m[2]) {
       shape = m[2][0] === '(' ? 'round' : m[2][0] === '{' ? 'diamond' : 'rect';
-      const inner = m[2].slice(1, -1).trim();
+      const inner = unquoteLabel(m[2].slice(1, -1));
       if (inner) label = inner;
     }
     out.push({ id, label, shape });
@@ -193,7 +201,8 @@ function scanSegments(line: string): Segment[] {
   let m: RegExpExecArray | null;
   while ((m = arrowRe.exec(line))) {
     for (const spec of parseNodeSpec(line.slice(cursor, m.index))) segs.push({ kind: 'node', spec });
-    segs.push({ kind: 'arrow', mark: m[1], ...(m[2]?.trim() ? { label: m[2].trim() } : {}) });
+    const edgeLabel = m[2] ? unquoteLabel(m[2]) : '';
+    segs.push({ kind: 'arrow', mark: m[1], ...(edgeLabel ? { label: edgeLabel } : {}) });
     cursor = m.index + m[0].length;
   }
   for (const spec of parseNodeSpec(line.slice(cursor))) segs.push({ kind: 'node', spec });

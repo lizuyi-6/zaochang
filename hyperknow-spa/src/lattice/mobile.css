@@ -176,4 +176,9 @@
   .hk-root .wb-intro-art { display: none; }
   .hk-root .wb-intro-card { max-height: calc(100% - 64px); }
   .hk-root .wb-intro-body { padding: 16px; }
+  /* 横屏手机:可视高度仅 ~390px,顶栏不再拆成两行(两簇在 ≥600px 宽下放得进一行),
+   * 把高度还给板书——两行顶栏+字幕条曾把可视区压到 ~180px,板书只能缩到看不清 */
+  .hk-root .wb-top-bar { flex-wrap: nowrap; padding-top: max(6px, env(safe-area-inset-top, 0px)); padding-bottom: 6px; }
+  .hk-root .wb-cluster-left { flex: 1 1 auto; flex-basis: auto; min-width: 0; }
+  .hk-root .wb-cluster-right { width: auto; flex-shrink: 1; min-width: 0; padding-bottom: 0; }
 }

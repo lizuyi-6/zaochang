@@ -441,7 +441,11 @@
 .hk-page,
 .ob-root,
 .si-root {
-  animation: screen-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  /* fill-mode 只取 backwards:both 会在动画结束后永久保留 transform: translateY(0),
+   * 让 .hk-page 成为 position:fixed 的包含块与独立层叠上下文——页内所有弹窗遮罩
+   * (加入课程/反馈/确认)因此只罩住右侧内容区,盖不住左侧边栏。终态与自然样式一致,
+   * 去掉 forwards 视觉无差别。 */
+  animation: screen-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
 }
 @keyframes screen-in {
   from { opacity: 0; transform: translateY(12px); }

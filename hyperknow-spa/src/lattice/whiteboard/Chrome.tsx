@@ -21,6 +21,7 @@ import {
 import { ExportMenu } from './Popups';
 import { getIntroCopy, type Rich } from './lessonScript';
 import { CaptionBar } from './CaptionBar';
+import { L } from '../i18n/content';
 import { CAMERA_ZOOM_STEPS } from './camera';
 import type { PlayStatus } from './Panel';
 import type { ExportFormat, ExportPage } from '../boardExport';
@@ -106,11 +107,11 @@ export const WhiteboardChrome: React.FC<{
             <button
               className="wb-pill wb-follow-pill"
               onClick={p.onResumeFollow}
-              title="Resume camera following tutor"
-              aria-label="Resume camera following tutor"
+              title={L('Resume following the tutor', '镜头回到导师正在写的位置')}
+              aria-label={L('Resume following the tutor', '镜头回到导师正在写的位置')}
             >
               <LocateFixed size={15} />
-              <span>Resume Focus</span>
+              <span>{L('Resume Focus', '回到板书')}</span>
             </button>
           )}
 
@@ -205,11 +206,11 @@ export const WhiteboardChrome: React.FC<{
             ) : (
               <div className="wb-dock-caption-placeholder">
                 {p.quickCheckActive ? (
-                  <span className="wb-dock-qc-hint">Check your understanding above</span>
+                  <span className="wb-dock-qc-hint">{L('Check your understanding above', '请在上方作答')}</span>
                 ) : p.paused ? (
-                  <span className="wb-dock-paused-hint">Paused</span>
+                  <span className="wb-dock-paused-hint">{L('Paused', '已暂停')}</span>
                 ) : p.status === 'explaining' ? (
-                  <span className="wb-dock-explaining-hint">Tutor explaining...</span>
+                  <span className="wb-dock-explaining-hint">{L('Tutor explaining...', '导师讲解中…')}</span>
                 ) : null}
               </div>
             )}

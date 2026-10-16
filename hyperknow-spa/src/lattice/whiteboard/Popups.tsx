@@ -100,9 +100,25 @@ export const IntroOverlay: React.FC<{
   cover?: { kind: CoverKind; seed?: string | number } | null;
   /** 自由讲座(无课程上下文直进白板):先命题再 AI 实时备课;缺省保持旧行为 */
   freeTopic?: FreeTopicIntro;
-}> = ({ onStart, onClose, title, body, preparing, cover, freeTopic }) => {
+  /** 课程讲次备课失败(端点不可用/超时/限流):CTA 变重试,与自由讲座同一纪律——
+   * 绝不在本讲标题下静默开播话题对不上的演示课 */
+  failed?: boolean;
+  /** 拿到的是服务端模板降级计划:如实标注"简版提纲课"并给重新备课入口 */
+  degraded?: boolean;
+  onRetry?: () => void;
+}> = ({ onStart, onClose, title, body, preparing, cover, freeTopic, failed: courseFailed, degraded, onRetry }) => {
   const intro = { ...getIntroCopy(), ...(title ? { title } : {}), ...(body ? { body } : {}) };
   const [draft, setDraft] = useState('');
+  /* 备课等待计时:真实备课冷实例要 1-2 分钟,只给一个转圈的按钮,学员无从判断是在
+   * 正常工作还是卡死了——给出预期时长与已等待秒数 */
+  const [waitSec, setWaitSec] = useState(0);
+  useEffect(() => {
+    if (!preparing) return;
+    const started = Date.now();
+    setWaitSec(0);
+    const iv = window.setInterval(() => setWaitSec(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(iv);
+  }, [preparing]);
 
   if (freeTopic?.picking) {
     return (
@@ -171,8 +187,9 @@ export const IntroOverlay: React.FC<{
     );
   }
 
-  const failed = freeTopic?.failed === true;
-  const onCta = failed && freeTopic ? freeTopic.onRetry : onStart;
+  const failed = freeTopic ? freeTopic.failed === true : courseFailed === true;
+  const retry = freeTopic ? freeTopic.onRetry : onRetry;
+  const onCta = failed && retry ? retry : onStart;
   return (
     <div className="wb-intro">
       <button className="wb-intro-close" onClick={onClose} aria-label="Close">
@@ -197,7 +214,20 @@ export const IntroOverlay: React.FC<{
           <p className="wb-intro-text">{intro.body}</p>
           {failed && (
             <p className="wb-topic-error">
-              {L('Planning failed — the tutor service is busy right now.', '备课失败——导师服务繁忙,稍候重试。')}
+              {L('Planning failed — the tutor service is busy right now.', '备课失败——导师服务繁忙，请稍候重试。')}
+            </p>
+          )}
+          {!failed && !preparing && degraded && (
+            <p className="wb-topic-error">
+              {L(
+                'The AI tutor could not finish planning this lecture, so this is a short generic outline. ',
+                'AI 导师这次没能完成本讲备课，当前是一份通用的简版提纲。',
+              )}
+              {retry && (
+                <button type="button" className="wb-intro-link" onClick={retry}>
+                  {L('Plan it again', '重新备课')}
+                </button>
+              )}
             </p>
           )}
           <button className="wb-intro-cta" onClick={onCta} disabled={preparing}>
@@ -212,6 +242,14 @@ export const IntroOverlay: React.FC<{
               intro.cta
             )}
           </button>
+          {preparing && (
+            <p className="wb-intro-wait" aria-live="polite">
+              {L(
+                `The tutor is writing this lecture for you — usually 1–2 minutes (${waitSec}s so far).`,
+                `导师正在为你现场备课，通常需要 1–2 分钟（已等待 ${waitSec} 秒）。`,
+              )}
+            </p>
+          )}
         </div>
       </div>
     </div>

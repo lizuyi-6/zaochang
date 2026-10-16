@@ -173,15 +173,20 @@ export async function consumeCreditsIdempotent(
           return { remaining: null, charged: false, conflict: true };
         }
 
-        // 租约过期（先前任务崩溃或超时）：故障恢复接管租约，不重复扣费
-        await database()
+        // 租约过期（先前任务崩溃或超时）：故障恢复接管租约，不重复扣费。
+        // 比较-交换:只有读到的那份过期租约仍在原位才接管——两个并发恢复请求都读到同一
+        // 过期行时,旧实现两边都"接管成功",各跑一路 Stage1(双倍上游调用、蓝图互相覆盖)。
+        const takeover = await database()
           .prepare(
             `UPDATE hk_credit_charges
              SET lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE key = ? AND user_email = ?`,
+             WHERE key = ? AND user_email = ? AND status = 'pending' AND lease_expires_at IS ?`,
           )
-          .bind(leaseToken, leaseExpiresAt, key, user.email)
+          .bind(leaseToken, leaseExpiresAt, key, user.email, existing.lease_expires_at ?? null)
           .run();
+        if (Number(takeover.meta.changes ?? 0) === 0) {
+          return { remaining: null, charged: false, conflict: true };
+        }
 
         const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
@@ -190,7 +195,7 @@ export async function consumeCreditsIdempotent(
       if (existing.status === "refunded") {
         // 已退款的任务重试(失败后退费,同 key 再来):免费接管租约重做——
         // "恢复不重复扣费"的承诺对失败重试同样成立,退过的钱不再收一遍。
-        await database()
+        const reopened = await database()
           .prepare(
             `UPDATE hk_credit_charges
              SET status = 'pending', lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
@@ -198,6 +203,10 @@ export async function consumeCreditsIdempotent(
           )
           .bind(leaseToken, leaseExpiresAt, key, user.email)
           .run();
+        // 并发重试只有一个能把 refunded 翻回 pending;输家 409(旧实现零行更新也放行)
+        if (Number(reopened.meta.changes ?? 0) === 0) {
+          return { remaining: null, charged: false, conflict: true };
+        }
 
         const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
@@ -257,20 +266,23 @@ export async function consumeCreditsIdempotent(
           // 409 冲突：不放行并发重复任务！
           return { remaining: null, charged: false, conflict: true };
         }
-        // 过期租约接管,不重复扣费
-        await database()
+        // 过期租约接管,不重复扣费(同上:比较-交换,输家 409)
+        const takeover = await database()
           .prepare(
             `UPDATE hk_credit_charges
              SET lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE key = ? AND user_email = ? AND status = 'pending'`,
+             WHERE key = ? AND user_email = ? AND status = 'pending' AND lease_expires_at IS ?`,
           )
-          .bind(leaseToken, leaseExpiresAt, key, user.email)
+          .bind(leaseToken, leaseExpiresAt, key, user.email, check.lease_expires_at ?? null)
           .run();
+        if (Number(takeover.meta.changes ?? 0) === 0) {
+          return { remaining: null, charged: false, conflict: true };
+        }
         const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
       }
       if (check.status === "refunded") {
-        await database()
+        const reopened = await database()
           .prepare(
             `UPDATE hk_credit_charges
              SET status = 'pending', lease_token = ?, lease_expires_at = ?, updated_at = CURRENT_TIMESTAMP
@@ -278,6 +290,9 @@ export async function consumeCreditsIdempotent(
           )
           .bind(leaseToken, leaseExpiresAt, key, user.email)
           .run();
+        if (Number(reopened.meta.changes ?? 0) === 0) {
+          return { remaining: null, charged: false, conflict: true };
+        }
         const { remaining } = await currentCredits(user);
         return { remaining, charged: false, conflict: false };
       }

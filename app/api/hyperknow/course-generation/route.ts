@@ -153,6 +153,36 @@ function replayCompletedCourse(courseUuid: string, course: unknown): Response {
   return sseResponse(stream);
 }
 
+/** 任务行已落库的单元选择(Stage2 首次确认时写入);缺失或损坏返回 null。 */
+function storedSelectionOf(task: { selectedUnitsJson: string | null }): string[] | null {
+  if (!task.selectedUnitsJson) return null;
+  try {
+    const parsed = JSON.parse(task.selectedUnitsJson) as unknown;
+    return Array.isArray(parsed) && parsed.every((id) => typeof id === "string") ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 蓝图已就绪任务的回放(恢复流与幂等键重放共用)。selected_units 只在 Stage2 已确认过
+ * 时下发:选择一经落库即锁定,客户端据此直接续跑,不再让学员面对一个改了也会 409 的选单。 */
+function replayBlueprint(courseUuid: string, blueprint: unknown, selectedUnits: string[] | null): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(frame({ type: "course_generation_started", course_uuid: courseUuid, resumed: true }));
+      controller.enqueue(frame({
+        type: "blueprint_ready",
+        course_uuid: courseUuid,
+        blueprint,
+        requires_confirmation: true,
+        ...(selectedUnits ? { selected_units: selectedUnits } : {}),
+      }));
+      controller.close();
+    },
+  });
+  return sseResponse(stream);
+}
+
 export async function POST(request: Request) {
   try {
     const member = await requireMember();
@@ -172,13 +202,13 @@ export async function POST(request: Request) {
       model?: unknown;
     };
 
-    const query = String(input.query ?? input.prompt ?? "").trim().slice(0, 300);
+    let query = String(input.query ?? input.prompt ?? "").trim().slice(0, 300);
     const resumeUuid = typeof input.resumeUuid === "string" && input.resumeUuid.trim()
       ? input.resumeUuid.trim()
       : typeof input.courseUuid === "string" && input.courseUuid.trim()
         ? input.courseUuid.trim()
         : null;
-    const brief = input.brief && typeof input.brief === "object" ? input.brief : undefined;
+    let brief = input.brief && typeof input.brief === "object" ? input.brief : undefined;
     const explicitKey = typeof input.idempotencyKey === "string" && input.idempotencyKey.trim()
       ? input.idempotencyKey.trim().slice(0, 128)
       : null;
@@ -397,19 +427,16 @@ export async function POST(request: Request) {
           await markCourseTaskStatus(resumeUuid, member.email, "failed", "blueprint_json_corrupted");
           return Response.json({ error: "course_task_corrupted" }, { status: 500 });
         }
-        const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(frame({ type: "course_generation_started", course_uuid: resumeUuid, resumed: true }));
-            controller.enqueue(frame({
-              type: "blueprint_ready",
-              course_uuid: resumeUuid,
-              blueprint,
-              requires_confirmation: true,
-            }));
-            controller.close();
-          },
-        });
-        return sseResponse(stream);
+        return replayBlueprint(resumeUuid, blueprint, storedSelectionOf(existingTask));
+      }
+      // 蓝图尚未生成的恢复(Stage1 中断/失败后重跑):主题与 brief 一律取任务行(与 H1
+      // 同纪律)。请求体只带 resumeUuid 时 query 为空——不回填会用空主题重跑 Stage1,
+      // 并经 createCourseTask 的 upsert 把任务行原 query/brief 覆写为空。
+      query = existingTask.query;
+      try {
+        brief = existingTask.briefJson ? (JSON.parse(existingTask.briefJson) as CourseBrief) : undefined;
+      } catch {
+        brief = undefined;
       }
     }
 
@@ -445,15 +472,7 @@ export async function POST(request: Request) {
             await markCourseTaskStatus(courseUuid, member.email, "failed", "blueprint_json_corrupted");
             return Response.json({ error: "course_task_corrupted" }, { status: 500 });
           }
-          const stream = new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.enqueue(frame({ type: "course_generation_started", course_uuid: courseUuid, resumed: true }));
-              controller.enqueue(frame({ type: "blueprint_ready", course_uuid: courseUuid,
-                blueprint: resumedBlueprint, requires_confirmation: true }));
-              controller.close();
-            },
-          });
-          return sseResponse(stream);
+          return replayBlueprint(courseUuid, resumedBlueprint, storedSelectionOf(task));
         }
       }
     }

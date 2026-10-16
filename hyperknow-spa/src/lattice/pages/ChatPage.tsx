@@ -143,8 +143,11 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const convAtSend = activeConvRef.current;
-    /** 本会话专属更新:切会话/卸载后,旧流的迟到回调全部丢弃 */
-    const stillMine = () => activeConvRef.current === convAtSend;
+    /** 本会话专属更新:切会话/卸载后,旧流的迟到回调全部丢弃。另核对"本次发送仍是在途
+     * 那一路"(切会话/新对话/换账户都会把 abortRef 置空,新发送会换成新 ctrl)——在新对话里
+     * 两次发送的 convAtSend 同为 null,只比会话 ID 时被中断的旧流会把错误写进新回复、
+     * 并提前解除新流的 streaming 锁。 */
+    const stillMine = () => activeConvRef.current === convAtSend && abortRef.current === ctrl;
     /* 附件以引用形式并入发给导师的正文(后端暂不解析文件本体) */
     const wire = attached.length
       ? `${text}${text ? '\n\n' : ''}${attached.map((a) => `[Attachment: ${a.name} — ${a.url}]`).join('\n')}`

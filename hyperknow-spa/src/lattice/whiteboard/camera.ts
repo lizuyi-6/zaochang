@@ -34,6 +34,16 @@ export function clampZoom(z: number, min = CAMERA_ZOOM_MIN, max = CAMERA_ZOOM_MA
   return Math.min(Math.max(z, min), max);
 }
 
+/** 自动取景的可读下限:板书正文 19px,低于 0.5 倍就不足 10px。横屏手机可视高度只剩
+ * ~200px,旧逻辑把整块内容硬塞进去会缩到 20%,学员看到的是一团小黑点。到下限后
+ * 不再缩小,改为从内容起点(左上)显示,其余由镜头跟随/手动拖动查看。 */
+export const CAMERA_READABLE_MIN_ZOOM = 0.5;
+
+/** 留白随可视区收缩:固定 48px 在 200px 高的横屏可视区里要吃掉近一半 */
+function effectivePadding(padding: number, safeWidth: number, safeHeight: number): number {
+  return Math.min(padding, safeWidth * 0.08, safeHeight * 0.08);
+}
+
 export function calculateFocusZoom(
   box: BoundingBox,
   safeWidth: number,
@@ -41,12 +51,13 @@ export function calculateFocusZoom(
   padding = 48,
   maxAutoZoom = 1.35,
 ): number {
-  const availW = Math.max(safeWidth - padding * 2, 80);
-  const availH = Math.max(safeHeight - padding * 2, 80);
+  const pad = effectivePadding(padding, safeWidth, safeHeight);
+  const availW = Math.max(safeWidth - pad * 2, 80);
+  const availH = Math.max(safeHeight - pad * 2, 80);
   const fitZoom = Math.min(availW / Math.max(box.width, 1), availH / Math.max(box.height, 1));
   const sensibleFit = fitZoom * 0.92;
-  const zoom = Math.min(sensibleFit, maxAutoZoom);
-  return clampZoom(zoom, Math.min(0.1, zoom));
+  const zoom = Math.max(Math.min(sensibleFit, maxAutoZoom), Math.min(CAMERA_READABLE_MIN_ZOOM, maxAutoZoom));
+  return clampZoom(zoom, Math.min(CAMERA_READABLE_MIN_ZOOM, zoom));
 }
 
 export function zoomAtPoint(
@@ -97,9 +108,14 @@ export function focusBox(
     targetZoom = clampZoom(Math.min(currentZoom, maxFitZoom));
   }
 
+  /* 放得下就居中;放不下(已到可读下限)就让内容起点贴住安全区左上——板书自上而下、
+   * 自左而右书写,先看到开头才跟得上讲解 */
+  const pad = effectivePadding(padding, safeW, safeH);
+  const fitsX = box.width * targetZoom <= safeW - pad * 2;
+  const fitsY = box.height * targetZoom <= safeH - pad * 2;
   return {
-    x: safeCenterX - boxCenterX * targetZoom,
-    y: safeCenterY - boxCenterY * targetZoom,
+    x: fitsX ? safeCenterX - boxCenterX * targetZoom : left + pad - box.minX * targetZoom,
+    y: fitsY ? safeCenterY - boxCenterY * targetZoom : top + pad - box.minY * targetZoom,
     zoom: targetZoom,
   };
 }

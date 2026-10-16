@@ -22,6 +22,7 @@ import {
   type CourseGenProgressData,
   type CourseUnitProgressData,
   type GenStepId,
+  type LiveFailureReason,
 } from '../backend';
 import { buildDefaultInquiryQuestions } from '../courseInquiry';
 import { courseFromBackend, type GeneratedCourse } from '../generate';
@@ -113,6 +114,8 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const [phase, setPhase] = useState<Phase>('intake');
   const [insufficient, setInsufficient] = useState(false);
   const [genFailed, setGenFailed] = useState(false);
+  /** 失败原因细分:提示文案与能否立即恢复各不相同(仍在进行/限流/任务不存在/断网/一般故障) */
+  const [failKind, setFailKind] = useState<LiveFailureReason | null>(null);
   const [cancelled, setCancelled] = useState(false);
   const [stepStatus, setStepStatus] = useState<Partial<Record<GenStepId, 'loading' | 'completed'>>>({});
   const [research, setResearch] = useState<CourseGenProgressData | null>(null);
@@ -158,8 +161,12 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const remainingRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(Date.now());
   const finishTimerRef = useRef<number | null>(null);
+  /** 本轮生成的服务端任务 UUID:首帧 course_generation_started 即落定(不必等蓝图),
+   * 蓝图出来前取消/刷新/失败也有断点可恢复。命名沿用 blueprintUuid。 */
   const blueprintUuidRef = useRef('');
   const [blueprintUuid, setBlueprintUuid] = useState('');
+  /** 最近一次问询 brief:蓝图前失败且无任务 UUID 时「重试」免重答问询 */
+  const lastBriefRef = useRef<CourseBriefParams | null>(null);
   const updateBlueprintUuid = (uuid: string) => {
     blueprintUuidRef.current = uuid;
     setBlueprintUuid(uuid);
@@ -297,6 +304,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     setPhase('intake');
     setInsufficient(false);
     setGenFailed(false);
+    setFailKind(null);
     setCancelled(false);
     setReady(false);
     setWaiting(false);
@@ -312,9 +320,30 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     followRef.current = true;
   };
 
-  /* ---------- Stage 2:确认蓝图后逐单元生成(原逻辑) ---------- */
+  /** 生成失败的统一收尾:任务不存在(404)时断点作废,不再给一个注定 404 的恢复按钮;
+   * 积分不足单独成态;其余登记检查点并按原因给提示。 */
+  const failGeneration = (reason: LiveFailureReason) => {
+    setFailKind(reason);
+    if (reason === 'insufficient') {
+      setInsufficient(true);
+      return;
+    }
+    if (reason === 'not_found') {
+      updateBlueprintUuid('');
+      set({ genResume: null });
+    } else {
+      registerCheckpoint();
+    }
+    setGenFailed(true);
+  };
+
+  /* ---------- Stage 2:确认蓝图后逐单元生成 ---------- */
   const confirmAndStartStage2 = async (customUnits?: string[]) => {
     if (stage2BusyRef.current || finishedRef.current) return;
+    /* 任务 UUID/命题读 ref:本函数也会从恢复流的异步续作里调用,闭包 state 可能停在
+     * 旧渲染(空 UUID 上送 = 后端 400 query_required) */
+    const taskUuid = blueprintUuidRef.current;
+    if (!taskUuid) return;
     stage2BusyRef.current = true;
     inGenRef.current = true;
     const ctrl = new AbortController();
@@ -324,15 +353,18 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     setWaiting(false);
     setStage2(true);
     setGenFailed(false);
+    setFailKind(null);
     setCancelled(false);
     setStepStatus((s) => ({ ...s, generating_initial_syllabus: 'completed' }));
 
-    const unitsToGenerate = customUnits || selectedUnits;
+    /* 空选单绝不上送:服务端把显式 [] 判为 400 selected_units_required(不再解释为"全部")。
+     * 缺省由服务端沿用已落库选择或全部单元。 */
+    const unitsToGenerate = customUnits ?? (selectedUnits.length ? selectedUnits : undefined);
 
     let result: Awaited<ReturnType<typeof generateCourseLive>>;
     try {
       result = await generateCourseLive(
-        { resumeUuid: blueprintUuid, action: 'confirm_blueprint', selectedUnits: unitsToGenerate, model: state.chatModel },
+        { resumeUuid: taskUuid, action: 'confirm_blueprint', selectedUnits: unitsToGenerate, model: state.chatModel },
         {
           onModelDegraded: ({ fromModel, toModel }) => {
             if (finishedRef.current) return;
@@ -341,7 +373,8 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
           onUnitProgress: (data: CourseUnitProgressData) => {
             if (finishedRef.current) return;
             setUnit((cur) => ({ cur: Math.max(cur.cur, data.unit_index), total: Math.max(cur.total, data.total_units), title: data.title || cur.title }));
-            if (data.completed && data.title) {
+            /* 检查点复用的单元(cached)同样算已完成——断点恢复后列表不得少掉之前生成好的单元 */
+            if ((data.completed || data.cached) && data.title) {
               setUnitDone((prev) => (prev.some((p) => p.id === data.unit_id) ? prev : [...prev, { id: data.unit_id ?? `u${data.unit_index}`, title: data.title as string }]));
             }
           },
@@ -358,20 +391,19 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     }
 
     if (finishedRef.current) return;
-    if (result.ok && 'course' in result) {
+    if (result.ok === true && 'course' in result) {
       setReady(true);
-      const gen = courseFromBackend(result.course, topic);
+      const gen = courseFromBackend(result.course, topicRef.current);
       /* Stage2 产物已在服务端 D1 落库:persisted=true 让 App 置集市失效标记,
        * 否则"我的课程/集市"看不到刚恢复生成的课(直出路径早已传 true)。 */
       finishTimerRef.current = window.setTimeout(() => finish(gen, true), 1000);
     } else {
-      registerCheckpoint();
-      setGenFailed(true);
+      failGeneration(result.ok === false ? result.reason : 'error');
     }
   };
 
-  /* ---------- Stage 1:蓝图阶段(原逻辑) ---------- */
-  const startGeneration = (query: string, brief: CourseBriefParams) => {
+  /** 进入生成视图前的统一复位(新建与断点恢复共用) */
+  const resetGenerationView = () => {
     finishedRef.current = false;
     inGenRef.current = true;
     remainingRef.current = null;
@@ -381,6 +413,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     setCancelled(false);
     setInsufficient(false);
     setGenFailed(false);
+    setFailKind(null);
     setReady(false);
     setBlueprint(null);
     setWaiting(false);
@@ -389,18 +422,26 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     setResearch(null);
     setUnitDone([]);
     setUnit({ cur: 0, total: 0, title: '' });
-    set({ generating: true, genQuery: query, courseBrief: brief, generated: null });
     followRef.current = true;
+  };
 
+  /* ---------- Stage 1:蓝图阶段(新建与断点恢复共用一条流) ---------- */
+  const runStage1 = (body: Parameters<typeof generateCourseLive>[0]) => {
     const run = runRef.current;
-    updateBlueprintUuid('');
     const ctrl = new AbortController();
     stage1CtrlRef.current = ctrl;
 
     (async () => {
       const result = await generateCourseLive(
-        { query, brief, idempotencyKey: crypto.randomUUID(), requireConfirmation: true, model: state.chatModel },
+        body,
         {
+          onStarted: (uuid) => {
+            if (runRef.current !== run) return;
+            updateBlueprintUuid(uuid);
+            /* 拿到任务 UUID 即登记断点(App 按账户持久化):硬刷新/关页不会跑卸载 cleanup,
+             * 只在失败/取消/卸载时登记的话,生成途中刷新就再也找不回这门课 */
+            registerCheckpoint();
+          },
           onStep: (id, status) => {
             if (runRef.current !== run) return;
             setStepStatus((s) => ({ ...s, [id]: status }));
@@ -409,13 +450,13 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
             if (runRef.current !== run) return;
             if (data) setResearch(data);
           },
-          onBlueprint: (bp, reqConfirm, uuid) => {
+          onBlueprint: (bp, _reqConfirm, uuid, locked) => {
             if (runRef.current !== run) return;
             setBlueprint(bp);
             if (uuid) updateBlueprintUuid(uuid);
             const allIds = bp.units?.map((u) => u.unitId).filter(Boolean) as string[] | undefined;
-            if (allIds) setSelectedUnits(allIds);
-            if (reqConfirm) setWaiting(true);
+            const ids = locked ?? allIds;
+            if (ids) setSelectedUnits(ids);
           },
           onRemaining: (remaining) => {
             if (runRef.current !== run) return;
@@ -429,20 +470,44 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
       /* 工程未开 strict:真值检查不收窄判别联合,必须用字面量判别 */
       if (result.ok === true) {
         if ('requiresConfirmation' in result && result.requiresConfirmation) {
-          setWaiting(true);
           setStepStatus((s) => ({ ...s, generating_initial_syllabus: 'completed' }));
+          if (result.selectedUnits) {
+            /* 断点恢复且 Stage2 早已确认过(选择已在服务端锁定):直接续跑,
+             * 不再把学员挡在一个改了也会 409 的确认门前 */
+            void confirmAndStartStage2(result.selectedUnits);
+          } else {
+            setWaiting(true);
+          }
         } else if ('course' in result) {
           setReady(true);
-          const gen = courseFromBackend(result.course, query);
+          const gen = courseFromBackend(result.course, topicRef.current);
           finishTimerRef.current = window.setTimeout(() => finish(gen, true), 1000);
         }
-      } else if (result.reason === 'insufficient') {
-        setInsufficient(true);
       } else {
-        registerCheckpoint();
-        setGenFailed(true);
+        failGeneration(result.reason);
       }
     })();
+  };
+
+  const startGeneration = (query: string, brief: CourseBriefParams) => {
+    resetGenerationView();
+    lastBriefRef.current = brief;
+    set({ generating: true, genQuery: query, courseBrief: brief, generated: null });
+    updateBlueprintUuid('');
+    runStage1({ query, brief, idempotencyKey: crypto.randomUUID(), requireConfirmation: true, model: state.chatModel });
+  };
+
+  /** 断点恢复(中断/失败/取消后、「我的课程」交接、刷新后):把同一任务 UUID 交给服务端判定——
+   * 已完成课程直接回放;蓝图已就绪回放确认门(Stage2 已确认过则直接续跑);蓝图未出则
+   * 同键重跑 Stage1(计费幂等,不重复扣积分);上一次仍在运行则 409 → 'busy' 提示稍后再试。 */
+  const resumeTask = (uuid: string) => {
+    if (!uuid) return;
+    resetGenerationView();
+    set({ generating: true });
+    updateBlueprintUuid(uuid);
+    /* requireConfirmation 必须显式带上:蓝图未出时服务端同键重跑 Stage1,不带则按旧 API
+     * 默认自动级联生成全部单元——跳过确认门,长课还会撞 Stage1 的 300s 预算 */
+    runStage1({ resumeUuid: uuid, requireConfirmation: true, model: state.chatModel });
   };
 
   /* ---------- 问询(intake):AI 实时出题,逐题作答 ---------- */
@@ -545,14 +610,13 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     const seed = state.createPrompt.trim();
     const handoff = state.genResumeUuid;
     if (handoff) {
-      /* Courses 页「继续生成」交接:直接落到中断态,由用户点恢复(不重跑蓝图重复扣积分) */
+      /* Courses 页「继续生成」交接:学员已经点过一次"继续",直接按任务 UUID 恢复——
+       * 服务端判定回放/续跑/同键重跑,计费幂等不重复扣积分。旧实现落到中断态再让人
+       * 点「从检查点恢复」,而该按钮会上送空选单 → 400,恢复必然失败。 */
       seededRef.current = true;
       set({ genResumeUuid: undefined });
-      updateBlueprintUuid(handoff);
       if (state.genQuery) setTopic(state.genQuery);
-      setPhase('generating');
-      setGenFailed(true);
-      setCancelled(false);
+      resumeTask(handoff);
       return;
     }
     if (!seed) return;
@@ -590,6 +654,68 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
               : syllabusState === 'loading'
                 ? L('Drawing structure', '绘制结构')
                 : L('Researching', '调研资料');
+
+  /* 中断提示按原因给出真实可行的下一步:有没有服务端断点、能否立即恢复。旧文案一律
+   * 宣称"检查点已安全落库",蓝图出来前中断(没有断点、也没有恢复按钮)时是空头承诺。 */
+  const alertCopy = (() => {
+    if (insufficient) {
+      return {
+        title: L('Out of credits', '积分不足'),
+        body: L(
+          'A course costs 10 credits. You get 20 free credits every day (2 per chat), resetting at midnight Beijing time.',
+          '生成一门课程需要 10 积分。每天免费获得 20 积分（对话 2/次），北京时间零点自动重置。',
+        ),
+      };
+    }
+    const resumable = !!blueprintUuid;
+    const saved = L(
+      'Progress is saved on the server — resume anytime without paying twice.',
+      '进度已保存在服务器，可随时恢复，不会重复扣积分。',
+    );
+    if (cancelled) {
+      return {
+        title: L('Generation cancelled', '生成已取消'),
+        body: resumable ? saved : L('Generation stopped before the server created a checkpoint.', '生成在服务器建立断点之前就停止了。'),
+      };
+    }
+    switch (failKind) {
+      case 'busy':
+        return {
+          title: L('The previous run is still finishing', '上一次生成仍在进行'),
+          body: L(
+            'This course is still being generated on the server, or stopped only moments ago. Try resuming again in a minute or two — you will not be charged twice.',
+            '这门课在服务器上仍在生成，或刚刚中断、尚未释放。请过一两分钟再点恢复，不会重复扣积分。',
+          ),
+        };
+      case 'rate_limited':
+        return {
+          title: L('Too many requests', '请求太频繁'),
+          body: `${L('Course generation has an hourly limit. Please try again a little later.', '课程生成每小时有次数上限，请稍后再试。')}${resumable ? ` ${saved}` : ''}`,
+        };
+      case 'not_found':
+        return {
+          title: L('Checkpoint no longer available', '找不到这次生成的进度'),
+          body: L(
+            'This generation task no longer exists (or belongs to another account). Please start the course again.',
+            '该生成任务已不存在（或属于其他账户），请重新定制课程。',
+          ),
+        };
+      case 'offline':
+        return {
+          title: L('Connection lost', '网络连接中断'),
+          body: resumable
+            ? L('Check your connection, then resume. ', '请检查网络后再恢复。') + saved
+            : L('Check your connection and try again.', '请检查网络后重试。'),
+        };
+      default:
+        return {
+          title: L('Generation interrupted', '生成中断'),
+          body: resumable
+            ? L('Generation hit an issue. ', '生成遇到异常。') + saved
+            : L('Generation hit an issue before it got going. Please try again.', '生成在开始阶段遇到异常，请重试。'),
+        };
+    }
+  })();
 
   const tip = TIPS[tipIdx % TIPS.length];
   const TipIcon = tip[2];
@@ -880,42 +1006,28 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
                   <div className="cr-alert" role="status">
                     <div className="cr-alert-title">
                       <TriangleAlert size={15} />
-                      {insufficient
-                        ? L('Out of credits', '积分不足')
-                        : cancelled
-                          ? L('Generation cancelled', '生成已取消')
-                          : L('Generation interrupted', '生成中断')}
+                      {alertCopy.title}
                     </div>
-                    <p className="cr-alert-body">
-                      {insufficient
-                        ? L(
-                            'A course costs 10 credits. You get 20 free credits every day (2 per chat), resetting at midnight Beijing time.',
-                            '生成一门课程需要 10 积分。每天免费获得 20 积分（对话 2/次），北京时间零点自动重置。',
-                          )
-                        : cancelled
-                          ? L('Your checkpoint is safely stored — resume anytime without paying twice.', '检查点已安全落库，可随时恢复，不会重复扣积分。')
-                          : L(
-                              'Generation hit an issue. Your checkpoint is safely stored — resume anytime without paying twice.',
-                              '生成遇到异常。检查点已安全落库，可随时恢复，不会重复扣积分。',
-                            )}
-                    </p>
+                    <p className="cr-alert-body">{alertCopy.body}</p>
                     <div className="cr-alert-btns">
                       {blueprintUuid && !insufficient && (
                         <button
                           type="button"
                           className="cr-primary2"
-                          onClick={() => {
-                            /* 复位 finishedRef(cancelToFeed 置 true 是为掐断旧流,
-                             * 恢复=新一轮生成,与 startGeneration 同样从这里解锁)——
-                             * 不复位时 confirmAndStartStage2 的守卫直接 return,
-                             * 按钮变成"点了没反应、页面假装生成中"的死按钮。 */
-                            finishedRef.current = false;
-                            setCancelled(false);
-                            setGenFailed(false);
-                            void confirmAndStartStage2();
-                          }}
+                          /* 恢复=新一轮请求:resumeTask 复位 finishedRef 等守卫(否则按钮变死按钮),
+                           * 由服务端按任务真实状态决定回放确认门/续跑单元/重跑蓝图 */
+                          onClick={() => resumeTask(blueprintUuid)}
                         >
                           {L('Resume from checkpoint', '从检查点恢复生成')}
+                        </button>
+                      )}
+                      {!blueprintUuid && !insufficient && failKind !== 'not_found' && lastBriefRef.current && (
+                        <button
+                          type="button"
+                          className="cr-primary2"
+                          onClick={() => startGeneration(topic, lastBriefRef.current as CourseBriefParams)}
+                        >
+                          {L('Try again', '重试')}
                         </button>
                       )}
                       <button type="button" className="cr-ghost2" onClick={() => startIntake(topic)}>

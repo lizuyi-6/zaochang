@@ -1474,4 +1474,71 @@ export function register() {
     }
   });
 
+  test("hyperknow course-generation: 蓝图未出的任务只带 resumeUuid 恢复时,主题/brief 取任务行而非空请求体", async () => {
+    resetAiUpstream();
+    const email = `hk-resume-q-${runId}@example.com`;
+    const headers = authHeaders("恢复主题用户", email);
+    await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers }); // 建会员行(任务表 FK)
+    const taskId = crypto.randomUUID();
+    const chargeKey = `hk-resume-q-key-${runId}`;
+    const briefJson = JSON.stringify({ version: 1, goal: "看懂身边的社会现象", language: "zh-CN", depth: "overview" });
+    // 场景:首次 Stage1 在蓝图出来前失败并已退费(refunded),任务行只有 query/brief
+    await executeD1Sql(`INSERT INTO hk_course_tasks (id, user_email, query, credit_key, brief_json, status) VALUES ('${taskId}', '${email}', 'Resume Topic Kernel', '${chargeKey}', '${briefJson.replace(/'/g, "''")}', 'pending')`);
+    await executeD1Sql(`INSERT INTO hk_credit_charges (key, user_email, cost, status) VALUES ('${chargeKey}', '${email}', 10, 'refunded')`);
+
+    const res = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers: { ...headers, "x-hk-web-search-provider": "off" },
+      body: JSON.stringify({ resumeUuid: taskId, requireConfirmation: true }),
+    });
+    assert.equal(res.status, 200);
+    const frames = await readHkFrames(res);
+    assert.equal(frames.some((f) => f.type === "course_generation_error"), false, "恢复重跑不得失败");
+    const bp = frames.find((f) => f.type === "blueprint_ready");
+    assert.ok(bp, "蓝图未出的任务恢复后必须重新产出蓝图");
+    assert.equal(bp.requires_confirmation, true, "SPA 恢复流显式要求确认门,不得自动级联");
+    assert.match(lastChatCompletion.user, /blueprint for: "Resume Topic Kernel"/, "Stage1 必须用任务行的主题生成蓝图,不得是空串");
+    assert.match(lastChatCompletion.user, /看懂身边的社会现象/, "任务行的 brief 必须进入蓝图提示词");
+    const row = await queryLocalD1(`SELECT query, brief_json, status FROM hk_course_tasks WHERE id = '${taskId}'`);
+    assert.equal(row[0].query, "Resume Topic Kernel", "任务行主题不得被空请求体覆写");
+    assert.deepEqual(JSON.parse(row[0].brief_json), JSON.parse(briefJson), "任务行 brief 不得被覆写为空");
+    assert.equal(row[0].status, "blueprint_ready");
+    const charge = await queryLocalD1(`SELECT status FROM hk_credit_charges WHERE key = '${chargeKey}' AND user_email = '${email}'`);
+    assert.equal(charge[0].status, "pending", "退费过的同键恢复走免费接管(既有计费语义不变)");
+    resetAiUpstream();
+  });
+
+  test("hyperknow course-generation: 已确认过选单的任务恢复回放携带 selected_units(客户端直接续跑,不再面对必 409 的选单)", async () => {
+    resetAiUpstream();
+    const email = `hk-resume-sel-${runId}@example.com`;
+    const headers = authHeaders("恢复选单用户", email);
+    await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers });
+    const taskId = crypto.randomUUID();
+    const blueprint = { courseTitle: "选单回放", units: [{ unitId: "unit-1", title: "一" }, { unitId: "unit-2", title: "二" }, { unitId: "unit-3", title: "三" }] };
+    await executeD1Sql(`INSERT INTO hk_course_tasks (id, user_email, query, blueprint_json, selected_units_json, status) VALUES ('${taskId}', '${email}', '选单回放', '${JSON.stringify(blueprint)}', '["unit-1","unit-3"]', 'failed')`);
+    const res = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ resumeUuid: taskId, requireConfirmation: true }),
+    });
+    assert.equal(res.status, 200);
+    const frames = await readHkFrames(res);
+    const bp = frames.find((f) => f.type === "blueprint_ready");
+    assert.ok(bp);
+    assert.deepEqual(bp.selected_units, ["unit-1", "unit-3"], "回放必须携带已落库的锁定选单");
+    assert.equal(blueprintUpstreamCount, 0, "回放不得调用上游");
+
+    // 未确认过选单的任务回放不带该字段(客户端据此展示确认门)
+    const freshId = crypto.randomUUID();
+    await executeD1Sql(`INSERT INTO hk_course_tasks (id, user_email, query, blueprint_json, status) VALUES ('${freshId}', '${email}', '选单回放2', '${JSON.stringify(blueprint)}', 'blueprint_ready')`);
+    const fresh = await readHkFrames(await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ resumeUuid: freshId, requireConfirmation: true }),
+    }));
+    const bp2 = fresh.find((f) => f.type === "blueprint_ready");
+    assert.ok(bp2);
+    assert.equal("selected_units" in bp2, false);
+  });
+
 }

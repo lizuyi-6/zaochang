@@ -33,9 +33,9 @@ test("命题采集:无课程上下文时 IntroOverlay 收话题,不再静默播�
 test("失败诚实:备课失败显式重试,绝不拿话题对不上的演示课冒充", () => {
   /* 失败判定不得依赖 !aborted:135s 客户端超时掐死时 aborted=true,若跳过置失败,
    * 简介页会放出"开始学习"并播话题对不上的演示课(2026-10-03 代码审查修)。 */
-  assert.match(page, /if \(!plan && freeTopicMode\) setPlanFailed\(true\)/,
-    "自由讲座计划落空必须置失败态,含超时路径(课程模式维持静默演示双轨)");
-  assert.match(popups, /freeTopic\?\.failed/, "IntroOverlay 必须区分失败态");
+  assert.match(page, /if \(!plan\) setPlanFailed\(true\)/,
+    "计划落空必须置失败态,含超时路径——自由讲座与课程讲次同一纪律(课程讲次曾静默播公开演讲演示课)");
+  assert.match(popups, /freeTopic \? freeTopic\.failed === true : courseFailed === true/, "IntroOverlay 必须区分失败态(自由讲座/课程讲次各自来源)");
   assert.match(popups, /onRetry/, "失败态必须给出重试出口");
 });
 

@@ -58,9 +58,12 @@ export interface CourseUnitProgressData {
 }
 
 interface GenHandlers {
+  /** course_generation_started 帧:服务端任务 UUID(首帧即到,远早于蓝图)——断点恢复的唯一凭据 */
+  onStarted?: (courseUuid: string) => void;
   onStep?: (stepId: GenStepId, status: 'loading' | 'completed') => void;
   onProgress?: (message: string, data?: CourseGenProgressData) => void;
-  onBlueprint?: (blueprint: BlueprintData, requiresConfirmation?: boolean, courseUuid?: string) => void;
+  /** selectedUnits:恢复回放时服务端已锁定的单元选择(Stage2 确认过才有) */
+  onBlueprint?: (blueprint: BlueprintData, requiresConfirmation?: boolean, courseUuid?: string, selectedUnits?: string[]) => void;
   onUnitProgress?: (data: CourseUnitProgressData) => void;
   /** credit_status 帧:后端扣费后的真实余额(每日 20,课程 10/次) */
   onRemaining?: (remaining: number, max: number) => void;
@@ -148,8 +151,9 @@ interface CourseGenParams {
   model?: 'flash' | 'pro';
 }
 
-/** 在线调用失败原因:offline=静态托管/断网(可伪生成兜底);insufficient=积分不足(绝不可兜底);error=后端/上游故障;aborted=调用方主动取消(同 idx 换语言重译/切会话,不算失败,不弹 toast)。 */
-type LiveFailureReason = 'offline' | 'insufficient' | 'error' | 'aborted';
+/** 在线调用失败原因:offline=静态托管/断网(可伪生成兜底);insufficient=积分不足(绝不可兜底);error=后端/上游故障;aborted=调用方主动取消(同 idx 换语言重译/切会话,不算失败,不弹 toast);
+ * rate_limited=429 限流(稍后再试,立即重试必然再败);busy=409 同一任务仍在进行/租约未到期;not_found=404 任务/会话不存在或不属于本人。 */
+export type LiveFailureReason = 'offline' | 'insufficient' | 'error' | 'aborted' | 'rate_limited' | 'busy' | 'not_found';
 
 export interface BlueprintData {
   courseTitle?: string;
@@ -175,7 +179,7 @@ export interface BlueprintData {
 
 type CourseGenResult =
   | { ok: true; course: BackendCourse }
-  | { ok: true; blueprint: BlueprintData; courseUuid: string; requiresConfirmation: true }
+  | { ok: true; blueprint: BlueprintData; courseUuid: string; requiresConfirmation: true; selectedUnits?: string[] }
   | { ok: false; reason: LiveFailureReason };
 
 /** 解析一条 "data: {...}" 行;非 data 行返回 null。 */
@@ -214,14 +218,18 @@ async function consumeSse(body: ReadableStream<Uint8Array>, onFrame: (data: Reco
   }
 }
 
-/** SSE 错误响应 → 失败原因二分:402 insufficient_credits 单独成类,其余归 error。 */
+/** SSE 错误响应 → 失败原因:积分不足/限流/任务仍在进行/不存在各自成类(提示与可否重试不同),其余归 error。 */
 async function failureReason(res: Response): Promise<LiveFailureReason> {
+  let code: unknown;
   try {
-    const json = (await res.json()) as { error?: unknown };
-    if (json?.error === 'insufficient_credits') return 'insufficient';
+    code = ((await res.json()) as { error?: unknown })?.error;
   } catch {
     /* 非 JSON 错误体 */
   }
+  if (code === 'insufficient_credits') return 'insufficient';
+  if (res.status === 429) return 'rate_limited';
+  if (res.status === 409 && code === 'concurrent_operation_in_progress') return 'busy';
+  if (res.status === 404) return 'not_found';
   return 'error';
 }
 
@@ -268,12 +276,15 @@ export async function generateCourseLive(
       blueprint: BlueprintData | null;
       courseUuid: string;
       requiresConfirmation: boolean;
+      selectedUnits?: string[];
       failed: boolean;
     } = { course: null, blueprint: null, courseUuid: '', requiresConfirmation: false, failed: false };
 
     await consumeSse(res.body, (data) => {
       const type = data.type as string | undefined;
-      if (type === 'course_generation_step') {
+      if (type === 'course_generation_started') {
+        if (typeof data.course_uuid === 'string' && data.course_uuid) handlers.onStarted?.(data.course_uuid);
+      } else if (type === 'course_generation_step') {
         handlers.onStep?.(data.step_id as GenStepId, data.status as 'loading' | 'completed');
       } else if (type === 'course_generation_progress') {
         handlers.onProgress?.(String(data.message ?? ''), data.data as CourseGenProgressData | undefined);
@@ -281,11 +292,15 @@ export async function generateCourseLive(
         const bp = data.blueprint as BlueprintData | undefined;
         const reqConfirm = Boolean(data.requires_confirmation);
         const uuid = String(data.course_uuid ?? '');
+        const locked = Array.isArray(data.selected_units)
+          ? data.selected_units.filter((id): id is string => typeof id === 'string' && !!id)
+          : [];
         if (bp) {
           found.blueprint = bp;
           found.courseUuid = uuid;
           found.requiresConfirmation = reqConfirm;
-          handlers.onBlueprint?.(bp, reqConfirm, uuid);
+          found.selectedUnits = locked.length ? locked : undefined;
+          handlers.onBlueprint?.(bp, reqConfirm, uuid, found.selectedUnits);
         }
       } else if (type === 'course_unit_progress') {
         handlers.onUnitProgress?.(data.data as CourseUnitProgressData);
@@ -308,7 +323,13 @@ export async function generateCourseLive(
     if (found.failed) return { ok: false, reason: 'error' };
     if (found.course) return { ok: true, course: found.course };
     if (found.blueprint && found.requiresConfirmation) {
-      return { ok: true, blueprint: found.blueprint, courseUuid: found.courseUuid, requiresConfirmation: true };
+      return {
+        ok: true,
+        blueprint: found.blueprint,
+        courseUuid: found.courseUuid,
+        requiresConfirmation: true,
+        ...(found.selectedUnits ? { selectedUnits: found.selectedUnits } : {}),
+      };
     }
     return { ok: false, reason: 'error' };
   } catch {
@@ -692,7 +713,7 @@ export interface MarketCourse {
 export async function fetchMarketCourses(): Promise<MarketCourse[] | null> {
   let res: Response;
   try {
-    res = await fetch('/api/hyperknow/marketplace/courses');
+    res = await fetch('/api/hyperknow/marketplace/courses', { signal: AbortSignal.timeout(JSON_FETCH_TIMEOUT_MS) });
   } catch {
     return null;
   }
@@ -737,15 +758,18 @@ export async function fetchMarketCourses(): Promise<MarketCourse[] | null> {
   }
 }
 
-/** 课程详情(本人归属;越权/不存在 404)。不可用返回 null。 */
+/** 课程详情(本人归属;越权/不存在 404)。null = 课程确实不存在/无权访问(404/403/401/空数据);
+ * 断网、超时与 5xx 一律抛错——调用方据此提示"网络异常"而不是误报"课程不存在"。 */
 export async function fetchCourseDetail(uuid: string, signal?: AbortSignal): Promise<BackendCourse | null> {
-  let res: Response;
-  try {
-    res = await fetch(`/api/hyperknow/courses/${encodeURIComponent(uuid)}`, { signal });
-  } catch {
+  const res = await fetch(`/api/hyperknow/courses/${encodeURIComponent(uuid)}`, { signal });
+  if (res.status === 404 || res.status === 403 || res.status === 401) {
+    await res.body?.cancel().catch(() => {});
     return null;
   }
-  if (!res.ok) return null;
+  if (!res.ok) {
+    await res.body?.cancel().catch(() => {});
+    throw new Error(`course_detail_http_${res.status}`);
+  }
   try {
     const json = (await res.json()) as { success?: boolean; data?: unknown };
     return json?.success ? normalizeBackendCourse(json.data) : null;
@@ -844,7 +868,7 @@ export interface ConvRow {
 export async function fetchConversations(): Promise<ConvRow[] | null> {
   let res: Response;
   try {
-    res = await fetch('/api/hyperknow/conversations/list_past_conversations');
+    res = await fetch('/api/hyperknow/conversations/list_past_conversations', { signal: AbortSignal.timeout(JSON_FETCH_TIMEOUT_MS) });
   } catch {
     return null;
   }

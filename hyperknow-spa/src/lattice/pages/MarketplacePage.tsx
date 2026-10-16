@@ -35,6 +35,10 @@ const ENROLLED_FALLBACK: Record<string, string> = {
 
 const enrolledOf = (c: CourseCard) => c.onboarded ?? ENROLLED_FALLBACK[c.id] ?? '2.4K';
 
+/** 难度枚举是数据层英文键,展示随界面语言(中文界面曾直接显示 Beginner) */
+const difficultyLabel = (d: CourseCard['difficulty']): string =>
+  d === 'Advanced' ? L('Advanced', '高阶') : d === 'Intermediate' ? L('Intermediate', '进阶') : L('Beginner', '入门');
+
 function FeaturedCard({
   course,
   size,
@@ -53,7 +57,7 @@ function FeaturedCard({
       <div className="mp-feat-scrim" />
       <div className="mp-feat-overlay">
         <div className="mp-feat-chips">
-          <span className="mp-feat-chip">{course.difficulty}</span>
+          <span className="mp-feat-chip">{difficultyLabel(course.difficulty)}</span>
           <span className="mp-feat-chip">{course.lessons} {t('home.courseTicket.lessonsLabel').toLowerCase()}</span>
         </div>
         <div className="mp-feat-title">{course.title}</div>
@@ -81,13 +85,13 @@ function ListCard({ course, onClick }: { course: CourseCard; onClick: () => void
         <div className="mp-card-title">{course.title}</div>
         <div className="mp-card-desc">{course.description}</div>
         <div className="mp-card-chips">
-          <span className="mp-card-chip">{course.difficulty}</span>
+          <span className="mp-card-chip">{difficultyLabel(course.difficulty)}</span>
           <span className="mp-card-chip">{course.lessons} {t('home.courseTicket.lessonsLabel').toLowerCase()}</span>
         </div>
         <div className="mp-card-meta">
           <span className="mp-meta-left">
             <Users size={13} />
-            {enrolledOf(course)} enrolled
+            {L(`${enrolledOf(course)} enrolled`, `${enrolledOf(course)} 人在学`)}
           </span>
           <span className="mp-rating">
             <Star size={13} fill="#FACC15" color="#FACC15" />

@@ -61,16 +61,23 @@ test('whiteboard: TTS prefetch text must match playback (sanitized) source', () 
   assert.match(prefetch, /\.map\(\(s\) => sanitizeNarration\(s\.spoken_text\)\)/, '预热文本必须先净化——与实播同键,否则含标签旁白永远 miss');
 });
 
-test('whiteboard: free-topic timeout path must fail explicitly, never silent demo', () => {
+test('whiteboard: plan failure (free topic AND course lecture) must fail explicitly, never silent demo', () => {
   const page = read('hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx');
-  const hits = [...page.matchAll(/if \(!plan && freeTopicMode\) setPlanFailed\(true\);|if \(freeTopicMode\) setPlanFailed\(true\);/g)];
-  assert.ok(hits.length >= 2, 'then 空计划分支与 catch 分支都必须无条件(仅 alive 门)置失败——135s 超时 aborted=true 时不得跳过');
+  assert.match(page, /if \(!plan\) setPlanFailed\(true\);/, 'then 空计划分支必须无条件(仅 alive 门)置失败——135s 超时 aborted=true 时不得跳过');
+  assert.match(page, /\.catch\(\(\) => \{\s*if \(alive\) \{\s*setPlanPending\(false\);[\s\S]{0,200}?setPlanFailed\(true\);/, 'catch 分支同样必须置失败');
+  assert.doesNotMatch(page, /freeTopicMode\) setPlanFailed/, '课程讲次不得再被排除在失败态之外(否则静默播话题对不上的演示课)');
   assert.doesNotMatch(page, /freeTopicMode && !ctrl\.signal\.aborted\) setPlanFailed/, '失败判定不得依赖 !aborted');
+  assert.match(page, /failed=\{planFailed\}[\s\S]{0,80}?onRetry=\{retryPlan\}/, '课程讲次的失败态必须传给 IntroOverlay 并给重试出口');
+  assert.match(page, /setPlanDegraded\(plan\?\.degraded === true\)/, '模板降级计划必须如实标注给简介页(不静默当正式讲稿开播)');
 });
 
 test('create-page: resume button unlocks finishedRef; checkpoint reads topicRef; language split is exact', () => {
   const page = read('hyperknow-spa/src/lattice/pages/CreatePage.tsx');
-  assert.match(page, /finishedRef\.current = false;\s*setCancelled\(false\);[\s\S]*?void confirmAndStartStage2\(\);/, '恢复按钮必须先复位 finishedRef,否则守卫直接 return 成死按钮');
+  assert.match(page, /const resetGenerationView = \(\) => \{\s*finishedRef\.current = false;/, '恢复/新建的统一复位必须先解锁 finishedRef,否则守卫直接 return 成死按钮');
+  assert.match(page, /const resumeTask = \(uuid: string\) => \{[\s\S]{0,120}?resetGenerationView\(\);/, '断点恢复必须经统一复位');
+  assert.match(page, /onClick=\{\(\) => resumeTask\(blueprintUuid\)\}/, '恢复按钮交给服务端按任务真实状态判定(回放确认门/续跑/同键重跑)');
+  assert.match(page, /customUnits \?\? \(selectedUnits\.length \? selectedUnits : undefined\)/, '空选单绝不上送(服务端把 [] 判 400 selected_units_required)');
+  assert.match(page, /resumeUuid: taskUuid, action: 'confirm_blueprint'/, 'Stage2 的任务 UUID 必须读 ref(异步续作里闭包 state 可能停在旧渲染)');
   assert.match(page, /topicRef\.current = topic;/, 'topicRef 必须逐渲染同步');
   assert.match(page, /query: topicRef\.current \}/, '检查点必须读 topicRef(卸载闭包拿不到 state)');
   assert.match(page, /const zhCourse = lng === 'zh-CN' \|\| lng === 'zh-TW';/, '课程语言只认中文界面');

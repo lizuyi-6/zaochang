@@ -94,6 +94,7 @@
 
 /* KaTeX 公式块(display 模式;字体随 katex.min.css 异步 chunk 注入) */
 .wb-formula-item { white-space: normal; }
+.wb-formula-box { width: 100%; overflow: hidden; }
 .wb-formula { color: #1F2937; font-size: 15px; line-height: 1.4; }
 .wb-formula .katex-display { margin: 0; padding: 2px 0; }
 .wb-formula-fallback { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; color: #374151; }
@@ -1168,6 +1169,8 @@
 }
 .wb-topic-chip:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
 .wb-topic-error { font-size: 12px; line-height: 1.5; color: #B23A1F; margin: 0 0 10px; max-width: 360px; }
+.wb-topic-error .wb-intro-link { margin-left: 6px; }
+.wb-intro-wait { font-size: 12px; line-height: 1.5; color: var(--ink-500); margin: 10px 0 0; max-width: 360px; font-variant-numeric: tabular-nums; }
 .wb-topic-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; font-size: 12px; color: var(--ink-500); margin: 16px 0 0; }
 .wb-intro-link {
   background: none; border: none; padding: 0;
@@ -1464,12 +1467,14 @@
 .wb-conn-row .v .suf { font-size: 11px; font-weight: 400; color: #B3B3B3; margin-left: 4px; }
 .wb-conn-row .v.open { color: #4BAD8E; }
 .wb-conn-adv { font-size: 11px; letter-spacing: 0.08em; color: #9B9B9B; font-weight: 600; text-transform: uppercase; margin: 10px 0 6px; }
-.wb-conn-btn {
+/* 限定在连接状态弹层(.wb-conn)内:裸 .wb-conn-btn 与标题胶囊里的连接图标按钮同名,
+ * 曾把胶囊按钮撑成 100% 宽灰块,课程标题被挤成「社会…」 */
+.wb-conn .wb-conn-btn {
   width: 100%; height: 32px; border-radius: 9px; border: none; background: #F7F7F7;
   font-size: 13px; font-weight: 500; color: #111; cursor: pointer;
   display: flex; align-items: center; gap: 10px; padding: 0 12px; margin-bottom: 10px;
 }
-.wb-conn-btn:hover { background: #F0F0F0; }
+.wb-conn .wb-conn-btn:hover { background: #F0F0F0; }
 .wb-conn-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
 .wb-conn-foot .upd { font-size: 12px; color: #A1A1A1; }
 .wb-conn-foot .again { font-size: 12px; color: #212121; text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; }

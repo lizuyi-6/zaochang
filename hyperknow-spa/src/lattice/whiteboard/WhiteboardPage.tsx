@@ -305,8 +305,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     [learnerName],
   );
 
-  /* 直播放:生成课(伪生成/后端课)进白板 → 按选中课节话题真拉讲座计划;失败静默
-   * 回退演示课(与其余端点同一双轨纪律)。演示公开演讲课不走直播,保住演示观感。
+  /* 直播放:生成课(伪生成/后端课)进白板 → 按选中课节话题真拉讲座计划;失败显式
+   * 给重试(planFailed),不再静默回退演示课。演示公开演讲课不走直播,保住演示观感。
    * 严格锁定当前课节上下文，杜绝默认跳第一讲。 */
   const liveTopic = targetTopic;
   const [liveScript, setLiveScript] = useState<LessonScript | null>(null);
@@ -320,6 +320,9 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
    * planAttempt:同话题重试/失败后重试都靠它重新触发备课 effect。 */
   const freeTopicMode = !GEN && !state.activeCourseUuid;
   const [planFailed, setPlanFailed] = useState(false);
+  /** 拿到的是服务端模板降级计划(上游故障/超时):简介页如实告知并给重新备课入口,
+   * 不把 5 步通用提纲当成本讲的正式讲稿静默开播 */
+  const [planDegraded, setPlanDegraded] = useState(false);
   const [planAttempt, setPlanAttempt] = useState(0);
 
   useEffect(() => {
@@ -341,6 +344,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     let alive = true;
     setPlanPending(true); // 话题是进入页面后才选定的(自由讲座):收起"可开讲"态
     setPlanFailed(false);
+    setPlanDegraded(false);
     /* 每课语言偏好(加入弹窗的选择)优先,其次界面语言——课程讲次语言与界面解耦 */
     const appLang = getCourseLang(state.activeCourseUuid) ?? (getBackendLang() || getCurrentLng() || 'en');
     const planParams = {
@@ -374,10 +378,12 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           if (fresh) plan = fresh;
         }
         setPlanPending(false);
-        /* 自由讲座拿不到计划一律显式失败(alive 已排除卸载路径)——不得依赖
-         * !aborted:135s 客户端超时掐死时 aborted=true,若跳过置失败,简介页会放出
-         * "开始学习"并播话题对不上的演示课,正是自由讲座承诺绝不发生的事。 */
-        if (!plan && freeTopicMode) setPlanFailed(true);
+        setPlanDegraded(plan?.degraded === true);
+        /* 拿不到计划一律显式失败(alive 已排除卸载路径),自由讲座与课程讲次同一纪律——
+         * 不得依赖 !aborted:135s 客户端超时掐死时 aborted=true,若跳过置失败,简介页会放出
+         * "开始学习"并播话题对不上的演示课(公开演讲)。课程讲次此前正是这样:学员点开
+         * 《贝叶斯定理》,备课超时/限流后在本讲标题下静默播放公开演讲录课。 */
+        if (!plan) setPlanFailed(true);
         if (plan) {
           const script = liveLessonFromPlan(plan);
           setLiveScript(script);
@@ -428,8 +434,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       .catch(() => {
         if (alive) {
           setPlanPending(false);
-          /* 同上:超时/网络挂起也要显式失败,自由讲座绝不静默落到演示课 */
-          if (freeTopicMode) setPlanFailed(true);
+          /* 同上:超时/网络挂起也要显式失败,绝不静默落到话题对不上的演示课 */
+          setPlanFailed(true);
         }
       });
     return () => {
@@ -805,6 +811,9 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           : `${L('Not quite. The correct answer is: ', '不太准确哦。正确答案是：')}${choice.options[choice.answer]}。${choice.explanation || ''}`.trim();
         setEntries((prev) => [...prev, tutorBubble(`qc-fb-${s.id}-${Date.now()}`, fbText)]);
 
+        /* 暂停中作答:对错与解析文字立即上屏,朗读等学员恢复后再起——暂停键是声画同停,
+         * 不得被一次作答绕过(旧实现暂停态下照样播反馈音)。wait 走授课时钟,暂停时不走表。 */
+        if (pausedRef.current && !auto) await wait(1);
         const { voice: vk, speed: spkSpeed, muted: silent } = narrationRef.current;
         const spokenFb = !silent ? tts.speakTutorTrack(fbText, vk, spkSpeed) : null;
 
@@ -1192,16 +1201,14 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const handleExit = useCallback(() => {
     ctl.current.cancelled = true;
-    const current = state.identity?.credits ?? state.energy ?? 20;
-    const nextEnergy = finished ? Math.max(0, current - 5) : current;
+    /* 白板课不计费(服务端无扣费点):旧实现在这里把前端余额凭空减 5,顶栏显示与服务端
+     * 真实余额不一致,刷新后又"涨回来" */
     set({
       screen: 'courseJourney',
       lectureDone: finished,
       lectureCompletePrompt: finished,
-      energy: nextEnergy,
-      ...(state.identity ? { identity: { ...state.identity, credits: nextEnergy } } : {}),
     });
-  }, [finished, set, state.identity, state.energy]);
+  }, [finished, set]);
 
   /* 自由讲座:学员命题提交。相同话题重试也必须重新触发备课 effect,故 planAttempt
    * 递增——effect 依赖里的真正"点火器"。 */
@@ -1215,7 +1222,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     },
     [set],
   );
-  const retryFreePlan = useCallback(() => {
+  const retryPlan = useCallback(() => {
     setPlanFailed(false);
     setPlanAttempt((a) => a + 1);
   }, []);
@@ -1440,6 +1447,9 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
           title={genLectureTitle}
           body={genIntroBody}
           preparing={planPending}
+          failed={planFailed}
+          degraded={planDegraded}
+          onRetry={retryPlan}
           cover={GEN?.cover ? { kind: GEN.cover, seed: GEN.courseUuid ?? GEN.topic } : null}
           freeTopic={
             freeTopicMode
@@ -1448,7 +1458,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
                   failed: planFailed,
                   signedOut: state.bootReady && !state.identity,
                   onCommit: commitFreeTopic,
-                  onRetry: retryFreePlan,
+                  onRetry: retryPlan,
                   onDemo: () => setStage('talk'),
                   onSignIn: () => set({ screen: 'signin' }),
                 }

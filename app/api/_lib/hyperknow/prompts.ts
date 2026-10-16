@@ -380,7 +380,7 @@ export function fallbackLecturePlan(topic: string, learnerName = "", language = 
 // 上游即便在 jsonMode 下也偶发用 ```json 围栏包输出;剥掉再解析,减少误落 fallback。
 // 模型还经常在字符串值里直接写裸换行/制表符(mermaid 代码段尤其多),这在 JSON 里
 // 是非法控制字符——做一次"仅在字符串内转义控制字符"的清扫,否则整个计划被误判作废。
-function extractJsonPayload(jsonStr: string): string {
+function sliceJsonPayload(jsonStr: string): string {
   const fenced = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   let payload = (fenced ? fenced[1] : jsonStr).trim();
   const firstBrace = payload.indexOf('{');
@@ -388,6 +388,11 @@ function extractJsonPayload(jsonStr: string): string {
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     payload = payload.slice(firstBrace, lastBrace + 1);
   }
+  return payload;
+}
+
+function extractJsonPayload(jsonStr: string): string {
+  const payload = sliceJsonPayload(jsonStr);
   let out = "";
   let inString = false;
   let escaped = false;
@@ -416,10 +421,149 @@ function extractJsonPayload(jsonStr: string): string {
   return out;
 }
 
+/**
+ * 宽松 JSON 修复(仅用于严格解析失败之后):单趟扫描,字符串内
+ * - 裸双引号(中文正文里写 "武器" 这类 ASCII 引号)→ 转义;判据是引号后第一个非空白字符
+ *   不是 , } ] : 之一(那样才可能是收尾引号);
+ * - 裸换行/制表符 → 转义;
+ * 字符串外
+ * - 元素之间漏逗号(`}` / `]` / 收尾引号后换行紧跟 `{` `[` `"`)→ 补逗号;
+ * - 尾逗号 → 删除。
+ * 2026-10-16 生产实测:13 步真实讲稿因一处 "Expected ',' or ']' after array element"
+ * 整份作废、换成 5 步模板课(3 次备课 2 次中招)。修不好的交给 salvageLectureSteps。
+ */
+export function repairLooseJson(src: string): string {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  const nextNonSpace = (from: number): { ch: string | undefined; newline: boolean } => {
+    let j = from;
+    let newline = false;
+    while (j < src.length && /\s/.test(src[j])) {
+      if (src[j] === "\n" || src[j] === "\r") newline = true;
+      j++;
+    }
+    return { ch: src[j], newline };
+  };
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inStr) {
+      if (esc) {
+        out += ch;
+        esc = false;
+      } else if (ch === "\\") {
+        out += ch;
+        esc = true;
+      } else if (ch === '"') {
+        const { ch: n, newline } = nextNonSpace(i + 1);
+        if (n === undefined || n === "," || n === "}" || n === "]" || n === ":") {
+          inStr = false;
+          out += ch;
+        } else if (newline && (n === '"' || n === "{" || n === "[")) {
+          inStr = false;
+          out += '",';
+        } else {
+          out += '\\"';
+        }
+      } else if (ch === "\r") {
+        if (src[i + 1] !== "\n") out += "\\n";
+      } else if (ch === "\n") {
+        out += "\\n";
+      } else if (ch === "\t") {
+        out += "\\t";
+      } else {
+        out += ch;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      out += ch;
+    } else if (ch === ",") {
+      const { ch: n } = nextNonSpace(i + 1);
+      if (n !== "}" && n !== "]") out += ch;
+    } else if (ch === "}" || ch === "]") {
+      out += ch;
+      const { ch: n } = nextNonSpace(i + 1);
+      if (n === "{" || n === "[" || n === '"') out += ",";
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+/** 修复仍失败时逐步抢救:在 steps 数组里按括号深度切出每个步骤对象单独解析,
+ * 只收结构完整(spoken_text + board_action)的步骤;截断的尾部直接放弃。 */
+export function salvageLectureSteps(src: string): LecturePlan["steps"] {
+  const key = src.indexOf('"steps"');
+  const open = key >= 0 ? src.indexOf("[", key) : -1;
+  if (open < 0) return [];
+  const steps: LecturePlan["steps"] = [];
+  let i = open + 1;
+  while (i < src.length) {
+    while (i < src.length && /[\s,]/.test(src[i])) i++;
+    if (src[i] !== "{") break;
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let j = i;
+    for (; j < src.length; j++) {
+      const c = src[j];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) break;
+    }
+    if (j >= src.length) break;
+    try {
+      const step = JSON.parse(src.slice(i, j + 1)) as LecturePlan["steps"][number];
+      if (
+        step && typeof step.spoken_text === "string" && step.spoken_text.trim()
+        && step.board_action && typeof step.board_action === "object"
+      ) {
+        steps.push(step);
+      }
+    } catch {
+      /* 该步本身坏了:跳过,继续抢救后面的步骤 */
+    }
+    i = j + 1;
+  }
+  return steps;
+}
+
+/** 抢救出的步骤少于此数就不如模板课结构完整,仍降级 */
+const MIN_SALVAGED_LECTURE_STEPS = 4;
+
 export function parseLecturePlan(jsonStr: string, topic: string, learnerName = "", language = ""): LecturePlan {
   try {
-    const parsed = JSON.parse(extractJsonPayload(jsonStr)) as LecturePlan;
-    if (!Array.isArray(parsed.steps)) throw new Error("steps is not an array");
+    let parsed: LecturePlan | undefined;
+    let strictError: unknown;
+    try {
+      parsed = JSON.parse(extractJsonPayload(jsonStr)) as LecturePlan;
+    } catch (error) {
+      strictError = error;
+    }
+    if (parsed === undefined) {
+      const repaired = repairLooseJson(sliceJsonPayload(jsonStr));
+      try {
+        parsed = JSON.parse(repaired) as LecturePlan;
+      } catch {
+        const steps = salvageLectureSteps(repaired);
+        if (steps.length >= MIN_SALVAGED_LECTURE_STEPS) parsed = { steps };
+      }
+      if (parsed === undefined) throw strictError;
+      console.warn(
+        `[hyperknow] lecture plan JSON repaired for "${topic}" (${Array.isArray(parsed?.steps) ? parsed.steps.length : 0} steps):`,
+        strictError instanceof Error ? strictError.message : strictError,
+      );
+    }
+    if (!parsed || !Array.isArray(parsed.steps)) throw new Error("steps is not an array");
     return parsed;
   } catch (error) {
     // 解析失败落 fallback 时留痕(上游空响应/坏 JSON 才能从日志区分),不再静默吞掉。
@@ -772,7 +916,13 @@ export function parseCourseBlueprint(jsonStr: string): CourseBlueprint {
   try {
     parsed = JSON.parse(payload) as CourseBlueprint;
   } catch (err) {
-    throw new Error(`blueprint_invalid_json: ${err instanceof Error ? err.message : String(err)}`);
+    // 与讲稿同一类模型 JSON 小瑕疵(正文裸引号/漏逗号/尾逗号):修一次再判失败,
+    // 少一次"蓝图失败→退费→用户重来"的往返
+    try {
+      parsed = JSON.parse(repairLooseJson(sliceJsonPayload(jsonStr))) as CourseBlueprint;
+    } catch {
+      throw new Error(`blueprint_invalid_json: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   if (
@@ -786,10 +936,22 @@ export function parseCourseBlueprint(jsonStr: string): CourseBlueprint {
     throw new Error("blueprint_malformed_structure");
   }
 
+  const seen = new Set<string>();
   for (const [idx, u] of parsed.units.entries()) {
     if (!u || typeof u !== "object" || !u.unitId || !u.title) {
       throw new Error(`blueprint_unit_${idx + 1}_invalid`);
     }
+    /* unitId 必须唯一:蓝图确认按 unitId 集合核对选单(canonical 长度 ≠ 集合大小即 400),
+     * 模型偶发输出重复 ID 时整份蓝图永远无法确认,学员卡死在确认门。重复者确定性改名;
+     * 先修引用仍指向首个同名单元。 */
+    let id = String(u.unitId).trim();
+    if (seen.has(id)) {
+      let n = 2;
+      while (seen.has(`${id}-${n}`)) n++;
+      id = `${id}-${n}`;
+    }
+    u.unitId = id;
+    seen.add(id);
   }
 
   return parsed;

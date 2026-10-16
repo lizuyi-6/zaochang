@@ -662,3 +662,61 @@ test("parseCourseBlueprint: 严格校验不使用模板 fallback，上游异常�
   assert.equal(parsed.units.length, 1);
   assert.equal(parsed.units[0].unitId, "unit-1");
 });
+
+test("parseLecturePlan: 模型 JSON 小瑕疵先修复/抢救,不再整份作废成模板课(2026-10-16 生产 3 次备课 2 次中招)", async () => {
+  const { parseLecturePlan: parse, repairLooseJson, salvageLectureSteps } = await import("../app/api/_lib/hyperknow/prompts.ts");
+  const step = (i, text) => `    {\n      "step_id": "step_${i}",\n      "spoken_text": "${text}",\n      "board_action": { "type": "card", "title": "第${i}步", "content": "<p>要点</p>" }\n    }`;
+  const steps = Array.from({ length: 6 }, (_, i) => step(i + 1, `第${i + 1}步讲解`));
+
+  // 1) 正文里的裸 ASCII 双引号(中文模型最常见):修复后 6 步全保留,引号成为内容
+  const innerQuotes = `{\n  "steps": [\n${[step(1, '社会学最核心的"武器"就是想象力'), ...steps.slice(1)].join(",\n")}\n  ]\n}`;
+  assert.throws(() => JSON.parse(innerQuotes));
+  const p1 = parse(innerQuotes, "社会学的想象力");
+  assert.equal(p1.degraded, undefined, "可修复的讲稿不得降级");
+  assert.equal(p1.steps.length, 6);
+  assert.equal(p1.steps[0].spoken_text, '社会学最核心的"武器"就是想象力');
+
+  // 2) 步骤之间漏逗号(生产日志: Expected ',' or ']' after array element)+ 尾逗号
+  const missingComma = `{\n  "steps": [\n${steps[0]}\n${steps.slice(1).join(",\n")},\n  ]\n}`;
+  assert.throws(() => JSON.parse(missingComma));
+  const p2 = parse(missingComma, "社会学的想象力");
+  assert.equal(p2.degraded, undefined);
+  assert.equal(p2.steps.length, 6);
+
+  // 3) 修不好的单步被跳过,其余步骤抢救出来(≥4 步才采用)
+  const oneBroken = `{"steps": [${steps.slice(0, 5).join(",")}, {"step_id": "x", "spoken_text": "坏" "掉", "board_action": {}}]}`;
+  const salvaged = salvageLectureSteps(repairLooseJson(oneBroken));
+  assert.ok(salvaged.length >= 4, `应抢救出 ≥4 步,实际 ${salvaged.length}`);
+  assert.equal(parse(oneBroken, "t").degraded, undefined);
+
+  // 4) 抢救不足 4 步 / 纯垃圾 → 仍走模板降级(诚实标 degraded)
+  assert.equal(parse(`{"steps": [${steps.slice(0, 2).join(",")}, {"bad": ]}`, "t").degraded, true);
+  assert.equal(parse("boom", "t").degraded, true);
+
+  // 5) 合法 JSON 不经修复原样透传(修复只在严格解析失败后介入)
+  const ok = { steps: [{ step_id: "s", spoken_text: 'a "q" b', board_action: { type: "card" } }] };
+  assert.deepEqual(parse(JSON.stringify(ok), "t"), ok);
+});
+
+test("parseCourseBlueprint: 重复 unitId 确定性改名(否则确认门永远 400 卡死);JSON 小瑕疵先修复", async () => {
+  const { parseCourseBlueprint } = await import("../app/api/_lib/hyperknow/prompts.ts");
+  const bp = parseCourseBlueprint(JSON.stringify({
+    courseTitle: "T",
+    units: [
+      { unitId: "unit-1", title: "一" },
+      { unitId: "unit-2", title: "二", prerequisites: ["unit-1"] },
+      { unitId: "unit-2", title: "三" },
+      { unitId: "unit-2", title: "四" },
+    ],
+  }));
+  const ids = bp.units.map((u) => u.unitId);
+  assert.deepEqual(ids, ["unit-1", "unit-2", "unit-2-2", "unit-2-3"]);
+  assert.equal(new Set(ids).size, ids.length, "unitId 必须唯一(确认阶段按集合核对选单)");
+  assert.deepEqual(bp.units[1].prerequisites, ["unit-1"], "非重复单元原样保留");
+
+  const broken = `{\n  "courseTitle": "社会学的"想象力"",\n  "units": [\n    {"unitId": "u1", "title": "一"}\n    {"unitId": "u2", "title": "二"},\n  ]\n}`;
+  const repaired = parseCourseBlueprint(broken);
+  assert.equal(repaired.courseTitle, '社会学的"想象力"');
+  assert.deepEqual(repaired.units.map((u) => u.unitId), ["u1", "u2"]);
+  assert.throws(() => parseCourseBlueprint("not json at all"), /blueprint_invalid_json/);
+});

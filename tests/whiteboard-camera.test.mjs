@@ -6,6 +6,7 @@ import {
   focusBox,
   computeBoundingBox,
   calculateFocusZoom,
+  CAMERA_READABLE_MIN_ZOOM,
 } from '../hyperknow-spa/src/lattice/whiteboard/camera.ts';
 
 test('camera zoom preserves the world point under the gesture anchor', () => {
@@ -31,16 +32,34 @@ test('camera bounds cover distant board items and preserve negative coordinates'
   ]), { minX: -100, minY: 50, maxX: 1000, maxY: 950, width: 1100, height: 900 });
 });
 
-test('mobile auto focus fits wide and tall content above a multiline caption dock', () => {
-  for (const size of [{ width: 900, height: 300 }, { width: 500, height: 1400 }]) {
+test('mobile auto focus fits real board items above a multiline caption dock', () => {
+  // 真实板书元素:单栏卡片 320 宽、栏高上限内;续排跨两栏的一步约 680 宽
+  for (const size of [{ width: 320, height: 420 }, { width: 360, height: 300 }]) {
     const box = computeBoundingBox([{ x: 900, y: 800, ...size }]);
     const camera = focusBox(box, { width: 390, height: 844 }, 1, 24,
       { top: 170, bottom: 200, left: 8, right: 8 });
-    assert.ok(camera.zoom < 0.75);
+    assert.ok(camera.zoom < 1.05);
+    assert.ok(camera.zoom >= CAMERA_READABLE_MIN_ZOOM);
     assert.ok(box.minX * camera.zoom + camera.x >= 8);
     assert.ok(box.maxX * camera.zoom + camera.x <= 382);
     assert.ok(box.minY * camera.zoom + camera.y >= 170);
     assert.ok(box.maxY * camera.zoom + camera.y <= 644);
+  }
+});
+
+test('oversized content never shrinks below the readable floor; it starts from its top-left instead (landscape phone)', () => {
+  // 2026-10-16 实测:横屏手机 844×390,一张 470 高的卡片被缩到 20%,字成一团小黑点
+  const insets = { top: 110, bottom: 84, left: 8, right: 8 };
+  const viewport = { width: 844, height: 390 };
+  for (const size of [{ width: 320, height: 470 }, { width: 900, height: 300 }, { width: 500, height: 1400 }]) {
+    const box = computeBoundingBox([{ x: 420, y: 94, ...size }]);
+    const camera = focusBox(box, viewport, 1, 48, insets, true);
+    assert.ok(camera.zoom >= CAMERA_READABLE_MIN_ZOOM, `zoom ${camera.zoom} 低于可读下限`);
+    // 起点可见:内容左上角落在安全区内(不被顶栏/左缘遮挡)
+    const left = box.minX * camera.zoom + camera.x;
+    const top = box.minY * camera.zoom + camera.y;
+    assert.ok(left >= insets.left && left < viewport.width - insets.right, `内容左缘不可见: ${left}`);
+    assert.ok(top >= insets.top && top < viewport.height - insets.bottom, `内容顶部不可见: ${top}`);
   }
 });
 

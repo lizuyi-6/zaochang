@@ -30,6 +30,13 @@ const COL_X = [60, 420, 780, 1180, 1540];
 const COL_W = 320;
 const COL_MAX_H = 580; // 留出充足安全区，绝不越过视口下边界
 const MAX_LINE_UNITS = 30; // 320px 列宽 / 19px 汉字 ≈ 16.8 字; 1 汉字 = 1.9 单元, 16 * 1.9 = 30.4
+const COL_TOP = 94;
+const BODY_LINE_H = 19 * 1.24;
+/** 卡片正文行数安全上限:只防模型失控输出撑爆整块板(正常卡片 4-6 条要点远低于此);
+ * 超出以省略号标明。旧上限 10 行且无省略号——长卡片在句中静默断掉,学员看不到后半段。 */
+const CARD_BODY_MAX_LINES = 48;
+/** 卡片标题至少带这么多行正文同列落位,避免标题孤悬列底、正文跑到下一列 */
+const CARD_HEAD_LINES = 3;
 
 /* ---------------- HTML → 手写行(Rich) ---------------- */
 
@@ -85,7 +92,15 @@ function charUnits(ch: string): number {
   return 1.0;
 }
 
-/** 按行宽把 run 序列折行:拉丁按词折,CJK 逐字折，与 DOM 真实渲染换行 1:1 对齐。 */
+/** 避头:这些标点不得出现在行首——超宽时悬挂在上一行行尾(至多溢出一个标点宽) */
+const NO_LINE_START = new Set('，。、；：！？）》」』】〉”’,.;:!?)%…～');
+/** 避尾:开括号/开引号不得孤零零留在行尾,随下一字换到下一行 */
+const NO_LINE_END = new Set('（《「『【〈“‘(');
+/** 中文段落里的数字/拉丁串(9900、95%、0.16、step-2)作为不可拆分的词;其余逐字 */
+const CJK_SEGMENT = /[A-Za-z0-9][A-Za-z0-9.%/_+\-=^]*|[\s\S]/gu;
+
+/** 按行宽把 run 序列折行:拉丁按词折,CJK 逐字折(数字串不拆、避头尾),与 DOM 真实渲染换行 1:1 对齐。
+ * 旧实现中文段内逐字硬折:「9900名」被拆成「990 / 0名」、逗号落到行首,板书观感粗糙。 */
 function wrapRuns(runs: Run[], maxUnits = MAX_LINE_UNITS, maxLines = 10): Rich[] {
   const lines: Rich[] = [];
   let cur: Rich = [];
@@ -109,10 +124,28 @@ function wrapRuns(runs: Run[], maxUnits = MAX_LINE_UNITS, maxLines = 10): Rich[]
     for (const part of parts) {
       const isCjk = /[\u2e80-\u9fff\uff00-\uffef]/.test(part);
       if (isCjk) {
-        for (const ch of part) {
-          const u = charUnits(ch);
-          if (curUnits + u > maxUnits) flush();
-          cur.push({ t: ch, b: run.b, i: run.i });
+        for (const tok of part.match(CJK_SEGMENT) ?? []) {
+          const u = [...tok].reduce((sum, ch) => sum + charUnits(ch), 0);
+          if (u > maxUnits) {
+            /* 超长拉丁串(长 URL 之类)放不进一行:只能逐字硬折 */
+            for (const ch of tok) {
+              const cu = charUnits(ch);
+              if (curUnits + cu > maxUnits && cur.length) flush();
+              cur.push({ t: ch, b: run.b, i: run.i });
+              curUnits += cu;
+            }
+            continue;
+          }
+          if (curUnits + u > maxUnits && cur.length && !NO_LINE_START.has(tok)) {
+            const carry: Rich = [];
+            while (cur.length > 1 && NO_LINE_END.has(cur[cur.length - 1].t)) carry.unshift(cur.pop()!);
+            flush();
+            for (const c of carry) {
+              cur.push(c);
+              curUnits += charUnits(c.t);
+            }
+          }
+          cur.push({ t: tok, b: run.b, i: run.i });
           curUnits += u;
         }
         continue;
@@ -127,7 +160,11 @@ function wrapRuns(runs: Run[], maxUnits = MAX_LINE_UNITS, maxLines = 10): Rich[]
     }
   }
   flush();
-  return lines.slice(0, maxLines);
+  if (lines.length <= maxLines) return lines;
+  /* 超限必须可见:末行补省略号,绝不静默截断 */
+  const kept = lines.slice(0, maxLines);
+  kept[maxLines - 1] = [...kept[maxLines - 1], { t: '…' }];
+  return kept;
 }
 
 /** 卡片标题折行:22px 字体折行(单行约 25 单元),带粗体,每行独立成 rich line */
@@ -141,12 +178,21 @@ export function titleToLines(title: string): Rich[] {
 /** HTML 卡片正文 → 手写板书行(结构性标签成行、strong/h* 加粗、br/块界换行)。 */
 export function htmlToLines(html: string): Rich[] {
   try {
+    if (typeof DOMParser === 'undefined') {
+      /* 无 DOM 的环境(Node 契约测试):块级标签/换行作断行,其余标签剥除,按纯文本折行 */
+      const runs: Run[] = [];
+      for (const seg of html.split(/<(?:br\s*\/?|\/?(?:p|div|li|h[1-6]|ul|ol|tr)\b[^>]*)>/i)) {
+        const t = seg.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+        if (t) runs.push({ t }, { t: '', br: true });
+      }
+      return wrapRuns(runs, MAX_LINE_UNITS, CARD_BODY_MAX_LINES);
+    }
     const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
     const root = doc.body.firstElementChild;
     if (!root) return [];
     const runs: Run[] = [];
     root.childNodes.forEach((c) => collectRuns(c, {}, runs));
-    return wrapRuns(runs);
+    return wrapRuns(runs, MAX_LINE_UNITS, CARD_BODY_MAX_LINES);
   } catch {
     return [];
   }
@@ -197,22 +243,43 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
       const titleLines = action.title ? titleToLines(action.title) : [];
       const body = action.content ? htmlToLines(action.content) : [];
       const titleH = titleLines.length ? titleLines.length * 22 * 1.24 + 14 : 0;
-      const bodyH = body.length ? body.length * 19 * 1.24 : 0;
-      const totalCardH = titleH + bodyH;
+      const totalCardH = titleH + body.length * BODY_LINE_H;
 
-      // 标题与正文捆绑前置检查：若本列剩余空间不足以完整容纳该卡片，整卡移至下一列顶部
-      ensureSpace(totalCardH);
+      // 标题与正文捆绑前置检查:整卡放得进一列就整卡换列;比一整列还高的长卡片,
+      // 至少保证标题带着开头几行正文同列落位
+      ensureSpace(
+        totalCardH <= COL_MAX_H - COL_TOP
+          ? totalCardH
+          : titleH + Math.min(body.length, CARD_HEAD_LINES) * BODY_LINE_H,
+      );
 
       if (titleLines.length) {
         items.push({ id: `c${id}t`, step: id, size: 22, weight: 700, color: VIOLET, lines: titleLines, w: COL_W, x: COL_X[cursor.col], y: cursor.y });
         cursor.y += titleH;
       }
-      if (body.length) {
-        items.push({ id: `c${id}b`, step: id, size: 19, w: COL_W, lines: body, x: COL_X[cursor.col], y: cursor.y });
-        advance(bodyH);
-      } else if (titleLines.length) {
-        advance(0);
+      /* 正文超出本列剩余高度时按列续排(同一步一起写出),内容一行不丢 */
+      let rest = body;
+      let part = 0;
+      while (rest.length) {
+        const lastCol = cursor.col >= COL_X.length - 1;
+        const room = lastCol ? rest.length : Math.floor((COL_MAX_H - cursor.y) / BODY_LINE_H);
+        if (room < 1) {
+          cursor.col += 1;
+          cursor.y = COL_TOP;
+          continue;
+        }
+        const chunk = rest.slice(0, room);
+        rest = rest.slice(chunk.length);
+        items.push({ id: part === 0 ? `c${id}b` : `c${id}b${part}`, step: id, size: 19, w: COL_W, lines: chunk, x: COL_X[cursor.col], y: cursor.y });
+        part += 1;
+        if (rest.length) {
+          cursor.col += 1;
+          cursor.y = COL_TOP;
+        } else {
+          advance(chunk.length * BODY_LINE_H);
+        }
       }
+      if (!body.length && titleLines.length) advance(0);
     } else if (action.type === 'formula') {
       const latex = action.latex ?? action.content ?? '';
       /* 高度估算:KaTeX 实际高度渲染后才知道,布局先按结构保守估(换行阵列/分式/

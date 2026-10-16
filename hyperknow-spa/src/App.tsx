@@ -14,6 +14,7 @@ import { fetchConversations, fetchCourseDetail, fetchMarketCourses, fetchMe } fr
 import { toast } from './lattice/toast';
 import { L } from './lattice/i18n/content';
 import { ProLaunchModal, markProLaunchSeen, proLaunchSeen } from './lattice/ProLaunchModal';
+import { loadGenResume, saveGenResume } from './lattice/genResumeMemory';
 import './lattice/shell.css';
 
 /* 次级页面按需加载:登录/引导/首页保持同步(首屏体验),重页面(白板/聊天/课程等)
@@ -265,6 +266,20 @@ export const App: React.FC = () => {
     };
   }, [state.identity?.email, set]);
 
+  /* 未完成生成的断点入口按账户持久化:身份落定先装载本账户记录(换账户时整体替换,
+   * 上一账户的断点绝不串号),之后 genResume 的每次变化写回。 */
+  const genResumeScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const scope = state.identity?.email ?? null;
+    if (!state.bootReady || !scope) return;
+    if (genResumeScopeRef.current !== scope) {
+      genResumeScopeRef.current = scope;
+      set({ genResume: loadGenResume(scope) });
+      return;
+    }
+    saveGenResume(scope, state.genResume);
+  }, [state.bootReady, state.identity?.email, state.genResume, set]);
+
   /* 进入历史/聊天页时静默刷新一次列表:其他标签页新建的会话、会话期间
    * cookie 被替换等场景下,内存列表可能落后于服务端真值。 */
   useEffect(() => {
@@ -283,8 +298,12 @@ export const App: React.FC = () => {
     const isCourseScreen = state.screen === 'coursePreview' || state.screen === 'courseJourney';
     const uuid = state.activeCourseUuid;
     if (!isCourseScreen || !uuid) return;
-    // 如果已有对应的真实课程树则无需重复拉取
-    if (state.generated && (state.generated as { courseUuid?: string }).courseUuid === uuid) return;
+    // 如果已有对应的真实课程树则无需重复拉取——但 hash 导航(浏览器后退/前进、深链)的
+    // stateFromHash 会把 courseLoading 置 true,这里不复位就永远停在"正在加载课程…"
+    if (state.generated && (state.generated as { courseUuid?: string }).courseUuid === uuid) {
+      if (stateRef.current.courseLoading) set({ courseLoading: false, courseError: null });
+      return;
+    }
 
     let alive = true;
     const ctrl = new AbortController();
