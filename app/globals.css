@@ -201,9 +201,22 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.012em; }
 .auth-divider { align-items: center; color: #9a9b94; display: flex; font-size: 9px; gap: 10px; margin: 20px 0; }.auth-divider::before, .auth-divider::after { background: #d9d8d2; content: ""; flex: 1; height: 1px; }.auth-chatgpt { align-items: center; background: #171816; border-radius: 0; color: white; display: flex; font-size: 11px; height: 44px; justify-content: center; }.auth-chatgpt:hover { background: #ff5c3d; }.auth-email-back { background: none; border: none; color: #92948d; cursor: pointer; font-family: inherit; font-size: 9px; padding: 2px 0; text-decoration: underline; }.auth-email-back:hover { color: #171816; }.auth-note { color: #8a8b84; display: block; font-size: 8px; line-height: 1.6; margin-top: 19px; }
 /* 扫码登录:桌面 QR 面板 + 手机确认/扫一扫页。 */
 .auth-qr-panel { align-items: center; display: flex; flex-direction: column; gap: 10px; }
-.auth-qr-frame { background: #fffdf8; border: 1px solid #d9d8d2; box-sizing: content-box; height: 208px; padding: 10px; width: 208px; }
-.auth-qr-image svg { display: block; height: 208px; width: 208px; }
-.auth-qr-placeholder { align-items: center; color: #9a9b94; display: flex; font-size: 11px; height: 100%; justify-content: center; }
+.auth-qr-frame { background: #fcf2f3; border: 1px solid #d9d8d2; box-sizing: content-box; width: min(360px, 100%); }
+.auth-qr-image svg { display: block; height: auto; width: 100%; }
+.auth-qr-placeholder { align-items: center; aspect-ratio: 71 / 83; color: #9a9b94; display: flex; font-size: 11px; justify-content: center; }
+/* 樱花树二维码:SVG 静态;落花是 HTML 元素,只动 transform/opacity,下落距离按画宽(cqw)给。 */
+.sakura-qr { container-type: inline-size; overflow: hidden; position: relative; }
+.sakura-qr-petal { animation: sakura-qr-fall 8s linear infinite; background: radial-gradient(circle at 35% 35%, #fde3ea, #f4a9bf 70%); border-radius: 0 100% 0 100%; height: 1.15cqw; opacity: 0; pointer-events: none; position: absolute; width: 1.8cqw; will-change: transform, opacity; }
+.sakura-qr-petal.is-tone-1 { background: radial-gradient(circle at 35% 35%, #fff4f7, #f8c4d3 70%); }
+.sakura-qr-petal.is-tone-2 { background: radial-gradient(circle at 35% 35%, #fbd3df, #ec93ae 70%); }
+@keyframes sakura-qr-fall {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(0deg); }
+  12% { opacity: .95; }
+  50% { transform: translate3d(calc(var(--drift, 0cqw) * -.6), calc(var(--fall, 20cqw) * .5), 0) rotate(150deg); }
+  85% { opacity: .9; }
+  100% { opacity: 0; transform: translate3d(var(--drift, 0cqw), var(--fall, 20cqw), 0) rotate(300deg); }
+}
+@media (prefers-reduced-motion: reduce) { .sakura-qr-petal { animation: none; display: none; } }
 .auth-qr-caption { color: #8a8b84; font-size: 10px; margin: 0; }
 .auth-qr-panel.is-done { color: #171816; gap: 8px; padding: 18px 0; text-align: center; }
 .auth-qr-panel .text-action { color: #171816; cursor: pointer; }

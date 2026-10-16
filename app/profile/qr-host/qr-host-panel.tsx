@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import QRCode from "qrcode";
 import { formatPairCode } from "../../api/_lib/qr-login-core";
+import { SakuraQrImage, sakuraQrArt, type SakuraQrArt } from "../../signin/sakura-qr-image";
 
-// 宿主面板:发起 host 拿到 QR URL + 配对码 → 本地渲染 SVG → 轮询 host-state。
+// 宿主面板:发起 host 拿到 QR URL + 配对码 → 本地渲染樱花树 SVG → 轮询 host-state。
 // pair_requested 时亮出「允许 / 拒绝」;允许后等手机 claim 完成(consumed→ok)。
 // 两分钟过期自动换新码;hierarchy 与正向 QrLoginPanel 同纪律:effect 只按
 // [round] 跑一轮,phase 不进依赖。
@@ -14,7 +14,7 @@ const HOST_POLL_INTERVAL_MS = 2000;
 
 export function QrHostPanel() {
   const [phase, setPhase] = useState<Phase>("loading");
-  const [qrSvg, setQrSvg] = useState<string | null>(null);
+  const [qrArt, setQrArt] = useState<SakuraQrArt | null>(null);
   const [pairCode, setPairCode] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [round, setRound] = useState(0);
@@ -29,7 +29,7 @@ export function QrHostPanel() {
 
     async function runSession() {
       setPhase("loading");
-      setQrSvg(null);
+      setQrArt(null);
       setPairCode("");
       const hostResponse = await fetch("/api/auth/qr/host", {
         method: "POST",
@@ -48,14 +48,7 @@ export function QrHostPanel() {
         return;
       }
       currentTokenRef.current = host.token;
-      const svg = await QRCode.toString(host.url, {
-        type: "svg",
-        margin: 1,
-        width: 208,
-        color: { dark: "#171816", light: "#0000" },
-      });
-      if (cancelled || roundRef.current !== round) return;
-      setQrSvg(svg);
+      setQrArt(sakuraQrArt(host.url));
       setPairCode(host.pairCode);
       setSecondsLeft(host.expiresIn ?? 120);
       setPhase("watching");
@@ -143,8 +136,8 @@ export function QrHostPanel() {
   return (
     <div className="auth-qr-panel">
       <div className="auth-qr-frame" aria-live="polite">
-        {qrSvg
-          ? <div className="auth-qr-image" dangerouslySetInnerHTML={{ __html: qrSvg }} />
+        {qrArt
+          ? <SakuraQrImage art={qrArt} />
           : <div className="auth-qr-placeholder">正在生成…</div>}
       </div>
       <div className="qr-host-code" aria-label="配对码">

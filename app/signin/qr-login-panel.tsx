@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MonitorSmartphone } from "lucide-react";
-import QRCode from "qrcode";
+import { SakuraQrImage, sakuraQrArt, type SakuraQrArt } from "./sakura-qr-image";
 
-// 桌面端扫码登录面板:发起 QR 会话 → 本地渲染 SVG QR(token 不经过任何第三方
+// 桌面端扫码登录面板:发起 QR 会话 → 本地渲染樱花树 SVG QR(token 不经过任何第三方
 // 图床)→ 2 秒轮询。会话由 poll 响应的 Set-Cookie 下发(与 GitHub/邮箱码/passkey
 // 同一管线),拿到 ok 后整页跳 return_to。二维码 2 分钟过期,过期自动换新码;
 // "taken" 表示该码已在别处消费(多标签页/重放),提示后停止轮询。
@@ -16,7 +16,7 @@ const POLL_INTERVAL_MS = 2000;
 
 export function QrLoginPanel({ returnTo }: { returnTo: string }) {
   const [phase, setPhase] = useState<Phase>("loading");
-  const [qrSvg, setQrSvg] = useState<string | null>(null);
+  const [qrArt, setQrArt] = useState<SakuraQrArt | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [round, setRound] = useState(0);
   const roundRef = useRef(round);
@@ -28,7 +28,7 @@ export function QrLoginPanel({ returnTo }: { returnTo: string }) {
 
     async function runSession() {
       setPhase("loading");
-      setQrSvg(null);
+      setQrArt(null);
       const startResponse = await fetch("/api/auth/qr/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -44,14 +44,7 @@ export function QrLoginPanel({ returnTo }: { returnTo: string }) {
         setPhase("unavailable");
         return;
       }
-      const svg = await QRCode.toString(start.url, {
-        type: "svg",
-        margin: 1,
-        width: 208,
-        color: { dark: "#171816", light: "#0000" },
-      });
-      if (cancelled || roundRef.current !== round) return;
-      setQrSvg(svg);
+      setQrArt(sakuraQrArt(start.url));
       setSecondsLeft(start.expiresIn ?? 120);
       setPhase("watching");
 
@@ -126,8 +119,8 @@ export function QrLoginPanel({ returnTo }: { returnTo: string }) {
   return (
     <div className="auth-qr-panel">
       <div className="auth-qr-frame" aria-live="polite">
-        {qrSvg
-          ? <div className="auth-qr-image" dangerouslySetInnerHTML={{ __html: qrSvg }} />
+        {qrArt
+          ? <SakuraQrImage art={qrArt} />
           : <div className="auth-qr-placeholder">正在生成…</div>}
       </div>
       <p className="auth-qr-caption">
