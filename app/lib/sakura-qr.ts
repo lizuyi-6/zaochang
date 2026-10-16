@@ -1,402 +1,531 @@
-// 樱花树二维码:把 QR 模块矩阵画成一棵带光影的 3D 樱花树(静态 SVG 字符串 + 落花参数)。
-// 零 import——登录面板与反向邀请面板共用,测试直连(strip-types)。
+// 樱花树立体码:把 QR 模块矩阵搭成一块体素小园子——地砖、草、树干、樱花树冠。
+// 斜 45°俯视是一棵树;相机转到正上方(正交投影)时,每一列最高那块体素的顶面
+// 恰好拼成二维码。零 import——登录面板与反向邀请面板共用,测试直连(strip-types)。
 //
-// 可扫性纪律(装饰再多也不能让码失效):
-// - 码区 + 四周 SAKURA_QR_QUIET 个模块的静区只放两种东西:浅色树冠底(亮模块)与
-//   深色樱花(暗模块)。每个暗模块恰好一朵花、花心落在模块中心;亮模块不画任何东西。
-// - 树冠花团、树枝、地面全部在静区之外:花团圆心沿静区矩形的外法向放置,到静区的
-//   距离 ≥ 半径(构造保证 + 渲染前过滤),且静区矩形在所有装饰之后用同一渐变重绘一遍
-//   兜底,任何越界(含投影、花团上的小花)都会被盖掉。
-// - 定位图形保留 1:1:3:1:1 的明暗结构,只做小圆角与浮雕渐变(圆角上限见 FINDER_RADII)。
-// - 落花不进 SVG:由组件按 sakuraQrPetals 渲染成 HTML 元素做合成层动画(SVG 静态,
-//   不随动画重绘滤镜),起点在树冠下沿之下、只往下落,不经过码区。
-// 外观随机量全部由模块坐标与码尺寸派生(确定性):同一矩阵永远渲染出同一棵树。
+// 可扫性纪律(只约束正上方那一帧,树形态不要求能扫):
+// - 每一列(= 一个模块)最高体素的顶面颜色由模块真值决定:暗模块取深色、亮模块取浅色,
+//   与体素是地砖、草还是树冠无关(SAKURA_FLAT 按 kind × 明暗给色)。场景先搭完几何,
+//   最后才按"每列最高者"统一上色,树干/树枝哪怕穿出树冠也只会拿到正确明暗的颜色。
+// - 平面码四周铺 SAKURA_QR_MAT 个模块宽的浅色衬底作静区,不依赖页面背景色。
+// - 平面帧不走斜投影的多边形绘制,而是按模块直接 fillRect(边界取整到设备像素),
+//   没有抗锯齿接缝;同一份绘制函数也被测试拿去栅格化、交给 jsQR 解码。
+// 外观随机量全部由体素坐标派生(确定性):同一矩阵永远是同一棵树。
 
 export type QrModuleMatrix = { size: number; data: ArrayLike<number | boolean> };
-export type SakuraPuff = { cx: number; cy: number; r: number; tone: 0 | 1 | 2 | 3; layer: 0 | 1 | 2 };
+export type Rgb = readonly [number, number, number];
+export type SakuraVoxelKind = "slab" | "floor" | "grass" | "trunk" | "crown";
+export type SakuraVoxel = {
+  x: number;
+  y: number;
+  z: number;
+  kind: SakuraVoxelKind;
+  faces: number;
+  // 每列最高的体素:顶面在两种形态间渐变(tree → flat);其余体素 flat 无意义
+  top: boolean;
+  // 树形态下三个可见面的颜色(已含朝向明暗与环境光遮蔽)
+  tree: Rgb;
+  sideX: Rgb;
+  sideY: Rgb;
+  flat: Rgb;
+  blades: boolean;
+};
+export type SakuraScene = {
+  size: number;
+  dark: Uint8Array;
+  voxels: SakuraVoxel[];
+  // 每个模块(row * size + col)对应的最高体素下标
+  topOf: Int32Array;
+  // 取景用的轮廓点(x, y, z 三元组):地块四角 + 每个凸出地面的列的顶面四角
+  hull: Float64Array;
+  crownBox: { x0: number; y0: number; x1: number; y1: number; z0: number; z1: number };
+};
 export type SakuraPetal = { left: number; top: number; fall: number; drift: number; delay: number; duration: number; tone: number };
-type Rect = { x0: number; y0: number; x1: number; y1: number };
+export type SakuraCamera = { e: number; cy: number; sy: number; cp: number; sp: number };
+export type SakuraFit = { scale: number; ox: number; oy: number };
+export type SakuraPalette = "sakura" | "plain";
+// 测试用最小 2D 画布接口(浏览器 CanvasRenderingContext2D 满足它)
+export type SakuraCanvas = {
+  fillStyle: unknown;
+  strokeStyle: unknown;
+  lineWidth: number;
+  globalAlpha: number;
+  clearRect(x: number, y: number, w: number, h: number): void;
+  fillRect(x: number, y: number, w: number, h: number): void;
+  beginPath(): void;
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  closePath(): void;
+  fill(): void;
+  stroke(): void;
+};
 
-export const SAKURA_QR_QUIET = 2;
-export const SAKURA_QR_FINDER = 7;
-// 纠错等级 Q(25%):装饰不占纠错预算(每个模块的花心都按真值着色),余量留给屏幕反光/摩尔纹。
-// 对比实测(zxing-cpp / WeChatQRCode,6 个 URL × 12 种拍屏劣化):Q 与 H 持平或略好,且模块更大。
+// 纠错等级 Q(25%):平面帧每个模块都按真值着色,纠错余量留给屏幕反光/摩尔纹。
 export const SAKURA_QR_ERROR_CORRECTION = "Q";
+export const SAKURA_QR_MAT = 3;
+export const FACE_TOP = 1;
+export const FACE_X = 2;
+export const FACE_Y = 4;
 
-const GAP = 0.2;
-const PAD = 0.6;
-const TRUNK_LENGTH = 11;
-const GROUND_BAND = 3.6;
-const CORNER_WEIGHT = 3;
-// 暗模块樱花的半径(模块为 1):> 0.5 让相邻暗模块的花瓣交叠成簇,花心始终在模块中心。
-const BLOSSOM_SCALE = 1.2;
-// 定位图形圆角(外环外沿 / 外环内沿 / 内核)。实测圆角越大,严格解码器(OpenCV)越难
-// 认出定位图形:1.9/1.05/0.9 时 2x 屏 2/72,0.35/0.18/0.2 时 71/72(直角 72/72),不要再放大。
-const FINDER_RADII = [0.35, 0.18, 0.2] as const;
+const TREE_YAW = Math.PI / 4;
+const TREE_PITCH = Math.PI / 6;
+const SLAB_Z = -2;
+const SHADE_Y = 0.88;
+const SHADE_X = 0.75;
 
-// 点到轴对齐矩形的距离(点在矩形内为 0)。
-export function distanceToRect(x: number, y: number, rect: Rect) {
-  const dx = Math.max(rect.x0 - x, 0, x - rect.x1);
-  const dy = Math.max(rect.y0 - y, 0, y - rect.y1);
-  return Math.hypot(dx, dy);
-}
+const hex = (value: string): Rgb => [
+  parseInt(value.slice(1, 3), 16),
+  parseInt(value.slice(3, 5), 16),
+  parseInt(value.slice(5, 7), 16),
+];
 
-export function isFinderModule(row: number, col: number, size: number) {
-  const f = SAKURA_QR_FINDER;
-  return (row < f && col < f) || (row < f && col >= size - f) || (row >= size - f && col < f);
-}
+export const SAKURA_MAT = hex("#fbf7f1");
+// 正上方帧的顶面色:[暗模块, 亮模块]。含 ±3% 抖动后暗色相对亮度 ≤ 0.15、亮色 ≥ 0.8,
+// 对比度 ≥ 4.5:1(测试按此断言)。
+export const SAKURA_FLAT: Record<SakuraVoxelKind, readonly [Rgb, Rgb]> = {
+  crown: [hex("#a92e57"), hex("#fdecf1")],
+  floor: [hex("#ad315b"), hex("#f8f2e9")],
+  grass: [hex("#276b2b"), hex("#eef5e6")],
+  trunk: [hex("#5a3424"), hex("#f6efe6")],
+  slab: [hex("#5a3424"), hex("#f6efe6")],
+};
+const PLAIN_DARK = "#111111";
+const PLAIN_LIGHT = "#ffffff";
 
-function rand(a: number, b: number, salt = 0) {
-  let h = (Math.imul(a + 1, 374761393) + Math.imul(b + 7, 668265263) + Math.imul(salt + 3, 1442695041)) | 0;
+const TREE = {
+  crownDark: hex("#ec8dab"),
+  crownLight: hex("#fcdce6"),
+  crownBody: [hex("#f8c0d1"), hex("#f3abc2"), hex("#fad1de"), hex("#ef9bb6")],
+  shadow: hex("#c99aa5"),
+  floorDark: hex("#efbcc8"),
+  floorLight: [hex("#f1e8da"), hex("#e8dcc9")],
+  floorSide: hex("#dccbb2"),
+  slab: hex("#b9a58b"),
+  grass: hex("#7cc44e"),
+  grassSide: hex("#5a9b39"),
+  trunk: hex("#7a4a32"),
+  blade: ["#8fd65c", "#64b23f", "#a6e070"],
+};
+
+// 树冠 = 若干椭球花团的并集(相对码中心,单位:模块;按 41 模块的码设计,其余尺寸等比缩放)。
+// [dx, dy, 中心高度, 水平半径, 垂直半径]
+const CROWN_PUFFS: ReadonlyArray<readonly [number, number, number, number, number]> = [
+  [0, 0, 25, 11.5, 7.5],
+  [1, -1, 32, 9, 6],
+  [-2, -3, 37.5, 6, 4],
+  [0, -12, 27, 6.5, 5],
+  [-8, -7, 28, 6, 5],
+  [8, -8, 29, 6, 5],
+  [-12, 3, 24, 5.5, 4.5],
+  [12, -3, 25, 5.5, 4.5],
+  [-8, 8, 22.5, 6, 4.5],
+  [9, 9, 23, 7, 5],
+  [2, 12, 22, 6, 4.5],
+  [-7, -2, 32, 6, 5],
+  [7, 3, 31, 6, 5],
+  [3, -8, 34, 6, 4.5],
+  [-4, 7, 29.5, 6, 4.5],
+];
+// 树枝:从树干上段伸进各个花团(终点藏在树冠里)。[dx, dy, z] 起点 → 终点
+const BRANCHES: ReadonlyArray<readonly [number, number, number, number, number, number]> = [
+  [0, 0, 12, -8, -7, 27],
+  [0, 0, 13, 8, -8, 28],
+  [0, 0, 11, -8, 8, 22],
+  [0, 0, 12, 9, 9, 22],
+  [0, 0, 14, 2, 12, 21],
+  [0, 0, 15, 0, -12, 26],
+  [0, 0, 13, -12, 3, 23],
+  [0, 0, 14, 12, -3, 24],
+];
+const TRUNK_TOP = 20;
+
+function rand(x: number, y: number, z: number, salt = 0) {
+  let h = (Math.imul(x + 11, 374761393) + Math.imul(y + 7, 668265263) + Math.imul(z + 5, 2246822519) + Math.imul(salt + 3, 1442695041)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
 
-const n = (value: number) => String(Math.round(value * 100) / 100);
-const lerp = (range: readonly [number, number], t: number) => range[0] + (range[1] - range[0]) * t;
+const clamp255 = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+const scaleRgb = (c: Rgb, k: number): Rgb => [clamp255(c[0] * k), clamp255(c[1] * k), clamp255(c[2] * k)];
+const mixRgb = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const css = (c: Rgb) => `rgb(${clamp255(c[0])},${clamp255(c[1])},${clamp255(c[2])})`;
 
-type Side = "top" | "right" | "bottom" | "left";
-type PerimeterPoint = { px: number; py: number; nx: number; ny: number; side: Side; t: number; corner: boolean };
-
-// 沿静区矩形外缘走一圈:四条边给边法向,四个角把法向在 90° 内扫过(角按 CORNER_WEIGHT 计长度)。
-// 侧边的 t 统一为"自上而下"0→1,顶/底边为左→右/右→左。
-function perimeterPoint(R: Rect, s: number): PerimeterPoint {
-  const w = R.x1 - R.x0;
-  const h = R.y1 - R.y0;
-  const arc = (Math.PI / 2) * CORNER_WEIGHT;
-  const corner = (x: number, y: number, angle: number, side: Side, t: number): PerimeterPoint => (
-    { px: x, py: y, nx: Math.cos(angle), ny: Math.sin(angle), side, t, corner: true }
-  );
-  const segments: Array<[number, (u: number) => PerimeterPoint]> = [
-    [w, (u) => ({ px: R.x0 + w * u, py: R.y0, nx: 0, ny: -1, side: "top", t: u, corner: false })],
-    [arc, (u) => corner(R.x1, R.y0, -Math.PI / 2 + (Math.PI / 2) * u, "top", u)],
-    [h, (u) => ({ px: R.x1, py: R.y0 + h * u, nx: 1, ny: 0, side: "right", t: u, corner: false })],
-    [arc, (u) => corner(R.x1, R.y1, (Math.PI / 2) * u, "bottom", u)],
-    [w, (u) => ({ px: R.x1 - w * u, py: R.y1, nx: 0, ny: 1, side: "bottom", t: u, corner: false })],
-    [arc, (u) => corner(R.x0, R.y1, Math.PI / 2 + (Math.PI / 2) * u, "bottom", u)],
-    [h, (u) => ({ px: R.x0, py: R.y1 - h * u, nx: -1, ny: 0, side: "left", t: 1 - u, corner: false })],
-    [arc, (u) => corner(R.x0, R.y0, Math.PI + (Math.PI / 2) * u, "top", u)],
-  ];
-  let rest = s;
-  for (const [length, at] of segments) {
-    if (rest <= length) return at(rest / length);
-    rest -= length;
-  }
-  return segments[0][1](0);
-}
-
-// 树冠三层花团:前层(小、亮)紧贴静区外沿,把码"嵌"进树冠;中层、后层(大、偏深)
-// 逐层外扩,勾出顶部穹顶、两侧中上部外鼓、底部收拢的树冠轮廓。
-const LAYERS = [
-  // step, 顶/侧/底/上角/下角 半径范围, 外扩(基础, 穹顶增量)
-  { step: 2.2, top: [1.5, 2.3], side: [1.4, 2.1], bottom: [1.4, 2.0], cornerTop: [1.6, 2.2], cornerBottom: [1.4, 1.9], base: [0, 0.35], dome: 0.6 },
-  { step: 2.9, top: [2.0, 2.8], side: [1.8, 2.5], bottom: [1.7, 2.3], cornerTop: [2.2, 2.8], cornerBottom: [1.7, 2.1], base: [0.5, 1.5], dome: 2.0 },
-  { step: 3.6, top: [2.6, 3.5], side: [2.2, 3.0], bottom: [1.9, 2.4], cornerTop: [2.6, 3.2], cornerBottom: [1.8, 2.2], base: [1.2, 2.6], dome: 3.4 },
-] as const;
-
-function crownPuffs(R: Rect, size: number): SakuraPuff[] {
-  const w = R.x1 - R.x0;
-  const h = R.y1 - R.y0;
-  const perimeter = 2 * (w + h) + 4 * (Math.PI / 2) * CORNER_WEIGHT;
-  const puffs: SakuraPuff[] = [];
-  // 后层先入数组(先画,在最下面)
-  for (let layer = 2; layer >= 0; layer -= 1) {
-    const spec = LAYERS[layer];
-    const count = Math.round(perimeter / spec.step);
-    for (let i = 0; i < count; i += 1) {
-      const salt = 10 + layer * 7;
-      const s = ((i + 0.5 + (rand(i, size, salt) - 0.5) * 0.6) / count) * perimeter;
-      const p = perimeterPoint(R, Math.min(perimeter - 0.01, Math.max(0, s)));
-      const wobble = rand(i, size, salt + 1);
-      const push = rand(i, size, salt + 2);
-      let range: readonly [number, number];
-      let dome = 0;
-      let shade: number;
-      if (p.corner) {
-        const top = p.ny < 0;
-        range = top ? spec.cornerTop : spec.cornerBottom;
-        dome = top ? spec.dome * 0.35 : 0;
-        shade = top ? 0 : 2;
-      } else if (p.side === "top") {
-        range = spec.top;
-        dome = spec.dome * Math.sin(Math.PI * p.t);
-        shade = 0;
-      } else if (p.side === "bottom") {
-        range = spec.bottom;
-        dome = spec.dome * 0.15 * Math.sin(Math.PI * p.t);
-        shade = 2;
-      } else {
-        range = spec.side;
-        // 侧缘在中上部最鼓,越往下越收、越沉色
-        dome = spec.dome * 0.6 * Math.sin(Math.PI * Math.min(1, p.t * 1.3));
-        shade = p.t < 0.4 ? 0 : p.t < 0.75 ? 1 : 2;
-      }
-      const r = lerp(range, wobble);
-      const extra = lerp(spec.base, push) + dome;
-      const d = r + GAP + extra;
-      const tone = Math.min(3, shade + (layer === 0 ? 0 : 1)) as SakuraPuff["tone"];
-      puffs.push({ cx: p.px + p.nx * d, cy: p.py + p.ny * d, r, tone, layer: layer as SakuraPuff["layer"] });
-    }
-  }
-  return puffs;
-}
-
-export function sakuraQrLayout(size: number) {
-  const quiet = SAKURA_QR_QUIET;
-  // 先在局部坐标(码区左上角为原点)生成树冠,再按外包框平移到画布内。
-  const local: Rect = { x0: -quiet, y0: -quiet, x1: size + quiet, y1: size + quiet };
-  const raw = crownPuffs(local, size);
-  const minX = Math.min(...raw.map((p) => p.cx - p.r));
-  const maxX = Math.max(...raw.map((p) => p.cx + p.r));
-  const minY = Math.min(...raw.map((p) => p.cy - p.r));
-  const maxY = Math.max(...raw.map((p) => p.cy + p.r));
-  const qrX = PAD - minX;
-  const qrY = PAD - minY;
-  const quietRect: Rect = { x0: qrX - quiet, y0: qrY - quiet, x1: qrX + size + quiet, y1: qrY + size + quiet };
-  const puffs = raw.map((p) => ({ ...p, cx: p.cx + qrX, cy: p.cy + qrY }));
-  const crownBottom = maxY + qrY - 0.8;
-  const groundY = crownBottom + TRUNK_LENGTH;
-  return {
-    width: maxX - minX + PAD * 2,
-    height: groundY + GROUND_BAND,
-    qrX,
-    qrY,
-    quietRect,
-    crownBottom,
-    groundY,
-    puffs,
+// WCAG 相对亮度(0..1)
+export function relativeLuminance(c: Rgb) {
+  const lin = (v: number) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   };
+  return 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
 }
 
-// 落花参数(百分比坐标,相对整幅画):起点在树冠下沿之下,下落距离到地面为止。
-export function sakuraQrPetals(size: number, count = 9): SakuraPetal[] {
-  const { width: W, height: H, quietRect: R, crownBottom: cb, groundY: gy } = sakuraQrLayout(size);
-  return Array.from({ length: count }, (_, i) => {
-    const x = R.x0 + 2 + rand(i, 1, 51) * (R.x1 - R.x0 - 4);
-    const y = cb + 0.4 + rand(i, 2, 52) * 1.6;
-    return {
-      left: (x / W) * 100,
-      top: (y / H) * 100,
-      fall: ((gy + 0.6 - y) / W) * 100,
-      drift: ((rand(i, 5, 55) - 0.6) * 5 / W) * 100,
-      delay: -rand(i, 3, 53) * 8,
-      duration: 6.5 + rand(i, 4, 54) * 3.5,
-      tone: i % 3,
-    };
-  });
+export function isFinderZone(row: number, col: number, size: number) {
+  // 定位图形 7×7 + 1 圈分隔带
+  const f = 8;
+  return (row < f && col < f) || (row < f && col >= size - f) || (row >= size - f && col < f);
 }
 
-// 单片花瓣(尖端带樱花特有的缺口),沿 +x 方向,根部在原点。
-const PETAL = [
-  [0.04, -0.28], [0.42, -0.38], [0.55, -0.14], [0.47, 0], [0.55, 0.14], [0.42, 0.38], [0.04, 0.28],
-] as const;
-
-function flowerPath(rotationDeg: number, scale = 1) {
-  let d = "";
-  for (let p = 0; p < 5; p += 1) {
-    const angle = ((rotationDeg + p * 72 - 90) * Math.PI) / 180;
-    const cos = Math.cos(angle) * scale;
-    const sin = Math.sin(angle) * scale;
-    const pt = ([u, v]: readonly [number, number]) => `${n(u * cos - v * sin)} ${n(u * sin + v * cos)}`;
-    d += `M0 0C${pt(PETAL[0])} ${pt(PETAL[1])} ${pt(PETAL[2])}L${pt(PETAL[3])}L${pt(PETAL[4])}C${pt(PETAL[5])} ${pt(PETAL[6])} 0 0Z`;
-  }
-  return d;
-}
-
-const SINGLE_PETAL = "M-.27 0C-.15 -.22 .15 -.26 .28 -.08L.2 0L.28 .08C.15 .26 -.15 .22 -.27 0Z";
-
-// 暗模块樱花的三套色(深玫红系;基色亮度都压在 0.36 以下,保证与浅底的明暗差)。
-const BLOSSOM_PALETTES = [
-  ["#e2678c", "#b3264f", "#6e0f31"],
-  ["#d6557c", "#9c1b46", "#5c0b2a"],
-  ["#e56c88", "#b02c48", "#70122b"],
-] as const;
-const BLOSSOM_ROTATIONS = [9, 33, 57] as const;
-
-// 树冠花团四档明暗:0 迎光 → 3 背光(外层底部)。
-const PUFF_TONES = [
-  ["#fde8ee", "#f9d5df", "#f0b8c9"],
-  ["#fadbe4", "#f5c5d3", "#e8a5ba"],
-  ["#f6ccd8", "#f0b4c6", "#de8fa9"],
-  ["#f0bfce", "#e7a3b9", "#cf7b98"],
-] as const;
-// 花团上的装饰小花:白粉 / 浅粉 / 中粉
-const FLOWER_TONES = [
-  ["#ffffff", "#fff2f6", "#f7c9d6"],
-  ["#fff6f8", "#fcdbe4", "#f2abc0"],
-  ["#fde3ea", "#f5b3c6", "#e48aa6"],
-] as const;
-const PETAL_COLORS = ["#f4a9bf", "#f8c4d3", "#ec93ae"] as const;
-
-function radial(id: string, stops: readonly string[], fx = 0.34, fy = 0.3) {
-  return `<radialGradient id="${id}" cx="${n(fx + 0.08)}" cy="${n(fy + 0.08)}" r=".72" fx="${fx}" fy="${fy}">${
-    stops.map((color, i) => `<stop offset="${n(i / (stops.length - 1))}" stop-color="${color}"/>`).join("")
-  }</radialGradient>`;
-}
-
-// 一段渐细的枝:起点宽 w1、终点宽 w2,中段沿法向弯 bend。
-function limb(x1: number, y1: number, x2: number, y2: number, w1: number, w2: number, bend: number) {
-  const length = Math.hypot(x2 - x1, y2 - y1);
-  const nx = -(y2 - y1) / length;
-  const ny = (x2 - x1) / length;
-  const mx = (x1 + x2) / 2 + nx * bend;
-  const my = (y1 + y2) / 2 + ny * bend;
-  const wm = (w1 + w2) / 4;
-  const side = (sign: number, w: number, x: number, y: number) => `${n(x + nx * w * sign / 2)} ${n(y + ny * w * sign / 2)}`;
-  return `M${side(1, w1, x1, y1)}Q${n(mx + nx * wm)} ${n(my + ny * wm)} ${side(1, w2, x2, y2)}L${side(-1, w2, x2, y2)}Q${n(mx - nx * wm)} ${n(my - ny * wm)} ${side(-1, w1, x1, y1)}Z`;
-}
-
-function roundedRectPath(x: number, y: number, w: number, h: number, r: number) {
-  return `M${n(x + r)} ${n(y)}H${n(x + w - r)}A${n(r)} ${n(r)} 0 0 1 ${n(x + w)} ${n(y + r)}V${n(y + h - r)}A${n(r)} ${n(r)} 0 0 1 ${n(x + w - r)} ${n(y + h)}H${n(x + r)}A${n(r)} ${n(r)} 0 0 1 ${n(x)} ${n(y + h - r)}V${n(y + r)}A${n(r)} ${n(r)} 0 0 1 ${n(x + r)} ${n(y)}Z`;
-}
-
-export function renderSakuraQrSvg(matrix: QrModuleMatrix, label = "扫码登录二维码"): string {
+export function buildSakuraScene(matrix: QrModuleMatrix): SakuraScene {
   const size = matrix.size;
-  const { width: W, height: H, qrX, qrY, quietRect: R, crownBottom: cb, groundY: gy, puffs: crown } = sakuraQrLayout(size);
-  const cx = (R.x0 + R.x1) / 2;
-  const dark = (row: number, col: number) => Boolean(matrix.data[row * size + col]);
+  const k = size / 41;
+  const c = size / 2;
+  const dark = new Uint8Array(size * size);
+  for (let i = 0; i < size * size; i += 1) dark[i] = matrix.data[i] ? 1 : 0;
 
-  const defs: string[] = [
-    `<linearGradient id="zqSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffaf6"/><stop offset=".7" stop-color="#fdf1f2"/><stop offset="1" stop-color="#f7edef"/></linearGradient>`,
-    `<radialGradient id="zqSun" cx=".14" cy=".08" r=".55"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`,
-    // 树冠底色用绝对坐标渐变:冠底、静区兜底矩形共用同一渐变,拼接处无缝。
-    `<radialGradient id="zqCrown" gradientUnits="userSpaceOnUse" cx="${n(qrX + size * 0.36)}" cy="${n(qrY + size * 0.3)}" r="${n(size * 0.95)}"><stop offset="0" stop-color="#fffbfc"/><stop offset=".55" stop-color="#fdeef2"/><stop offset="1" stop-color="#f9e0e7"/></radialGradient>`,
-    `<linearGradient id="zqBark" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a2c22"/><stop offset=".28" stop-color="#97674c"/><stop offset=".55" stop-color="#6f452f"/><stop offset="1" stop-color="#2f1b15"/></linearGradient>`,
-    `<radialGradient id="zqGround" cx=".5" cy=".45" r=".55"><stop offset="0" stop-color="#e6f0d6"/><stop offset=".72" stop-color="#d7e6c4"/><stop offset="1" stop-color="#d7e6c4" stop-opacity="0"/></radialGradient>`,
-    `<linearGradient id="zqFinder" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b0325a"/><stop offset=".5" stop-color="#7c1339"/><stop offset="1" stop-color="#560a23"/></linearGradient>`,
-    `<radialGradient id="zqDome" gradientUnits="userSpaceOnUse" cx="${n(qrX + size * 0.28)}" cy="${n(qrY + size * 0.22)}" r="${n(size * 0.9)}"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#3d0619" stop-opacity=".07"/></radialGradient>`,
-    `<filter id="zqShadow" x="-2%" y="-2%" width="104%" height="104%"><feDropShadow dx=".12" dy=".16" stdDeviation=".13" flood-color="#4f0a22" flood-opacity=".32"/></filter>`,
-    `<filter id="zqPuffShadow" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx=".1" dy=".35" stdDeviation=".45" flood-color="#a83c62" flood-opacity=".26"/></filter>`,
-    `<filter id="zqBlur" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation=".7"/></filter>`,
-    `<path id="zqp" d="${SINGLE_PETAL}"/>`,
-  ];
-  BLOSSOM_PALETTES.forEach((palette, i) => defs.push(radial(`zqg${i}`, palette)));
-  PUFF_TONES.forEach((tone, i) => defs.push(radial(`zqPuff${i}`, tone, 0.36, 0.3)));
-  FLOWER_TONES.forEach((tone, i) => defs.push(radial(`zqFl${i}`, tone, 0.4, 0.36)));
-  BLOSSOM_PALETTES.forEach((_, c) => {
-    BLOSSOM_ROTATIONS.forEach((rotation, r) => {
-      defs.push(`<g id="zqb${c * 3 + r}"><path d="${flowerPath(rotation, BLOSSOM_SCALE)}" fill="url(#zqg${c})"/><circle r=".17" fill="#4d0820"/></g>`);
-    });
-  });
-  FLOWER_TONES.forEach((_, c) => {
-    BLOSSOM_ROTATIONS.forEach((rotation, r) => {
-      defs.push(`<g id="zqf${c * 3 + r}"><path d="${flowerPath(rotation)}" fill="url(#zqFl${c})"/><circle r=".11" fill="#e06a8f"/></g>`);
-    });
-  });
-
-  const body: string[] = [];
-  // 天空 + 左上柔光 + 远山
-  body.push(`<rect width="${n(W)}" height="${n(H)}" fill="url(#zqSky)"/>`);
-  body.push(`<rect width="${n(W)}" height="${n(H)}" fill="url(#zqSun)"/>`);
-  body.push(`<path d="M0 ${n(gy - 3)}C${n(W * 0.2)} ${n(gy - 7.5)} ${n(W * 0.38)} ${n(gy - 4.8)} ${n(W * 0.55)} ${n(gy - 2.8)}S${n(W * 0.85)} ${n(gy - 6.6)} ${n(W)} ${n(gy - 3.8)}V${n(H)}H0Z" fill="#f3e3eb" opacity=".8"/>`);
-
-  // 地面、树冠投影、地上落花
-  body.push(`<ellipse cx="${n(cx)}" cy="${n(gy + 0.9)}" rx="${n(W * 0.48)}" ry="2.9" fill="url(#zqGround)"/>`);
-  body.push(`<ellipse cx="${n(cx + 2.4)}" cy="${n(gy + 0.6)}" rx="${n(W * 0.27)}" ry="1.4" fill="#56663f" opacity=".3" filter="url(#zqBlur)"/>`);
-  for (let i = 0; i < 26; i += 1) {
-    const angle = rand(i, 1, 21) * Math.PI * 2;
-    const dist = Math.sqrt(rand(i, 2, 22));
-    const px = cx + Math.cos(angle) * dist * W * 0.41;
-    const py = gy + 0.9 + Math.sin(angle) * dist * 2;
-    body.push(`<use href="#zqp" fill="${PETAL_COLORS[i % 3]}" transform="translate(${n(px)} ${n(py)}) rotate(${n(rand(i, 3, 23) * 360)}) scale(${n(0.8 + rand(i, 4, 24) * 0.6)} ${n(0.45 + rand(i, 5, 25) * 0.3)})"/>`);
-  }
-
-  // 树:主干在离地约 2/3 处分叉,左右两根大枝斜展进树冠下沿(伞形),中枝直上;
-  // 两根下垂小枝末梢挂花团。枝顶都藏在树冠花团后面。
-  // 侧枝先画、主干后画盖住侧枝根部;主干与中枝共用绝对坐标渐变,衔接处无缝。
-  const fy = cb + 4;
-  const sideBark = [
-    limb(cx - 1.4, fy + 0.4, cx - 17.5, cb + 2.4, 1, 0.35, -0.9),
-    limb(cx + 1.6, fy + 0.2, cx + 15.5, cb + 1.6, 0.9, 0.3, 0.8),
-    limb(cx - 0.4, fy + 1.2, cx - 12.5, cb - 1.4, 2.7, 1.2, -1.4),
-    limb(cx + 0.7, fy + 1.1, cx + 11.5, cb - 1.8, 2.5, 1.1, 1.3),
-  ];
-  const trunk = [
-    limb(cx + 0.2, fy - 1, cx + 1, cb - 3.6, 2.75, 1.3, 0.5),
-    limb(cx, gy + 0.6, cx + 0.2, fy - 1.4, 5.6, 2.8, 0.5),
-  ];
-  const roots = `M${n(cx - 2.6)} ${n(gy - 0.4)}C${n(cx - 4.2)} ${n(gy)} ${n(cx - 5.8)} ${n(gy + 0.6)} ${n(cx - 7.6)} ${n(gy + 1.2)}C${n(cx - 5.4)} ${n(gy + 1.2)} ${n(cx - 3.8)} ${n(gy + 1)} ${n(cx - 1.8)} ${n(gy + 0.8)}ZM${n(cx + 2.6)} ${n(gy - 0.4)}C${n(cx + 4.2)} ${n(gy + 0.1)} ${n(cx + 5.8)} ${n(gy + 0.7)} ${n(cx + 7.2)} ${n(gy + 1.3)}C${n(cx + 5.2)} ${n(gy + 1.3)} ${n(cx + 3.7)} ${n(gy + 1.1)} ${n(cx + 1.8)} ${n(gy + 0.8)}Z`;
-  defs.push(`<linearGradient id="zqTrunk" gradientUnits="userSpaceOnUse" x1="${n(cx - 2.8)}" y1="0" x2="${n(cx + 3)}" y2="0"><stop offset="0" stop-color="#4a2c22"/><stop offset=".28" stop-color="#97674c"/><stop offset=".55" stop-color="#6f452f"/><stop offset="1" stop-color="#2f1b15"/></linearGradient>`);
-  body.push(`<g fill="url(#zqBark)">${sideBark.map((d) => `<path d="${d}"/>`).join("")}</g>`);
-  body.push(`<g fill="url(#zqTrunk)">${trunk.map((d) => `<path d="${d}"/>`).join("")}<path d="${roots}"/></g>`);
-  // 树皮纹理 + 主干左侧受光高光 + 树冠压在枝上的阴影
-  body.push(`<g fill="none" stroke="#2e1a14" stroke-linecap="round" stroke-width=".16" opacity=".4"><path d="M${n(cx - 0.6)} ${n(gy - 0.4)}C${n(cx - 1)} ${n(gy - 2.6)} ${n(cx - 0.3)} ${n(gy - 4.6)} ${n(cx - 0.5)} ${n(fy - 1)}"/><path d="M${n(cx + 1.3)} ${n(gy - 1)}C${n(cx + 1)} ${n(gy - 3)} ${n(cx + 1.5)} ${n(gy - 4.8)} ${n(cx + 1.2)} ${n(fy - 0.6)}"/></g>`);
-  body.push(`<path d="M${n(cx - 1.9)} ${n(gy - 0.3)}C${n(cx - 2)} ${n(gy - 2.6)} ${n(cx - 1.7)} ${n(gy - 4.8)} ${n(cx - 1.5)} ${n(fy - 0.8)}" fill="none" stroke="#d29f80" stroke-width=".42" stroke-linecap="round" opacity=".5"/>`);
-  body.push(`<ellipse cx="${n(cx + 1)}" cy="${n(cb - 0.4)}" rx="15" ry="1.5" fill="#3b1a12" opacity=".32" filter="url(#zqBlur)"/>`);
-
-  // 下垂小枝末梢的花团(在树冠下方,离静区很远)
-  const twigPuffs: SakuraPuff[] = [
-    { cx: cx - 17.4, cy: cb + 2.4, r: 1.7, tone: 1, layer: 0 },
-    { cx: cx - 15.4, cy: cb + 3.1, r: 1.2, tone: 2, layer: 0 },
-    { cx: cx - 18.9, cy: cb + 1.2, r: 1.1, tone: 0, layer: 0 },
-    { cx: cx + 15.5, cy: cb + 1.6, r: 1.5, tone: 1, layer: 0 },
-    { cx: cx + 13.8, cy: cb + 2.4, r: 1.05, tone: 2, layer: 0 },
-  ];
-
-  // 树冠:冠底(桥接静区与花团)→ 后/中/前三层花团(各带投影)→ 花团表面的小樱花
-  const puffs = [...crown, ...twigPuffs].filter((puff) => distanceToRect(puff.cx, puff.cy, R) >= puff.r);
-  body.push(`<rect x="${n(R.x0 - 1.4)}" y="${n(R.y0 - 1.4)}" width="${n(R.x1 - R.x0 + 2.8)}" height="${n(R.y1 - R.y0 + 2.8)}" rx="3" fill="url(#zqCrown)"/>`);
-  // 花团表面按向日葵螺旋铺小樱花;最外一圈花心压在圆周内侧、花瓣伸出圆外,
-  // 让花团轮廓呈花瓣状起伏而不是光滑的球。被上层花团盖住的花、会碰到静区的花直接剔除。
-  const covers = (layer: number, x: number, y: number, radius: number) => puffs.some(
-    (other) => other.layer < layer && Math.hypot(other.cx - x, other.cy - y) < other.r - radius * 0.7,
-  );
-  const flowersFor = (puff: SakuraPuff, index: number) => {
-    const count = Math.max(3, Math.round(puff.r * puff.r * 1.15));
-    const spin = rand(index, 0, 36) * Math.PI * 2;
-    const out: string[] = [];
-    for (let k = 0; k < count; k += 1) {
-      const frac = Math.sqrt((k + 0.5) / count);
-      const angle = spin + k * 2.39996 + (rand(index, k, 33) - 0.5) * 0.5;
-      const dist = frac * (puff.r + 0.05);
-      const scale = 1 + rand(index, k, 32) * 0.45;
-      const x = puff.cx + Math.cos(angle) * dist;
-      const y = puff.cy + Math.sin(angle) * dist;
-      if (distanceToRect(x, y, R) < 0.62 * scale || covers(puff.layer, x, y, 0.53 * scale)) continue;
-      // 迎光(左上)的花更白,背光的更粉
-      const lit = (Math.cos(angle) * -0.6 + Math.sin(angle) * -0.8) * frac;
-      const shade = lit > 0.25 ? 0 : lit > -0.35 ? 1 : 2;
-      const tone = Math.min(2, Math.max(0, shade + (puff.tone >= 2 ? 1 : 0) - (puff.tone === 0 ? 1 : 0)));
-      out.push(`<use href="#zqf${tone * 3 + (k % 3)}" transform="translate(${n(x)} ${n(y)}) scale(${n(scale)})"/>`);
-    }
-    return out.join("");
+  const zTop = Math.ceil(44 * k);
+  const layers = zTop - SLAB_Z + 1;
+  // 0 = 空;1 slab 2 floor 3 grass 4 trunk 5 crown
+  const grid = new Uint8Array(size * size * layers);
+  const at = (x: number, y: number, z: number) => ((z - SLAB_Z) * size + y) * size + x;
+  const inside = (x: number, y: number, z: number) => x >= 0 && y >= 0 && x < size && y < size && z >= SLAB_Z && z <= zTop;
+  const put = (x: number, y: number, z: number, kind: number) => {
+    if (inside(x, y, z)) grid[at(x, y, z)] = kind;
   };
-  for (const layer of [2, 1, 0] as const) {
-    const group = puffs.map((puff, index) => ({ puff, index })).filter(({ puff }) => puff.layer === layer);
-    // 前层不加投影:投影会落进静区边缘,被兜底矩形硬切出一道框线。
-    body.push(`<g${layer === 0 ? "" : ` filter="url(#zqPuffShadow)"`}>${
-      group.map(({ puff }) => `<circle cx="${n(puff.cx)}" cy="${n(puff.cy)}" r="${n(puff.r)}" fill="url(#zqPuff${puff.tone})" data-puff=""/>`).join("")
-    }</g>`);
-    body.push(`<g>${group.map(({ puff, index }) => flowersFor(puff, index)).join("")}</g>`);
-  }
+  const filled = (x: number, y: number, z: number) => inside(x, y, z) && grid[at(x, y, z)] !== 0;
 
-  // 静区兜底:同一渐变重绘静区矩形,盖掉任何可能越界的装饰/投影。
-  body.push(`<rect x="${n(R.x0)}" y="${n(R.y0)}" width="${n(R.x1 - R.x0)}" height="${n(R.y1 - R.y0)}" rx="1.2" fill="url(#zqCrown)" data-quiet-zone=""/>`);
-
-  // 暗模块 → 一朵深色樱花(定位图形单独画)
-  const blossoms: string[] = [];
-  for (let row = 0; row < size; row += 1) {
-    for (let col = 0; col < size; col += 1) {
-      if (!dark(row, col) || isFinderModule(row, col, size)) continue;
-      const variant = Math.floor(rand(row, col, 41) * 9);
-      blossoms.push(`<use href="#zqb${variant}" x="${n(qrX + col + 0.5)}" y="${n(qrY + row + 0.5)}"/>`);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      put(x, y, SLAB_Z, 1);
+      put(x, y, SLAB_Z + 1, 2);
+      const edge = x <= 1 || y <= 1 || x >= size - 2 || y >= size - 2;
+      if (dark[y * size + x] && (edge || isFinderZone(y, x, size))) put(x, y, 0, 3);
     }
   }
-  body.push(`<g filter="url(#zqShadow)" data-modules="">${blossoms.join("")}</g>`);
 
-  // 定位图形:外环 + 内核保持 1:1:3:1:1,内核上压一朵同色系浮雕樱花
-  const finders: string[] = [];
-  for (const [fx, fy] of [[qrX, qrY], [qrX + size - SAKURA_QR_FINDER, qrY], [qrX, qrY + size - SAKURA_QR_FINDER]]) {
-    finders.push(`<path d="${roundedRectPath(fx, fy, 7, 7, FINDER_RADII[0])}${roundedRectPath(fx + 1, fy + 1, 5, 5, FINDER_RADII[1])}" fill-rule="evenodd" fill="url(#zqFinder)"/>`);
-    finders.push(`<rect x="${n(fx + 2)}" y="${n(fy + 2)}" width="3" height="3" rx="${FINDER_RADII[2]}" fill="url(#zqFinder)"/>`);
-    finders.push(`<path d="${flowerPath(18, 2.55)}" transform="translate(${n(fx + 3.5)} ${n(fy + 3.5)})" fill="#a2365c" opacity=".7"/>`);
-    finders.push(`<circle cx="${n(fx + 3.5)}" cy="${n(fy + 3.5)}" r=".38" fill="#4d0820"/>`);
+  // 树干(2×2,根部外扩一圈)+ 树枝(三维直线体素化)
+  const t0 = Math.round(c) - 1;
+  for (let z = 0; z <= Math.round(TRUNK_TOP * k); z += 1) {
+    for (let dy = 0; dy < 2; dy += 1) for (let dx = 0; dx < 2; dx += 1) put(t0 + dx, t0 + dy, z, 4);
   }
-  body.push(`<g filter="url(#zqShadow)" data-finders="">${finders.join("")}</g>`);
+  for (const [dx, dy] of [[-1, 0], [2, 1], [0, 2], [1, -1], [-1, 1], [1, 2]] as const) put(t0 + dx, t0 + dy, 0, 4);
+  for (const [dx, dy] of [[-1, 0], [2, 1], [0, 2]] as const) put(t0 + dx, t0 + dy, 1, 4);
+  for (const [ax, ay, az, bx, by, bz] of BRANCHES) {
+    const from = [c + ax * k, c + ay * k, az * k];
+    const to = [c + bx * k, c + by * k, bz * k];
+    const steps = Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]) * 3);
+    for (let s = 0; s <= steps; s += 1) {
+      const u = s / steps;
+      put(Math.floor(from[0] + (to[0] - from[0]) * u), Math.floor(from[1] + (to[1] - from[1]) * u), Math.floor(from[2] + (to[2] - from[2]) * u), 4);
+    }
+  }
 
-  // 整个树冠的球面光照(左上亮、右下暗),幅度很小,不改变模块明暗归属
-  body.push(`<rect x="${n(R.x0)}" y="${n(R.y0)}" width="${n(R.x1 - R.x0)}" height="${n(R.y1 - R.y0)}" rx="1.2" fill="url(#zqDome)"/>`);
+  // 树冠:离定位图形与地块外缘留出空地(那里是草和地砖)
+  const crownAllowed = (x: number, y: number) => (
+    x >= 3 && y >= 3 && x <= size - 4 && y <= size - 4 && !isFinderZone(y, x, size)
+  );
+  const crown = { x0: size, y0: size, x1: 0, y1: 0, z0: zTop, z1: 0 };
+  // 每个体素到最近花团的归一化距离²(只遍历各花团自己的包围盒)
+  const field = new Float32Array(grid.length).fill(Infinity);
+  for (const [dx, dy, cz, rxy, rz] of CROWN_PUFFS) {
+    const px0 = c + dx * k;
+    const py0 = c + dy * k;
+    const pz0 = cz * k;
+    const r = rxy * k * 1.3;
+    const h = rz * k * 1.3;
+    for (let z = Math.max(1, Math.floor(pz0 - h)); z <= Math.min(zTop, Math.ceil(pz0 + h)); z += 1) {
+      for (let y = Math.max(0, Math.floor(py0 - r)); y <= Math.min(size - 1, Math.ceil(py0 + r)); y += 1) {
+        for (let x = Math.max(0, Math.floor(px0 - r)); x <= Math.min(size - 1, Math.ceil(px0 + r)); x += 1) {
+          const qx = (x + 0.5 - px0) / (rxy * k);
+          const qy = (y + 0.5 - py0) / (rxy * k);
+          const qz = (z + 0.5 - pz0) / (rz * k);
+          const i = at(x, y, z);
+          field[i] = Math.min(field[i], qx * qx + qy * qy + qz * qz);
+        }
+      }
+    }
+  }
+  for (let z = 1; z <= zTop; z += 1) {
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        if (!crownAllowed(x, y)) continue;
+        // 表面起伏:阈值按体素坐标抖动,轮廓不是光滑椭球
+        if (field[at(x, y, z)] <= 1 + (rand(x, y, z, 1) - 0.5) * 0.45) {
+          put(x, y, z, 5);
+          crown.x0 = Math.min(crown.x0, x);
+          crown.y0 = Math.min(crown.y0, y);
+          crown.x1 = Math.max(crown.x1, x + 1);
+          crown.y1 = Math.max(crown.y1, y + 1);
+          crown.z0 = Math.min(crown.z0, z);
+          crown.z1 = Math.max(crown.z1, z + 1);
+        }
+      }
+    }
+  }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n(W)} ${n(H)}" role="img" aria-label="${label}"><defs>${defs.join("")}</defs>${body.join("")}</svg>`;
+  const topZ = new Int32Array(size * size).fill(SLAB_Z - 1);
+  const crowned = new Uint8Array(size * size);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      for (let z = zTop; z >= SLAB_Z; z -= 1) {
+        if (filled(x, y, z)) {
+          topZ[y * size + x] = z;
+          break;
+        }
+      }
+      for (let z = 1; z <= zTop; z += 1) if (grid[at(x, y, z)] === 5) crowned[y * size + x] = 1;
+    }
+  }
+
+  const kinds: SakuraVoxelKind[] = ["slab", "slab", "floor", "grass", "trunk", "crown"];
+  const crownSpan = Math.max(1, crown.z1 - crown.z0);
+  const voxels: SakuraVoxel[] = [];
+  const topOf = new Int32Array(size * size).fill(-1);
+  for (let z = SLAB_Z; z <= zTop; z += 1) {
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const code = grid[at(x, y, z)];
+        if (!code) continue;
+        const faces = (filled(x, y, z + 1) ? 0 : FACE_TOP) | (filled(x + 1, y, z) ? 0 : FACE_X) | (filled(x, y + 1, z) ? 0 : FACE_Y);
+        if (!faces) continue;
+        const cell = y * size + x;
+        const kind = kinds[code];
+        const top = topZ[cell] === z;
+        const isDark = dark[cell] === 1;
+        const jitter = 0.94 + rand(x, y, z, 2) * 0.12;
+        let tree: Rgb;
+        let side: Rgb;
+        if (kind === "crown") {
+          const ao = 0.87 + 0.13 * ((z - crown.z0) / crownSpan);
+          const body = TREE.crownBody[Math.floor(rand(x, y, z, 3) * TREE.crownBody.length)];
+          tree = scaleRgb(top ? (isDark ? TREE.crownDark : TREE.crownLight) : body, jitter * ao);
+          side = scaleRgb(top ? mixRgb(body, isDark ? TREE.crownDark : TREE.crownLight, 0.5) : body, jitter * ao);
+        } else if (kind === "grass") {
+          tree = scaleRgb(TREE.grass, jitter);
+          side = scaleRgb(TREE.grassSide, jitter);
+        } else if (kind === "trunk") {
+          tree = scaleRgb(TREE.trunk, 0.9 + rand(x, y, z, 4) * 0.25);
+          side = tree;
+        } else if (kind === "floor") {
+          const tile = TREE.floorLight[(x + y) & 1];
+          // 树冠下的地砖(俯视看不到):阴影 + 落了一地的花瓣
+          const under = crowned[cell] === 1;
+          const petal = under ? rand(x, y, z, 5) < 0.28 : isDark;
+          const base = scaleRgb(petal ? TREE.floorDark : tile, 0.97 + rand(x, y, z, 6) * 0.06);
+          tree = under ? mixRgb(base, TREE.shadow, 0.28) : base;
+          side = scaleRgb(TREE.floorSide, jitter);
+        } else {
+          tree = scaleRgb(TREE.slab, jitter);
+          side = tree;
+        }
+        const flatPair = SAKURA_FLAT[kind];
+        const flatBase = isDark ? flatPair[0] : flatPair[1];
+        // 平面帧的明暗只认模块真值;抖动 ±3% 只做质感,不跨明暗档
+        const flat = top ? scaleRgb(flatBase, 0.97 + rand(x, y, z, 7) * 0.06) : tree;
+        if (top) topOf[cell] = voxels.length;
+        // 环境光遮蔽:每个可见面前方那一层 3×3 邻居里实心的越多,面越暗(花团之间的褶皱)
+        const occlusion = (ox: number, oy: number, oz: number) => {
+          let count = 0;
+          for (let a = -1; a <= 1; a += 1) {
+            for (let b = -1; b <= 1; b += 1) {
+              if (oz) count += filled(x + a, y + b, z + 1) ? 1 : 0;
+              else if (ox) count += filled(x + 1, y + a, z + b) ? 1 : 0;
+              else if (oy) count += filled(x + a, y + 1, z + b) ? 1 : 0;
+            }
+          }
+          return 1 - 0.04 * count;
+        };
+        voxels.push({
+          x, y, z, kind, faces, top,
+          tree: faces & FACE_TOP ? scaleRgb(tree, occlusion(0, 0, 1)) : tree,
+          sideX: faces & FACE_X ? scaleRgb(side, SHADE_X * occlusion(1, 0, 0)) : side,
+          sideY: faces & FACE_Y ? scaleRgb(side, SHADE_Y * occlusion(0, 1, 0)) : side,
+          flat,
+          blades: kind === "grass" && top,
+        });
+      }
+    }
+  }
+
+  const hull: number[] = [];
+  for (const z of [0, SLAB_Z]) hull.push(0, 0, z, size, 0, z, 0, size, z, size, size, z);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const z = topZ[y * size + x] + 1;
+      if (z > 0) hull.push(x, y, z, x + 1, y, z, x, y + 1, z, x + 1, y + 1, z);
+    }
+  }
+
+  return { size, dark, voxels, topOf, hull: Float64Array.from(hull), crownBox: crown };
+}
+
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+// t = 0 树(斜 45°、仰角 30°),t = 1 平面码(正上方,码的行列与屏幕对齐)
+export function sakuraCamera(t: number): SakuraCamera {
+  const clamped = Math.max(0, Math.min(1, t));
+  if (clamped >= 1) return { e: 1, cy: 1, sy: 0, cp: 0, sp: 1 };
+  const e = easeInOut(clamped);
+  const yaw = TREE_YAW * (1 - e);
+  const pitch = TREE_PITCH + (Math.PI / 2 - TREE_PITCH) * e;
+  return { e, cy: Math.cos(yaw), sy: Math.sin(yaw), cp: Math.cos(pitch), sp: Math.sin(pitch) };
+}
+
+// 正交投影:地面坐标绕竖轴转 yaw,再按仰角压扁;z 越高屏幕上越靠上。
+function projectX(cam: SakuraCamera, X: number, Y: number) {
+  return X * cam.cy - Y * cam.sy;
+}
+function projectY(cam: SakuraCamera, X: number, Y: number, z: number) {
+  return (X * cam.sy + Y * cam.cy) * cam.sp - z * cam.cp;
+}
+
+// 取景:轮廓点投影后的包围盒居中放进画布;平面帧四周恰好留 SAKURA_QR_MAT 个模块。
+export function sakuraFit(scene: SakuraScene, cam: SakuraCamera, width: number, height: number): SakuraFit {
+  const c = scene.size / 2;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  const { hull } = scene;
+  for (let i = 0; i < hull.length; i += 3) {
+    const X = hull[i] - c;
+    const Y = hull[i + 1] - c;
+    const sx = projectX(cam, X, Y);
+    const sy = projectY(cam, X, Y, hull[i + 2]);
+    if (sx < minX) minX = sx;
+    if (sx > maxX) maxX = sx;
+    if (sy < minY) minY = sy;
+    if (sy > maxY) maxY = sy;
+  }
+  const flatPad = SAKURA_QR_MAT / (scene.size + 2 * SAKURA_QR_MAT);
+  const pad = 0.04 + (flatPad - 0.04) * cam.e;
+  const scale = Math.min((width * (1 - 2 * pad)) / (maxX - minX), (height * (1 - 2 * pad)) / (maxY - minY));
+  return { scale, ox: width / 2 - (scale * (minX + maxX)) / 2, oy: height / 2 - (scale * (minY + maxY)) / 2 };
+}
+
+function drawFlat(ctx: SakuraCanvas, scene: SakuraScene, width: number, height: number, palette: SakuraPalette) {
+  const { size } = scene;
+  const m = Math.min(width, height) / (size + 2 * SAKURA_QR_MAT);
+  const ox = (width - m * size) / 2;
+  const oy = (height - m * size) / 2;
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = palette === "plain" ? PLAIN_LIGHT : css(SAKURA_MAT);
+  ctx.fillRect(0, 0, width, height);
+  for (let row = 0; row < size; row += 1) {
+    const y0 = Math.round(oy + row * m);
+    const y1 = Math.round(oy + (row + 1) * m);
+    for (let col = 0; col < size; col += 1) {
+      const cell = row * size + col;
+      if (palette === "plain" && !scene.dark[cell]) continue;
+      const x0 = Math.round(ox + col * m);
+      const x1 = Math.round(ox + (col + 1) * m);
+      ctx.fillStyle = palette === "plain" ? PLAIN_DARK : css(scene.voxels[scene.topOf[cell]].flat);
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    }
+  }
+}
+
+function face(ctx: SakuraCanvas, x: number, y: number, ax: number, ay: number, bx: number, by: number, color: string) {
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + ax, y + ay);
+  ctx.lineTo(x + ax + bx, y + ay + by);
+  ctx.lineTo(x + bx, y + by);
+  ctx.closePath();
+  ctx.fill();
+  // 同色描边盖住相邻多边形之间的抗锯齿缝
+  ctx.stroke();
+}
+
+// 画一帧。width/height 为画布像素(已乘 devicePixelRatio)。
+export function drawSakuraQr(ctx: SakuraCanvas, scene: SakuraScene, t: number, width: number, height: number, palette: SakuraPalette = "sakura") {
+  ctx.clearRect(0, 0, width, height);
+  if (palette === "plain" || t >= 1) {
+    drawFlat(ctx, scene, width, height, palette);
+    return;
+  }
+  const cam = sakuraCamera(t);
+  const { scale, ox, oy } = sakuraFit(scene, cam, width, height);
+  const c = scene.size / 2;
+  const exX = scale * cam.cy;
+  const exY = scale * cam.sy * cam.sp;
+  const eyX = -scale * cam.sy;
+  const eyY = scale * cam.cy * cam.sp;
+  const ezY = -scale * cam.cp;
+
+  if (cam.e > 0) {
+    ctx.globalAlpha = Math.min(1, cam.e * 1.4);
+    ctx.fillStyle = css(SAKURA_MAT);
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalAlpha = 1;
+  }
+
+  const { voxels } = scene;
+  const depth = new Float64Array(voxels.length);
+  for (let i = 0; i < voxels.length; i += 1) {
+    const v = voxels[i];
+    // 朝向观察者的深度;各分量非负,单位体素按中心深度排序即正确的画家序
+    depth[i] = ((v.x + 0.5 - c) * cam.sy + (v.y + 0.5 - c) * cam.cy) * cam.cp + (v.z + 0.5) * cam.sp;
+  }
+  const order = new Uint32Array(voxels.length);
+  for (let i = 0; i < order.length; i += 1) order[i] = i;
+  order.sort((a, b) => depth[a] - depth[b]);
+
+  ctx.lineWidth = Math.max(0.5, scale * 0.08);
+  const bladeAlpha = 1 - cam.e;
+  for (let i = 0; i < order.length; i += 1) {
+    const v = voxels[order[i]];
+    const X = v.x - c;
+    const Y = v.y - c;
+    const bx = ox + scale * projectX(cam, X, Y);
+    const by = oy + scale * projectY(cam, X, Y, v.z);
+    if (v.faces & FACE_X) face(ctx, bx + exX, by + exY, eyX, eyY, 0, ezY, css(v.sideX));
+    if (v.faces & FACE_Y) face(ctx, bx + eyX, by + eyY, exX, exY, 0, ezY, css(v.sideY));
+    if (v.faces & FACE_TOP) {
+      face(ctx, bx, by + ezY, exX, exY, eyX, eyY, css(v.top ? mixRgb(v.tree, v.flat, cam.e) : v.tree));
+      if (v.blades && bladeAlpha > 0.02) {
+        ctx.globalAlpha = bladeAlpha;
+        for (let b = 0; b < 4; b += 1) {
+          const u = 0.15 + rand(v.x, v.y, b, 8) * 0.7;
+          const w = 0.15 + rand(v.x, v.y, b, 9) * 0.7;
+          const h = 0.6 + rand(v.x, v.y, b, 10) * 0.9;
+          const lean = (rand(v.x, v.y, b, 11) - 0.5) * 0.5;
+          const px = bx + exX * u + eyX * w;
+          const py = by + ezY + exY * u + eyY * w;
+          ctx.fillStyle = TREE.blade[b % TREE.blade.length];
+          ctx.beginPath();
+          ctx.moveTo(px - scale * 0.14, py);
+          ctx.lineTo(px + scale * lean, py + ezY * h);
+          ctx.lineTo(px + scale * 0.14, py);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+}
+
+// 落花(HTML 元素,只在树形态显示):起点在树冠下沿附近,按方形画布的百分比给出。
+export function sakuraPetals(scene: SakuraScene, count = 10): SakuraPetal[] {
+  const cam = sakuraCamera(0);
+  const fit = sakuraFit(scene, cam, 100, 100);
+  const c = scene.size / 2;
+  const box = scene.crownBox;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const x of [box.x0, box.x1]) {
+    for (const y of [box.y0, box.y1]) {
+      const sx = fit.ox + fit.scale * projectX(cam, x - c, y - c);
+      const sy = fit.oy + fit.scale * projectY(cam, x - c, y - c, box.z0);
+      minX = Math.min(minX, sx);
+      maxX = Math.max(maxX, sx);
+      maxY = Math.max(maxY, sy);
+    }
+  }
+  const petals: SakuraPetal[] = [];
+  for (let i = 0; i < count; i += 1) {
+    petals.push({
+      left: minX + (maxX - minX) * (0.18 + rand(i, 1, 0, 20) * 0.64),
+      top: Math.max(0, maxY - 30 + rand(i, 2, 0, 20) * 18),
+      fall: 14 + rand(i, 3, 0, 20) * 12,
+      drift: (rand(i, 4, 0, 20) - 0.5) * 12,
+      delay: rand(i, 5, 0, 20) * 9,
+      duration: 6.5 + rand(i, 6, 0, 20) * 4,
+      tone: i % 3,
+    });
+  }
+  return petals;
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { MonitorSmartphone } from "lucide-react";
 import { SakuraQrImage, sakuraQrArt, type SakuraQrArt } from "./sakura-qr-image";
 
-// 桌面端扫码登录面板:发起 QR 会话 → 本地渲染樱花树 SVG QR(token 不经过任何第三方
+// 桌面端扫码登录面板:发起 QR 会话 → 本地渲染樱花树立体码(token 不经过任何第三方
 // 图床)→ 2 秒轮询。会话由 poll 响应的 Set-Cookie 下发(与 GitHub/邮箱码/passkey
 // 同一管线),拿到 ok 后整页跳 return_to。二维码 2 分钟过期,过期自动换新码;
 // "taken" 表示该码已在别处消费(多标签页/重放),提示后停止轮询。

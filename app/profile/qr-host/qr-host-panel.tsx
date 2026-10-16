@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatPairCode } from "../../api/_lib/qr-login-core";
 import { SakuraQrImage, sakuraQrArt, type SakuraQrArt } from "../../signin/sakura-qr-image";
 
-// 宿主面板:发起 host 拿到 QR URL + 配对码 → 本地渲染樱花树 SVG → 轮询 host-state。
+// 宿主面板:发起 host 拿到 QR URL + 配对码 → 本地渲染樱花树立体码 → 轮询 host-state。
 // pair_requested 时亮出「允许 / 拒绝」;允许后等手机 claim 完成(consumed→ok)。
 // 两分钟过期自动换新码;hierarchy 与正向 QrLoginPanel 同纪律:effect 只按
 // [round] 跑一轮,phase 不进依赖。

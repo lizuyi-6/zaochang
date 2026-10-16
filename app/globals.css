@@ -202,10 +202,15 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.012em; }
 /* 扫码登录:桌面 QR 面板 + 手机确认/扫一扫页。 */
 .auth-qr-panel { align-items: center; display: flex; flex-direction: column; gap: 10px; }
 .auth-qr-frame { background: #fcf2f3; border: 1px solid #d9d8d2; box-sizing: content-box; width: min(360px, 100%); }
-.auth-qr-image svg { display: block; height: auto; width: 100%; }
-.auth-qr-placeholder { align-items: center; aspect-ratio: 71 / 83; color: #9a9b94; display: flex; font-size: 11px; justify-content: center; }
-/* 樱花树二维码:SVG 静态;落花是 HTML 元素,只动 transform/opacity,下落距离按画宽(cqw)给。 */
-.sakura-qr { container-type: inline-size; overflow: hidden; position: relative; }
+.auth-qr-placeholder { align-items: center; aspect-ratio: 1; color: #9a9b94; display: flex; font-size: 11px; justify-content: center; }
+/* 樱花树立体码:方形画布只在翻转时逐帧重画;落花是 HTML 元素,只动 transform/opacity,下落距离按画宽(cqw)给。 */
+.sakura-qr-stage { background: none; border: 0; border-radius: 0; color: inherit; container-type: inline-size; cursor: pointer; display: block; overflow: hidden; padding: 0; position: relative; width: 100%; }
+div.sakura-qr-stage { cursor: default; }
+.sakura-qr-stage:focus-visible { outline: 2px solid rgb(216 180 106 / 60%); outline-offset: -2px; }
+.sakura-qr-canvas { aspect-ratio: 1; display: block; width: 100%; }
+.sakura-qr-switch { display: flex; gap: 16px; justify-content: center; padding: 2px 0 10px; }
+.sakura-qr-switch button { background: none; border: 0; color: #73766f; cursor: pointer; font-family: inherit; font-size: 11px; padding: 2px 0; }
+.sakura-qr-switch button:hover { color: #171816; text-decoration: underline; }
 .sakura-qr-petal { animation: sakura-qr-fall 8s linear infinite; background: radial-gradient(circle at 35% 35%, #fde3ea, #f4a9bf 70%); border-radius: 0 100% 0 100%; height: 1.15cqw; opacity: 0; pointer-events: none; position: absolute; width: 1.8cqw; will-change: transform, opacity; }
 .sakura-qr-petal.is-tone-1 { background: radial-gradient(circle at 35% 35%, #fff4f7, #f8c4d3 70%); }
 .sakura-qr-petal.is-tone-2 { background: radial-gradient(circle at 35% 35%, #fbd3df, #ec93ae 70%); }
