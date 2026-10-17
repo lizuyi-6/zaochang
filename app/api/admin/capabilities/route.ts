@@ -20,6 +20,7 @@ export async function GET() {
         "/api/admin/moderation",
         "/api/admin/invitations",
         "/api/admin/incubation",
+        "/api/admin/overview",
       ],
       // agent 写面:精确列名(worker 入口 fail-closed,未列名 403 agent_scope_forbidden)
       agentWrites: [...AGENT_WRITE_CAPABILITIES, ...AGENT_ADMIN_CAPABILITIES],

@@ -14,6 +14,8 @@ import {
   reviewProduct,
 } from "../harness/preview.mjs";
 
+const quoteSql = (value) => `'${String(value).replaceAll("'", "''")}'`;
+
 // 同意提交后返回中转页(meta refresh),不再 303:同意页 CSP 为 form-action 'self',浏览器会拦截
 // 表单提交后跳往客户端回调的重定向(2026-10-12 生产实测 Claude Code 登录卡住)。断言 CSP 未被放宽。
 async function consentCallback(response) {
@@ -282,7 +284,7 @@ test("OIDC login and delegated fruit API require PKCE, scopes, and per-payment c
   const rejectClient = await fetch(`${baseUrl}/api/admin/moderation`, {
     method: "PATCH",
     headers: authHeaders("发布审核管理员", adminEmail),
-    body: JSON.stringify({ action: "reject_client", targetRef: registered.clientId }),
+    body: JSON.stringify({ action: "reject_client", targetRef: registered.clientId, note: "测试拒绝第三方应用" }),
   });
   assert.equal(rejectClient.status, 200);
   assert.deepEqual(await rejectClient.json(), { updated: true });
@@ -446,13 +448,17 @@ test("reports require an administrator decision and hidden products leave public
   const hide = await fetch(`${baseUrl}/api/admin/moderation`, {
     method: "PATCH",
     headers: adminHeaders,
-    body: JSON.stringify({ action: "hide_reported_content", targetRef: queuedReport.id }),
+    body: JSON.stringify({ action: "hide_reported_content", targetRef: queuedReport.id, note: "测试举报隐藏理由" }),
   });
   assert.equal(hide.status, 200);
   assert.deepEqual(await hide.json(), {
     updated: true,
     remediation: { refundedPending: 1, compensatedSettled: 1, revokedEntitlements: 2 },
   });
+  const moderationRiskEvidence = await queryLocalD1(
+    `SELECT evidence FROM fruit_risk_events WHERE id = ${quoteSql(`risk:moderation:${queuedReport.id}`)}`,
+  );
+  assert.equal(JSON.parse(moderationRiskEvidence[0].evidence).reason, "fraud");
 
   const publicState = await (await fetch(`${baseUrl}/api/community`, { headers: reporterHeaders })).json();
   assert.equal(publicState.products.some((product) => product.id === productId), false);

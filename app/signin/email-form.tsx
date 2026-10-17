@@ -19,6 +19,7 @@ const ERROR_TEXT: Record<string, string> = {
   code_invalid: "验证码不正确，请核对后重试。",
   code_locked: "错误次数过多，该验证码已锁定，请重新发送一封新邮件。",
   email_not_configured: "邮件服务尚未配置，邮箱登录暂不可用。",
+  member_suspended: "该账号已被停用，如有疑问请联系管理员。",
 };
 
 function sendErrorText(code: string) {

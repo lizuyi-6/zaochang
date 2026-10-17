@@ -40,6 +40,8 @@ export default async function SignInPage({ searchParams }: PageProps) {
             ? "这是首次注册，请输入邀请码后重新使用 GitHub 登录。"
             : error === "invitation_invalid"
               ? "邀请码无效、已用完或已经过期，请向造场团队获取新邀请码。"
+          : error === "member_suspended"
+            ? "该账号已被停用，如有疑问请联系管理员。"
           : error === "turnstile_invalid"
             ? "人机验证未通过，请稍后在登录页重新完成验证后再注册。"
           : null;

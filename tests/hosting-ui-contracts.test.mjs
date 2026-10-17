@@ -6,6 +6,10 @@ import test from "node:test";
 const source = (path) => readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), "utf8");
 const panel = source("app/hosting/hosting-panel.tsx");
 const admin = source("app/admin/admin-console.tsx");
+const adminConfirm = source("app/admin/confirm-dialog.tsx");
+const adminApi = source("app/admin/admin-api.ts");
+const adminReview = source("app/admin/sections/review.tsx");
+const adminHostingGrants = source("app/admin/sections/hosting-grants.tsx");
 const productPage = source("app/product/[slug]/page.tsx");
 const productExperience = source("app/product/[slug]/product-experience.tsx");
 const profile = source("app/profile/page.tsx");
@@ -18,7 +22,7 @@ test("托管查询 helper 只通过发布视图读取链接并检查 SQL 别名"
   assert.match(helper, /if \(!\/\^\[a-z_\]\[a-z0-9_\]\*\$\/i\.test\(alias\)\) throw new Error\("invalid_sql_alias"\)/);
   assert.match(helper, /return `\(SELECT live_url FROM product_hosted_urls WHERE product_id = \$\{alias\}\.id\) AS hostedUrl`/);
   assert.doesNotMatch(panel, /live_url|liveUrl/);
-  assert.doesNotMatch(admin, /live_url|liveUrl/);
+  assert.doesNotMatch(admin + adminReview, /live_url|liveUrl/);
   assert.doesNotMatch(productExperience, /live_url|liveUrl/);
 });
 
@@ -66,25 +70,25 @@ test("产品页托管链接只接受 HTTPS 且主机后缀正确，并带安全 
 });
 
 test("管理员批准保留外链限制，并要求托管 state 为 staged 或 live", () => {
-  assert.match(admin, /function approvalBlockReason\(hosting: AdminHosting \| null\): string \{\s*if \(!hosting \|\| hosting\.state === "staged" \|\| hosting\.state === "live"\) return ""/);
-  assert.match(admin, /disabled=\{hasExternalDemo \|\| hasExternalImage \|\| Boolean\(hostingReason\) \|\| noteTooShort/);
-  assert.match(admin, /"托管部署失败"/);
-  assert.match(admin, /"托管包尚未部署完成"/);
-  assert.match(admin, /hasExternalDemo \|\| hasExternalImage \? "外链不可批准"/);
+  assert.match(adminApi, /export function approvalBlockReason\(hosting: AdminHosting \| null\): string \{\s*if \(!hosting \|\| hosting\.state === "staged" \|\| hosting\.state === "live"\) return ""/);
+  assert.match(adminReview, /disabled=\{hasExternalDemo \|\| hasExternalImage \|\| Boolean\(hostingReason\) \|\| noteTooShort/);
+  assert.match(adminApi, /"托管部署失败"/);
+  assert.match(adminApi, /"托管包尚未部署完成"/);
+  assert.match(adminReview, /hasExternalDemo \|\| hasExternalImage \? "外链不可批准"/);
 });
 
 test("移除托管复用审核备注并发送契约要求的三个字段", () => {
-  assert.match(admin, /reviewProduct = async \(action: "approve_product" \| "reject_product" \| "remove_hosting"/);
-  assert.match(admin, /JSON\.stringify\(\{ action, targetRef: String\(productId\), note \}\)/);
-  assert.match(admin, /action === "remove_hosting" \? "移除托管请求已写入审计记录。"/);
+  assert.match(admin, /reviewProduct = useCallback\(\(action: "approve_product" \| "reject_product" \| "remove_hosting"/);
+  assert.match(admin, /targetRef: String\(product\.id\), note: reason/);
+  assert.match(admin, /action === "remove_hosting" \? "已提交托管站点移除请求，并写入审计记录。"/);
 });
 
 test("授权区使用约定路由与字段，并在撤销前说明站点影响", () => {
   assert.match(admin, /adminRequest<\{ grants: HostingGrant\[\] \}>\("\/api\/admin\/hosting-grants"/);
-  assert.match(admin, /JSON\.stringify\(\{ \.\.\.hostingGrantDraft, email: hostingGrantDraft\.email\.trim\(\) \}\)/);
-  assert.match(admin, /JSON\.stringify\(\{ email: memberEmail \}\)/);
-  assert.match(admin, /撤销会同时移除该会员所有托管站点/);
-  assert.match(admin, /id="hosting-grants"/);
+  assert.match(admin, /runMutation\("hosting-grant", "托管授权未保存", "\/api\/admin\/hosting-grants", \{ \.\.\.hostingGrantDraft, email: hostingGrantDraft\.email\.trim\(\) \}, "托管授权已保存。", "POST"\)/);
+  assert.match(admin, /hosting-revoke:\$\{grant\.memberEmail\}[\s\S]*email: grant\.memberEmail, reason[\s\S]*"DELETE"/);
+  assert.match(adminHostingGrants, /撤销授权也会提交移除该会员托管站点的请求/);
+  assert.match(admin, /section === "hosting"/);
 });
 
 test("常见包错误有可操作中文，ambiguous 明确要求人工核对", () => {
@@ -115,6 +119,24 @@ test("创建成功态从创建响应取项目 ID 并提供内联托管入口", (
 test("新样式在 900px 与窄屏规则下允许收缩和换行", () => {
   assert.match(css, /@media \(max-width: 900px\) \{[\s\S]*\.profile-owned-projects, \.profile-project-card, \.hosting-panel \{ max-width: 100%; \}/);
   assert.match(css, /\.profile-project-card \{[^}]*min-width: 0/);
-  assert.match(css, /\.admin-hosting-grant-form \{[^}]*min-width: 0/);
+  assert.match(css, /\.admin-hosting-grant-form, \.admin-invitation-form \{[^}]*min-width: 0/);
   assert.match(css, /\.admin-product-hosting code \{[^}]*overflow-wrap: anywhere/);
+});
+
+test("管理台桌面侧栏与移动横向标签切换，页面裁切横向溢出", () => {
+  assert.match(css, /\.admin-console \{[^}]*overflow-x: clip/);
+  assert.match(css, /\.admin-sidebar \{[^}]*position: sticky/);
+  assert.match(css, /@media \(max-width: 899px\) \{[\s\S]*?\.admin-sidebar \{[^}]*display: flex;[^}]*overflow-x: auto;[^}]*position: static/);
+  assert.match(css, /@media \(max-width: 768px\) \{[\s\S]*?\.admin-sidebar \{[^}]*margin-inline/);
+  assert.match(admin, /data-section=\{id\}/);
+});
+
+test("破坏性操作确认框提供焦点管理、Esc 关闭和必填理由", () => {
+  assert.match(adminConfirm, /role="dialog" aria-modal="true"/);
+  assert.match(adminConfirm, /previousFocus\.current\?\.focus\(\)/);
+  assert.match(adminConfirm, /event\.key === "Escape"/);
+  assert.match(adminConfirm, /event\.key !== "Tab"/);
+  assert.match(adminConfirm, /reason\.trim\(\)\.length >= 4/);
+  assert.match(admin, /const resolveRisk =[\s\S]*?setConfirmRequest\(/);
+  assert.match(admin, /submit: async \(reason\) => \{ await runModeration\(action, risk\.id, reason\); \}/);
 });

@@ -14,6 +14,7 @@ const ERROR_TEXT: Record<string, string> = {
   challenge_invalid: "登录状态已过期，请再点一次通行密钥按钮。",
   passkey_invalid: "通行密钥验证没有通过，请重试或改用其他登录方式。",
   invalid_request: "请求格式不正确，请刷新页面后重试。",
+  member_suspended: "该账号已被停用，如有疑问请联系管理员。",
 };
 
 // WebAuthn 可用性检测:仅看 window.PublicKeyCredential 存在还不够——Android

@@ -30,7 +30,10 @@ export function jsonError(error: unknown): Response {
     const headers = Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 1
       ? { "retry-after": String(Math.floor(retryAfterSeconds)) }
       : undefined;
-    return Response.json({ error: code }, { status: Number.isInteger(status) ? status : 500, headers });
+    const payload = code === "member_suspended"
+      ? { error: code, message: "该账号已被停用，如有疑问请联系管理员。" }
+      : { error: code };
+    return Response.json(payload, { status: Number.isInteger(status) ? status : 500, headers });
   }
 
   const message = error instanceof Error ? error.message : "Unexpected error";

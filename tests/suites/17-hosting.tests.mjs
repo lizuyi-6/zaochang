@@ -256,7 +256,7 @@ export function register() {
     const revoked = await fetch(`${baseUrl}/api/admin/hosting-grants`, {
       method: "DELETE",
       headers: cookieHeaders(await adminCookie(), { "content-type": "application/json" }),
-      body: JSON.stringify({ email: owner.email }),
+      body: JSON.stringify({ email: owner.email, reason: "测试撤销托管授权" }),
     });
     const revokedBody = await revoked.json();
     assert.equal(revoked.status, 200);
@@ -837,7 +837,7 @@ export function register() {
     const revokeGrant = await fetch(`${baseUrl}/api/admin/hosting-grants`, {
       method: "DELETE",
       headers: cookieHeaders(await adminCookie(), { "content-type": "application/json" }),
-      body: JSON.stringify({ email: owner.email }),
+      body: JSON.stringify({ email: owner.email, reason: "测试撤销托管授权" }),
     });
     const revokeGrantBody = await revokeGrant.json();
     assert.equal(revokeGrant.status, 200);
