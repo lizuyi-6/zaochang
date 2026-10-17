@@ -378,9 +378,11 @@ export async function upsertHostingGrant(admin: MemberIdentity, email: string, m
   ).bind(memberEmail).first()) ?? null;
 }
 
-export async function revokeHostingGrant(admin: MemberIdentity, email: string): Promise<{ removedHostings: number }> {
+export async function revokeHostingGrant(admin: MemberIdentity, email: string, reason: string): Promise<{ removedHostings: number }> {
   const memberEmail = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(memberEmail) || memberEmail.length > 254) fail("invalid_hosting_grant", 400);
+  const cleanReason = reason.trim().slice(0, 500);
+  if (cleanReason.length < 4) fail("invalid_hosting_reason", 400);
   const db = database();
   let removedHostings: number;
   try {
@@ -404,7 +406,7 @@ export async function revokeHostingGrant(admin: MemberIdentity, email: string): 
            updated_at = CURRENT_TIMESTAMP
          WHERE owner_email = ? AND desired <> 'removed'`,
       ).bind(memberEmail),
-      adminAuditStatement(admin.email, "revoke_hosting_grant", "hosting_grant", memberEmail),
+      adminAuditStatement(admin.email, "revoke_hosting_grant", "hosting_grant", memberEmail, `reason=${cleanReason}`),
     ]);
     removedHostings = Number(results[1]?.meta?.changes ?? 0);
   } catch (error) {

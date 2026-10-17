@@ -1096,3 +1096,19 @@
   - 生产上发现的问题与处理:盒子(北京)到 Cloudflare 边缘链路不稳(12~14 次请求约 3~4 次 15~30s 超时,固定 IPv4 同样)→ 部署器 API 客户端加 4 次指数退避重试(仅网络错误/超时/5xx),盒子已装该版本,补丁走独立 PR。
   - 未验证 / 缺口:StepFun 站点/版本额度上限、价格、自定义域名、托管第三方内容条款;`*.page.stepcloud.com` 子域 Cookie 隔离;真实 MCP 客户端调用 `begin_hosting_upload`(本会话的 MCP 工具列表在连接时缓存,新工具需用户 `/mcp` 重连后才可见;令牌路径用等价的库口径写入代替);Worker 处理 10 MiB zip 的内存峰值;生产上多用户并发与长期运行(部署器常驻内存约 63~70MB,<100MB 目标);R2 孤儿 bundle 不回收;部署器日志在重试耗尽时只写通用一行,排查需结合 `journalctl` 时间与 WAL;**StepFun Page key 曾出现在对话里,尚未轮换(阻断级,见下)**。
   - 待用户:① 在 StepFun 控制台作废旧 Page key 并生成新 key,仅写入盒子 `/etc/zaochang/hosting.env` 的 `STEPFUN_API_KEY` 后 `systemctl restart zaochang-hosting-deployer`;② 在 `/admin` 的「托管授权」给要开放的会员授权(`max_sites` 默认建议 1~3)。
+
+## 管理后台重做与会员/内容管控（2026-10-16）
+
+- **2026-10-17 复核更新(以此为准,下方 Codex 原始条目中"未运行/部分完成"已过时)**:沙箱外实跑发现并修复 5 处——①会员搜索用 `LIKE '%长邮箱%'` 触发 D1「LIKE or GLOB pattern too complex」500(会员/内容搜索改 `instr(lower(col), ?)`,同时消除 `%`/`_` 通配符注入);②`admin-members.ts` 直调 `isAdminEmail` 违反角色判定集中规则(改走 `hasRole`);③suite 18 两处买家未回拨注册时间被 `account_too_new_for_transfer` 拦;④suite 07 缺 `quoteSql`;⑤suite 18 自相矛盾断言改为"overview 返回体不含 `@`"、null-prototype 行深比较。另修手机端标题挤成两行、首次进入多余「已刷新」提示。证据:`npm test` 845/845、skipped 0、todo 0;`tsc`/`lint`/`git diff --check` exit 0;`db:generate` No schema changes;本地生产构建 + 种子库截图(桌面待办/会员/审核/封禁确认框、手机待办/会员,无横向滚动、无页面报错)。仍未验证:GitHub/邮箱码/passkey/扫码各登录入口对封禁账号的真实运行时表现(仅 dev-login 入口有集成断言);确认框键盘焦点;内容搜索 `q` 无单独断言;生产 D1 尚未应用 0035。
+
+- 状态：**部分完成**。工作区包含待办收件箱/分区 UI、会员封禁与运行时凭证闸门、主动下架/资金补救、总览/审计 API 和相应集成断言；本地集成服务和 Drizzle generator 受 `spawn EPERM` 阻断，不能作为已验收结论。未 commit、push、deploy，也未连接生产。
+- 改动锚点：详细逐文件清单见 `reports/admin-platform-redo-report.md`；当前 `git diff --stat` 31 个 tracked 文件、871 insertions / 436 deletions，`git status --short --untracked-files=all` 含 54 个实现/测试文件及报告/账本。
+- 本轮可复现检查：`npx tsc --noEmit` exit=0；`npm run lint` exit=0；纯 Node 定向命令 `node --experimental-strip-types --test --test-isolation=none tests/admin-suspension-triggers.test.mjs tests/hosting-ui-contracts.test.mjs tests/agent-admin-api.test.mjs` 为 30 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo；测试断言包括五类凭证插入触发器、托管 UI 合约、agent capability 和管理台断点/确认框静态结构。
+- 未运行/失败：`npm test` 在 Vite build 的 `spawn EPERM` 停止，测试 runner 未启动；直接 `tests/rendered-html.test.mjs` 的 preview harness 不能启动本地 D1/Wrangler 子进程；`npm run db:generate` 在读取 drizzle config 后 `spawn EPERM`，没有 `No schema changes` 结果。
+- 语义变更：从没有封禁字段/凭证限制改为 `suspended_at` 标记、五类凭证 INSERT DB trigger 和 Cookie/API key/OAuth bearer 运行时过滤。触发依据：本轮任务 B.2/B.4/B.5；迁移见 `drizzle/0035_member_suspension.sql`，运行时锚点见 report。
+- 语义变更：从被下架作品材料编辑后继续保持 hidden 改为材料编辑后清 `moderation_status`、回到 `pending_review`，由常规审核决定是否公开。触发依据：本轮任务 C“作者重新提交走正常预审”。公开页/下单/互动失败语义尚未由集成 suite 验证，必须保留发布阻断检查。
+- 语义变更：风险队列 resolve/dismiss 从无理由直接更改状态改为页面内确认、理由至少 4 字并写入审计；触发依据：本轮任务 A“所有破坏性操作统一确认并必填理由”。suite 18 对该路径的 DB 状态和 audit detail 有断言，但未运行。
+- 独立静态审查发现并修复两项：无点号域名的 `AGENT_EMAIL` 先被常规邮箱格式校验拒绝（现保护名单优先，返回 403）；举报风险 evidence 曾收到管理员 note（现回传原始 `report.reason`，suite 07 增 DB 字段断言）。审查未报告其他具体静态安全发现，但 D1/Worker 行为未运行。
+- 本轮改动可能引入的新风险：Drizzle snapshot/journal 是手动同步，generator 无法运行；封禁 DB batch 的原子性、OAuth consent 失效及未认证行为未在 D1/Worker 集成验证；材料编辑触发器放开 hidden 标志，安全依赖待审门禁保持有效；移动端布局/真实焦点陷阱只做了静态结构断言。
+- 已知取舍/已知不证明事项：钱包“进入复核时间”以 `wallets.updated_at` 近似；Node SQLite 证明本地五个凭证插入触发器字段断言，不证明 D1 batch 运行语义；README 暂不更新后台功能可用性描述，因为端到端未验收，避免把未验证状态发布为用户可用功能；当前报告和本状态账本承载待验信息。
+- 未覆盖范围：未执行 `tests/suites/18-admin-platform.tests.mjs` 与更新后的 `tests/suites/07-oidc-external.tests.mjs`；未逐入口运行 GitHub、邮箱码、passkey、QR、dev-login。检索命令 `rg -n "createOAuthSession\\(" app/api app/oauth-session.ts` 命中共用 session writer 的 OAuth callback、email-codes、passkey、QR poll/claim、dev-login 及 `admin/visual-session/enter`；`rg -n "suspended_at IS NULL" app` 命中 Cookie、API key、OAuth access/refresh bearer 解析过滤。入口与未验证分支见 report 的「未覆盖范围」。

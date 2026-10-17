@@ -235,7 +235,15 @@ export async function verifyEmailCode(request: Request, body: Record<string, unk
     throw error;
   }
 
-  const session = await createOAuthSession(user, "email");
+  let session: Awaited<ReturnType<typeof createOAuthSession>>;
+  try {
+    session = await createOAuthSession(user, "email");
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "member_suspended") {
+      return NextResponse.json({ error: "member_suspended", message: "该账号已被停用，如有疑问请联系管理员。" }, { status: 403 });
+    }
+    throw error;
+  }
   const destination = await setAuthCookies(session.token, returnTo, await requestSecure(request));
   return NextResponse.json({ status: "ok", return_to: destination });
 }

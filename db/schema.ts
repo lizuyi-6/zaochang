@@ -21,6 +21,9 @@ export const members = sqliteTable("members", {
   // 新成员由 trigger members_assign_member_number 自动赋 MAX+1,
   // UNIQUE 索引兜底。应用层不应直接写入此列。
   memberNumber: integer("member_number"),
+  suspendedAt: text("suspended_at"),
+  suspendedReason: text("suspended_reason").notNull().default(""),
+  suspendedBy: text("suspended_by"),
 }, (table) => [
   uniqueIndex("members_member_number_idx").on(table.memberNumber),
 ]);

@@ -72,7 +72,8 @@ export async function resolveUserApiKey(token: string): Promise<UserApiKeyIdenti
   const row = await db.prepare(
     `SELECT k.id AS apiKeyId, m.email, m.display_name AS displayName
      FROM api_keys k JOIN members m ON m.email = k.member_email
-     WHERE k.token_hash = ? AND k.revoked_at IS NULL AND k.expires_at > CURRENT_TIMESTAMP`,
+     WHERE k.token_hash = ? AND k.revoked_at IS NULL AND k.expires_at > CURRENT_TIMESTAMP
+       AND m.suspended_at IS NULL`,
   ).bind(await sha256Hex(token)).first<{ apiKeyId: string; email: string; displayName: string }>();
   if (!row) throw invalidApiKey();
 

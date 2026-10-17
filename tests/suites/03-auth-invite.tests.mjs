@@ -331,7 +331,7 @@ test("requires and atomically consumes an invitation for each new OAuth identity
   const revoked = await fetch(`${baseUrl}/api/admin/invitations`, {
     method: "PATCH",
     headers: adminHeaders,
-    body: JSON.stringify({ action: "revoke", id: invitation.id }),
+    body: JSON.stringify({ action: "revoke", id: invitation.id, reason: "测试撤销邀请" }),
   });
   assert.equal(revoked.status, 200);
   assert.deepEqual(await revoked.json(), { updated: true, id: invitation.id });

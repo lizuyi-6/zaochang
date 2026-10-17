@@ -46,7 +46,8 @@ export async function createInvitation(admin: MemberIdentity, input: Record<stri
 
 export async function revokeInvitation(admin: MemberIdentity, input: Record<string, unknown>): Promise<Response> {
   const id = String(input.id ?? "").slice(0, 80);
-  if (input.action !== "revoke" || !/^invite:[a-f0-9-]+$/.test(id)) {
+  const reason = String(input.reason ?? "").trim().slice(0, 500);
+  if (input.action !== "revoke" || !/^invite:[a-f0-9-]+$/.test(id) || reason.length < 4) {
     return Response.json({ error: "invalid_invitation_action" }, { status: 400 });
   }
   const active = await database().prepare(
@@ -57,7 +58,7 @@ export async function revokeInvitation(admin: MemberIdentity, input: Record<stri
     database().prepare(
       `UPDATE invitation_codes SET revoked_at = CURRENT_TIMESTAMP WHERE id = ? AND revoked_at IS NULL`,
     ).bind(id),
-    adminAuditStatement(admin.email, "revoke_invitation", "invitation", id),
+    adminAuditStatement(admin.email, "revoke_invitation", "invitation", id, `reason=${reason}`),
   ]);
   return Response.json({ updated: true, id });
 }

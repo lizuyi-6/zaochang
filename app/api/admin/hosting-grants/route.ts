@@ -45,7 +45,8 @@ export async function DELETE(request: Request) {
     if (guarded instanceof Response) return guarded;
     const input = await readJson(request);
     const email = typeof input.email === "string" ? input.email : "";
-    const result = await revokeHostingGrant(guarded.member, email);
+    const reason = typeof input.reason === "string" ? input.reason : "";
+    const result = await revokeHostingGrant(guarded.member, email, reason);
     return Response.json({ ok: true, removedHostings: result.removedHostings });
   } catch (error) {
     return jsonError(error);

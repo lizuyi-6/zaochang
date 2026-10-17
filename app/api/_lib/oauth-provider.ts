@@ -438,13 +438,27 @@ export async function revokeUserConsent(userEmail: string, clientId: string) {
      WHERE client_id = ? AND user_email = ? AND revoked_at IS NULL`,
   ).bind(clientId, userEmail).first<{ found: number }>();
   if (!consent) throw new OAuthProviderError("consent_not_found", 404);
-  await db.batch([
-    db.prepare(`UPDATE oauth_provider_consents SET revoked_at = CURRENT_TIMESTAMP WHERE client_id = ? AND user_email = ? AND revoked_at IS NULL`).bind(clientId, userEmail),
-    db.prepare(`UPDATE oauth_provider_access_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE client_id = ? AND user_email = ? AND revoked_at IS NULL`).bind(clientId, userEmail),
-    db.prepare(`UPDATE oauth_provider_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE client_id = ? AND user_email = ? AND revoked_at IS NULL`).bind(clientId, userEmail),
-    db.prepare(`UPDATE external_fruit_payments SET status = 'cancelled', approval_challenge_hash = NULL WHERE client_id = ? AND payer_email = ? AND status = 'pending'`).bind(clientId, userEmail),
-  ]);
+  await db.batch(consentRevocationStatements(userEmail, clientId));
   return { revoked: true };
+}
+
+// 会员封禁与用户主动撤销同意共用这组更新语句:撤销 consent 会即时吊销该用户
+// 对应的 access/refresh token,并取消尚未确认的果子支付。调用方可将这些语句并入
+// 更大的 D1 batch,保证封禁和 OAuth 凭证撤销处于同一事务。
+export function consentRevocationStatements(userEmail: string, clientId?: string) {
+  const scoped = clientId !== undefined;
+  const consentFilter = scoped ? "client_id = ? AND user_email = ?" : "user_email = ?";
+  const binds = scoped ? [clientId, userEmail] : [userEmail];
+  const paymentFilter = scoped
+    ? "client_id = ? AND payer_email = ?"
+    : "payer_email = ? AND client_id IN (SELECT client_id FROM oauth_provider_consents WHERE user_email = ?)";
+  const paymentBinds = scoped ? [clientId, userEmail] : [userEmail, userEmail];
+  return [
+    database().prepare(`UPDATE oauth_provider_consents SET revoked_at = CURRENT_TIMESTAMP WHERE ${consentFilter} AND revoked_at IS NULL`).bind(...binds),
+    database().prepare(`UPDATE oauth_provider_access_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE ${consentFilter} AND revoked_at IS NULL`).bind(...binds),
+    database().prepare(`UPDATE oauth_provider_refresh_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE ${consentFilter} AND revoked_at IS NULL`).bind(...binds),
+    database().prepare(`UPDATE external_fruit_payments SET status = 'cancelled', approval_challenge_hash = NULL WHERE ${paymentFilter} AND status = 'pending'`).bind(...paymentBinds),
+  ];
 }
 
 export async function createAuthorizationRequest(url: URL, userEmail: string) {
@@ -896,7 +910,7 @@ export async function requireBearer(
      JOIN members m ON m.email = t.user_email
      JOIN oauth_provider_subjects s ON s.client_id = t.client_id AND s.user_email = t.user_email
      WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > CURRENT_TIMESTAMP
-       AND c.status = 'active'`,
+       AND c.status = 'active' AND m.suspended_at IS NULL`,
   ).bind(tokenHash).first<TokenIdentity & Pick<ClientRow, "allowedScopes" | "status" | "reviewStatus" | "writeAccessApproved" | "registrationSource">>();
   if (!row) throw new OAuthProviderError("invalid_token", 401);
   const clientOwnerEmail = row.clientOwnerEmail;
@@ -922,7 +936,7 @@ export async function requireMcpOAuthBearer(request: Request): Promise<OAuthMcpI
      JOIN oauth_provider_clients c ON c.client_id = t.client_id
      JOIN members m ON m.email = t.user_email
      WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > CURRENT_TIMESTAMP
-       AND c.status = 'active'`,
+       AND c.status = 'active' AND m.suspended_at IS NULL`,
   ).bind(tokenHash).first<Pick<ClientRow, "allowedScopes" | "status" | "reviewStatus" | "writeAccessApproved" | "registrationSource"> & {
     clientId: string; userEmail: string; scope: string; resource: string | null; displayName: string;
   }>();

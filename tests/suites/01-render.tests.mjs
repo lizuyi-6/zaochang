@@ -264,8 +264,11 @@ test("founder identity owns the built-in portfolio and exposes founder managemen
   assert.match(founderHtml, /进入平台管理/);
   const adminHtml = await adminResponse.text();
   assert.match(adminHtml, /<h1>造场管理中心<\/h1>/);
-  assert.match(adminHtml, /aria-label="管理事项总览"/);
-  assert.match(adminHtml, /href="#product-review"/);
+  assert.match(adminHtml, /aria-label="管理分区"/);
+  assert.match(adminHtml, /待办收件箱/);
+  assert.match(adminHtml, /data-section="inbox"/);
+  assert.match(adminHtml, /会员/);
+  assert.match(adminHtml, /内容/);
 
   const regularHome = await fetch(baseUrl, { headers: authHeaders("普通成员", `regular-shell-${runId}@example.com`) });
   assert.equal(regularHome.status, 200);

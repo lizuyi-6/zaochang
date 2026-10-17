@@ -99,6 +99,9 @@ test("capabilities 自描述端点:读面/写面如实上报两张能力表", ()
   const src = readFileSync(new URL("../app/api/admin/capabilities/route.ts", import.meta.url), "utf8");
   assert.ok(src.includes("requireAdminOrAgent"));
   assert.ok(src.includes("[...AGENT_WRITE_CAPABILITIES, ...AGENT_ADMIN_CAPABILITIES]"));
+  const reads = src.match(/reads:\s*\[([\s\S]*?)\]/)?.[1] ?? "";
+  assert.match(reads, /"\/api\/admin\/overview"/);
+  assert.doesNotMatch(reads, /members|content|audit|wallets/);
 });
 
 

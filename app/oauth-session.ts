@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { toBase64Url } from "./api/_lib/crypto-utils";
 import { cookies, headers } from "next/headers";
 import { resolvePublicAppOrigin } from "./lib/public-origin";
-import { isInvitationRegistrationRequiredError, isInvitationUnavailableError } from "./api/_lib/errors";
+import { accessError, isInvitationRegistrationRequiredError, isInvitationUnavailableError } from "./api/_lib/errors";
 
 export type OAuthProvider = "github";
 // 会话签发可用的 provider:OAuth 登录走 OAuthProvider,邮箱验证码登录走 "email",
@@ -162,7 +162,8 @@ export async function sessionUserFromTokenValue(raw: string | null | undefined):
     const row = await database().prepare(
       `SELECT m.display_name AS displayName, m.email AS email
        FROM auth_sessions s JOIN members m ON m.email = s.user_email
-       WHERE s.token_hash = ? AND s.expires_at > CURRENT_TIMESTAMP`,
+       WHERE s.token_hash = ? AND s.expires_at > CURRENT_TIMESTAMP
+         AND m.suspended_at IS NULL`,
     ).bind(tokenHash).first<{ displayName: string; email: string }>();
     if (!row) return null;
     return { displayName: row.displayName, email: row.email, fullName: row.displayName };
@@ -183,10 +184,17 @@ export async function getOAuthSessionUser(): Promise<SessionUser | null> {
 export async function createOAuthSession(user: SessionUser, provider: SessionProvider) {
   const token = randomToken(32);
   const expiresAt = sqliteTimestamp(new Date(Date.now() + 1000 * 60 * 60 * 24 * 30));
-  await database().prepare(
-    `INSERT INTO auth_sessions (token_hash, user_email, provider, expires_at)
-     VALUES (?, ?, ?, ?)`,
-  ).bind(await hashToken(token), user.email, provider, expiresAt).run();
+  try {
+    await database().prepare(
+      `INSERT INTO auth_sessions (token_hash, user_email, provider, expires_at)
+       VALUES (?, ?, ?, ?)`,
+    ).bind(await hashToken(token), user.email, provider, expiresAt).run();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("member_suspended")) {
+      throw accessError("member_suspended", 403);
+    }
+    throw error;
+  }
   return { token, expiresAt };
 }
 

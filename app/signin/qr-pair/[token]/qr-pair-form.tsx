@@ -12,6 +12,7 @@ const PAIR_ERROR: Record<string, string> = {
   qr_expired: "邀请已过期。请在桌面端重新生成二维码。",
   qr_invalid: "这个邀请无效或已被使用,请在桌面端重新生成。",
   rate_limited: "操作太频繁,请稍等几分钟再试。",
+  member_suspended: "该账号已被停用，如有疑问请联系管理员。",
 };
 
 export function QrPairForm({ token }: { token: string }) {
@@ -32,8 +33,14 @@ export function QrPairForm({ token }: { token: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token }),
       });
-      const result = await response.json().catch(() => null) as { status?: string } | null;
-      if (cancelled || roundRef.current !== round || !result?.status) return;
+      const result = await response.json().catch(() => null) as { status?: string; error?: string } | null;
+      if (cancelled || roundRef.current !== round || !result) return;
+      if (result.error === "member_suspended") {
+        setStage("code");
+        setError(PAIR_ERROR.member_suspended);
+        return;
+      }
+      if (!result.status) return;
       if (result.status === "ok") {
         setStage("ok");
         window.location.assign("/");

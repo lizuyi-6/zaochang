@@ -46,6 +46,9 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.redirect(absoluteAppUrl(request, destination));
   } catch (error) {
     if (error instanceof RegistrationInviteError) return redirectError(request, error.code);
+    if (error && typeof error === "object" && "code" in error && error.code === "member_suspended") {
+      return redirectError(request, "member_suspended");
+    }
     console.error("OAuth callback failed", error);
     return redirectError(request, "provider_error");
   }

@@ -98,7 +98,7 @@ test("hidden posts close their comment surface and counters stay consistent", as
   const hide = await fetch(`${baseUrl}/api/admin/moderation`, {
     method: "PATCH",
     headers: adminHeaders,
-    body: JSON.stringify({ action: "hide_reported_content", targetRef: queuedReport.id }),
+    body: JSON.stringify({ action: "hide_reported_content", targetRef: queuedReport.id, note: "测试举报隐藏理由" }),
   });
   assert.equal(hide.status, 200);
 
@@ -126,7 +126,7 @@ test("hidden posts close their comment surface and counters stay consistent", as
   const hideComment = await fetch(`${baseUrl}/api/admin/moderation`, {
     method: "PATCH",
     headers: adminHeaders,
-    body: JSON.stringify({ action: "hide_reported_content", targetRef: queuedCommentReport.id }),
+    body: JSON.stringify({ action: "hide_reported_content", targetRef: queuedCommentReport.id, note: "测试评论隐藏理由" }),
   });
   assert.equal(hideComment.status, 200);
   counts = await queryLocalD1(`SELECT comments_count AS n FROM posts WHERE id = ${postId}`);

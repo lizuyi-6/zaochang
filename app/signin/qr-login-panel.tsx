@@ -10,7 +10,7 @@ import { SakuraQrImage, sakuraQrArt, type SakuraQrArt } from "./sakura-qr-image"
 // "taken" 表示该码已在别处消费(多标签页/重放),提示后停止轮询。
 // 生命周期:effect 只按 [returnTo, round] 跑一轮(round +1 = 换新码),phase 是
 // 轮内的展示状态,不进依赖——否则 setPhase 会自激重扫。
-type Phase = "loading" | "watching" | "done" | "taken" | "unavailable";
+type Phase = "loading" | "watching" | "done" | "taken" | "unavailable" | "suspended";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -56,10 +56,17 @@ export function QrLoginPanel({ returnTo }: { returnTo: string }) {
         });
         const poll = await pollResponse.json().catch(() => null) as {
           status?: string;
+          error?: string;
           return_to?: string;
           expiresIn?: number;
         } | null;
-        if (cancelled || roundRef.current !== round || !poll?.status) return;
+        if (cancelled || roundRef.current !== round || !poll) return;
+        if (poll.error === "member_suspended") {
+          if (pollTimer !== null) window.clearInterval(pollTimer);
+          setPhase("suspended");
+          return;
+        }
+        if (!poll.status) return;
         if (poll.status === "pending") {
           setSecondsLeft(poll.expiresIn ?? 0);
           return;
@@ -113,6 +120,14 @@ export function QrLoginPanel({ returnTo }: { returnTo: string }) {
         <MonitorSmartphone size={22} aria-hidden />
         <p>扫码登录暂时不可用（可能发起太频繁），请稍后再试或改用其它登录方式。</p>
         <button className="text-action" type="button" onClick={() => setRound((value) => value + 1)}>重试</button>
+      </div>
+    );
+  }
+  if (phase === "suspended") {
+    return (
+      <div className="auth-qr-panel is-done">
+        <MonitorSmartphone size={22} aria-hidden />
+        <p>该账号已被停用，如有疑问请联系管理员。</p>
       </div>
     );
   }

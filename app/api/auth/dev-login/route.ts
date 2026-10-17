@@ -47,7 +47,15 @@ export async function GET(request: Request) {
   };
   await ensureMember(user);
   // provider 记 "email"(模拟本地登录,与真实 GitHub 会话区分,不污染 provider 审计数据)。
-  const session = await createOAuthSession(user, "email");
+  let session: Awaited<ReturnType<typeof createOAuthSession>>;
+  try {
+    session = await createOAuthSession(user, "email");
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "member_suspended") {
+      return NextResponse.json({ error: "member_suspended", message: "该账号已被停用，如有疑问请联系管理员。" }, { status: 403 });
+    }
+    throw error;
+  }
   const destination = await setAuthCookies(session.token, safeReturnPath(query.get("return_to")), await requestSecure(request));
   return NextResponse.redirect(absoluteAppUrl(request, destination));
 }
