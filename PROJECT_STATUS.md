@@ -1,5 +1,13 @@
 # 造场项目账本
 
+## 2026-10-17 安卓 App「按钮点了没反应」:跳转中反馈 + 卡住整页兜底 + 触屏去重预取(部分完成:本地已验证,未提交/未上线,真机未复验)
+
+- **真机证据**(`wrangler tail` 实时日志,用户 vivo V2426A / Android 16 / WebView Chrome 153,出口 IP 在美国 → App 流量走代理):30 个请求全 200,RSC 服务端 0.35–1.1s;但 01:29:40 点「发现/动态/个人/发布」后直到 01:30:13 才有页面挂载(首个 `/api/community`)≈30s;同一目标每点一次两条 RSC(触屏 pointerenter 预取 + 跳转各一份)。排除项:内核过旧(153)、壳吞触摸(模拟器 WebView 124 真实 `input tap` 4/4 命中按钮)、遮挡(线上 14 页 elementFromPoint 无遮挡,仅 `/galaxy` 加载层首屏挡 3–8s)。
+- **根因(最可能)**:App Router 客户端跳转是 React 过渡,RSC 与新路由脚本到齐前旧页面原样不动、零反馈;弱网下就是"点不了",再点又重开跳转。**回退假设**:服务端 `/api/community` 3.2s、`/api/shell-state` 1.6s 偏慢在弱网叠加放大(未处理)。
+- **改动**:`app/lib/navigation-pending.ts`(零 import 纯逻辑:目标判定/整页兜底模式/包装 `window.__VINEXT_RSC_NAVIGATE__` 广播开始事件,微任务延后派发以免 setState 并入 `<Link>` 的 startTransition);`app/components/navigation-pending.tsx`(点即出顶部条、离开出发页即收、7s 仍停留则 `location.assign/replace`,traverse 不兜底);`app/layout.tsx` 站壳外挂载;`app/globals.css` `.navigation-pending`(pointer-events:none);`app/components/intent-link.tsx` 触屏/指针聚焦不预取。`instrumentation-client.ts` 方案作废:vinext 0.0.50 只在 Pages Router 入口加载该钩子(`entries/pages-client-entry.js:28`)。
+- **证据**:`tests/navigation-pending.test.mjs` 9 例(含 vinext 两处源码钉、产物含广播包装);本地生产构建 + 无头 Chrome 手机视口真实触摸 6 场景连跑 3 次 6/6(点后 120ms 出条;拦截 `.rsc` 永挂时 1s/5s 条在、≈9s 整页落到目标;点当前页不出条;一次点按只发 1 条 RSC);`npm test` 844/844、skipped 0、todo 0;`tsc`/`git diff --check` exit 0;lint 排除既有未跟踪 `tmp/` 与已忽略 `promo/` 后 exit 0。
+- **未验证**:用户真机(需部署后复测);兜底整页跳转在真弱网下是否更快;`/galaxy` 加载层遮挡未改;服务端慢接口未优化。
+
 ## 2026-10-16 登录二维码改为「立体码」:体素樱花树 ↔ 平面码翻转(本地已验证;用户要求直接部署,随本提交推送 main,上线结果以 CI/部署记录为准)
 
 - **起因**:上一版(`fdf3c92`,下条)上线后用户给出参考图——要的是支付宝式「立体码」:默认一棵斜 45° 的体素樱花树,点「点击查看平面码」相机转到正上方变成可扫的码,另有「改用普通二维码」。上一版的 SVG 花朵码整体被替换。

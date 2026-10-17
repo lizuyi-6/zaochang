@@ -3,6 +3,7 @@ import { hasRole } from "./api/_lib/access-control";
 import { database } from "./api/_lib/community";
 import { memberInitial } from "./lib/format";
 import { getChatGPTUser } from "./chatgpt-auth";
+import { NavigationPending } from "./components/navigation-pending";
 import { SiteShell } from "./components/site-shell";
 import "./globals.css";
 /* 编辑排版视觉系统(myui DESIGN-PREFERENCES「暖色编辑工作室」):标题与巨型数字用衬线,
@@ -45,6 +46,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="zh-CN">
       <body>
+        {/* 站壳之外挂载:登录页、星系等不套站壳的页面同样需要跳转中反馈。 */}
+        <NavigationPending />
         <SiteShell member={member}>{children}</SiteShell>
       </body>
     </html>
