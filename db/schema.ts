@@ -955,6 +955,29 @@ export const mailStatusTokens = sqliteTable(
   (table) => [index("mail_status_tokens_updated_idx").on(table.updatedAt)],
 );
 
+// 见界创赛选拔候选人(管理台「选拔」分区)。一人一行(email 唯一);
+// status_token 链到 mail_status_tokens 的个人进度页(E8 邮件里嵌的那张图/那个链接),
+// 可空——只有发过 E8 或手动建过进度令牌的候选人才有。
+export const recruitCandidates = sqliteTable(
+  "recruit_candidates",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    position: text("position").notNull(),
+    stage: text("stage").notNull().default("applied"),
+    statusToken: text("status_token"),
+    note: text("note").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("recruit_candidates_stage_idx").on(table.stage),
+    uniqueIndex("recruit_candidates_email_unique").on(table.email),
+    check("recruit_candidates_stage_valid", sql`${table.stage} in ('applied', 'homework', 'group', 'final', 'admitted', 'rejected')`),
+  ],
+);
+
 export const productHostings = sqliteTable(
   "product_hostings",
   {

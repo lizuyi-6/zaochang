@@ -62,6 +62,10 @@ export const AGENT_ADMIN_CAPABILITIES = [
   // 评审进度实时状态写入(运营机器通道 tmp/mail/status.mjs)。只写 mail_status_tokens
   // 一行 JSON,读侧是 /email/status/<token>(收件人匿名可读);不触碰成员/资金。
   { method: "POST", pathname: "/api/admin/mail-status" },
+  // 选拔候选人建档/环节推进(管理台「选拔」分区的机器通道等价物)。
+  // 只写 recruit_candidates 一行(建档时可连带建该候选人的进度令牌);删除不可逆,不给 agent。
+  { method: "POST", pathname: "/api/admin/recruit-candidates" },
+  { method: "PATCH", pathname: "/api/admin/recruit-candidates" },
 ] as const;
 
 // agent 非 GET 请求的放行判定:两张能力表之并集精确命中(method+pathname)。

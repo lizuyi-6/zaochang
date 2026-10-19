@@ -878,6 +878,36 @@ div.sakura-qr-stage { cursor: default; }
 .admin-confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .admin-icon-button { align-items: center; border: 0 !important; display: inline-flex !important; flex: 0 0 auto; justify-content: center; min-height: 36px !important; padding: 5px !important; width: 36px; }
 .admin-product-review .admin-product-hosting { grid-column: 1 / -1; }
+.admin-recruit-two-col { align-items: start; display: grid; gap: 16px; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); min-width: 0; }
+.admin-template-grid { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-template-card { background: var(--paper); border: 1px solid var(--line); cursor: pointer; display: grid; gap: 4px; justify-items: start; min-height: 0; min-width: 0; padding: 10px 12px; text-align: left; }
+.admin-template-card.is-active { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.admin-template-card strong { font-size: 11px; }
+.admin-template-card small { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.admin-mail-fields { display: grid; gap: 9px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-mail-fields label, .admin-recruit-form label { color: var(--muted); display: grid; font-size: 10px; gap: 4px; }
+.admin-mail-fields .is-wide, .admin-recruit-form .is-wide { grid-column: 1 / -1; }
+.admin-recruit-form { align-items: end; display: grid; gap: 9px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-recruit-check { align-items: center; display: flex !important; flex-direction: row; gap: 6px; }
+.admin-recruit-check input { min-height: 0; }
+.admin-mail-preview { background: #EFE8DA; border: 1px solid var(--line); }
+.admin-mail-preview iframe { border: 0; display: block; height: 560px; width: 100%; }
+.admin-copy-block { background: var(--paper); border: 1px solid var(--line); display: grid; gap: 8px; padding: 10px; }
+.admin-copy-block pre { font-family: var(--font-geist-mono), monospace; font-size: 9px; line-height: 1.6; margin: 0; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+.admin-progress-track { background: var(--line); border-radius: 999px; height: 6px; overflow: hidden; width: 110px; }
+.admin-progress-fill { background: #164E46; height: 100%; }
+.admin-token-row { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: 8px; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2.6fr) auto; padding: 12px 2px; }
+.admin-token-row:last-child { border-bottom: 0; }
+.admin-token-row .admin-token-fields { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-token-row .admin-token-fields input, .admin-token-row .admin-token-fields select { max-width: 130px; }
+.admin-token-row small { color: var(--muted); font-size: 9px; }
+.admin-candidate-stage { max-width: 96px; }
+@media (max-width: 1020px) {
+  .admin-recruit-two-col { grid-template-columns: 1fr; }
+  .admin-template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-recruit-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-token-row { grid-template-columns: 1fr; }
+}
 @media (max-width: 1020px) {
   .admin-console { padding-inline: 18px; }
   .admin-layout { gap: 16px; grid-template-columns: 190px minmax(0, 1fr); }

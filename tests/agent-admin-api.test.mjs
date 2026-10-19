@@ -18,7 +18,7 @@ const same = (list) => JSON.stringify([...list].sort((a, b) => a.pathname.locale
 
 // ---- 能力表内容逐字固定(扩面 = 显式改这里 + 改 agent-auth.ts,评审可见) ----
 
-test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH / mail-files POST / mail-status POST", () => {
+test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH", () => {
   assert.equal(same(AGENT_ADMIN_CAPABILITIES), same([
     cap("PATCH", "/api/admin/moderation"),
     cap("POST", "/api/admin/invitations"),
@@ -26,6 +26,8 @@ test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / i
     cap("PATCH", "/api/admin/incubation"),
     cap("POST", "/api/admin/mail-files"),
     cap("POST", "/api/admin/mail-status"),
+    cap("POST", "/api/admin/recruit-candidates"),
+    cap("PATCH", "/api/admin/recruit-candidates"),
   ]));
 });
 
@@ -45,6 +47,9 @@ test("isAgentWriteAllowed:列名内精确命中(method+pathname 都要匹配)", 
   assert.equal(isAgentWriteAllowed("PATCH", "/api/admin/incubation"), true);
   assert.equal(isAgentWriteAllowed("POST", "/api/admin/mail-files"), true);
   assert.equal(isAgentWriteAllowed("POST", "/api/admin/mail-status"), true);
+  assert.equal(isAgentWriteAllowed("POST", "/api/admin/recruit-candidates"), true);
+  assert.equal(isAgentWriteAllowed("PATCH", "/api/admin/recruit-candidates"), true);
+  assert.equal(isAgentWriteAllowed("DELETE", "/api/admin/recruit-candidates"), false); // 删除不可逆,人类专属
   assert.equal(isAgentWriteAllowed("POST", "/api/docs"), true);
   assert.equal(isAgentWriteAllowed("PATCH", "/api/products"), false); // method 不匹配
 });
@@ -99,6 +104,24 @@ test("mail-status 写入路由:adminOrAgent + 审计 + 局部更新合并", () =
   assert.ok(src.includes("upsertMailStatus"), "必须走共享的 upsert(token 校验/合并/归一化)");
   assert.ok(src.includes("auditAdminAction"), "进度更新必须写管理审计");
   assert.match(src, /MAIL_STATUS_TOKEN_PATTERN/, "调用方传入 token 必须过形状校验");
+});
+
+test("mail-status 列表读侧:requireAdminOrAgent,只读不改", () => {
+  const src = readFileSync(new URL("../app/api/admin/mail-status/route.ts", import.meta.url), "utf8");
+  assert.match(src, /export async function GET\(/, "管理台进度面板需要 GET 列表");
+  assert.ok(src.includes("requireAdminOrAgent"), "GET 必须 requireAdminOrAgent");
+  assert.ok(src.includes("listMailStatus"), "列表必须走共享 store 层");
+});
+
+test("recruit-candidates 路由:adminOrAgent + 校验纯逻辑 + 审计;无 DELETE(删除人类专属)", () => {
+  const src = readFileSync(new URL("../app/api/admin/recruit-candidates/route.ts", import.meta.url), "utf8");
+  assert.ok(src.includes("requireAdminOrAgent"), "GET 必须 requireAdminOrAgent");
+  assert.ok(src.includes('"adminOrAgent"'), "写守卫必须 adminOrAgent");
+  assert.ok(src.includes("normalizeRecruitCandidateInput"), "建档必须过共享校验");
+  assert.ok(src.includes("normalizeRecruitCandidatePatch"), "局部更新必须过共享校验");
+  assert.ok(src.includes("auditAdminAction"), "写操作必须写管理审计");
+  assert.doesNotMatch(src, /export async function DELETE/, "删除不可逆,不在此路由暴露");
+  assert.match(src, /recruit_candidate_email_exists/, "email 唯一冲突必须 409 稳定错误码");
 });
 
 test("评审进度公开读侧:能力 URL 命中才返回、未命中 404、两路 no-store", () => {

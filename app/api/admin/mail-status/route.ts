@@ -2,13 +2,35 @@
 // 运营每得到一次评委进度就调用一次(CLI: tmp/mail/status.mjs set <token> --done 4),
 // 已发出的邮件里嵌的进度图与状态页链接随即反映新值——这是"实时更新"的写入侧。
 // 合并语义:只带改动字段,未带的保持原值;字符串传空串 = 清除该字段。
+// GET 是管理台「选拔」分区的进度令牌列表(agent GET 全通,无需能力表)。
 import { guardWrite } from "../../_lib/route-guards";
+import { requireAdminOrAgent } from "../../_lib/access-control";
 import { MAIL_STATUS_TOKEN_PATTERN } from "../../_lib/mail-status";
-import { upsertMailStatus } from "../../_lib/mail-status-store";
+import { listMailStatus, upsertMailStatus } from "../../_lib/mail-status-store";
 import { auditAdminAction } from "../../_lib/admin";
 import { jsonError } from "../../_lib/community";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  try {
+    await requireAdminOrAgent();
+    const origin = new URL(request.url).origin;
+    const tokens = await listMailStatus();
+    return Response.json({
+      tokens: tokens.map((record) => ({
+        token: record.token,
+        label: record.label,
+        state: record.state,
+        updatedAt: record.updatedAt,
+        pageUrl: `${origin}/email/status/${record.token}`,
+        pngUrl: `${origin}/email/status/${record.token}.png`,
+      })),
+    });
+  } catch (error) {
+    return jsonError(error);
+  }
+}
 
 export async function POST(request: Request) {
   try {

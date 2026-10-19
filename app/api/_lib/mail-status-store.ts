@@ -27,6 +27,20 @@ export async function readMailStatus(token: string): Promise<MailStatusRecord | 
   return { token: row.token, label: row.label, state: parseMailStatusState(row.stateJson), updatedAt: row.updatedAt };
 }
 
+// 管理台列表用:按最近更新倒序。数量有界(运营手工创建),200 封顶。
+export async function listMailStatus(limit = 200): Promise<MailStatusRecord[]> {
+  const rows = await database().prepare(
+    `SELECT token, label, state_json AS stateJson, updated_at AS updatedAt
+     FROM mail_status_tokens ORDER BY updated_at DESC LIMIT ?`,
+  ).bind(Math.min(Math.max(1, limit), 500)).all<{ token: string; label: string; stateJson: string; updatedAt: string }>();
+  return (rows.results ?? []).map((row) => ({
+    token: row.token,
+    label: row.label,
+    state: parseMailStatusState(row.stateJson),
+    updatedAt: row.updatedAt,
+  }));
+}
+
 // 更新或新建(token 缺省则新建)。合并语义见 mail-status.ts 的 mergeMailStatusState:
 // 只改带来的字段,未带的保持原值。返回最终记录,调用方负责审计与响应。
 export async function upsertMailStatus(args: {
