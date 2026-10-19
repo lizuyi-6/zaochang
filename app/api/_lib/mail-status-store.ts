@@ -5,18 +5,16 @@ import {
   MAIL_STATUS_TOKEN_PATTERN,
   mergeMailStatusState,
   newMailStatusToken,
-  normalizeMailStatusState,
   parseMailStatusState,
 } from "./mail-status.ts";
+import type { MailStatusState } from "./mail-status.ts";
 
 export type MailStatusRecord = {
   token: string;
   label: string;
-  state: MailStatusStateShape;
+  state: MailStatusState;
   updatedAt: string;
 };
-
-type MailStatusStateShape = ReturnType<typeof normalizeMailStatusState>;
 
 // 单行读取:token 形状不合法直接 null(调用方一律按 404 处理,不泄露存在性)。
 export async function readMailStatus(token: string): Promise<MailStatusRecord | null> {
@@ -41,7 +39,11 @@ export async function upsertMailStatus(args: {
   const existing = await database().prepare(
     `SELECT label, state_json AS stateJson FROM mail_status_tokens WHERE token = ?`,
   ).bind(token).first<{ label: string; stateJson: string }>();
-  const state = mergeMailStatusState(existing?.stateJson ?? "{}", args.patch);
+  // state_json 是 JSON 字符串,必须先 parse 再合并:mergeMailStatusState 的
+  // normalize 对非对象一律返回空状态——直接把字符串喂进去,每次局部更新都会把
+  // 既有 total/stage 清空(生产实测:set --done 5 后 total 消失)。
+  const current = parseMailStatusState(existing?.stateJson ?? "{}");
+  const state = mergeMailStatusState(current, args.patch);
   const label = typeof args.label === "string" && args.label.trim() ? args.label.trim().slice(0, 60) : existing?.label ?? "";
   await database().prepare(
     `INSERT INTO mail_status_tokens (token, label, state_json, updated_by, updated_at)

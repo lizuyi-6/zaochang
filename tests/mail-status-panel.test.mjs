@@ -144,6 +144,15 @@ test("normalize:白名单字段、超长截断、非法类型丢弃、total 至�
   assert.equal(state.evil, undefined, "白名单外字段一律丢弃");
 });
 
+test("merge:DB 字符串必须先 parse——store 路径回归(total 不得被局部更新清空)", () => {
+  // 生产 bug 复现:upsert 把 state_json 字符串直接喂 merge,normalize 对非对象
+  // 返回空状态,于是 set --done 5 之后 total/stage 全部消失。
+  const stored = JSON.stringify({ stage: "作业评审", total: 5, done: 2 });
+  assert.deepEqual(mergeMailStatusState(stored, { done: 5 }), { done: 5 }, "字符串直接喂 = 清空(反面对照)");
+  assert.deepEqual(mergeMailStatusState(JSON.parse(stored), { done: 5 }), { stage: "作业评审", total: 5, done: 5 });
+  assert.deepEqual(mergeMailStatusState(JSON.parse(stored), { stage: "群面" }), { stage: "群面", total: 5, done: 2 });
+});
+
 test("merge:局部更新只改带来的字段,空串清除,数字跨字段重钳", () => {
   const base = { stage: "作业评审", total: 5, done: 2, eta: "10月20日", note: "顺利" };
   assert.deepEqual(mergeMailStatusState(base, { done: 4 }), { stage: "作业评审", total: 5, done: 4, eta: "10月20日", note: "顺利" });
