@@ -92,7 +92,7 @@ export async function PATCH(request: Request) {
     if (!entries.length) return Response.json({ error: "empty_patch" }, { status: 400 });
     const existing = await database().prepare(`SELECT id FROM recruit_candidates WHERE id = ?`).bind(id).first<{ id: string }>();
     if (!existing) return Response.json({ error: "recruit_candidate_not_found" }, { status: 404 });
-    const columns: Record<string, string> = { name: "name", email: "email", position: "position", stage: "stage", note: "note" };
+    const columns: Record<string, string> = { name: "name", email: "email", position: "position", stage: "stage", note: "note", statusToken: "status_token" };
     const assignments = entries.map(([key]) => `${columns[key]} = ?`).join(", ");
     try {
       await database().prepare(

@@ -66,6 +66,9 @@ export const AGENT_ADMIN_CAPABILITIES = [
   // 只写 recruit_candidates 一行(建档时可连带建该候选人的进度令牌);删除不可逆,不给 agent。
   { method: "POST", pathname: "/api/admin/recruit-candidates" },
   { method: "PATCH", pathname: "/api/admin/recruit-candidates" },
+  // 结果邮件线上发送(凭据在 CF secret)。真出信:一人一封去重(审计台账)+严格限流
+  // 都在路由层;能力表放行只是让机器通道能调用,不放宽任何业务不变量。
+  { method: "POST", pathname: "/api/admin/mail-send" },
 ] as const;
 
 // agent 非 GET 请求的放行判定:两张能力表之并集精确命中(method+pathname)。

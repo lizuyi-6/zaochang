@@ -46,12 +46,13 @@ export function normalizeRecruitCandidateInput(
 }
 
 // 局部更新(PATCH):只校验带来的字段;环节单改很常见(推进/淘汰)。
+// statusToken 是特例:把候选人绑到既有进度令牌(32 位十六进制),传 null 解绑。
 export function normalizeRecruitCandidatePatch(
   input: unknown,
-): { ok: true; patch: Partial<RecruitCandidateInput> } | { ok: false; error: string } {
+): { ok: true; patch: Partial<RecruitCandidateInput> & { statusToken?: string | null } } | { ok: false; error: string } {
   if (!input || typeof input !== "object") return { ok: false, error: "invalid_body" };
   const raw = input as Record<string, unknown>;
-  const patch: Partial<RecruitCandidateInput> = {};
+  const patch: Partial<RecruitCandidateInput> & { statusToken?: string | null } = {};
   if ("name" in raw) {
     const name = typeof raw.name === "string" ? raw.name.trim() : "";
     if (!name || name.length > RECRUIT_CANDIDATE_LIMITS.name) return { ok: false, error: "invalid_name" };
@@ -77,6 +78,13 @@ export function normalizeRecruitCandidatePatch(
       return { ok: false, error: "invalid_stage" };
     }
     patch.stage = raw.stage as RecruitStage;
+  }
+  if ("statusToken" in raw) {
+    const token = raw.statusToken;
+    if (token !== null && (typeof token !== "string" || !/^[a-f0-9]{32}$/.test(token))) {
+      return { ok: false, error: "invalid_status_token" };
+    }
+    patch.statusToken = token;
   }
   return { ok: true, patch };
 }

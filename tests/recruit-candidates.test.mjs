@@ -40,6 +40,17 @@ test("局部更新:只校验带来的字段;空 patch 合法;未知键忽略", (
   assert.equal(normalizeRecruitCandidatePatch("x").error, "invalid_body");
 });
 
+test("局部更新 statusToken:32 位十六进制绑定、null 解绑、其它一律拒", () => {
+  const token = "a".repeat(32);
+  const bound = normalizeRecruitCandidatePatch({ statusToken: token });
+  assert.equal(bound.ok, true);
+  assert.deepEqual(bound.patch, { statusToken: token });
+  assert.deepEqual(normalizeRecruitCandidatePatch({ statusToken: null }).patch, { statusToken: null });
+  for (const bad of ["xyz", "A".repeat(32), 42, "a".repeat(31)]) {
+    assert.equal(normalizeRecruitCandidatePatch({ statusToken: bad }).error, "invalid_status_token", String(bad));
+  }
+});
+
 test("环节白名单与中文标签一一对应", () => {
   for (const stage of RECRUIT_STAGES) {
     assert.ok(RECRUIT_STAGE_LABELS[stage], `${stage} 缺标签`);

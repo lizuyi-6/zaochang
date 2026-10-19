@@ -18,7 +18,7 @@ const same = (list) => JSON.stringify([...list].sort((a, b) => a.pathname.locale
 
 // ---- 能力表内容逐字固定(扩面 = 显式改这里 + 改 agent-auth.ts,评审可见) ----
 
-test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH", () => {
+test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH / mail-send POST", () => {
   assert.equal(same(AGENT_ADMIN_CAPABILITIES), same([
     cap("PATCH", "/api/admin/moderation"),
     cap("POST", "/api/admin/invitations"),
@@ -28,6 +28,7 @@ test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / i
     cap("POST", "/api/admin/mail-status"),
     cap("POST", "/api/admin/recruit-candidates"),
     cap("PATCH", "/api/admin/recruit-candidates"),
+    cap("POST", "/api/admin/mail-send"),
   ]));
 });
 
@@ -50,6 +51,7 @@ test("isAgentWriteAllowed:列名内精确命中(method+pathname 都要匹配)", 
   assert.equal(isAgentWriteAllowed("POST", "/api/admin/recruit-candidates"), true);
   assert.equal(isAgentWriteAllowed("PATCH", "/api/admin/recruit-candidates"), true);
   assert.equal(isAgentWriteAllowed("DELETE", "/api/admin/recruit-candidates"), false); // 删除不可逆,人类专属
+  assert.equal(isAgentWriteAllowed("POST", "/api/admin/mail-send"), true);
   assert.equal(isAgentWriteAllowed("POST", "/api/docs"), true);
   assert.equal(isAgentWriteAllowed("PATCH", "/api/products"), false); // method 不匹配
 });
@@ -122,6 +124,28 @@ test("recruit-candidates 路由:adminOrAgent + 校验纯逻辑 + 审计;无 DELE
   assert.ok(src.includes("auditAdminAction"), "写操作必须写管理审计");
   assert.doesNotMatch(src, /export async function DELETE/, "删除不可逆,不在此路由暴露");
   assert.match(src, /recruit_candidate_email_exists/, "email 唯一冲突必须 409 稳定错误码");
+});
+
+test("mail-send 路由:一人一封去重 + 共享渲染 + 凭据 fail-closed + 候选人联动 + 审计", () => {
+  const src = readFileSync(new URL("../app/api/admin/mail-send/route.ts", import.meta.url), "utf8");
+  assert.ok(src.includes('"adminOrAgent"'), "写守卫必须 adminOrAgent");
+  assert.ok(src.includes("renderMailTemplate"), "必须用共享渲染逻辑(预览=所发)");
+  assert.ok(src.includes("sendSmtpMail"), "发送必须走 SMTP 库(cloudflare:sockets)");
+  assert.match(src, /action = 'mail\.send' AND target_ref = \? AND detail = \?/, "同收件人同模板必须去重");
+  assert.ok(src.includes("mail_already_sent"), "去重命中必须 409 稳定错误码");
+  assert.ok(src.includes("mail_not_configured"), "凭据缺失必须 503 fail-closed");
+  assert.ok(src.includes("dryRun"), "必须有 dryRun 探针(不连 SMTP 的全链路校验)");
+  assert.ok(src.includes("auditAdminAction"), "发送必须写管理审计");
+  assert.match(src, /UPDATE recruit_candidates/, "带 candidateId 必须联动推进环节");
+  assert.match(src, /rate: \{ bucket: "mail-send"/, "发送必须单独限流桶");
+});
+
+test("mail-send SMTP 库:续行读取 + 凭据不进错误 + 超时兜底", () => {
+  const src = readFileSync(new URL("../app/api/_lib/mail-send.ts", import.meta.url), "utf8");
+  assert.ok(src.includes('from "cloudflare:sockets"'), "Workers 上只能走 cloudflare:sockets");
+  assert.match(src, /\^\\d\{3\} \//, "SMTP 续行必须读到「数字码+空格」末行");
+  assert.ok(src.includes("smtp_timeout"), "必须有超时兜底");
+  assert.doesNotMatch(src, /reply\.text.*pass|credentials\.pass.*Error/, "凭据不得进错误文本");
 });
 
 test("评审进度公开读侧:能力 URL 命中才返回、未命中 404、两路 no-store", () => {
