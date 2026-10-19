@@ -253,6 +253,13 @@
       "when": 1792198711585,
       "tag": "0035_member_suspension",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1792395651846,
+      "tag": "0036_quiet_freak",
+      "breakpoints": true
     }
   ]
 }

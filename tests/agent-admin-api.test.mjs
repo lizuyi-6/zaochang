@@ -18,13 +18,14 @@ const same = (list) => JSON.stringify([...list].sort((a, b) => a.pathname.locale
 
 // ---- 能力表内容逐字固定(扩面 = 显式改这里 + 改 agent-auth.ts,评审可见) ----
 
-test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH / mail-files POST", () => {
+test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH / mail-files POST / mail-status POST", () => {
   assert.equal(same(AGENT_ADMIN_CAPABILITIES), same([
     cap("PATCH", "/api/admin/moderation"),
     cap("POST", "/api/admin/invitations"),
     cap("PATCH", "/api/admin/invitations"),
     cap("PATCH", "/api/admin/incubation"),
     cap("POST", "/api/admin/mail-files"),
+    cap("POST", "/api/admin/mail-status"),
   ]));
 });
 
@@ -43,6 +44,7 @@ test("isAgentWriteAllowed:列名内精确命中(method+pathname 都要匹配)", 
   assert.equal(isAgentWriteAllowed("POST", "/api/admin/invitations"), true);
   assert.equal(isAgentWriteAllowed("PATCH", "/api/admin/incubation"), true);
   assert.equal(isAgentWriteAllowed("POST", "/api/admin/mail-files"), true);
+  assert.equal(isAgentWriteAllowed("POST", "/api/admin/mail-status"), true);
   assert.equal(isAgentWriteAllowed("POST", "/api/docs"), true);
   assert.equal(isAgentWriteAllowed("PATCH", "/api/products"), false); // method 不匹配
 });
@@ -57,6 +59,7 @@ test("isAgentWriteAllowed:fail-closed——未列名/不可逆/财务/上传一�
     ["POST", "/api/payments"],
     ["POST", "/api/v1/fruit/transfer"],
     ["POST", "/api/uploads"],
+    ["POST", "/api/admin/mail-status/unknown"],   // 子路径不在表内
     ["PATCH", "/api/admin/unknown"],
     ["POST", "/api/admin"],
   ]) {
@@ -88,6 +91,23 @@ test("mail-files 挂载路由:adminOrAgent + 扫描管线 + public/PDF-only 语�
   assert.match(src, /visibility: "public"/, "读侧依赖 public 上传通道的匿名可读语义");
   assert.match(src, /file\.type !== "application\/pdf"/, "必须限 PDF");
   assert.ok(src.includes("auditAdminAction"), "挂载动作必须写管理审计");
+});
+
+test("mail-status 写入路由:adminOrAgent + 审计 + 局部更新合并", () => {
+  const src = readFileSync(new URL("../app/api/admin/mail-status/route.ts", import.meta.url), "utf8");
+  assert.ok(src.includes('"adminOrAgent"'), "写守卫必须 adminOrAgent");
+  assert.ok(src.includes("upsertMailStatus"), "必须走共享的 upsert(token 校验/合并/归一化)");
+  assert.ok(src.includes("auditAdminAction"), "进度更新必须写管理审计");
+  assert.match(src, /MAIL_STATUS_TOKEN_PATTERN/, "调用方传入 token 必须过形状校验");
+});
+
+test("评审进度公开读侧:能力 URL 命中才返回、未命中 404、两路 no-store", () => {
+  const src = readFileSync(new URL("../app/email/status/[token]/route.ts", import.meta.url), "utf8");
+  assert.match(src, /MAIL_STATUS_TOKEN_PATTERN\.test\(token\)/, "token 形状必须先校验");
+  assert.ok(src.includes('"cache-control": "no-store"'), "实时进度不得进任何缓存");
+  assert.ok(src.includes("readMailStatus"), "必须按 token 单行读取");
+  assert.match(src, /renderMailStatusPanelPng/, "PNG 表示必须实时渲染而非预生成");
+  assert.ok(src.includes("escapeHtml"), "运营提供的文本必须转义后再进 HTML");
 });
 
 test("同源豁免必须限定 agent 身份(cookie 会话照常校验同源)", () => {

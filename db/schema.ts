@@ -938,6 +938,23 @@ export const uploadedFiles = sqliteTable(
   ],
 );
 
+// 见界结果邮件「评审进行中」的实时状态(token → state_json)。
+// 邮件发出后不可改,收件人每次打开时由 /email/status/<token>(页面)与
+// /email/status/<token>.png(邮件内嵌进度图)现读本表;运营更新一行,
+// 所有已发出的这封邮件的进度展示随之变化。token 是 128bit 随机能力 URL。
+export const mailStatusTokens = sqliteTable(
+  "mail_status_tokens",
+  {
+    token: text("token").primaryKey(),
+    label: text("label").notNull().default(""),
+    stateJson: text("state_json").notNull().default("{}"),
+    updatedBy: text("updated_by").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("mail_status_tokens_updated_idx").on(table.updatedAt)],
+);
+
 export const productHostings = sqliteTable(
   "product_hostings",
   {

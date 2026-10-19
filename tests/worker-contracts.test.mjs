@@ -192,6 +192,7 @@ test("anon-cache: cookie / authorization / no-cache / 排除路径全部 bypass"
     ["admin", new Request(`${ORIGIN}/admin`)],
     ["well-known", new Request(`${ORIGIN}/.well-known/openid-configuration`)],
     ["product-apps", new Request(`${ORIGIN}/product-apps/mori/index.html`)],
+    ["email-status", new Request(`${ORIGIN}/email/status/${"a".repeat(32)}`)],
     ["post", new Request(`${ORIGIN}/cache-test/post`, { method: "POST" })],
   ];
   for (const [label, request] of cases) {

@@ -29,6 +29,9 @@ const ANON_STORED_CACHE_CONTROL = `public, max-age=0, s-maxage=${ANON_PAGE_CACHE
 const ANON_CACHE_EXCLUDED_PREFIXES = [
   "/api/", "/oauth/", "/admin", "/founder", "/studio", "/wallet", "/notifications",
   "/signin", "/signout", "/callback", "/invite", "/product-apps/", "/_vinext/", "/.well-known/",
+  // /email/status/* 是评审进度实时读侧:邮件里嵌的进度图/状态页每次打开都必须是
+  // 当时的值,匿名边缘缓存(哪怕 60s)会让收件人看到过期进度,与功能目的冲突。
+  "/email/status",
 ];
 
 function anonPageCacheEligible(request: Request, url: URL): boolean {
