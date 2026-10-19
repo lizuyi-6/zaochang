@@ -26,7 +26,7 @@ export async function sendSmtpMail(credentials: SmtpCredentials, message: {
   timeoutMs?: number;
 }): Promise<string> {
   const timeoutMs = message.timeoutMs ?? 25_000;
-  const socket = connect(`${credentials.host}:${credentials.port}`, { secureTransport: "on" });
+  const socket = connect(`${credentials.host}:${credentials.port}`, { secureTransport: "on" as const, allowHalfOpen: false });
   const writer = socket.writable.getWriter();
   const reader = socket.readable.getReader();
   const encoder = new TextEncoder();
@@ -91,7 +91,7 @@ export async function sendSmtpMail(credentials: SmtpCredentials, message: {
     ].join("\r\n");
     await writer.write(encoder.encode(wire + "\r\n"));
     const queued = await cmd(null, "250", "queued");
-    await cmd("QUIT", "221").catch(() => "");
+    await cmd("QUIT", "221", "quit").catch(() => "");
     return queued;
   })();
 
