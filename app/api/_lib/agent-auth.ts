@@ -55,6 +55,10 @@ export const AGENT_ADMIN_CAPABILITIES = [
   { method: "POST", pathname: "/api/admin/invitations" },
   { method: "PATCH", pathname: "/api/admin/invitations" },
   { method: "PATCH", pathname: "/api/admin/incubation" },
+  // 见界结果邮件 PDF 回执挂载(运营机器通道 tmp/mail/mount.mjs)。文件仍走
+  // ClamAV 扫描管线、读侧是既有 public 上传通道,此处只开放挂载写入口;
+  // 路由限 PDF + 小时级限流,与"通用 /api/uploads 不给 agent"的边界不冲突。
+  { method: "POST", pathname: "/api/admin/mail-files" },
 ] as const;
 
 // agent 非 GET 请求的放行判定:两张能力表之并集精确命中(method+pathname)。

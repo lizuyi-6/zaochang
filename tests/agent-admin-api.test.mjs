@@ -18,12 +18,13 @@ const same = (list) => JSON.stringify([...list].sort((a, b) => a.pathname.locale
 
 // ---- 能力表内容逐字固定(扩面 = 显式改这里 + 改 agent-auth.ts,评审可见) ----
 
-test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH", () => {
+test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH / mail-files POST", () => {
   assert.equal(same(AGENT_ADMIN_CAPABILITIES), same([
     cap("PATCH", "/api/admin/moderation"),
     cap("POST", "/api/admin/invitations"),
     cap("PATCH", "/api/admin/invitations"),
     cap("PATCH", "/api/admin/incubation"),
+    cap("POST", "/api/admin/mail-files"),
   ]));
 });
 
@@ -41,6 +42,7 @@ test("isAgentWriteAllowed:列名内精确命中(method+pathname 都要匹配)", 
   assert.equal(isAgentWriteAllowed("PATCH", "/api/admin/moderation"), true);
   assert.equal(isAgentWriteAllowed("POST", "/api/admin/invitations"), true);
   assert.equal(isAgentWriteAllowed("PATCH", "/api/admin/incubation"), true);
+  assert.equal(isAgentWriteAllowed("POST", "/api/admin/mail-files"), true);
   assert.equal(isAgentWriteAllowed("POST", "/api/docs"), true);
   assert.equal(isAgentWriteAllowed("PATCH", "/api/products"), false); // method 不匹配
 });
@@ -77,6 +79,15 @@ test("三个 admin 路由接入 adminOrAgent(读 requireAdminOrAgent,写 guardWr
     assert.ok(src.includes('"adminOrAgent"'), `${route}: 写守卫必须 adminOrAgent`);
     assert.ok(!src.includes('"admin"'), `${route}: 不得残留旧 admin 角色`);
   }
+});
+
+test("mail-files 挂载路由:adminOrAgent + 扫描管线 + public/PDF-only 语义不回退", () => {
+  const src = readFileSync(new URL("../app/api/admin/mail-files/route.ts", import.meta.url), "utf8");
+  assert.ok(src.includes('"adminOrAgent"'), "写守卫必须 adminOrAgent");
+  assert.ok(src.includes("storeScannedUpload"), "必须走 ClamAV 扫描管线,不得直写 R2");
+  assert.match(src, /visibility: "public"/, "读侧依赖 public 上传通道的匿名可读语义");
+  assert.match(src, /file\.type !== "application\/pdf"/, "必须限 PDF");
+  assert.ok(src.includes("auditAdminAction"), "挂载动作必须写管理审计");
 });
 
 test("同源豁免必须限定 agent 身份(cookie 会话照常校验同源)", () => {
