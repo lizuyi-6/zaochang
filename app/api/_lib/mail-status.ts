@@ -9,6 +9,16 @@
 
 export const MAIL_STATUS_TOKEN_PATTERN = /^[a-f0-9]{32}$/;
 
+// 管理台进度编辑器的阶段下拉。这里是"常用词表",不是白名单:
+// 状态字段仍接受任意文本(历史值/特殊阶段不会被清掉),界面只负责少打字。
+export const MAIL_STATUS_STAGE_OPTIONS = [
+  "作业评审中",
+  "群面评审中",
+  "终面评审中",
+  "结果整理中",
+  "已完成",
+] as const;
+
 // 场上字段上限:stage/eta 短词,note 一段话;done 钳进 [0,total]。
 const LIMITS = { stage: 40, eta: 40, note: 500, total: 50 } as const;
 

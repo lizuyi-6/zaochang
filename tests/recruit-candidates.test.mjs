@@ -5,6 +5,7 @@ import {
   normalizeRecruitCandidateInput,
   normalizeRecruitCandidatePatch,
   RECRUIT_CANDIDATE_LIMITS,
+  RECRUIT_POSITION_OPTIONS,
   RECRUIT_STAGE_LABELS,
   RECRUIT_STAGES,
 } from "../app/api/_lib/recruit-candidates.ts";
@@ -56,4 +57,12 @@ test("环节白名单与中文标签一一对应", () => {
     assert.ok(RECRUIT_STAGE_LABELS[stage], `${stage} 缺标签`);
   }
   assert.equal(Object.keys(RECRUIT_STAGE_LABELS).length, RECRUIT_STAGES.length);
+});
+
+test("岗位预置选项:与结果邮件原型的角色划分一致,且不构成白名单", () => {
+  assert.deepEqual([...RECRUIT_POSITION_OPTIONS], ["队长 / 项目负责人", "调研", "商业计划书 / 文案", "PPT / 视觉", "技术 / 产品"]);
+  // 下拉只是快捷方式:预置之外的岗位仍可建档(否则历史档案/新岗位会被堵死)。
+  const custom = normalizeRecruitCandidateInput({ name: "李四", email: "li@example.com", position: "前端工程师" });
+  assert.equal(custom.ok, true);
+  assert.equal(custom.value.position, "前端工程师");
 });

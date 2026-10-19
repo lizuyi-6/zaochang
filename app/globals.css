@@ -900,6 +900,7 @@ div.sakura-qr-stage { cursor: default; }
 .admin-token-row:last-child { border-bottom: 0; }
 .admin-token-row .admin-token-fields { display: flex; flex-wrap: wrap; gap: 6px; }
 .admin-token-row .admin-token-fields input, .admin-token-row .admin-token-fields select { max-width: 130px; }
+.admin-token-row .admin-token-fields input[type="date"] { max-width: 160px; }
 .admin-token-row small { color: var(--muted); font-size: 9px; }
 .admin-candidate-stage { max-width: 96px; }
 .admin-record-list > article.is-active { background: var(--paper); box-shadow: inset 2px 0 0 var(--ink); }

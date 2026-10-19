@@ -9,7 +9,13 @@ import {
   mailTemplateMeta,
   renderMailTemplate,
 } from "../../api/_lib/mail-templates";
-import { RECRUIT_STAGE_LABELS, RECRUIT_STAGES, type RecruitStage } from "../../api/_lib/recruit-candidates";
+import { MAIL_STATUS_STAGE_OPTIONS } from "../../api/_lib/mail-status";
+import {
+  RECRUIT_POSITION_OPTIONS,
+  RECRUIT_STAGE_LABELS,
+  RECRUIT_STAGES,
+  type RecruitStage,
+} from "../../api/_lib/recruit-candidates";
 
 export type RecruitCandidate = {
   id: string; name: string; email: string; position: string; stage: RecruitStage;
@@ -50,6 +56,31 @@ const SENDER_STORAGE_KEY = "recruit-sender-fields";
 
 // ———— 进度令牌编辑器:本地草稿 + 保存(局部更新,未动的字段保持原值) ————
 // 行组件以 token+updatedAt 为 key,保存成功后数据变化即重挂载,不需要 effect 同步草稿。
+// 字段全部做成选择/日期选择:值守时点几下就能改完,不用逐字敲。
+const CUSTOM_POSITION = "__custom";
+const POSITION_PRESETS: readonly string[] = RECRUIT_POSITION_OPTIONS;
+const TOTAL_CHOICES = Array.from({ length: 10 }, (_, index) => index + 1);
+
+// 已存文本("10 月 24 日")↔ 日期控件值(yyyy-mm-dd)。解析不了的历史值
+// 原样保留:保存时若没动日期,就把旧文本写回去,不做静默清空。
+function etaToDateInput(eta: string): string {
+  const match = /^(\d{1,2})\s*月\s*(\d{1,2})\s*日$/.exec(eta.trim());
+  if (!match) return "";
+  const now = new Date();
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  let year = now.getFullYear();
+  // 落到半年前的日期视为来年(12 月填 1 月)。
+  if (new Date(year, month - 1, day).getTime() < now.getTime() - 180 * 24 * 3600 * 1000) year += 1;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function dateInputToEta(value: string): string {
+  const [, month, day] = value.split("-");
+  if (!month || !day) return "";
+  return `${Number(month)} 月 ${Number(day)} 日`;
+}
+
 function StatusTokenEditor({ token, busy, onSave, onStatus }: {
   token: MailStatusTokenItem;
   busy: boolean;
@@ -57,13 +88,23 @@ function StatusTokenEditor({ token, busy, onSave, onStatus }: {
   onStatus: (m: string, k: "success" | "error") => void;
 }) {
   const [stage, setStage] = useState(token.state.stage ?? "");
-  const [done, setDone] = useState(String(token.state.done ?? ""));
-  const [total, setTotal] = useState(String(token.state.total ?? ""));
-  const [eta, setEta] = useState(token.state.eta ?? "");
-  const numericTotal = Number(total);
-  const percent = Number.isFinite(numericTotal) && numericTotal > 0 && done !== ""
-    ? Math.min(100, Math.round((Number(done) / numericTotal) * 100))
-    : null;
+  // 数量字段没有"清空"语义(合并补丁只增不减),所以直接给默认值 0/5:
+  // 下拉永远有确定选项,保存后进度图一定有数字。
+  const [done, setDone] = useState(String(token.state.done ?? 0));
+  const [total, setTotal] = useState(String(token.state.total ?? 5));
+  const initialEtaDate = etaToDateInput(token.state.eta ?? "");
+  const [etaDate, setEtaDate] = useState(initialEtaDate);
+  // 阶段词表之外的存量值(老数据/特殊阶段)也要能继续选中,不能被下拉"吃掉"。
+  const stageChoices = stage && !(MAIL_STATUS_STAGE_OPTIONS as readonly string[]).includes(stage)
+    ? [stage, ...MAIL_STATUS_STAGE_OPTIONS]
+    : [...MAIL_STATUS_STAGE_OPTIONS];
+  const totalValue = Math.max(Number(total), 1);
+  const doneChoices = Array.from({ length: totalValue + 1 }, (_, index) => index);
+  if (Number(done) > totalValue) doneChoices.push(Number(done));
+  const percent = Math.min(100, Math.round((Number(done) / totalValue) * 100));
+  const eta = etaDate === initialEtaDate
+    ? (token.state.eta ?? "")
+    : (etaDate ? dateInputToEta(etaDate) : "");
   return <div className="admin-token-row">
     <div>
       <strong>{token.label || "(无标签)"}</strong>
@@ -71,16 +112,29 @@ function StatusTokenEditor({ token, busy, onSave, onStatus }: {
       {percent !== null && <span className="admin-progress-track"><span className="admin-progress-fill" style={{ width: `${percent}%` }} /></span>}
     </div>
     <div className="admin-token-fields">
-      <input aria-label="阶段" placeholder="阶段(如:评委评审中)" value={stage} maxLength={40} onChange={(event) => setStage(event.target.value)} />
-      <input aria-label="已评份数" placeholder="已评" inputMode="numeric" value={done} onChange={(event) => setDone(event.target.value.replace(/[^0-9]/g, ""))} />
-      <input aria-label="总份数" placeholder="总数" inputMode="numeric" value={total} onChange={(event) => setTotal(event.target.value.replace(/[^0-9]/g, ""))} />
-      <input aria-label="预计日期" placeholder="预计(如:本周五)" value={eta} maxLength={40} onChange={(event) => setEta(event.target.value)} />
+      <select aria-label="阶段" value={stage} onChange={(event) => setStage(event.target.value)}>
+        <option value="">阶段未设置</option>
+        {stageChoices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}
+      </select>
+      <select aria-label="已评份数" value={done} onChange={(event) => setDone(event.target.value)}>
+        {doneChoices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}
+      </select>
+      <select aria-label="总份数" value={total} onChange={(event) => {
+        const next = event.target.value;
+        setTotal(next);
+        if (Number(done) > Number(next)) setDone(next);
+      }}>
+        {TOTAL_CHOICES.map((choice) => <option key={choice} value={choice}>{choice}</option>)}
+        {totalValue > TOTAL_CHOICES[TOTAL_CHOICES.length - 1] && <option value={total}>{total}</option>}
+      </select>
+      <input type="date" aria-label="预计日期" value={etaDate} onChange={(event) => setEtaDate(event.target.value)} />
     </div>
     <div className="admin-member-actions">
       <button type="button" disabled={busy} onClick={() => onSave(token.token, {
-        stage, eta,
-        ...(done !== "" ? { done: Number(done) } : {}),
-        ...(total !== "" ? { total: Number(total) } : {}),
+        stage,
+        eta,
+        total: Number(total),
+        done: Number(done),
       })}><Save size={14} /> 保存进度</button>
       <button type="button" onClick={() => void copyText(token.pageUrl, onStatus, "进度页链接")}><Copy size={14} /> 链接</button>
       <a className="admin-inline-link" href={token.pageUrl} target="_blank" rel="noreferrer"><ExternalLink size={13} /> 打开</a>
@@ -106,6 +160,8 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
   // 建档草稿
   const [draft, setDraft] = useState({ name: "", email: "", position: "", note: "" });
   const [draftToken, setDraftToken] = useState(true);
+  // 岗位默认走预置角色下拉;选「自定义…」才出现输入框(岗位本身仍是自由文本)。
+  const [customPosition, setCustomPosition] = useState(false);
 
   // 邮件面板(全部作用于选中的候选人)
   const [templateId, setTemplateId] = useState("E0");
@@ -222,6 +278,7 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
         body: JSON.stringify({ ...draft, createStatusToken: draftToken }),
       });
       setDraft({ name: "", email: "", position: "", note: "" });
+      setCustomPosition(false);
       await loadAll();
       selectCandidate(result.candidate);
       onStatus(draftToken ? `已为 ${result.candidate.name} 建档并选中,个人进度令牌已一并创建。` : `已为 ${result.candidate.name} 建档并选中。`, "success");
@@ -335,7 +392,27 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
       <form className="admin-recruit-form" onSubmit={(event) => { event.preventDefault(); void createCandidate(); }}>
         <label>姓名<input value={draft.name} maxLength={40} required onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
         <label>邮箱<input type="email" value={draft.email} maxLength={120} required onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))} /></label>
-        <label>岗位<input value={draft.position} maxLength={40} required placeholder="如:前端工程师" onChange={(event) => setDraft((current) => ({ ...current, position: event.target.value }))} /></label>
+        <label>岗位
+          <select
+            aria-label="岗位"
+            value={customPosition ? CUSTOM_POSITION : (POSITION_PRESETS.includes(draft.position) ? draft.position : "")}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value === CUSTOM_POSITION) {
+                setCustomPosition(true);
+                if (POSITION_PRESETS.includes(draft.position)) setDraft((current) => ({ ...current, position: "" }));
+                return;
+              }
+              setCustomPosition(false);
+              setDraft((current) => ({ ...current, position: value }));
+            }}
+          >
+            <option value="">请选择岗位</option>
+            {RECRUIT_POSITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            <option value={CUSTOM_POSITION}>自定义…</option>
+          </select>
+        </label>
+        {customPosition && <label>自定义岗位<input value={draft.position} maxLength={40} required placeholder="如:前端工程师" onChange={(event) => setDraft((current) => ({ ...current, position: event.target.value }))} /></label>}
         <label>备注<input value={draft.note} maxLength={500} onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))} /></label>
         <label className="admin-recruit-check"><input type="checkbox" checked={draftToken} onChange={(event) => setDraftToken(event.target.checked)} /> 同时创建进度令牌</label>
         <button type="submit" disabled={busyLocal || !draft.name.trim() || !draft.email.trim() || !draft.position.trim()}><UserPlus size={14} /> 建档并选中</button>
@@ -409,7 +486,10 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
               {preview && "error" in preview && <p className="admin-status admin-status-error">{preview.error}</p>}
               {preview && !("error" in preview) && <>
                 <p className="admin-muted">主题:{preview.subject || "(空)"} · 收件人:{selected.email}</p>
-                <div className="admin-mail-preview"><iframe title="邮件预览" sandbox="" srcDoc={preview.html} /></div>
+                {/* key 绑定令牌更新时间:进度图 URL 不变、内容随保存变化,srcdoc 字符串不变时
+                    React 不重设属性、iframe 不重载,图会一直停在建档时的空状态。保存进度后
+                    updatedAt 变化 → 重挂载 → 重新取图,预览始终反映最新进度。 */}
+                <div className="admin-mail-preview"><iframe key={selectedToken ? `${selectedToken.token}:${selectedToken.updatedAt}` : "no-token"} title="邮件预览" sandbox="" srcDoc={preview.html} /></div>
               </>}
               {!preview && <p className="admin-muted">正在读取模板…</p>}
             </div>

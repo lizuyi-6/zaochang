@@ -15,6 +15,16 @@ export const RECRUIT_STAGE_LABELS: Record<RecruitStage, string> = {
 
 export const RECRUIT_CANDIDATE_LIMITS = { name: 40, email: 120, position: 40, note: 500 } as const;
 
+// 岗位下拉的预置选项:与结果邮件原型里的角色划分一致。
+// 只负责"少打字";岗位本身仍是自由文本(选「自定义」手填),不在此处收窄取值。
+export const RECRUIT_POSITION_OPTIONS = [
+  "队长 / 项目负责人",
+  "调研",
+  "商业计划书 / 文案",
+  "PPT / 视觉",
+  "技术 / 产品",
+] as const;
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type RecruitCandidateInput = {
