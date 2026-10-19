@@ -901,10 +901,10 @@ div.sakura-qr-stage { cursor: default; }
 .admin-token-row .admin-token-fields { display: flex; flex-wrap: wrap; gap: 6px; }
 .admin-token-row .admin-token-fields input, .admin-token-row .admin-token-fields select { max-width: 130px; }
 .admin-token-row .admin-token-fields input[type="date"] { max-width: 160px; }
-.admin-feedback-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.admin-chip { background: var(--paper) !important; border: 1px solid var(--line) !important; border-radius: 999px !important; color: var(--muted) !important; font-size: 10px !important; line-height: 1.5 !important; padding: 3px 9px !important; text-align: left !important; }
-.admin-chip:hover { border-color: var(--ink) !important; color: var(--ink) !important; }
-.admin-chip.is-neg { border-style: dashed !important; }
+.admin-feedback-block { display: grid; gap: 6px; }
+.admin-feedback-label { color: var(--muted); font-size: 10px; }
+.admin-feedback-selects { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-feedback-selects label { color: var(--muted); display: grid; font-size: 10px; gap: 4px; }
 .admin-token-row small { color: var(--muted); font-size: 9px; }
 .admin-candidate-stage { max-width: 96px; }
 .admin-record-list > article.is-active { background: var(--paper); box-shadow: inset 2px 0 0 var(--ink); }

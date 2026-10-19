@@ -47,10 +47,20 @@ test("岗位是下拉选择(预置角色 + 自定义入口),不是纯输入框",
 test("自动填充接入:岗位段落/人才库段落来自共享函数,且手填值优先", () => {
   assert.match(src, /autoFillValuesForTemplate\(\{ position: selected\.position, talent: talentChoice \}\)/,
     "岗位段落必须按候选人岗位自动带出");
-  assert.match(src, /\{ \.\.\.signature, \.\.\.autoValues, \.\.\.values \}/,
+  assert.match(src, /\.\.\.signature,[\s\S]{0,80}?\.\.\.autoValues,[\s\S]{0,80}?\.\.\.values/,
     "合并顺序必须是 签名兜底 < 自动填充 < 手填(运营改写优先)");
   assert.match(src, /ROLE_PLACEHOLDER_FIELDS\[key\]/, "岗位段落占位符要标注自动带出");
   assert.match(src, /aria-label="人才库回执"/, "人才库段落要有 A/B 回执选择");
   assert.match(src, /feedbackLibraryFor\(selected\.position, templateId\)/, "反馈句库要按岗位/邮件类型取");
-  assert.match(src, /admin-chip/, "反馈句必须可点选追加");
+});
+
+test("反馈是选择或自定义:肯定/改进各一个下拉 + 自定义补充,合成后才参与渲染", () => {
+  assert.match(src, /aria-label="反馈肯定句"/, "肯定句必须是下拉选择");
+  assert.match(src, /aria-label="反馈改进句"/, "改进句必须是下拉选择");
+  assert.match(src, /自定义补充/, "必须保留自定义书写入口(只加不删)");
+  assert.match(src, /feedbackText = `\$\{feedbackPicks\.pos\}\$\{feedbackPicks\.neg\}\$\{feedbackPicks\.custom\}`/,
+    "成稿必须由三段按序拼成");
+  assert.match(src, /\.\.\.\(feedbackText \? \{ 反馈: feedbackText \} : \{\}\)/,
+    "三段全空时不写反馈键,缺项检查才能拦住发送");
+  assert.match(src, /setFeedbackPicks\(\{ pos: "", neg: "", custom: "" \}\)/, "换候选人要清空反馈选择");
 });

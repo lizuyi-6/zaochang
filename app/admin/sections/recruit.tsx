@@ -180,6 +180,9 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
   const [attachLabel, setAttachLabel] = useState("下载回执 PDF");
   const [withStatus, setWithStatus] = useState(false);
   const [talentChoice, setTalentChoice] = useState<RecruitTalentChoice | "">("");
+  // 反馈做成"选一句肯定 + 选一句改进 + 自定义补充":值守时点两下就成稿,
+  // 需要贴合这份作业再改写时,直接写在自定义里(两者会拼在一起)。
+  const [feedbackPicks, setFeedbackPicks] = useState({ pos: "", neg: "", custom: "" });
   const [confirmingSend, setConfirmingSend] = useState(false);
   const [allowResend, setAllowResend] = useState(false);
 
@@ -253,7 +256,14 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
     () => selected ? autoFillValuesForTemplate({ position: selected.position, talent: talentChoice }) : {},
     [selected, talentChoice],
   );
-  const mergedValues = useMemo(() => ({ ...signature, ...autoValues, ...values }), [signature, autoValues, values]);
+  // 反馈由三个选择合成;三者全空时不写这个键(让缺项检查如实拦住发送)。
+  const feedbackText = `${feedbackPicks.pos}${feedbackPicks.neg}${feedbackPicks.custom}`;
+  const mergedValues = useMemo<Record<string, string>>(() => ({
+    ...signature,
+    ...autoValues,
+    ...values,
+    ...(feedbackText ? { 反馈: feedbackText } : {}),
+  }), [signature, autoValues, values, feedbackText]);
 
   const preview = useMemo(() => {
     if (!html) return null;
@@ -277,6 +287,7 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
     setConfirmingSend(false);
     setAllowResend(false);
     setTalentChoice("");
+    setFeedbackPicks({ pos: "", neg: "", custom: "" });
     setValues((current) => ({
       ...Object.fromEntries(SENDER_KEYS.flatMap((key) => current[key] ? [[key, current[key]]] : [])),
       姓名: candidate.name,
@@ -478,6 +489,28 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
                   const roleField = ROLE_PLACEHOLDER_FIELDS[key];
                   const autoText = autoValues[key];
                   const feedbackLibrary = key === "反馈" && selected ? feedbackLibraryFor(selected.position, templateId) : null;
+                  if (key === "反馈") return <div key={key} className="admin-feedback-block is-wide">
+                    <small className="admin-feedback-label">反馈{selected ? `(按 ${selected.position} 的句库)` : ""}</small>
+                    <div className="admin-feedback-selects">
+                      <label>肯定一句
+                        <select aria-label="反馈肯定句" value={feedbackPicks.pos} onChange={(event) => setFeedbackPicks((current) => ({ ...current, pos: event.target.value }))}>
+                          <option value="">未选</option>
+                          {(feedbackLibrary?.pos ?? []).map((sentence) => <option key={sentence} value={sentence}>{sentence}</option>)}
+                        </select>
+                      </label>
+                      <label>改进一句
+                        <select aria-label="反馈改进句" value={feedbackPicks.neg} onChange={(event) => setFeedbackPicks((current) => ({ ...current, neg: event.target.value }))}>
+                          <option value="">未选</option>
+                          {(feedbackLibrary?.neg ?? []).map((sentence) => <option key={sentence} value={sentence}>{sentence}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                    <label>自定义补充(可留空;要整段手写就选两个「未选」写在这里)
+                      <textarea rows={2} value={feedbackPicks.custom} onChange={(event) => setFeedbackPicks((current) => ({ ...current, custom: event.target.value }))} />
+                    </label>
+                    {!feedbackLibrary && <small className="admin-muted">这个岗位没有预置句库,直接把整段反馈写进上面的自定义。</small>}
+                    {feedbackText && <small className="admin-muted">成稿:{feedbackText}</small>}
+                  </div>;
                   return <label key={key} className={key.length > 12 ? "is-wide" : ""}>{key}{signature[key] !== undefined ? ` (签名兜底:${signature[key]})` : ""}
                     {roleField && <small className="admin-muted">{autoText ? "已按岗位自动带出,可直接改写" : "岗位未匹配预置角色,请手填"}</small>}
                     {key === TALENT_PLACEHOLDER && <select
@@ -497,23 +530,9 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
                       <option value="A">A:同意加入人才库</option>
                       <option value="B">B:未同意,删除报名信息</option>
                     </select>}
-                    {key.length > 12 || key === "反馈"
+                    {key.length > 12
                       ? <textarea rows={3} value={mergedValues[key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))} />
                       : <input value={mergedValues[key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))} />}
-                    {key === "反馈" && (feedbackLibrary
-                      ? <span className="admin-feedback-chips">
-                          {[
-                            { label: "肯定", sentences: feedbackLibrary.pos, tone: "" },
-                            { label: "改进", sentences: feedbackLibrary.neg, tone: "is-neg" },
-                          ].map((group) => group.sentences.map((sentence) => <button
-                            key={`${group.label}:${sentence}`}
-                            type="button"
-                            className={`admin-chip${group.tone ? ` ${group.tone}` : ""}`}
-                            title={`追加到反馈(${group.label})`}
-                            onClick={() => setValues((current) => ({ ...current, 反馈: `${current["反馈"] ?? ""}${sentence}` }))}
-                          >{sentence}</button>))}
-                        </span>
-                      : <small className="admin-muted">先给候选人选预置岗位,这里会出现可直接点选的反馈句。</small>)}
                   </label>;
                 })}
                 <label className="is-wide">附件链接(可选,只认 aetherstudio.top;回执 PDF 用 mount.mjs 挂载)<input value={attachUrl} placeholder="https://aetherstudio.top/api/uploads/….pdf" onChange={(event) => setAttachUrl(event.target.value)} /></label>

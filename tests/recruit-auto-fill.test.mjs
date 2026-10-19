@@ -31,14 +31,33 @@ test("roleForPosition:名字精确匹配(容忍空白),自定义岗位返回 nul
   assert.equal(roleForPosition(""), null);
 });
 
-test("岗位段落自动带出:群面关注点/录取职责/等待期建议随岗位变化", () => {
+test("岗位段落自动带出:群面关注点/录取职责/候补等待期建议随岗位变化", () => {
   const captain = autoFillValuesForTemplate({ position: "队长 / 项目负责人" });
   assert.equal(captain["岗位段落：群面关注点"], RECRUIT_ROLES.captain.focus);
   assert.equal(captain["岗位段落：录取后职责"], RECRUIT_ROLES.captain.duty);
-  assert.equal(captain["等待期建议"], RECRUIT_ROLES.captain.wait);
+  assert.equal(captain["岗位段落：候补等待期建议"], RECRUIT_ROLES.captain.wait);
   const tech = autoFillValuesForTemplate({ position: "技术 / 产品" });
   assert.equal(tech["岗位段落：群面关注点"], RECRUIT_ROLES.tech.focus);
   assert.notEqual(tech["岗位段落：群面关注点"], captain["岗位段落：群面关注点"]);
+});
+
+test("E8 的等待期建议用 reviewWait:不提群面(同学对比邮件会提前泄露结果)", () => {
+  for (const key of RECRUIT_ROLE_KEYS) {
+    const role = RECRUIT_ROLES[key];
+    assert.ok(role.reviewWait.includes("不需要提交"), `${key}: E8 建议应说明不需提交`);
+    assert.ok(!role.reviewWait.includes("群面"), `${key}: E8 建议不得提群面`);
+    assert.ok(!role.reviewWait.includes("递补"), `${key}: E8 建议不得提递补`);
+  }
+  const values = autoFillValuesForTemplate({ position: "调研" });
+  assert.equal(values["等待期建议"], RECRUIT_ROLES.research.reviewWait);
+  assert.notEqual(values["等待期建议"], RECRUIT_ROLES.research.wait);
+});
+
+test("E2 模板恢复了候补等待期建议段落;E3 恢复了未通过后的建议段落(只加不删)", () => {
+  for (const [id, key] of [["E2", "岗位段落：候补等待期建议"], ["E3", "岗位段落：未通过后的建议"]]) {
+    const html = readFileSync(new URL(`../public/mail-templates/${id}.html`, import.meta.url), "utf8");
+    assert.ok(extractMailTemplatePlaceholders(html).includes(key), `${id} 缺 ${key}`);
+  }
 });
 
 test("自定义岗位不产生自动值(占位符留给运营手填)", () => {
