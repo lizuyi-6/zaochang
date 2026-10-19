@@ -1,5 +1,6 @@
 // 见界创赛选拔候选人的校验纯逻辑(无 cloudflare/D1 依赖,Node 测试直接断言)。
 // 存储见 db/schema.ts recruit_candidates;读写路由 app/api/admin/recruit-candidates/route.ts。
+import { RECRUIT_ROLE_KEYS, RECRUIT_ROLES } from "./recruit-roles.ts";
 
 export const RECRUIT_STAGES = ["applied", "homework", "group", "final", "admitted", "rejected"] as const;
 export type RecruitStage = (typeof RECRUIT_STAGES)[number];
@@ -15,15 +16,9 @@ export const RECRUIT_STAGE_LABELS: Record<RecruitStage, string> = {
 
 export const RECRUIT_CANDIDATE_LIMITS = { name: 40, email: 120, position: 40, note: 500 } as const;
 
-// 岗位下拉的预置选项:与结果邮件原型里的角色划分一致。
+// 岗位下拉的预置选项:直接取角色词表的显示名(单一事实来源 recruit-roles.ts)。
 // 只负责"少打字";岗位本身仍是自由文本(选「自定义」手填),不在此处收窄取值。
-export const RECRUIT_POSITION_OPTIONS = [
-  "队长 / 项目负责人",
-  "调研",
-  "商业计划书 / 文案",
-  "PPT / 视觉",
-  "技术 / 产品",
-] as const;
+export const RECRUIT_POSITION_OPTIONS: readonly string[] = RECRUIT_ROLE_KEYS.map((key) => RECRUIT_ROLES[key].name);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

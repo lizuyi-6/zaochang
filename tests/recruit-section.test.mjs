@@ -43,3 +43,14 @@ test("岗位是下拉选择(预置角色 + 自定义入口),不是纯输入框",
   assert.match(src, /CUSTOM_POSITION\}>自定义…/, "必须保留自定义岗位入口(只加不删)");
   assert.match(src, /自定义岗位<input/, "自定义岗位仍可手填");
 });
+
+test("自动填充接入:岗位段落/人才库段落来自共享函数,且手填值优先", () => {
+  assert.match(src, /autoFillValuesForTemplate\(\{ position: selected\.position, talent: talentChoice \}\)/,
+    "岗位段落必须按候选人岗位自动带出");
+  assert.match(src, /\{ \.\.\.signature, \.\.\.autoValues, \.\.\.values \}/,
+    "合并顺序必须是 签名兜底 < 自动填充 < 手填(运营改写优先)");
+  assert.match(src, /ROLE_PLACEHOLDER_FIELDS\[key\]/, "岗位段落占位符要标注自动带出");
+  assert.match(src, /aria-label="人才库回执"/, "人才库段落要有 A/B 回执选择");
+  assert.match(src, /feedbackLibraryFor\(selected\.position, templateId\)/, "反馈句库要按岗位/邮件类型取");
+  assert.match(src, /admin-chip/, "反馈句必须可点选追加");
+});

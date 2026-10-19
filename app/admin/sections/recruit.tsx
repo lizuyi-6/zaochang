@@ -11,6 +11,15 @@ import {
 } from "../../api/_lib/mail-templates";
 import { MAIL_STATUS_STAGE_OPTIONS } from "../../api/_lib/mail-status";
 import {
+  autoFillValuesForTemplate,
+  feedbackLibraryFor,
+  RECRUIT_TALENT,
+  ROLE_PLACEHOLDER_FIELDS,
+  roleForPosition,
+  TALENT_PLACEHOLDER,
+  type RecruitTalentChoice,
+} from "../../api/_lib/recruit-roles";
+import {
   RECRUIT_POSITION_OPTIONS,
   RECRUIT_STAGE_LABELS,
   RECRUIT_STAGES,
@@ -172,6 +181,7 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
   const [attachUrl, setAttachUrl] = useState("");
   const [attachLabel, setAttachLabel] = useState("下载回执 PDF");
   const [withStatus, setWithStatus] = useState(false);
+  const [talentChoice, setTalentChoice] = useState<RecruitTalentChoice | "">("");
   const [confirmingSend, setConfirmingSend] = useState(false);
   const [allowResend, setAllowResend] = useState(false);
 
@@ -239,7 +249,13 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
   const meta = mailTemplateMeta(templateId) ?? MAIL_TEMPLATE_CATALOG[0];
   const html = templateHtml[templateId] ?? "";
   const placeholders = useMemo(() => html ? extractMailTemplatePlaceholders(html) : [], [html]);
-  const mergedValues = useMemo(() => ({ ...signature, ...values }), [signature, values]);
+  // 自动填充(原型里的 ROLES/FEEDBACK/TALENT):岗位段落按候选人岗位带出,
+  // 人才库段落按 A/B 回执带出。只在渲染时合并——手填值永远优先,不会覆盖运营的改写。
+  const autoValues = useMemo(
+    () => selected ? autoFillValuesForTemplate({ position: selected.position, talent: talentChoice }) : {},
+    [selected, talentChoice],
+  );
+  const mergedValues = useMemo(() => ({ ...signature, ...autoValues, ...values }), [signature, autoValues, values]);
 
   const preview = useMemo(() => {
     if (!html) return null;
@@ -257,10 +273,12 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
 
   // 选中候选人 = 之后所有操作的作用对象:邮件收件人、姓名/岗位占位符、
   // 进度令牌一并带入。换候选人时清掉上一个人的内容型占位符(反馈等),发件人字段保留。
+  // 岗位段落由 autoValues 按新候选人的岗位重新带出,上一个人的手改写不会残留。
   const selectCandidate = useCallback((candidate: RecruitCandidate) => {
     setSelectedId((current) => current === candidate.id ? "" : candidate.id);
     setConfirmingSend(false);
     setAllowResend(false);
+    setTalentChoice("");
     setValues((current) => ({
       ...Object.fromEntries(SENDER_KEYS.flatMap((key) => current[key] ? [[key, current[key]]] : [])),
       姓名: candidate.name,
@@ -458,11 +476,48 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
               <div className="admin-mail-fields">
                 <label>主题后缀(试发用)<input value={subjectSuffix} maxLength={20} placeholder="如:(试发)" onChange={(event) => setSubjectSuffix(event.target.value)} /></label>
                 {meta.hasStatusBlock && <label className="admin-recruit-check"><input type="checkbox" checked={withStatus && Boolean(selectedToken)} disabled={!selectedToken} onChange={(event) => setWithStatus(event.target.checked)} /> 附实时进度块{selectedToken ? "" : "(需先创建令牌)"}</label>}
-                {placeholders.map((key) => <label key={key} className={key.length > 12 ? "is-wide" : ""}>{key}{signature[key] !== undefined ? ` (签名兜底:${signature[key]})` : ""}
-                  {key.length > 12 || key === "反馈"
-                    ? <textarea rows={3} value={values[key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))} />
-                    : <input value={values[key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))} />}
-                </label>)}
+                {placeholders.map((key) => {
+                  const roleField = ROLE_PLACEHOLDER_FIELDS[key];
+                  const autoText = autoValues[key];
+                  const feedbackLibrary = key === "反馈" && selected ? feedbackLibraryFor(selected.position, templateId) : null;
+                  return <label key={key} className={key.length > 12 ? "is-wide" : ""}>{key}{signature[key] !== undefined ? ` (签名兜底:${signature[key]})` : ""}
+                    {roleField && <small className="admin-muted">{autoText ? "已按岗位自动带出,可直接改写" : "岗位未匹配预置角色,请手填"}</small>}
+                    {key === TALENT_PLACEHOLDER && <select
+                      aria-label="人才库回执"
+                      value={talentChoice}
+                      onChange={(event) => {
+                        setTalentChoice(event.target.value as RecruitTalentChoice | "");
+                        // 切换回执即清掉这一段的手改写,让新的 A/B 段落生效。
+                        setValues((current) => {
+                          const next = { ...current };
+                          delete next[key];
+                          return next;
+                        });
+                      }}
+                    >
+                      <option value="">未选</option>
+                      <option value="A">A:同意加入人才库</option>
+                      <option value="B">B:未同意,删除报名信息</option>
+                    </select>}
+                    {key.length > 12 || key === "反馈"
+                      ? <textarea rows={3} value={mergedValues[key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))} />
+                      : <input value={mergedValues[key] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))} />}
+                    {key === "反馈" && (feedbackLibrary
+                      ? <span className="admin-feedback-chips">
+                          {[
+                            { label: "肯定", sentences: feedbackLibrary.pos, tone: "" },
+                            { label: "改进", sentences: feedbackLibrary.neg, tone: "is-neg" },
+                          ].map((group) => group.sentences.map((sentence) => <button
+                            key={`${group.label}:${sentence}`}
+                            type="button"
+                            className={`admin-chip${group.tone ? ` ${group.tone}` : ""}`}
+                            title={`追加到反馈(${group.label})`}
+                            onClick={() => setValues((current) => ({ ...current, 反馈: `${current["反馈"] ?? ""}${sentence}` }))}
+                          >{sentence}</button>))}
+                        </span>
+                      : <small className="admin-muted">先给候选人选预置岗位,这里会出现可直接点选的反馈句。</small>)}
+                  </label>;
+                })}
                 <label className="is-wide">附件链接(可选,只认 aetherstudio.top;回执 PDF 用 mount.mjs 挂载)<input value={attachUrl} placeholder="https://aetherstudio.top/api/uploads/….pdf" onChange={(event) => setAttachUrl(event.target.value)} /></label>
                 {attachUrl.trim() && <label>附件按钮文字<input value={attachLabel} maxLength={20} onChange={(event) => setAttachLabel(event.target.value)} /></label>}
               </div>
