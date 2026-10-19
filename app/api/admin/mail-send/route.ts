@@ -33,16 +33,20 @@ export async function POST(request: Request) {
     const meta = mailTemplateMeta(typeof input.template === "string" ? input.template : "");
     if (!meta) return Response.json({ error: "unknown_template" }, { status: 400 });
 
-    const origin = new URL(request.url).origin;
-    const [templateHtml, signature] = await Promise.all([
-      fetch(`${origin}/mail-templates/${meta.id}`).then((response) => {
-        if (!response.ok) throw new Error(`template_fetch_${response.status}`);
-        return response.text();
-      }),
-      fetch(`${origin}/mail-templates/signature.json`)
-        .then((response) => response.ok ? response.json() as Promise<Record<string, unknown>> : {})
-        .catch(() => ({}) as Record<string, unknown>),
+    // 模板/签名走 ASSETS binding 直读(不经公网自回环子请求——同域自 fetch 在
+    // Workers 里会重新进 Worker 管线,实测 500)。.html 字面路径直取文件,无跳转歧义。
+    const assets = (env as unknown as { ASSETS?: Fetcher }).ASSETS;
+    if (!assets) return Response.json({ error: "template_unavailable" }, { status: 503 });
+    const assetUrl = (path: string) => new Request(`${new URL(request.url).origin}${path}`);
+    const [templateResponse, signatureResponse] = await Promise.all([
+      assets.fetch(assetUrl(`/mail-templates/${meta.id}.html`)),
+      assets.fetch(assetUrl("/mail-templates/signature.json")),
     ]);
+    if (!templateResponse.ok) return Response.json({ error: "template_unavailable" }, { status: 503 });
+    const templateHtml = await templateResponse.text();
+    const signature = signatureResponse.ok
+      ? await signatureResponse.json().catch(() => ({})) as Record<string, unknown>
+      : {} as Record<string, unknown>;
     // 签名兜底在下、调用方值在上(同名覆盖),与 send.mjs 合并顺序一致;
     // 非字符串值一律丢弃,模板替换只吃字符串。
     const provided = (typeof input.values === "object" && input.values ? input.values : {}) as Record<string, unknown>;

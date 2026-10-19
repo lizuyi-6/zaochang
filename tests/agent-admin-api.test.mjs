@@ -138,6 +138,7 @@ test("mail-send 路由:一人一封去重 + 共享渲染 + 凭据 fail-closed + 
   assert.ok(src.includes("auditAdminAction"), "发送必须写管理审计");
   assert.match(src, /UPDATE recruit_candidates/, "带 candidateId 必须联动推进环节");
   assert.match(src, /rate: \{ bucket: "mail-send"/, "发送必须单独限流桶");
+  assert.ok(src.includes("assets.fetch"), "模板必须走 ASSETS binding 直读(同域自 fetch 会重进 Worker 管线)");
 });
 
 test("mail-send SMTP 库:续行读取 + 凭据不进错误 + 超时兜底", () => {
