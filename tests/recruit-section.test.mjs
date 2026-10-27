@@ -64,3 +64,21 @@ test("反馈是选择或自定义:肯定/改进各一个下拉 + 自定义补充
     "三段全空时不写反馈键,缺项检查才能拦住发送");
   assert.match(src, /setFeedbackPicks\(\{ pos: "", neg: "", custom: "" \}\)/, "换候选人要清空反馈选择");
 });
+
+test("归档:列表默认只看在招,「显示已归档」切换可见,归档只隐藏不删除", () => {
+  assert.match(src, /visibleCandidates = showArchived \? candidates : candidates\.filter\(\(candidate\) => !candidate\.archivedAt\)/,
+    "默认视图必须过滤掉 archivedAt 非空的候选人");
+  assert.match(src, /显示已归档\(共 \$\{archivedCount\} 人\)/, "有归档时要提供展开入口并显示人数");
+  assert.match(src, /<Archive size=\{13\} \/> 归档/, "在招行必须有归档按钮");
+  assert.match(src, /<ArchiveRestore size=\{13\} \/> 恢复/, "归档行必须有恢复按钮");
+  assert.match(src, /archived: true/, "归档走 PATCH archived 布尔");
+  assert.match(src, /archived: false/, "恢复走 PATCH archived 布尔");
+});
+
+test("归档的安全边界:归档选中人先取消选中;归档行不可选中、无环节下拉;工作台不作用于归档人", () => {
+  assert.match(src, /setSelectedId\(\(current\) => \(current === candidate\.id \? "" : current\)\)/,
+    "归档当前选中人必须先清空选中,工作台不能继续作用于 TA");
+  assert.match(src, /\{selected && !selected\.archivedAt && <section className="admin-panel"/,
+    "归档候选人不得进入操作工作台(发信/进度调控)");
+  assert.match(src, /!isArchived && <>/, "归档行不渲染环节下拉与归档按钮");
+});

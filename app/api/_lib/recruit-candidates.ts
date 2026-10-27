@@ -52,12 +52,13 @@ export function normalizeRecruitCandidateInput(
 
 // 局部更新(PATCH):只校验带来的字段;环节单改很常见(推进/淘汰)。
 // statusToken 是特例:把候选人绑到既有进度令牌(32 位十六进制),传 null 解绑。
+// archived 也是特例:布尔,归档(true)/恢复(false),路由层换算成 archived_at。
 export function normalizeRecruitCandidatePatch(
   input: unknown,
-): { ok: true; patch: Partial<RecruitCandidateInput> & { statusToken?: string | null } } | { ok: false; error: string } {
+): { ok: true; patch: Partial<RecruitCandidateInput> & { statusToken?: string | null; archived?: boolean } } | { ok: false; error: string } {
   if (!input || typeof input !== "object") return { ok: false, error: "invalid_body" };
   const raw = input as Record<string, unknown>;
-  const patch: Partial<RecruitCandidateInput> & { statusToken?: string | null } = {};
+  const patch: Partial<RecruitCandidateInput> & { statusToken?: string | null; archived?: boolean } = {};
   if ("name" in raw) {
     const name = typeof raw.name === "string" ? raw.name.trim() : "";
     if (!name || name.length > RECRUIT_CANDIDATE_LIMITS.name) return { ok: false, error: "invalid_name" };
@@ -90,6 +91,11 @@ export function normalizeRecruitCandidatePatch(
       return { ok: false, error: "invalid_status_token" };
     }
     patch.statusToken = token;
+  }
+  if ("archived" in raw) {
+    // 布尔白名单:字符串 "true"/数字 1 都不算——机器通道传错类型要炸出来,不能静默归档。
+    if (typeof raw.archived !== "boolean") return { ok: false, error: "invalid_archived" };
+    patch.archived = raw.archived;
   }
   return { ok: true, patch };
 }

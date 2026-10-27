@@ -52,6 +52,20 @@ test("局部更新 statusToken:32 位十六进制绑定、null 解绑、其它�
   }
 });
 
+test("局部更新 archived:严格布尔(归档/恢复);字符串/数字/null 一律拒,不带该键则不影响", () => {
+  assert.deepEqual(normalizeRecruitCandidatePatch({ archived: true }).patch, { archived: true });
+  assert.deepEqual(normalizeRecruitCandidatePatch({ archived: false }).patch, { archived: false });
+  // 机器通道传错类型必须炸出稳定错误码,不能静默归档/漏归档。
+  for (const bad of ["true", "false", 1, 0, null]) {
+    assert.equal(normalizeRecruitCandidatePatch({ archived: bad }).error, "invalid_archived", String(bad));
+  }
+  // 不带 archived 的老调用不受影响(空 patch/纯 stage 推进都不出现该键)。
+  assert.ok(!("archived" in normalizeRecruitCandidatePatch({ stage: "group" }).patch));
+  assert.ok(!("archived" in normalizeRecruitCandidatePatch({}).patch));
+  // 可与其它字段混合:一次调用既推进又归档是合法输入。
+  assert.deepEqual(normalizeRecruitCandidatePatch({ stage: "rejected", archived: true }).patch, { stage: "rejected", archived: true });
+});
+
 test("环节白名单与中文标签一一对应", () => {
   for (const stage of RECRUIT_STAGES) {
     assert.ok(RECRUIT_STAGE_LABELS[stage], `${stage} 缺标签`);

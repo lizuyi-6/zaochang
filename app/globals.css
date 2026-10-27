@@ -908,6 +908,8 @@ div.sakura-qr-stage { cursor: default; }
 .admin-token-row small { color: var(--muted); font-size: 9px; }
 .admin-candidate-stage { max-width: 96px; }
 .admin-record-list > article.is-active { background: var(--paper); box-shadow: inset 2px 0 0 var(--ink); }
+.admin-record-list > article.is-archived { opacity: 0.6; }
+.admin-record-list > article.is-archived .admin-inline-link { font-style: italic; }
 .admin-panel section h3 { font-size: 13px; margin: 0 0 8px; }
 @media (max-width: 1020px) {
   .admin-recruit-two-col { grid-template-columns: 1fr; }

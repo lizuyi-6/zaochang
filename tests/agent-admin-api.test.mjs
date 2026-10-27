@@ -124,6 +124,10 @@ test("recruit-candidates 路由:adminOrAgent + 校验纯逻辑 + 审计;无 DELE
   assert.ok(src.includes("auditAdminAction"), "写操作必须写管理审计");
   assert.doesNotMatch(src, /export async function DELETE/, "删除不可逆,不在此路由暴露");
   assert.match(src, /recruit_candidate_email_exists/, "email 唯一冲突必须 409 稳定错误码");
+  assert.match(src, /archived_at AS archivedAt/, "GET 必须带回归档标记,调用方才能过滤");
+  assert.match(src, /recruit_candidate\.archive/, "归档必须单独记审计动作");
+  assert.match(src, /recruit_candidate\.restore/, "恢复必须单独记审计动作");
+  assert.match(src, /archived_at = CURRENT_TIMESTAMP/, "归档时间戳必须与表内口径一致");
 });
 
 test("mail-send 路由:一人一封去重 + 共享渲染 + 凭据 fail-closed + 候选人联动 + 审计", () => {
@@ -139,6 +143,7 @@ test("mail-send 路由:一人一封去重 + 共享渲染 + 凭据 fail-closed + 
   assert.match(src, /UPDATE recruit_candidates/, "带 candidateId 必须联动推进环节");
   assert.match(src, /rate: \{ bucket: "mail-send"/, "发送必须单独限流桶");
   assert.ok(src.includes("assets.fetch"), "模板必须走 ASSETS binding 直读(同域自 fetch 会重进 Worker 管线)");
+  assert.ok(src.includes("recruit_candidate_archived"), "归档候选人的发信必须在出信前被拦下(机器通道兜底)");
 });
 
 test("mail-send SMTP 库:续行读取 + 凭据不进错误 + 超时兜底", () => {

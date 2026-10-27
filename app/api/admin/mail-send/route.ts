@@ -33,6 +33,16 @@ export async function POST(request: Request) {
     const meta = mailTemplateMeta(typeof input.template === "string" ? input.template : "");
     if (!meta) return Response.json({ error: "unknown_template" }, { status: 400 });
 
+    // 带候选人档案的发送:归档候选人(archived_at 非空)在渲染/出信前就拦下——
+    // 整届结束收纳的档案不该再收到新邮件;管理台默认也选不中,这里是机器通道的兜底。
+    const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
+    if (candidateId) {
+      const candidate = await database().prepare(
+        `SELECT archived_at FROM recruit_candidates WHERE id = ?`,
+      ).bind(candidateId).first<{ archived_at: string | null }>();
+      if (candidate?.archived_at) return Response.json({ error: "recruit_candidate_archived" }, { status: 409 });
+    }
+
     // 模板/签名走 ASSETS binding 直读(不经公网自回环子请求——同域自 fetch 在
     // Workers 里会重新进 Worker 管线,实测 500)。.html 字面路径直取文件,无跳转歧义。
     const assets = (env as unknown as { ASSETS?: Fetcher }).ASSETS;
@@ -110,7 +120,6 @@ export async function POST(request: Request) {
     // 候选人联动:带 candidateId 时发送成功即推进环节(模板元数据 nextStage),
     // 并把本次用的进度令牌回填到候选人档案(若尚未绑定)。
     let candidateStage: string | null = null;
-    const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
     if (candidateId) {
       const statusToken = typeof input.statusToken === "string" && /^[a-f0-9]{32}$/.test(input.statusToken) ? input.statusToken : null;
       const updated = await database().prepare(

@@ -1,6 +1,8 @@
 // 见界创赛选拔候选人(admin/agent 机器通道 + 管理台「选拔」分区)。
-// GET 列表;POST 建档(可选同时建个人进度令牌);PATCH 局部更新(环节推进/淘汰/备注)。
+// GET 列表(含归档,archivedAt 非空即归档,调用方自行过滤);POST 建档(可选同时建
+// 个人进度令牌);PATCH 局部更新(环节推进/淘汰/备注/归档 archived_at)。
 // 一人一行(email 唯一索引兜底,冲突回 409)。所有写操作记管理审计。
+// 归档≠删除:不可逆操作不在此路由暴露(无 DELETE),收纳走软标记且可恢复。
 import { guardWrite } from "../../_lib/route-guards";
 import { requireAdminOrAgent } from "../../_lib/access-control";
 import { database, jsonError } from "../../_lib/community";
@@ -12,11 +14,11 @@ export const dynamic = "force-dynamic";
 
 type CandidateRow = {
   id: string; name: string; email: string; position: string; stage: string;
-  statusToken: string | null; note: string; createdAt: string; updatedAt: string;
+  statusToken: string | null; note: string; archivedAt: string | null; createdAt: string; updatedAt: string;
 };
 
 const SELECT_COLUMNS = `id, name, email, position, stage, status_token AS statusToken, note,
-  created_at AS createdAt, updated_at AS updatedAt`;
+  archived_at AS archivedAt, created_at AS createdAt, updated_at AS updatedAt`;
 
 export async function GET() {
   try {
@@ -93,19 +95,36 @@ export async function PATCH(request: Request) {
     const existing = await database().prepare(`SELECT id FROM recruit_candidates WHERE id = ?`).bind(id).first<{ id: string }>();
     if (!existing) return Response.json({ error: "recruit_candidate_not_found" }, { status: 404 });
     const columns: Record<string, string> = { name: "name", email: "email", position: "position", stage: "stage", note: "note", statusToken: "status_token" };
-    const assignments = entries.map(([key]) => `${columns[key]} = ?`).join(", ");
+    // archived 是换算字段:布尔 → archived_at 写当前时间/清空(与表内时间戳同口径 CURRENT_TIMESTAMP)。
+    const assignmentSql: string[] = [];
+    const values: unknown[] = [];
+    for (const [key, value] of entries) {
+      if (key === "archived") {
+        assignmentSql.push(value ? "archived_at = CURRENT_TIMESTAMP" : "archived_at = NULL");
+        continue;
+      }
+      assignmentSql.push(`${columns[key]} = ?`);
+      values.push(value);
+    }
     try {
       await database().prepare(
-        `UPDATE recruit_candidates SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      ).bind(...entries.map(([, value]) => value), id).run();
+        `UPDATE recruit_candidates SET ${assignmentSql.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      ).bind(...values, id).run();
     } catch (error) {
       if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
         return Response.json({ error: "recruit_candidate_email_exists" }, { status: 409 });
       }
       throw error;
     }
+    // 归档/恢复单独记审计动作:台账里一眼能看出"谁被收纳过",与普通字段更新区分。
     const changedKeys = entries.map(([key]) => key).join(",");
-    await auditAdminAction(actor.email, "recruit_candidate.update", "recruit_candidate", id, changedKeys);
+    if (patch.archived === true) {
+      await auditAdminAction(actor.email, "recruit_candidate.archive", "recruit_candidate", id, changedKeys);
+    } else if (patch.archived === false) {
+      await auditAdminAction(actor.email, "recruit_candidate.restore", "recruit_candidate", id, changedKeys);
+    } else {
+      await auditAdminAction(actor.email, "recruit_candidate.update", "recruit_candidate", id, changedKeys);
+    }
     const updated = await database().prepare(`SELECT ${SELECT_COLUMNS} FROM recruit_candidates WHERE id = ?`).bind(id).first<CandidateRow>();
     return Response.json({ candidate: updated });
   } catch (error) {

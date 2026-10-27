@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, ExternalLink, Plus, Save, Send, UserPlus } from "lucide-react";
+import { Archive, ArchiveRestore, Copy, ExternalLink, Plus, Save, Send, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminRequestError, adminErrorMessage, adminRequest } from "../admin-api";
 import {
@@ -26,7 +26,7 @@ import {
 
 export type RecruitCandidate = {
   id: string; name: string; email: string; position: string; stage: RecruitStage;
-  statusToken: string | null; note: string; createdAt: string; updatedAt: string;
+  statusToken: string | null; note: string; archivedAt: string | null; createdAt: string; updatedAt: string;
 };
 
 export type MailStatusTokenItem = {
@@ -163,6 +163,11 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
   const [selectedId, setSelectedId] = useState("");
   const selected = candidates.find((candidate) => candidate.id === selectedId) ?? null;
   const selectedToken = selected?.statusToken ? tokens.find((token) => token.token === selected.statusToken) ?? null : null;
+
+  // 归档视图:默认只看在招;归档只隐藏不删除,展开可查看/恢复。
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedCount = candidates.filter((candidate) => candidate.archivedAt).length;
+  const visibleCandidates = showArchived ? candidates : candidates.filter((candidate) => !candidate.archivedAt);
 
   // 建档草稿
   const [draft, setDraft] = useState({ name: "", email: "", position: "", note: "" });
@@ -316,7 +321,7 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
     }
   }, [draft, draftToken, loadAll, onStatus, selectCandidate]);
 
-  const updateCandidate = useCallback(async (id: string, patch: Record<string, string | null>, actionLabel: string) => {
+  const updateCandidate = useCallback(async (id: string, patch: Record<string, string | boolean | null>, actionLabel: string) => {
     setPendingKey(`candidate-${id}`);
     try {
       await adminRequest("/api/admin/recruit-candidates", {
@@ -332,6 +337,13 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
       setPendingKey("");
     }
   }, [loadAll, onStatus]);
+
+  // 归档:收纳整届结束/不再跟进的档案。归档的是当前选中人时先取消选中——
+  // 工作台(进度调控/发信)不再作用于 TA,恢复后重新选中即可继续。
+  const archiveCandidate = useCallback(async (candidate: RecruitCandidate) => {
+    setSelectedId((current) => (current === candidate.id ? "" : current));
+    await updateCandidate(candidate.id, { archived: true }, `${candidate.name} 已归档(点「显示已归档」可找回、恢复)`);
+  }, [updateCandidate]);
 
   const saveToken = useCallback(async (token: string, patch: Record<string, string | number>) => {
     setPendingKey(`token-${token}`);
@@ -415,7 +427,7 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
 
   return <div className="admin-section-stack">
     <section className="admin-panel">
-      <header className="admin-section-heading"><div><p className="admin-eyebrow">CANDIDATES</p><h2>候选人</h2><p>先建档,再点选——下面的进度调控和发信都作用于选中的这个人。</p></div></header>
+      <header className="admin-section-heading"><div><p className="admin-eyebrow">CANDIDATES</p><h2>候选人</h2><p>先建档,再点选——下面的进度调控和发信都作用于选中的这个人。整届结束的档案点「归档」收纳,归档只隐藏不删除,随时恢复。</p></div></header>
       <form className="admin-recruit-form" onSubmit={(event) => { event.preventDefault(); void createCandidate(); }}>
         <label>姓名<input value={draft.name} maxLength={40} required onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
         <label>邮箱<input type="email" value={draft.email} maxLength={120} required onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))} /></label>
@@ -444,21 +456,40 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
         <label className="admin-recruit-check"><input type="checkbox" checked={draftToken} onChange={(event) => setDraftToken(event.target.checked)} /> 同时创建进度令牌</label>
         <button type="submit" disabled={busyLocal || !draft.name.trim() || !draft.email.trim() || !draft.position.trim()}><UserPlus size={14} /> 建档并选中</button>
       </form>
-      {loading && !candidates.length ? <p className="admin-muted">正在读取候选人…</p> : candidates.length ? <div className="admin-record-list">{candidates.map((candidate) => <article key={candidate.id} className={candidate.id === selectedId ? "is-active" : ""}>
-        <button type="button" className="admin-inline-link" onClick={() => selectCandidate(candidate)}>{candidate.id === selectedId ? "取消选中" : "选中"}</button>
-        <div>
-          <strong>{candidate.name} · {candidate.position}</strong>
-          <small>{candidate.email} · 建档 {candidate.createdAt}{candidate.note ? ` · ${candidate.note}` : ""}</small>
-          {candidate.statusToken && <small>进度页:{`/email/status/${candidate.statusToken}`}</small>}
-        </div>
-        <select className="admin-candidate-stage" aria-label={`${candidate.name} 的环节`} value={candidate.stage} disabled={busyLocal}
-          onChange={(event) => void updateCandidate(candidate.id, { stage: event.target.value }, `${candidate.name} 已推进到「${RECRUIT_STAGE_LABELS[event.target.value as RecruitStage]}」`)}>
-          {RECRUIT_STAGES.map((stage) => <option key={stage} value={stage}>{RECRUIT_STAGE_LABELS[stage]}</option>)}
-        </select>
-      </article>)}</div> : <p className="admin-empty-state">还没有候选人,先在上面建档。</p>}
+      {loading && !candidates.length ? <p className="admin-muted">正在读取候选人…</p> : candidates.length ? <>
+        {archivedCount > 0 && <p className="admin-muted">
+          <button type="button" className="admin-inline-link" onClick={() => setShowArchived((current) => !current)}>
+            {showArchived ? `隐藏已归档(共 ${archivedCount} 人)` : `显示已归档(共 ${archivedCount} 人)`}
+          </button>
+        </p>}
+        {visibleCandidates.length ? <div className="admin-record-list">{visibleCandidates.map((candidate) => {
+          const isArchived = Boolean(candidate.archivedAt);
+          return <article key={candidate.id} className={`${candidate.id === selectedId ? "is-active" : ""}${isArchived ? " is-archived" : ""}`}>
+            {isArchived
+              ? <button type="button" className="admin-inline-link" disabled={busyLocal}
+                onClick={() => void updateCandidate(candidate.id, { archived: false }, `${candidate.name} 已恢复,回到在招列表`)}>
+                <ArchiveRestore size={13} /> 恢复
+              </button>
+              : <button type="button" className="admin-inline-link" onClick={() => selectCandidate(candidate)}>{candidate.id === selectedId ? "取消选中" : "选中"}</button>}
+            <div>
+              <strong>{candidate.name} · {candidate.position}</strong>
+              <small>{candidate.email} · 建档 {candidate.createdAt}{isArchived ? ` · 归档 ${candidate.archivedAt}` : ""}{candidate.note ? ` · ${candidate.note}` : ""}</small>
+              {candidate.statusToken && !isArchived && <small>进度页:{`/email/status/${candidate.statusToken}`}</small>}
+            </div>
+            {!isArchived && <>
+              <select className="admin-candidate-stage" aria-label={`${candidate.name} 的环节`} value={candidate.stage} disabled={busyLocal}
+                onChange={(event) => void updateCandidate(candidate.id, { stage: event.target.value }, `${candidate.name} 已推进到「${RECRUIT_STAGE_LABELS[event.target.value as RecruitStage]}」`)}>
+                {RECRUIT_STAGES.map((stage) => <option key={stage} value={stage}>{RECRUIT_STAGE_LABELS[stage]}</option>)}
+              </select>
+              <button type="button" className="admin-inline-link" disabled={busyLocal} onClick={() => void archiveCandidate(candidate)}><Archive size={13} /> 归档</button>
+            </>}
+          </article>;
+        })}</div>
+        : <p className="admin-empty-state">在招候选人都在归档里,点上面「显示已归档」可以找回、恢复。</p>}
+      </> : <p className="admin-empty-state">还没有候选人,先在上面建档。</p>}
     </section>
 
-    {selected && <section className="admin-panel">
+    {selected && !selected.archivedAt && <section className="admin-panel">
       <header className="admin-section-heading"><div><p className="admin-eyebrow">WORKSPACE</p><h2>{selected.name} · {RECRUIT_STAGE_LABELS[selected.stage]}</h2><p>{selected.email} · {selected.position}。这里的一切操作只作用于 TA。</p></div></header>
 
       <div className="admin-section-stack">
@@ -569,6 +600,6 @@ export function RecruitSection({ refreshKey, busy, onStatus }: {
         </section>
       </div>
     </section>}
-    <p className="admin-policy-note">发送纪律:一人一封、不群发、不抄送;同邮箱同模板服务端去重(强制重发会留痕);【见界创赛选拔】是品牌文字不是占位符;发送成功即自动推进候选人环节,全部写管理审计。</p>
+    <p className="admin-policy-note">发送纪律:一人一封、不群发、不抄送;同邮箱同模板服务端去重(强制重发会留痕);【见界创赛选拔】是品牌文字不是占位符;发送成功即自动推进候选人环节,全部写管理审计。归档是软收纳(可恢复、留审计),归档期间服务端也会拦下发信;归档不解除 email 唯一——同人再报名先恢复原档案。</p>
   </div>;
 }

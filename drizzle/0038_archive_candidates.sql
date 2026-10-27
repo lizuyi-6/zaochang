@@ -1,0 +1,1 @@
+ALTER TABLE `recruit_candidates` ADD `archived_at` text;

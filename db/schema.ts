@@ -968,6 +968,9 @@ export const recruitCandidates = sqliteTable(
     stage: text("stage").notNull().default("applied"),
     statusToken: text("status_token"),
     note: text("note").notNull().default(""),
+    // 归档时间:NULL=在招;非空=已归档(整届结束/重复建档收纳,管理台默认隐藏,可恢复)。
+    // 只归档不删除——删除不可逆,本表纪律是软收纳 + 审计留痕。
+    archivedAt: text("archived_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
