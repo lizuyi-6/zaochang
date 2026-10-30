@@ -1,6 +1,6 @@
 # 造场项目账本
 
-## 2026-10-30 管理员直接开通账户 + 首次登录引导(唯一用户名/昵称)(部分完成:本地已验证;上线状态见本条末尾)
+## 2026-10-30 管理员直接开通账户 + 首次登录引导(唯一用户名/昵称)(已上线 `e760333`;线上「被引导会员」一环未实测,需真人开通一次)
 
 - **范围**(用户本轮选定:新增管理员直接开通;所有新注册账户都要引导,存量会员不受影响;唯一用户名 + 可重复昵称;简介/所在地/主页选填):
   - 迁移 0043:`members` 加 `username`(唯一索引)、`onboarding_required`、`display_name_custom`;新表 `admin_provisioned_accounts`;四个触发器(用户名格式 ×2、用户名不可改/不可清空、引导须先有用户名才能结束)。
@@ -19,6 +19,16 @@
   - 生产快照(`backups/zaochang-db-2026-10-30-pre0043.sql`)预演 0043:4 位会员全部 onboarding=0/无用户名,外键违规 0,触发器 4 个,既有 upsert 照常。
   - `npm test` 1000/1000、fail 0、skipped 0、todo 0(上一轮 981 + 本轮新增 19);tsc/`git diff --check`/`db:generate` 无漂移 exit 0;lint 排除未跟踪 `tmp/`、已忽略 `promo/` 后 exit 0。
 - **已知取舍/未做**:门禁只拦整页导航——会员可直接调 API 不设用户名(无安全影响,但会有「没有用户名」的会员);每个登录态整页导航多一次 D1 读(与页面渲染里的会话查询同一行,未合并);用户名目前只在主页/管理台展示,没有 @提及、按用户名访问主页;开通账户不能经 GitHub 首登(GitHub 新身份仍要邀请码),通知里只写了邮箱验证码登录;保留名单是静态列表;昵称冒充词只拦 4 个片段。
+- **上线**:
+  - 生产 D1 先导出备份,在快照上预演 0043,再 `wrangler d1 execute --file` 应用,回填 `__drizzle_migrations`(LF sha256 `457d2a41…9734`,created_at=1793360636957)。
+  - 生产核对:账本 44 条,4 位会员 onboarding=0、无用户名,触发器 4 个,`admin_provisioned_accounts` 已建。
+  - 推送 `e760333` → `release-gates` 41053984012 success → `deploy-production` 41054389840 success(迁移检查 44 条一致),Worker 版本 `2586ffe0-a891-4234-a3eb-e8955bafa0fe`。
+- **线上实测**(`--resolve` 直连 CF 边缘):
+  - 匿名 `/welcome` 307 到 `/signin?return_to=%2Fwelcome`;`/apply`、`/signin` 200。
+  - 匿名 POST `/api/admin/accounts` 401 `auth_required`;agent POST 403 `agent_scope_forbidden`;agent GET 200 `{"accounts":[]}`;匿名 POST `/api/onboarding` 401。
+  - 存量会员会话(visual-session 入场票换 agent@zaochang,`/api/community` signedIn=true)整页导航 `/profile`、`/feed`、`/`、`/lattice/` 全 200(门禁不误拦),`/welcome` 307 回 `/`;随后登出,signedIn=false。
+  - 第一次取会话时我用错了入场票字段(`enter` 是目的路径,票据在 `url`),那一轮其实是匿名请求、不作数,已重做。
+- **未验证**:线上没有一个 onboarding_required=1 的会员——开通只允许人类管理员会话,邀请码注册又要读邮箱验证码,两条我都走不了;「新会员整页导航被带到 /welcome、完成后放行」只在本地真 Chrome 跑通过。开通通知在真实外部邮箱的到达与排版未看。
 
 ## 2026-10-30 账户申请页 /apply + 邀请码邮件发放(管理台「账户申请」)(已上线 `a17b10f`;线上冒烟通过,真实邮件是否进收件箱未肉眼确认)
 
