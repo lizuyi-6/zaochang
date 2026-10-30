@@ -33,7 +33,7 @@ Cloudflare 边缘 (proxied DNS + Workers Route 接管)
 ```
 
 状态页运维(华为云北京主机上):
-- 探针 `/opt/zc-mon/probe.sh`(cron `*/5`)覆盖 8 条链路:home/signin/version 页面、app-shell(纯 Worker)、shell-state(验 D1)、community(验 D1 聚合)、apk(HEAD,URL 从 /api/app-shell 动态解析,发新版无需改脚本)、scanner 隧道(404=存活)。公开页只显示职责描述,不暴露探测 URL。
+- 探针 `/opt/zc-mon/probe.sh`(cron `*/5`)覆盖 9 条链路:home/signin/version 页面、app-shell(纯 Worker)、shell-state(验 D1)、community(验 D1 聚合)、apk(HEAD,URL 从 /api/app-shell 动态解析,发新版无需改脚本)、scanner 隧道(404=存活)、lattice-model(见界学习 Agent 的 LLM 推理上游,2026-10-30 起)。公开页只显示职责描述,不暴露探测 URL。
 - 事件与公告:`zc-incident` CLI(软链到 /usr/local/bin,实文件 /opt/zc-status/zc-incident.mjs)维护 /opt/zc-status/incidents.json:`add --level info|degraded|down --title … --text …`、`update <id> --text …`、`resolve <id> --text …`、`list`。未解决的非 info 事件会把页面总状态抬升为降级/故障。
 - 页面源码 /opt/zc-status/server.mjs(零依赖 Node);改版先备份同目录 server.mjs.bak-*。
 - 2026-10-06 用户“发布”授权后的替换命令 exit=0：仓库源 `deploy/status/server.mjs` 与远端 SHA256 均为 `09910096c3c11d0d7e2d7b30040d4154879f1598103a97d17553e42bbcfdda9a`，service=active；备份 `/opt/zc-status/server.mjs.bak-status-20261006T024930Z` 的 SHA 为原322d3d5a…；发行目录 `/opt/zc-status/releases/status-20261006T024930Z`。Linux/Node22.20.0定向测试36/36、fail/skipped/cancelled/todo=0、exit=0；源站和公开字段检查exit=0（staleAfterMin=10、probeCount=8、状态重算相等）。完整命令/日志/逐文件证据见 `deploy/status/README.md` 与 `output/status-fix-2026-10-06/`。真实生产停采样、来源失败缓存及回滚未执行。

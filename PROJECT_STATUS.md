@@ -1112,3 +1112,9 @@
 - 本轮改动可能引入的新风险：Drizzle snapshot/journal 是手动同步，generator 无法运行；封禁 DB batch 的原子性、OAuth consent 失效及未认证行为未在 D1/Worker 集成验证；材料编辑触发器放开 hidden 标志，安全依赖待审门禁保持有效；移动端布局/真实焦点陷阱只做了静态结构断言。
 - 已知取舍/已知不证明事项：钱包“进入复核时间”以 `wallets.updated_at` 近似；Node SQLite 证明本地五个凭证插入触发器字段断言，不证明 D1 batch 运行语义；README 暂不更新后台功能可用性描述，因为端到端未验收，避免把未验证状态发布为用户可用功能；当前报告和本状态账本承载待验信息。
 - 未覆盖范围：未执行 `tests/suites/18-admin-platform.tests.mjs` 与更新后的 `tests/suites/07-oidc-external.tests.mjs`；未逐入口运行 GitHub、邮箱码、passkey、QR、dev-login。检索命令 `rg -n "createOAuthSession\\(" app/api app/oauth-session.ts` 命中共用 session writer 的 OAuth callback、email-codes、passkey、QR poll/claim、dev-login 及 `admin/visual-session/enter`；`rg -n "suspended_at IS NULL" app` 命中 Cookie、API key、OAuth access/refresh bearer 解析过滤。入口与未验证分支见 report 的「未覆盖范围」。
+
+## 状态页新增见界模型探针(2026-10-30,已部署)
+
+- **部分完成**:状态页(https://status.aetherstudio.top)从 8 条探针扩到 9 条,新增 `lattice-model`(显示名「见界模型」)——北京盒子每 5 分钟向见界学习 Agent 的 LLM 上游(`api.stepfun.com/step_plan/v1/messages`,Anthropic Messages 协议,`step-5-preview`、`max_tokens=64`、流式)发真实小补全,预期 200;模型 404/密钥 401→降级,不可达→故障。`server.mjs` 的 classify/sampleReason/严重度口径零改动。
+- 仓库与生产:`deploy/status/server.mjs`(SHA `2fc2151b…`)与首次入库的 `deploy/status/probe.sh`(SHA `a932c087…`)已替换到盒子并重启 `zc-status.service`(备份 `.bak-latticemodel-20261030T034529Z`,旧 server SHA `324d7eb5…` 无漂移);上游密钥在盒子 `/opt/zc-mon/stepfun.env`(root 600,缺失即探针跳过→显式 unknown)。首个 probe.sh 候选漏 `>> "$LOG"` 追加,验收时当场发现修正重发,坏版未进 cron,采样无缺口(细节见 `deploy/status/README.md` 2026-10-30 节)。
+- 验证:`npm run test:status` 64/64(ids 夹具与断言 8→9)、eslint/`git diff --check` exit0;源站与公网 API 均 overall=up、9 项探针、lattice-model up(http 200,ttfb≈0.7s),公网 HTML 渲染「见界模型」。未证明:探针不经 Worker,不代表生产 Worker→上游全链路;盒子 key 与线上 Worker secret 同值性无法读回验证;TTS/图片/搜索等其他上游能力不在监控内。

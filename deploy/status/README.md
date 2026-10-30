@@ -166,3 +166,13 @@ UI层本轮14:13:52公开Chromium证据：production-ui.json/production-mobile.p
 - 修改前源（SHA `9071ba7b…`）跑这 7 项：1 pass / 6 fail、exit 1（窗口边界用例新旧都通过；绑定两项 actual `connected`，覆盖率 236/234/236/287）。修改后 `node --experimental-strip-types --test tests/status-client.test.mjs tests/status-page.test.mjs` exit 0，tests 64 / pass 64 / fail 0 / skipped 0 / cancelled 0 / todo 0（原 57 + 新 7，无删除/过滤/跳过）；`node --check deploy/status/server.mjs` exit 0。
 - 后续补充：全量 `npm test` exit 0（614 pass / 0 fail / 0 skipped / 0 todo）；生产绑定、ingress 与外部 8080 可达性见上方部署证据。
 - 未覆盖：真实安全组规则内容（只测了从阿里云主机直连被拒）、`output/status-*/check-record.mjs` 等历史对账脚本（它们钉死旧 SHA `9071…`，对新源必然不等，属预期）。`CLOUDFLARE_RUNBOOK.md` 主机表已于部署后同步。
+
+## 2026-10-30 见界模型探针(已部署)
+
+状态:部分完成;新增第 9 条探针 `lattice-model`(显示名「见界模型」),监控见界学习 Agent 的 LLM 推理上游。生产源 SHA256:`server.mjs` = `2fc2151b8b19213ea721a240c14ff1611fcc50027e2ae32ccfe7528acd9fdc1e`、`probe.sh` = `a932c0875b98e8fa93ba2e7a509b4868b1980812d7cfb51061372904b8fb55ff`(仓库源首次包含 `deploy/status/probe.sh`,此前探针只在盒子 `/opt/zc-mon/probe.sh`)。
+
+- 语义:probe.sh 向 `${STEPFUN_BASE_URL}/messages`(`https://api.stepfun.com/step_plan/v1`,Anthropic Messages 协议)发真实小补全——`model=step-5-preview`(config.ts `normalizeModelAlias` 默认)、`max_tokens=64`、`stream=true`,预期 HTTP 200。TTFB 反映上游受理延迟(实测 ~0.7s),生成耗时只落在 total,不进 10s 降级阈值;`classify`/`sampleReason`/严重度口径零改动。模型下线→404(降级 `unexpected_http`)、key 失效→401(降级)、不可达→rc≠0(故障)。
+- 密钥:盒子 `/opt/zc-mon/stepfun.env`(root 600,164B)存 `STEPFUN_BASE_URL/STEPFUN_API_KEY/STEPFUN_MODEL`,由 probe.sh source;文件或 key 缺失时跳过该探针→状态页显式 unknown(fail-closed)。key 取自本地 `.dev.vars` 的 `AI_CHAT_API_KEY`(同套餐),**生产 Worker secret 无法读回,不证明与线上 `AI_CHAT_API_KEY` 同值**(同类漂移风险先例见 AGENT_TOKEN)。成本:288 次/天 × ≤64 输出 token(thinking 计入),量级可忽略但非零。
+- 部署证据(ssh zaochang-cibox,UTC 2026-10-30T03:4x):备份 `server.mjs.bak-latticemodel-20261030T034529Z`(SHA `324d7eb5…`,与 10-11 记录一致无漂移)、`probe.sh.bak-latticemodel-20261030T034529Z`(SHA `7450e181…`);候选 SHA 本地/远端逐字相等,`node --check`/`bash -n` 通过;替换后 `zc-status.service` active。**偏差如实记录**:首个 probe.sh 候选漏掉 `printf … >> "$LOG"` 追加,手动跑一轮时样本打到 stdout、日志无 lattice-model 行,当场发现并修正重发(`probe.sh.bak-noappend-20261030T034610Z` 为坏版本备份);坏版本只在手动运行执行过一次,cron 03:45/03:50 两轮分别落在旧版与修正版,采样无缺口。
+- 验收:源站 `/api/status.json` overall=up、9 项探针、lattice-model up http=200 ttfb≈0.67s;公网 `https://status.aetherstudio.top/api/status.json` 同样 9 项 up,HTML 渲染「见界模型」条目;首屏 hero 文案已加入模型上游。本地门禁:`node --check` exit0、`npm run test:status` 64/64(夹具 ids 8→9、`probes.length` 8→9、新增 `probes.at(-1).id==='lattice-model' && expect===200` 断言)、eslint(两文件)exit0、`git diff --check` exit0。
+- 未覆盖:探针从北京盒子直连上游,不经过 CF Worker,不证明生产 Worker→上游全链路;只探 `step-5-preview` 一个模型 id,上游其他模型/其他能力(TTS、图片、搜索)不在监控内;真实故障日、zc-status 回滚、告警投递未演练;上游对高频小请求的限流行为未实测(若 429 会显示降级)。

@@ -42,6 +42,7 @@ const PROBES = [
   { id: 'community',   name: '社区内容接口', desc: '社区帖子与产品聚合查询',        expect: 200 },
   { id: 'apk',         name: '安卓安装包',   desc: '静态资源下载链路(HEAD)',       expect: 200 },
   { id: 'scanner',     name: '上传扫描隧道', desc: '病毒扫描服务连通性',            expect: 404 }, // GET 对 POST-only 端点返回 404 即隧道存活
+  { id: 'lattice-model', name: '见界模型',   desc: '见界学习 Agent 的 LLM 推理上游(真实小补全,流式)', expect: 200 },
 ];
 
 const esc = s => String(s ?? '')
@@ -484,7 +485,7 @@ footer a:hover{color:var(--orange)}
 <div class="hero">
   <p class="eyebrow">Zaochang Service Status</p>
   <h1><span id="overall-status">${OVERALL_TEXT[s.overall]}</span><span class="accent">.</span></h1>
-  <p class="hero-sub">站点、数据库接口、安装包与扫描隧道的可达性。每 5 分钟采样，满 10 分钟未更新会标记为未知。</p>
+  <p class="hero-sub">站点、数据库接口、安装包、扫描隧道与见界模型推理上游的可达性。每 5 分钟采样，满 10 分钟未更新会标记为未知。</p>
   <div class="hero-figs">
     <div><b class="good" id="up-count">${s.probes.filter(p => p.status === 'up').length}/${s.probes.length}</b><span>当前探测正常</span></div>
     <div><b>${latestTs ? bjHM(latestTs).slice(-5) : '—'}</b><span>最近采样 · UTC+8</span></div>

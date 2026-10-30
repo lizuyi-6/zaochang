@@ -11,7 +11,7 @@ import { once } from 'node:events';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const source = process.env.STATUS_SERVER_SOURCE || fileURLToPath(new URL('../deploy/status/server.mjs', import.meta.url));
-const ids = ['home', 'signin', 'version', 'app-shell', 'shell-state', 'community', 'apk', 'scanner'];
+const ids = ['home', 'signin', 'version', 'app-shell', 'shell-state', 'community', 'apk', 'scanner', 'lattice-model'];
 const clockStart = Date.parse('2026-10-06T02:00:00Z');
 const samples = (ts, failure = null) => ids.map(probe => ({
   ts: new Date(ts).toISOString(), probe, http: probe === failure ? 0 : probe === 'scanner' ? 404 : 200,
@@ -65,7 +65,8 @@ async function start(t, options = {}) {
 
 test('status: fresh expected responses are up with explicit observed coverage', async t => {
   const server = await start(t); const data = await server.json();
-  assert.equal(data.overall, 'up'); assert.equal(data.probes.length, 8);
+  assert.equal(data.overall, 'up'); assert.equal(data.probes.length, 9);
+  assert.equal(data.probes.at(-1).id, 'lattice-model'); assert.equal(data.probes.at(-1).expect, 200);
   assert.equal(data.probes.every(p => p.status === 'up'), true);
   assert.equal(data.staleAfterMin, 10);
   assert.equal(data.probes[0].observedSlots24h, 1); assert.equal(data.probes[0].expectedSamples24h, 288);
