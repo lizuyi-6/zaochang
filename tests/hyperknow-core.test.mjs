@@ -698,6 +698,20 @@ test("parseLecturePlan: 模型 JSON 小瑕疵先修复/抢救,不再整份作废
   assert.deepEqual(parse(JSON.stringify(ok), "t"), ok);
 });
 
+test("parseLecturePlan: 重复 step_id 去重(续写轮复述已生成步骤时不重复上板)", async () => {
+  const { parseLecturePlan: parse } = await import("../app/api/_lib/hyperknow/prompts.ts");
+  const step = (i) => ({ step_id: `step_${i}`, spoken_text: `第${i}步`, board_action: { type: "card", title: `要点 ${i}` } });
+  // 续写轮把整份讲稿重发一遍:合并文本抢救出 [1,2,3,4,1,2,3,4,5,6]
+  const merged = `{"steps": [${[1, 2, 3, 4, 1, 2, 3, 4, 5, 6].map(step).map((s) => JSON.stringify(s)).join(",")}]}`;
+  JSON.parse(merged); // 合并文本本身合法(去重不靠这层,靠解析后的 id)
+  const plan = parse(merged, "t");
+  assert.equal(plan.degraded, undefined);
+  assert.deepEqual(plan.steps.map((s) => s.step_id), ["step_1", "step_2", "step_3", "step_4", "step_5", "step_6"], "首现顺序保持,复述步骤丢弃");
+  // 无 step_id 的步骤不受去重影响
+  const anonymous = { steps: [{ spoken_text: "a", board_action: {} }, { spoken_text: "b", board_action: {} }] };
+  assert.equal(parse(JSON.stringify(anonymous), "t").steps.length, 2);
+});
+
 test("parseLecturePlan: JSON 字符串里的 ```mermaid 不被当成外层围栏(2026-10-16 直连对照 17 路完整输出 2 路因此整课降级)", async () => {
   const { parseLecturePlan: parse } = await import("../app/api/_lib/hyperknow/prompts.ts");
   const plan = {
@@ -728,7 +742,9 @@ test("parseLecturePlan: JSON 字符串里的 ```mermaid 不被当成外层围栏
   const shortBroken = JSON.stringify({ steps: stepsObj.slice(0, 3) }, null, 2).replace(/\},\n {4}\{\n {6}"step_id"/g, '},\n      "step_id"');
   assert.equal(parse(shortBroken, "t").degraded, true);
   // 5) 外层围栏被截断(无收尾围栏)时整段交给修复/抢救,不因找不到收尾而丢内容
-  const truncated = parse("```json\n" + JSON.stringify({ steps: [...plan.steps, ...plan.steps] }).slice(0, -30), "t");
+  //    (夹具用 6 个互异步骤:重复 id 会被去重合并,不再作为凑数手段)
+  const sixSteps = Array.from({ length: 6 }, (_, i) => ({ step_id: `step_${i + 1}`, spoken_text: `讲解 ${i + 1}`, board_action: { type: "card", title: `T${i + 1}` } }));
+  const truncated = parse("```json\n" + JSON.stringify({ steps: sixSteps }).slice(0, -30), "t");
   assert.equal(truncated.degraded, undefined, "截断但 ≥4 个完整步骤 → 抢救");
   assert.ok(truncated.steps.length >= 4);
 });

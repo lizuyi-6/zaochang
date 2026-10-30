@@ -245,8 +245,8 @@ export const IntroOverlay: React.FC<{
           {preparing && (
             <p className="wb-intro-wait" aria-live="polite">
               {L(
-                `The tutor is writing this lecture for you — usually 1–2 minutes (${waitSec}s so far).`,
-                `导师正在为你现场备课，通常需要 1–2 分钟（已等待 ${waitSec} 秒）。`,
+                `The tutor is writing this lecture for you — usually 2–3 minutes (${waitSec}s so far).`,
+                `导师正在为你现场备课，通常需要 2–3 分钟（已等待 ${waitSec} 秒）。`,
               )}
             </p>
           )}

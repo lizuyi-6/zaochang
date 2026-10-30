@@ -122,6 +122,16 @@ export let aiUpstreamJsonOverride = null;
 /** 置数字后,流式调用只吐出覆盖正文的前 N 个字符,随后以 stop_reason=max_tokens 收尾
  * (测讲稿流式截断后的步骤抢救);resetAiUpstream 会复位。 */
 export let aiUpstreamStreamTruncateAt = null;
+/** 流式脚本(测讲稿截断续写):置数组后,每次流式 AI 调用(messages/chat-completions)
+ * 依次消费一个条目 { text, truncateAt? }——truncateAt 模拟该轮在 max_tokens 处截断。
+ * 脚本耗尽后重复最后一个条目;resetAiUpstream 会复位并清零游标。 */
+export let aiUpstreamStreamScript = null;
+let aiUpstreamStreamScriptIndex = 0;
+
+export function setAiUpstreamStreamScript(entries) {
+  aiUpstreamStreamScript = Array.isArray(entries) && entries.length ? entries : null;
+  aiUpstreamStreamScriptIndex = 0;
+}
 
 export function setAiUpstreamStreamTruncateAt(n) {
   aiUpstreamStreamTruncateAt = Number.isInteger(n) ? n : null;
@@ -170,6 +180,8 @@ export function resetAiUpstream() {
   mcpMockOutcome = "success";
   aiUpstreamJsonOverride = null;
   aiUpstreamStreamTruncateAt = null;
+  aiUpstreamStreamScript = null;
+  aiUpstreamStreamScriptIndex = 0;
   unitResponseDelayMs = 0;
   imageResponseDelayMs = 0;
 }
@@ -301,6 +313,7 @@ export async function startFakeAiUpstream() {
       system: isMessages ? (body.system ?? "") : (body.messages?.[0]?.content ?? ""),
       user: userText(rawContent),
       userContent: rawContent ?? "",
+      messages: body.messages,
       messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
       transport: isMessages ? "messages" : "chat",
     };
@@ -465,12 +478,19 @@ export async function startFakeAiUpstream() {
       return;
     }
     response.writeHead(200, { "content-type": "text/event-stream" });
-    // 覆盖正文(讲稿透传断言)在流式通道同样生效:切成 4 段验证跨帧拼接;可选截断模拟 max_tokens
-    const overrideText = aiUpstreamJsonOverride === null ? null
-      : aiUpstreamStreamTruncateAt === null ? aiUpstreamJsonOverride : aiUpstreamJsonOverride.slice(0, aiUpstreamStreamTruncateAt);
+    // 流式脚本条目优先;无脚本时回落到覆盖正文(讲稿透传断言)与既有截断旋钮:
+    // 切成 4 段验证跨帧拼接;可选截断模拟 max_tokens
+    const scriptEntry = aiUpstreamStreamScript
+      ? aiUpstreamStreamScript[Math.min(aiUpstreamStreamScriptIndex, aiUpstreamStreamScript.length - 1)]
+      : null;
+    aiUpstreamStreamScriptIndex += 1;
+    const overrideText = scriptEntry
+      ? (scriptEntry.truncateAt == null ? scriptEntry.text : scriptEntry.text.slice(0, scriptEntry.truncateAt))
+      : aiUpstreamJsonOverride === null ? null
+        : aiUpstreamStreamTruncateAt === null ? aiUpstreamJsonOverride : aiUpstreamJsonOverride.slice(0, aiUpstreamStreamTruncateAt);
     const streamPieces = overrideText === null ? sseChunks
       : [0, 1, 2, 3].map((i) => overrideText.slice(Math.floor((i * overrideText.length) / 4), Math.floor(((i + 1) * overrideText.length) / 4)));
-    const truncated = overrideText !== null && aiUpstreamStreamTruncateAt !== null;
+    const truncated = scriptEntry ? scriptEntry.truncateAt != null : overrideText !== null && aiUpstreamStreamTruncateAt !== null;
     if (isMessages) {
       // Anthropic Messages 流:先 thinking 块再 text 块。thinking_delta 里故意夹带与正文
       // 相同的文字——若解析器把思维链当正文,客户端拼接会翻倍、断言即失败(可证伪)。

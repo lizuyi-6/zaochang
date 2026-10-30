@@ -49,7 +49,8 @@ export type ConversationHistory = Array<{ role: string; content: string }>;
 
 // ── Content Generator(内容流)─────────────────────────────────────────────
 
-/** 见界双模型:Flash=step-3.7-flash(快),Pro=step-5-preview(质量优先;step-5 这个 id 上游不存在,2026-10-01 实测 404)。 */
+/** 见界双模型:Flash=step-3.7-flash(快),Pro=step-5-preview(质量优先;2026-10-29
+ * 直连实测 step_plan 端点 step-5-preview 可用,同 prompt 完整讲稿质量与 3.7-flash 相当)。 */
 export type ChatModelId = "flash" | "pro";
 export const CHAT_MODEL_MAP: Record<ChatModelId, string> = { flash: "step-3.7-flash", pro: "step-5-preview" };
 
@@ -241,7 +242,7 @@ export async function planLecture(
   const nameNote = learnerName
     ? `\nThe learner's name is "${learnerName}". Address them by this name in 2-3 narration lines only (e.g. the opening greeting and the closing line); never write the name into board card/diagram text.`
     : "";
-  const messages: LlmMessage[] = [
+  const baseMessages: LlmMessage[] = [
     { role: "system", content: `${WHITEBOARD_INSTRUCTOR_PROMPT}\nIMPORTANT: You must respond in valid JSON format only.` },
     {
       role: "user",
@@ -253,31 +254,75 @@ export async function planLecture(
    *    非流式只能拿到半截 JSON 或整段丢失 → 模板降级课(生产 14 天 22/44 降级);
    * ② 非流式长连接 72~104s 无字节时上游回 520,随后的兼容通道重试必然撞上路由预算。
    * 流式下字节持续到达;截断、断流、预算中止都保留已收到的正文,由 parseLecturePlan
-   * 抢救完整步骤(≥4 步才采用,否则仍降级)。 */
+   * 抢救完整步骤(≥4 步才采用,否则仍降级)。
+   * 断流自愈(与 contentGenerateStream 同款策略):正文已出但流被截,assistant 预填
+   * partial + 接续指令继续流(≤2 轮,受剩余路由预算约束)——2026-10-29 直连实测完整
+   * 计划需 128-171s,旧 130s 路由预算把成功计划掐死在半路是降级的主因。 */
   const startedAt = Date.now();
-  let { text, error } = await collectStreamText(streamChat(messages, { signal, maxTokens: LECTURE_PLAN_MAX_TOKENS }));
-  const retryable = !(error instanceof HyperknowNotConfiguredError)
-    && !(error instanceof HyperknowUpstreamError && error.code !== "ai_upstream_error");
-  if (error && retryable && !signal?.aborted && text.length < 200 && Date.now() - startedAt < LECTURE_PLAN_RETRY_WINDOW_MS) {
-    // 开流即断(Worker 出口走 /messages 偶发秒断流,见 llm.ts streamChatOpenAI 注释):换兼容通道重来一次
-    console.warn(`[hyperknow] planLecture stream dropped early for "${topic}", retrying via chat/completions:`, errorMessage(error));
-    ({ text, error } = await collectStreamText(streamChatOpenAI(messages, { signal, maxTokens: LECTURE_PLAN_MAX_TOKENS })));
+  let partial = "";
+  let continuations = 0;
+  let lastError: unknown = null;
+  for (;;) {
+    const messages: LlmMessage[] = partial
+      ? [...baseMessages, { role: "assistant", content: partial }, { role: "user", content: LECTURE_PLAN_CONTINUE_INSTRUCTION }]
+      : baseMessages;
+    let { text: roundText, error } = await collectStreamText(streamChat(messages, { signal, maxTokens: LECTURE_PLAN_MAX_TOKENS }));
+    const retryable = !(error instanceof HyperknowNotConfiguredError)
+      && !(error instanceof HyperknowUpstreamError && error.code !== "ai_upstream_error");
+    if (!partial && error && retryable && !signal?.aborted && roundText.length < 200 && Date.now() - startedAt < LECTURE_PLAN_RETRY_WINDOW_MS) {
+      // 开流即断(Worker 出口走 /messages 偶发秒断流,见 llm.ts streamChatOpenAI 注释):换兼容通道重来一次
+      console.warn(`[hyperknow] planLecture stream dropped early for "${topic}", retrying via chat/completions:`, errorMessage(error));
+      ({ text: roundText, error } = await collectStreamText(streamChatOpenAI(messages, { signal, maxTokens: LECTURE_PLAN_MAX_TOKENS })));
+    }
+    partial += roundText;
+    if (!error) break;
+    lastError = error;
+    // 预算中止/不可重试故障:半截正文交给 parseLecturePlan 抢救,不再续写
+    if (signal?.aborted || !retryable) break;
+    // 截断/断流但有实质正文:续写接着流(多步思考),预算不够就交抢救
+    if (
+      partial.length >= 200
+      && continuations < LECTURE_PLAN_MAX_CONTINUATIONS
+      && PLAN_ROUTE_BUDGET_MS - (Date.now() - startedAt) >= LECTURE_PLAN_CONTINUATION_MIN_BUDGET_MS
+    ) {
+      continuations += 1;
+      console.warn(
+        `[hyperknow] planLecture incomplete for "${topic}" (${effLang}) after ${partial.length} chars, continuing round ${continuations}/${LECTURE_PLAN_MAX_CONTINUATIONS}:`,
+        errorMessage(error),
+      );
+      continue;
+    }
+    break;
   }
-  if (error) {
+  if (lastError) {
     // 留痕:上游故障 / 截断 / 预算中止都要能从日志区分;已收到的正文仍交给解析器抢救
     console.warn(
-      `[hyperknow] planLecture stream ended early for "${topic}" (${effLang}) after ${Math.round((Date.now() - startedAt) / 1000)}s, kept ${text.length} chars:`,
-      errorMessage(error),
+      `[hyperknow] planLecture stream ended early for "${topic}" (${effLang}) after ${Math.round((Date.now() - startedAt) / 1000)}s`
+      + `${continuations ? ` with ${continuations} continuation round(s)` : ""}, kept ${partial.length} chars:`,
+      errorMessage(lastError),
     );
   }
-  return parseLecturePlan(text, topic, learnerName, effLang);
+  return parseLecturePlan(partial, topic, learnerName, effLang);
 }
 
-/** 讲稿生成的 token 上限:混合推理模型的思维链计入 max_tokens。16384 下思考 26K 字的请求
- * ~100s 就被截断;32768 实测同类请求 125s 正常结束。再长的由路由 130s 预算收口,流式保留正文。 */
-const LECTURE_PLAN_MAX_TOKENS = 32768;
+/** 讲稿生成的 token 上限:混合推理模型的思维链计入 max_tokens(实测 budget_tokens 参数
+ * 不被尊重,思考量不可控)。2026-10-29 直连实测完整计划 output ≈15-16K tokens
+ * (思考 3 万字 + 正文 8-9K 字),65536 给超长思考留足余量,再长的由续写轮兜住。 */
+const LECTURE_PLAN_MAX_TOKENS = 65536;
+/** plan 路由总预算(路由的 AbortSignal.timeout 与续写剩余预算判断共用,单一事实源)。
+ * 2026-10-29 直连实测:step-5-preview/step-3.7-flash 完整计划 128-171s,130s 预算
+ * 把成功计划掐死在半路(学员拿到模板降级课)。放宽到 300s,客户端 PLAN_CLIENT_TIMEOUT_MS
+ * 必须仍大于它(契约 tests/whiteboard-plan-budget.test.mjs 锁定两侧关系)。 */
+export const PLAN_ROUTE_BUDGET_MS = 300_000;
 /** 开流后这么短时间内就断且几乎没有正文,才值得换通道重试;再晚重试也赶不上路由预算 */
 const LECTURE_PLAN_RETRY_WINDOW_MS = 30_000;
+/** 截断续写轮数上限:assistant 预填续写每轮也要重付思考成本,2 轮覆盖已观测的截断形态 */
+const LECTURE_PLAN_MAX_CONTINUATIONS = 2;
+/** 每轮续写至少要剩这么多路由预算(思考+正文的一轮完整往返),不够就交抢救解析 */
+const LECTURE_PLAN_CONTINUATION_MIN_BUDGET_MS = 60_000;
+/** 讲稿续写指令:与 prose 的 CONTINUE_INSTRUCTION 不同,目标是"两段拼成一个完整 JSON" */
+const LECTURE_PLAN_CONTINUE_INSTRUCTION =
+  "Your previous response above was cut off by a length limit. Continue generating EXACTLY from where it stopped — do not repeat any previously generated content, do not restart, do not add commentary. Output only the missing remainder, so that the previous partial text and your continuation together form one single complete JSON object.";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

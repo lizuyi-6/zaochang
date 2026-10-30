@@ -12,17 +12,22 @@ const root = process.cwd();
 const read = (p) => readFileSync(join(root, p), 'utf8');
 
 test('plan budget: client abort budget exceeds the server route timeout, via exported constant', () => {
-  const route = read('app/api/hyperknow/whiteboard/plan/route.ts');
-  const serverMatch = route.match(/AbortSignal\.timeout\((\d+_000)\)/);
-  assert.ok(serverMatch, 'plan 路由必须显式设置 AbortSignal.timeout');
+  // 服务端预算是 agents.ts 导出的单一事实源(路由的 AbortSignal.timeout 与
+  // planLecture 续写轮的剩余预算判断共用);路由只许引用常量,禁止内联毫秒数。
+  const agents = read('app/api/_lib/hyperknow/agents.ts');
+  const serverMatch = agents.match(/export const PLAN_ROUTE_BUDGET_MS = (\d+_000)/);
+  assert.ok(serverMatch, 'agents.ts 必须导出 PLAN_ROUTE_BUDGET_MS 常量');
   const serverMs = Number(serverMatch[1].replace('_', ''));
+
+  const route = read('app/api/hyperknow/whiteboard/plan/route.ts');
+  assert.match(route, /AbortSignal\.timeout\(PLAN_ROUTE_BUDGET_MS\)/, 'plan 路由必须引用 PLAN_ROUTE_BUDGET_MS 常量');
 
   const backend = read('hyperknow-spa/src/lattice/backend.ts');
   const constMatch = backend.match(/export const PLAN_CLIENT_TIMEOUT_MS = (\d+_000)/);
   assert.ok(constMatch, 'SPA 必须导出 PLAN_CLIENT_TIMEOUT_MS 常量(调用点禁止内联数字)');
   const clientMs = Number(constMatch[1].replace('_', ''));
 
-  assert.ok(serverMs >= 130_000, `服务端预算应 ≥130s(冷实例实测 92-100s),当前 ${serverMs}ms`);
+  assert.ok(serverMs >= 300_000, `服务端预算应 ≥300s(2026-10-29 直连实测完整计划 128-171s),当前 ${serverMs}ms`);
   assert.ok(clientMs > serverMs, `客户端兜底(${clientMs}ms)必须大于服务端超时(${serverMs}ms),否则服务端预算成空话`);
 
   const page = read('hyperknow-spa/src/lattice/whiteboard/WhiteboardPage.tsx');

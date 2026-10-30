@@ -38,7 +38,7 @@ tests/                         # hyperknow-core(纯逻辑)+ suites/11-hyperknow(
 ## 上游与配置
 
 LLM 走 **StepFun/Anthropic Messages 协议**(`{base}/messages`,thinking 预算 384(流)/256(JSON),
-step-explore 原生协议),`thinking_delta` 增量映射为 directorAgent 思考过程实时展示——与
+step-5-preview / step-3.7-flash 世代原生协议;step-explore 已被上游下线,配置归一到 step-5-preview),`thinking_delta` 增量映射为 directorAgent 思考过程实时展示——与
 `reading-ai-provider.ts` 刻意丢弃思维链不同,这是本产品的核心语义。TTS 走 StepFun
 `/audio/speech`(默认 `stepaudio-3-tts`,StepAudio 3 代;兼容 step-tts 时代的自定义音色与 speed 参数),音色为 6 个预置 Voice Tone ID
 (warm/calm/bright/gentle/firm/lively,见 `tts.ts` 常量)。缓存 key 含模型名,换模型即全量重新合成。

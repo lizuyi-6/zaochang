@@ -20,7 +20,7 @@ import {
   resetAiUpstream,
   setAiUpstreamForceFail,
   setAiUpstreamJsonResponse,
-  setAiUpstreamStreamTruncateAt,
+  setAiUpstreamStreamScript,
   setAiUpstreamUnitDelay,
   setAiUpstreamMissingModel,
   setMcpMockOutcome,
@@ -288,13 +288,13 @@ export function register() {
       // 2026-10-16:讲稿走流式(非流式长连接被截断/520 时整段丢失)且推理链有足够上限
       assert.equal(lastChatCompletion.stream, true, "讲稿必须流式请求上游");
       assert.equal(lastChatCompletion.transport, "messages");
-      assert.equal(lastChatCompletion.max_tokens, 32768, "讲稿 max_tokens 必须容得下长推理链");
+      assert.equal(lastChatCompletion.max_tokens, 65536, "讲稿 max_tokens 必须容得下长推理链(实测 budget_tokens 不被尊重)");
     } finally {
       resetAiUpstream();
     }
   });
 
-  test("hyperknow whiteboard: 流式讲稿在 max_tokens 处截断 → 抢救已完整的步骤,不落模板课", async () => {
+  test("hyperknow whiteboard: 流式讲稿在 max_tokens 处截断 → 续写补全,不落模板课", async () => {
     const email = `hk-board-trunc-${runId}@example.com`;
     const steps = Array.from({ length: 6 }, (_, i) => ({
       step_id: `step_${i + 1}`,
@@ -302,10 +302,12 @@ export function register() {
       board_action: { type: "card", title: `要点 ${i + 1}`, content: `<p>内容 ${i + 1}</p>` },
     }));
     const full = JSON.stringify({ steps });
-    // 截在第 6 步中途:前 5 步完整,第 6 步只有半截
+    // 截在第 6 步中途:前 5 步完整,第 6 步只有半截;续写轮补上余部 → 拼出完整 6 步
     const cut = full.indexOf('"step_6"') + 30;
-    setAiUpstreamJsonResponse({ steps });
-    setAiUpstreamStreamTruncateAt(cut);
+    setAiUpstreamStreamScript([
+      { text: full, truncateAt: cut },
+      { text: full.slice(cut) },
+    ]);
     try {
       const res = await fetch(`${baseUrl}/api/hyperknow/whiteboard/plan`, {
         method: "POST",
@@ -314,18 +316,24 @@ export function register() {
       });
       assert.equal(res.status, 200);
       const plan = await res.json();
-      assert.equal(plan.degraded, false, "≥4 个完整步骤 → 按正常讲稿播放,不标降级");
-      assert.deepEqual(plan.steps.map((s) => s.step_id), ["step_1", "step_2", "step_3", "step_4", "step_5"]);
-      assert.equal(plan.steps[4].board_action.title, "要点 5");
+      assert.equal(plan.degraded, false, "续写补全 → 完整讲稿,不标降级");
+      assert.deepEqual(plan.steps.map((s) => s.step_id), ["step_1", "step_2", "step_3", "step_4", "step_5", "step_6"]);
+      assert.equal(plan.steps[5].board_action.title, "要点 6");
       const stored = await queryLocalD1(`SELECT plan_json AS p FROM hk_whiteboard_sessions WHERE id = '${plan.session_id}'`);
-      assert.equal(JSON.parse(stored[0].p).steps.length, 5, "落库的是抢救后的讲稿");
+      assert.equal(JSON.parse(stored[0].p).steps.length, 6, "落库的是续写补全后的讲稿");
+      // 续写轮请求形状:原 user + assistant 预填已收正文 + 接续指令
+      assert.match(lastChatCompletion.messages[2].content, /Continue generating EXACTLY/, "续写轮必须带接续指令");
+      assert.equal(lastChatCompletion.messages[1].role, "assistant");
+      assert.equal(lastChatCompletion.messages[1].content.length, cut, "已收正文必须 assistant 预填");
     } finally {
       resetAiUpstream();
     }
 
-    // 截得太早(不足 4 个完整步骤)→ 仍落确定性模板并显式标降级
-    setAiUpstreamJsonResponse({ steps });
-    setAiUpstreamStreamTruncateAt(full.indexOf('"step_3"') + 10);
+    // 截得太早且续写轮同样截断(不足 4 个完整步骤)→ 落确定性模板并显式标降级
+    setAiUpstreamStreamScript([
+      { text: full, truncateAt: full.indexOf('"step_3"') + 10 },
+      { text: full, truncateAt: 20 },
+    ]);
     try {
       const res = await fetch(`${baseUrl}/api/hyperknow/whiteboard/plan`, {
         method: "POST",
@@ -338,6 +346,26 @@ export function register() {
       assert.equal(plan.steps.length, 5, "模板课 5 步");
       assert.notEqual(plan.steps[0].step_id, undefined);
       assert.doesNotMatch(plan.steps[0].spoken_text, /第 1 步讲解/, "不得把 2 步残片当正常讲稿");
+    } finally {
+      resetAiUpstream();
+    }
+
+    // 续写轮复述整份 JSON(模型"重发"而非"接续"的常见形态):合并解析靠 step_id
+    // 去重兜底——首现顺序保持,复述的步骤不重复上板
+    setAiUpstreamStreamScript([
+      { text: full, truncateAt: full.indexOf('"step_5"') + 10 },
+      { text: full },
+    ]);
+    try {
+      const res = await fetch(`${baseUrl}/api/hyperknow/whiteboard/plan`, {
+        method: "POST",
+        headers: authHeaders("截断用户", email),
+        body: JSON.stringify({ topic: "Truncated Lecture" }),
+      });
+      assert.equal(res.status, 200);
+      const plan = await res.json();
+      assert.equal(plan.degraded, false);
+      assert.deepEqual(plan.steps.map((s) => s.step_id), ["step_1", "step_2", "step_3", "step_4", "step_5", "step_6"], "合并+去重后按序补全");
     } finally {
       resetAiUpstream();
     }

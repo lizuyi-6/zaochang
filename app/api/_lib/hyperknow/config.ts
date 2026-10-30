@@ -7,8 +7,8 @@ import { env } from "cloudflare:workers";
 // reading-ai 的 AiNotConfiguredError 对齐)。
 //
 // 注意协议:本模块只说 Anthropic Messages 协议({base}/messages,thinking 预算流式)
-// ——这是 StepFun step-explore 的原生协议。不提供
-// OpenAI chat/completions 回退:"上游必须支持 Messages 协议"是显式契约(见 LATTICE.md)。
+// ——这是 StepFun 混合推理模型世代(step-5-preview / step-3.7-flash)的原生协议。
+// 不提供 OpenAI chat/completions 回退:"上游必须支持 Messages 协议"是显式契约(见 LATTICE.md)。
 
 export class HyperknowNotConfiguredError extends Error {
   readonly code = "ai_not_configured";
@@ -29,6 +29,12 @@ export type HyperknowAiConfig = {
   ttsModel: string;
 };
 
+// StepFun 官方已下线 step-explore(2026-10-29 实测 step_plan 端点 /models 已无此 id,
+// step-5-preview 同 key 可用):历史配置或显式传入一律归一到当前主力 step-5-preview。
+export function normalizeModelAlias(rawModel: string | undefined | null): string {
+  return !rawModel || rawModel === "step-explore" ? "step-5-preview" : rawModel;
+}
+
 export function resolveHyperknowAiConfig(): HyperknowAiConfig | null {
   const values = env as unknown as Record<string, string | undefined>;
   const baseUrl = values.HYPERKNOW_AI_BASE_URL || values.AI_CHAT_BASE_URL;
@@ -36,9 +42,7 @@ export function resolveHyperknowAiConfig(): HyperknowAiConfig | null {
   if (!baseUrl || !apiKey) return null;
   const ttsBaseUrl = values.HYPERKNOW_TTS_BASE_URL || "https://api.stepfun.com/v1";
   const defaultTtsModel = ttsBaseUrl.includes("step_plan") ? "stepaudio-2.5-tts" : "stepaudio-3-tts";
-  const rawModel = values.HYPERKNOW_AI_MODEL || values.AI_CHAT_MODEL;
-  // StepFun 官方已下线 step-explore 模型，若配置为 step-explore 或为空，自动升级为主力模型 step-3.7-flash
-  const model = (!rawModel || rawModel === "step-explore") ? "step-3.7-flash" : rawModel;
+  const model = normalizeModelAlias(values.HYPERKNOW_AI_MODEL || values.AI_CHAT_MODEL);
   return {
     baseUrl,
     apiKey,

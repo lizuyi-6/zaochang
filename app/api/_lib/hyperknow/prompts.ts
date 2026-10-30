@@ -506,7 +506,9 @@ export function repairLooseJson(src: string): string {
 }
 
 /** 修复仍失败时逐步抢救:在 steps 数组里按括号深度切出每个步骤对象单独解析,
- * 只收结构完整(spoken_text + board_action)的步骤;截断的尾部直接放弃。 */
+ * 只收结构完整(spoken_text + board_action)的步骤。坏候选(截断的半步、非步骤
+ * 形状的 JSON)不再终止扫描——只前移一位继续找,嵌在坏区域之后的完整步骤
+ * (续写轮复述/接续的产物)仍能被扫出;结构校验保证内部碎片不会被当成步骤。 */
 export function salvageLectureSteps(src: string): LecturePlan["steps"] {
   const key = src.indexOf('"steps"');
   const open = key >= 0 ? src.indexOf("[", key) : -1;
@@ -515,7 +517,11 @@ export function salvageLectureSteps(src: string): LecturePlan["steps"] {
   let i = open + 1;
   while (i < src.length) {
     while (i < src.length && /[\s,]/.test(src[i])) i++;
-    if (src[i] !== "{") break;
+    if (src[i] !== "{") {
+      const next = src.indexOf("{", i);
+      if (next < 0) break;
+      i = next;
+    }
     let depth = 0;
     let inStr = false;
     let esc = false;
@@ -532,25 +538,45 @@ export function salvageLectureSteps(src: string): LecturePlan["steps"] {
       else if (c === "{") depth++;
       else if (c === "}" && --depth === 0) break;
     }
-    if (j >= src.length) break;
-    try {
-      const step = JSON.parse(src.slice(i, j + 1)) as LecturePlan["steps"][number];
-      if (
-        step && typeof step.spoken_text === "string" && step.spoken_text.trim()
-        && step.board_action && typeof step.board_action === "object"
-      ) {
-        steps.push(step);
+    let step: LecturePlan["steps"][number] | undefined;
+    if (j < src.length) {
+      try {
+        const candidate = JSON.parse(src.slice(i, j + 1)) as LecturePlan["steps"][number];
+        if (
+          candidate && typeof candidate.spoken_text === "string" && candidate.spoken_text.trim()
+          && candidate.board_action && typeof candidate.board_action === "object"
+        ) {
+          step = candidate;
+        }
+      } catch {
+        /* 该步本身坏了:前移一位,继续抢救后面的步骤 */
       }
-    } catch {
-      /* 该步本身坏了:跳过,继续抢救后面的步骤 */
     }
-    i = j + 1;
+    if (step) {
+      steps.push(step);
+      i = j + 1;
+    } else {
+      i += 1;
+    }
   }
   return steps;
 }
 
 /** 抢救出的步骤少于此数就不如模板课结构完整,仍降级 */
 const MIN_SALVAGED_LECTURE_STEPS = 4;
+
+/** 按 step_id 去重(保留首次出现)。续写合并后,续写轮若复述了已生成的步骤,
+ * 会出现同 id 步骤成对——板书按序播放会重复画一遍。无 id 的步骤原样保留。 */
+function dedupeStepsById<T extends { step_id?: unknown }>(steps: T[]): T[] {
+  const seen = new Set<string>();
+  return steps.filter((step) => {
+    const id = step?.step_id;
+    if (typeof id !== "string" || !id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
 
 /** 模型偶发漏写步骤对象的左花括号:`},\n  "step_id": "step_2", ...`(2026-10-16 直连对照
  * 24 路中 1 路,其后各步全部错位)。只补"上一对象收尾 + 逗号"后紧跟 step_id 键的位置。 */
@@ -594,6 +620,7 @@ export function parseLecturePlan(jsonStr: string, topic: string, learnerName = "
       );
     }
     if (!parsed || !Array.isArray(parsed.steps)) throw new Error("steps is not an array");
+    parsed.steps = dedupeStepsById(parsed.steps);
     return parsed;
   } catch (error) {
     // 解析失败落 fallback 时留痕(上游空响应/坏 JSON 才能从日志区分),不再静默吞掉。

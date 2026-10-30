@@ -1,4 +1,4 @@
-import { resolveConfigOrThrow, HyperknowNotConfiguredError } from "./config";
+import { normalizeModelAlias, resolveConfigOrThrow, HyperknowNotConfiguredError } from "./config";
 import { consumeMessagesSse, consumeChatCompletionsSse, type StreamChunk } from "./protocol";
 
 // 见界 LLM 客户端:StepFun/Anthropic Messages 协议,fetch + Web Streams。
@@ -105,10 +105,11 @@ async function postChatCompletions(
     content: idx === 0 && m.role === "system" ? m.content + sysJson : m.content,
   }));
 
-  const primaryModel = options.model || config.model;
+  const primaryModel = normalizeModelAlias(options.model || config.model);
   const candidateModels = [primaryModel];
-  if (primaryModel === "step-explore" || primaryModel === "step-2-16k") {
-    candidateModels.unshift("step-3.7-flash");
+  if (primaryModel === "step-2-16k") {
+    // 旧套餐主力一并升级:2-16k 之上当前可用旗舰是 step-5-preview
+    candidateModels.unshift("step-5-preview");
   } else {
     if (!candidateModels.includes("step-3.7-flash")) candidateModels.push("step-3.7-flash");
     if (!candidateModels.includes("step-3.5-flash")) candidateModels.push("step-3.5-flash");
@@ -168,8 +169,8 @@ async function postChatCompletions(
 export async function* streamChat(messages: LlmMessage[], options: ChatOptions = {}): AsyncGenerator<StreamChunk> {
   const config = resolveConfigOrThrow();
   options.signal?.throwIfAborted();
-  const primaryModel = options.model || config.model;
-  const targetModel = primaryModel === "step-explore" ? "step-3.7-flash" : primaryModel;
+  const primaryModel = normalizeModelAlias(options.model || config.model);
+  const targetModel = primaryModel;
   let response: Response | undefined;
   if (!config.baseUrl.includes("/chat/completions")) {
     const { systemPrompt, formatted } = formatMessagesForMessagesApi(messages);
@@ -219,8 +220,8 @@ export async function* streamChat(messages: LlmMessage[], options: ChatOptions =
 export async function* streamChatOpenAI(messages: LlmMessage[], options: ChatOptions = {}): AsyncGenerator<StreamChunk> {
   const config = resolveConfigOrThrow();
   options.signal?.throwIfAborted();
-  const primaryModel = options.model || config.model;
-  const targetModel = primaryModel === "step-explore" ? "step-3.7-flash" : primaryModel;
+  const primaryModel = normalizeModelAlias(options.model || config.model);
+  const targetModel = primaryModel;
   let response: Response;
   try {
     response = await fetch(chatCompletionsEndpoint(config.baseUrl), {

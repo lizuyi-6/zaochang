@@ -2,7 +2,7 @@ import { requireMember } from "../../../_lib/access-control";
 import { jsonError } from "../../../_lib/errors";
 import { assertSameOrigin } from "../../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../../_lib/rate-limit";
-import { planLecture, type LectureCourseContext } from "../../../_lib/hyperknow/agents";
+import { planLecture, PLAN_ROUTE_BUDGET_MS, type LectureCourseContext } from "../../../_lib/hyperknow/agents";
 import { getCourse, getCourseTask, saveWhiteboardSession } from "../../../_lib/hyperknow/store";
 import { getSampleCourse } from "../../../_lib/hyperknow/samples";
 import { resolveEffectiveLanguage } from "../../../_lib/hyperknow/protocol";
@@ -141,11 +141,12 @@ export async function POST(request: Request) {
     // 语言优先级: course saved language -> request language -> zh-CN 兜底
     const effectiveLanguage = resolveEffectiveLanguage(courseSavedLanguage, requestLanguage);
 
-    // 循证教学 v4 提示词的推理链更长,冷实例实测 92-100s:放宽到 130s,
-    // 绝不让路由超时把一次成功的计划掐死在半路(掐死=学员拿到模板降级课)。
+    // 循证教学 v4 提示词的推理链更长,2026-10-29 直连实测完整计划 128-171s:放宽到
+    // PLAN_ROUTE_BUDGET_MS(300s,agents.ts 单一事实源),绝不让路由超时把一次成功的计划
+    // 掐死在半路(掐死=学员拿到模板降级课)。流内截断由 planLecture 的续写轮自愈。
     // 注:planLecture 内部对上游/配置故障一律兜底为降级计划,不在路由层再分流
     // (此前的 upstream-error 分支因内部全捕获而永不可达,已删)。
-    const signal = AbortSignal.timeout(130_000);
+    const signal = AbortSignal.timeout(PLAN_ROUTE_BUDGET_MS);
     const plan = await planLecture(resolvedTopic, signal, member.displayName, effectiveLanguage, lectureContext);
 
     const sessionId = crypto.randomUUID();

@@ -11,7 +11,7 @@ function client(baseUrl, fetch) {
   const mod = { exports: {} };
   new Function('require', 'module', 'exports', 'fetch', compiled)((spec) => {
     if (spec === './protocol') return protocol;
-    if (spec === './config') return { resolveConfigOrThrow: () => ({ baseUrl, apiKey: 'test', model: 'test' }), HyperknowNotConfiguredError: class extends Error {} };
+    if (spec === './config') return { resolveConfigOrThrow: () => ({ baseUrl, apiKey: 'test', model: 'test' }), HyperknowNotConfiguredError: class extends Error {}, normalizeModelAlias: (m) => m || 'step-5-preview' };
     throw new Error(spec);
   }, mod, mod.exports, fetch);
   return mod.exports;
