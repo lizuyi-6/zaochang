@@ -1,5 +1,11 @@
 # 造场项目账本
 
+## 2026-10-30 账户申请页 /apply + 邀请码邮件发放(管理台「账户申请」)(部分完成:本地已验证;上线状态见本条末尾)
+
+- **范围**:公开页 `/apply`(称呼/邮箱/想做什么/作品链接)→ `POST /api/account-applications`(同源、Turnstile 已配置时校验、每 IP 5/h + 每邮箱 3/天 + 全局 200/天;新建/重复待审/已是会员三态统一 202,提交不发任何邮件)→ 表 `account_applications`(迁移 0042)→ 管理台「账户申请」分区:通过/拒绝/重发(换新码)/直接邀请(人类专属)。通过 = 一个 db.batch 原子生成单次 `invitation_codes`(max_uses=1,默认 14 天,1–90)+ 申请置 approved + 审计,三条都以申请当前状态为前提(SQL 抽到 `account-application-sql.ts`);落库后经 `EMAIL` binding 从 zaochang@aetherstudio.top 发模板邮件(`invite-mail.ts`,零 import,管理台预览同函数换占位码)。明文只在邮件里:不进响应/审计/链接。发信失败立即撤销该码并记 `mail_status=failed`;重发撤销未用旧码再发新码。登录页加「还没有邀请码？申请造场账户」入口;站壳免壳名单加 `/apply`;CSP 的 Turnstile 源放行从 `/signin` 扩到 `/apply`(精确匹配)。机器通道能力表加 `PATCH /api/admin/account-applications`。
+- **证据**:`tests/account-applications.test.mjs` 14 例(校验分支、模板转义/链接不带码/北京时间、占位码不在真码字母表、邮箱形状与邮箱登录同源、0042 落位与快照链、node:sqlite + 全量迁移构造「两请求都读到待审」时序:落败批次每条 0 行、重发竞态只换一次、已用码不撤不发、拒绝双击只一条审计、DB CHECK/部分唯一索引);集成套件 `tests/suites/20-account-applications.tests.mjs` 9 例(真预览+假邮件上游:邮件里的码哈希=库存→用它邮箱注册成功→uses_count=1→别的邮箱复用 400 `invitation_invalid`;注入发信失败 → 码 revoked 且泄出的明文注册 400 → 重发新码可用;安全矩阵 401/403/缺 origin 403/agent POST 403 `agent_scope_forbidden`;第 6 次提交 429)。变异:删发信失败撤销 → 集成用例变红;删批次 `status='pending'` 前提 → sqlite 用例 2 例变红(**集成并发用例不变红**:本地预览把并发请求串行化,落败者在读取阶段就 409,该用例只作端到端结果断言)。无头 Chrome 截图:/apply 桌面/手机/提交成功态、/signin 入口、管理台预览→确认发送→列表「已通过·邮件已发送」、邮件 640/375/320px(320px 下码单行,溢出断言=0)。`npm test` 981/981、fail 0、skipped 0、todo 0(exit 0);tsc/`git diff --check`/`db:generate` 无漂移 exit 0;lint 排除未跟踪 `tmp/`、已忽略 `promo/` 后 exit 0。顺带修正 `hyperknow-feedback-contract` 把「0041 是最后一条迁移」写死的断言(改为按 tag 定位,语义不变)。
+- **已知取舍/未做**:邀请码不绑定申请邮箱(持码即可注册,邮件提示勿转发;绑定需改注册触发器,未做);申请行含个人信息,暂无保留期清理(purge 未接);对已是会员的申请只静默不落库,运营看不到;每 IP 5/h 在共享出口 IP(校园网)下可能误伤;生产邮件到达率/垃圾箱未实测(见下)。
+
 ## 2026-10-17 安卓 App「按钮点了没反应」:跳转中反馈 + 卡住整页兜底 + 触屏去重预取(部分完成:本地已验证,未提交/未上线,真机未复验)
 
 - **真机证据**(`wrangler tail` 实时日志,用户 vivo V2426A / Android 16 / WebView Chrome 153,出口 IP 在美国 → App 流量走代理):30 个请求全 200,RSC 服务端 0.35–1.1s;但 01:29:40 点「发现/动态/个人/发布」后直到 01:30:13 才有页面挂载(首个 `/api/community`)≈30s;同一目标每点一次两条 RSC(触屏 pointerenter 预取 + 跳转各一份)。排除项:内核过旧(153)、壳吞触摸(模拟器 WebView 124 真实 `input tap` 4/4 命中按钮)、遮挡(线上 14 页 elementFromPoint 无遮挡,仅 `/galaxy` 加载层首屏挡 3–8s)。

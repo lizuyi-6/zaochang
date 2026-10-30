@@ -22,7 +22,9 @@ export function withSecurityHeaders(request: Request, response: Response, public
   // 见界录音使用 MediaRecorder + 服务端 ASR;路径边界匹配避免 /latticefoo
   // 误获麦克风策略,其余页面继续由 permissions-policy 禁止麦克风。
   const lattice = pathname === "/lattice" || pathname.startsWith("/lattice/");
-  const signin = pathname === "/signin";
+  // Turnstile 只在带人机验证表单的两个页面放行:登录页与账户申请页(精确匹配,
+  // /applyx、/signin/qr 之类不放行)。
+  const signin = pathname === "/signin" || pathname === "/apply";
   const headers = new Headers(response.headers);
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", sameOriginEmbed ? "SAMEORIGIN" : "DENY");

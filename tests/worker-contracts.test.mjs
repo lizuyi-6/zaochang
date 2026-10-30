@@ -383,6 +383,14 @@ test("security: /signin 放行 Turnstile 域名,其余页面不放行", () => {
   assert.ok(signinCsp.includes("frame-src 'self' https://challenges.cloudflare.com"));
   const other = withSecurityHeaders(new Request(`${ORIGIN}/galaxy`), htmlResponse(), ORIGIN);
   assert.ok(!(other.headers.get("content-security-policy") ?? "").includes("challenges.cloudflare.com"));
+  // 账户申请页同样带 Turnstile 表单;精确匹配,相邻路径不放行。
+  const applyCsp = withSecurityHeaders(new Request(`${ORIGIN}/apply`), htmlResponse(), ORIGIN).headers.get("content-security-policy") ?? "";
+  assert.ok(applyCsp.includes("script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com"));
+  assert.ok(applyCsp.includes("frame-src 'self' https://challenges.cloudflare.com"));
+  for (const path of ["/applyx", "/apply/other", "/signin/qr/scan"]) {
+    const csp = withSecurityHeaders(new Request(`${ORIGIN}${path}`), htmlResponse(), ORIGIN).headers.get("content-security-policy") ?? "";
+    assert.ok(!csp.includes("challenges.cloudflare.com"), `${path} 不得放行 Turnstile 域`);
+  }
 });
 
 test("security: 非 HTML 响应不写 CSP,但保留 nosniff/XFO 与 body", async () => {

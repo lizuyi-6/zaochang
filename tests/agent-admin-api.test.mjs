@@ -18,7 +18,7 @@ const same = (list) => JSON.stringify([...list].sort((a, b) => a.pathname.locale
 
 // ---- 能力表内容逐字固定(扩面 = 显式改这里 + 改 agent-auth.ts,评审可见) ----
 
-test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / hk-redeem-codes POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH / mail-send POST", () => {
+test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / hk-redeem-codes POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH / mail-send POST / account-applications PATCH", () => {
   assert.equal(same(AGENT_ADMIN_CAPABILITIES), same([
     cap("PATCH", "/api/admin/moderation"),
     cap("POST", "/api/admin/invitations"),
@@ -31,6 +31,7 @@ test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / h
     cap("POST", "/api/admin/recruit-candidates"),
     cap("PATCH", "/api/admin/recruit-candidates"),
     cap("POST", "/api/admin/mail-send"),
+    cap("PATCH", "/api/admin/account-applications"),
   ]));
 });
 
@@ -69,6 +70,8 @@ test("isAgentWriteAllowed:fail-closed——未列名/不可逆/财务/上传一�
     ["POST", "/api/v1/fruit/transfer"],
     ["POST", "/api/uploads"],
     ["POST", "/api/admin/mail-status/unknown"],   // 子路径不在表内
+    ["POST", "/api/admin/account-applications"],  // 直接给任意邮箱发邀请:人类专属
+    ["DELETE", "/api/admin/account-applications"],
     ["PATCH", "/api/admin/unknown"],
     ["POST", "/api/admin"],
   ]) {

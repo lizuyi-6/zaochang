@@ -1374,3 +1374,44 @@ export const hkFeedback = sqliteTable(
     check("hk_feedback_notify_status_valid", sql`${table.notifyStatus} in ('sent', 'failed', 'not_configured')`),
   ],
 );
+
+// 造场账户申请:公开页 /apply 提交,管理台「账户申请」审核。通过 = 服务端生成一张
+// 单次邀请码(invitation_codes,max_uses=1)并按模板把明文发到申请邮箱——明文只在
+// 那封邮件里出现,库里只有 invitation_codes.code_hash。status 是审核决定,
+// mail_status 是投递结果,两者分开:发信失败会撤销刚生成的码(mail_status=failed),
+// 审核决定不回退,管理员点「重发」换新码再投。同一邮箱同时只能有一条待审。
+export const accountApplications = sqliteTable(
+  "account_applications",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    intro: text("intro").notNull(),
+    link: text("link").notNull().default(""),
+    source: text("source").notNull().default("public"),
+    status: text("status").notNull().default("pending"),
+    invitationId: text("invitation_id").references(() => invitationCodes.id),
+    mailStatus: text("mail_status").notNull().default("none"),
+    mailError: text("mail_error"),
+    mailSentAt: text("mail_sent_at"),
+    decidedBy: text("decided_by"),
+    decidedAt: text("decided_at"),
+    decisionNote: text("decision_note").notNull().default(""),
+    requestIpHash: text("request_ip_hash"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("account_applications_status_created_idx").on(table.status, table.createdAt),
+    index("account_applications_email_idx").on(table.email, table.createdAt),
+    uniqueIndex("account_applications_one_pending_idx")
+      .on(table.email)
+      .where(sql`${table.status} = 'pending'`),
+    check("account_applications_status_valid", sql`${table.status} in ('pending', 'approved', 'rejected')`),
+    check("account_applications_source_valid", sql`${table.source} in ('public', 'admin')`),
+    check("account_applications_mail_status_valid", sql`${table.mailStatus} in ('none', 'sending', 'sent', 'failed')`),
+    // 已通过必须挂着一张邀请码;未通过的不得挂码、不得有投递状态。
+    check("account_applications_approved_has_invitation", sql`(${table.status} = 'approved') = (${table.invitationId} IS NOT NULL)`),
+    check("account_applications_mail_requires_approval", sql`${table.status} = 'approved' OR ${table.mailStatus} = 'none'`),
+  ],
+);

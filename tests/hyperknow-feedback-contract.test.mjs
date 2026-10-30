@@ -73,8 +73,11 @@ test("feedback migration creates the constrained table and chains to the previou
   const journal = JSON.parse(readFileSync(new URL("../drizzle/meta/_journal.json", import.meta.url), "utf8"));
   const previous = JSON.parse(readFileSync(new URL("../drizzle/meta/0040_snapshot.json", import.meta.url), "utf8"));
   const current = JSON.parse(readFileSync(new URL("../drizzle/meta/0041_snapshot.json", import.meta.url), "utf8"));
-  assert.equal(journal.entries.at(-1).tag, "0041_hk_feedback");
-  assert.ok(journal.entries.at(-1).when > journal.entries.at(-2).when);
+  // 按 tag 定位(不是「最后一条」):后续迁移追加不应让这条链路断言失效。
+  const index = journal.entries.findIndex((entry) => entry.tag === "0041_hk_feedback");
+  assert.ok(index > 0, "journal 必须登记 0041_hk_feedback");
+  assert.equal(journal.entries[index - 1].tag, "0040_hk_credit_events");
+  assert.ok(journal.entries[index].when > journal.entries[index - 1].when);
   assert.equal(current.prevId, previous.id);
   assert.deepEqual(Object.keys(current.tables.hk_feedback.columns), ["id", "user_email", "message", "context_json", "notify_status", "notify_code", "created_at"]);
 });

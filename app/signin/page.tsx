@@ -86,6 +86,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
         </button>
       </form>
       <small className="auth-note">邀请码只在首次创建造场账号时原子消耗；后续登录不再需要。GitHub 登录不会获得你的 GitHub 密码；邮箱登录只用于接收验证码，我们会往你的邮箱发送登录验证码邮件。</small>
+      <Link className="auth-apply-link" href="/apply">还没有邀请码？申请造场账户 →</Link>
     </>
   );
 

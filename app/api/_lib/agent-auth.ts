@@ -73,6 +73,10 @@ export const AGENT_ADMIN_CAPABILITIES = [
   // 结果邮件线上发送(凭据在 CF secret)。真出信:一人一封去重(审计台账)+严格限流
   // 都在路由层;能力表放行只是让机器通道能调用,不放宽任何业务不变量。
   { method: "POST", pathname: "/api/admin/mail-send" },
+  // 账户申请审核(通过/拒绝/重发)的机器通道等价物。通过 = 生成单次邀请码 + 发邀请邮件,
+  // 能力上不超出已开放的 invitations POST + mail-send POST;收件人只能是申请表里已有的邮箱。
+  // 同路由的 POST(给任意邮箱直接发邀请)不在表内,人类专属。
+  { method: "PATCH", pathname: "/api/admin/account-applications" },
 ] as const;
 
 // agent 非 GET 请求的放行判定:两张能力表之并集精确命中(method+pathname)。

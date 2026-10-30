@@ -192,6 +192,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   // mobile rail from appearing while a user is signing in.
   if (
     pathname.startsWith("/signin") ||
+    pathname === "/apply" ||
     pathname === "/callback" ||
     pathname.startsWith("/oauth")
   ) return <>{children}</>;
