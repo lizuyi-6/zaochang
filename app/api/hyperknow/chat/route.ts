@@ -121,7 +121,7 @@ export async function POST(request: Request) {
           };
           try {
             push({ type: "conversation_created", data: { conversation_id: conversationId }, conversation_id: conversationId });
-            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member) } });
+            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: await dailyCreditsFor(member) } });
             push({
               type: "tool_execution",
               tool_name: "directorAgent",

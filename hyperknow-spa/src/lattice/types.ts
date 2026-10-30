@@ -69,7 +69,7 @@ export interface AppState {
   identity: MeInfo | null;
   /** true = 启动身份拉取已结算(无论成败);演示课开播前等它,旁白称呼绑定本次登录名 */
   bootReady: boolean;
-  /** 订阅档位(展示态;backend 目前统一 FREE,兑换码/付款尚未接通) */
+  /** 订阅档位(展示态;兑换码已接通,付款尚未接通) */
   plan: 'FREE' | 'PRO' | 'MAX';
   /** 当前成员历史会话(null = 拉取失败,回退演示列表;[] = 真实为空) */
   conversations: ConvRow[] | null;

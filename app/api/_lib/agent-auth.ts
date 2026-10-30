@@ -54,6 +54,10 @@ export const AGENT_ADMIN_CAPABILITIES = [
   { method: "PATCH", pathname: "/api/admin/moderation" },
   { method: "POST", pathname: "/api/admin/invitations" },
   { method: "PATCH", pathname: "/api/admin/invitations" },
+  // 见界会员兑换码发放/撤销(管理台「兑换码」分区的机器通道等价物)。
+  // 只写 hk_redeem_codes/hk_redeem_grants,审计照常;删除不可逆操作不存在(仅撤销)。
+  { method: "POST", pathname: "/api/admin/hk-redeem-codes" },
+  { method: "PATCH", pathname: "/api/admin/hk-redeem-codes" },
   { method: "PATCH", pathname: "/api/admin/incubation" },
   // 见界结果邮件 PDF 回执挂载(运营机器通道 tmp/mail/mount.mjs)。文件仍走
   // ClamAV 扫描管线、读侧是既有 public 上传通道,此处只开放挂载写入口;

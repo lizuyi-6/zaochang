@@ -18,11 +18,13 @@ const same = (list) => JSON.stringify([...list].sort((a, b) => a.pathname.locale
 
 // ---- 能力表内容逐字固定(扩面 = 显式改这里 + 改 agent-auth.ts,评审可见) ----
 
-test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH / mail-send POST", () => {
+test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / hk-redeem-codes POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH / mail-send POST", () => {
   assert.equal(same(AGENT_ADMIN_CAPABILITIES), same([
     cap("PATCH", "/api/admin/moderation"),
     cap("POST", "/api/admin/invitations"),
     cap("PATCH", "/api/admin/invitations"),
+    cap("POST", "/api/admin/hk-redeem-codes"),
+    cap("PATCH", "/api/admin/hk-redeem-codes"),
     cap("PATCH", "/api/admin/incubation"),
     cap("POST", "/api/admin/mail-files"),
     cap("POST", "/api/admin/mail-status"),

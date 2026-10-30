@@ -96,7 +96,7 @@ export async function POST(request: Request) {
               closed = true;
             }
           };
-          push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member) } });
+          push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: await dailyCreditsFor(member) } });
           try {
             for (let step = first; !step.done; step = await generator.next()) {
               const chunk = step.value;

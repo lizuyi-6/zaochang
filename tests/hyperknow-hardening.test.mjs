@@ -42,7 +42,7 @@ test('chat: model history window and storage cap', () => {
   const route = read('app/api/hyperknow/chat/route.ts');
   assert.match(route, /history\.slice\(-40\)/, '发给模型的历史必须有窗口上限');
   assert.match(route, /\.slice\(-200\)/, '落库历史必须有上限');
-  assert.match(route, /max: dailyCreditsFor\(member\)/, 'credit 帧的 max 必须按携带身份的用户套餐而非恒 20');
+  assert.match(route, /max: await dailyCreditsFor\(member\)/, 'credit 帧的 max 必须按携带身份的用户套餐(含兑换码授权)而非恒 20');
 });
 
 test('llm: empty thinking-only response falls back instead of silent ""', () => {

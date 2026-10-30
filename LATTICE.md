@@ -74,7 +74,7 @@ SPA 里每个可点控件都必须有真实行为或显式失败反馈,不留静
 | 浏览器本地能力 | 复制(execCommand 回退)、分享链接(navigator.share 回退剪贴板)、日历 `.ics` 下载、附件/材料/反馈附件上传(`/api/uploads`,visibility=private)、语音输入(Web Speech API 一次性识别)、朗读(TTS 单例)、反馈邮件(mailto) |
 | 前端自绘 | 白板导出 JPG/PDF:Canvas 2D 按课堂数据重绘(Caveat/Handlee/Satoshi 用已加载 woff2,2200×1300 世界坐标,第 1/2 页按 x=1100 切分,表格波纹网格、荧光高亮带、红色圈注),非 DOM 截图;PDF 在点击内同步 `window.open` 再写 blob `<img>` 并 `print()` |
 
-未接线的装饰性按钮统一给可见反馈(顶部 toast 或 `SOON` 徽章),如兑换码、Canvas/Google 日历集成、外部记忆同步、付费档预览。
+未接线的装饰性按钮统一给可见反馈(顶部 toast 或 `SOON` 徽章),如 Canvas/Google 日历集成、外部记忆同步、付费档预览。兑换码已接线:管理台/机器通道(`POST /api/admin/hk-redeem-codes`)发放 `HK-` 码(库存只存哈希、明文只显示一次),会员在 设置 → 优惠券 输入即开通 PRO/MAX(`POST /api/hyperknow/redeem`,同源+限流,授权落 `hk_redeem_grants`,撤码不回收已发授权),档位解析在 `resolveMembership` 中与环境/角色档位取最高者。
 
 集市/课程列表每张卡打开**对应课程**的预览与学习旅程(深链 `#/course/preview?topic=…&cover=…`
 可分享/直开),不再是固定演示课;进入白板时按当前课程话题实时拉取讲解计划,无课程上下文时

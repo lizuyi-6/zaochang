@@ -22,6 +22,7 @@ export async function GET() {
           tier: credits.tier,
           remaining_credits: credits.remaining,
           max_credits: credits.max,
+          expires_at: credits.expiresAt,
         },
       },
     });

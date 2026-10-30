@@ -21,6 +21,7 @@ import { register as register_15_mcp_oauth } from "./suites/15-mcp-oauth.tests.m
 import { register as register_16_scanner_capacity } from "./suites/16-scanner-capacity.tests.mjs";
 import { register as register_17_hosting } from "./suites/17-hosting.tests.mjs";
 import { register as register_18_admin_platform } from "./suites/18-admin-platform.tests.mjs";
+import { register as register_19_hk_redeem } from "./suites/19-hk-redeem.tests.mjs";
 
 describe("造场社区集成流程", { concurrency: false }, () => {
   register_01_render();
@@ -41,4 +42,5 @@ describe("造场社区集成流程", { concurrency: false }, () => {
   register_16_scanner_capacity();
   register_17_hosting();
   register_18_admin_platform();
+  register_19_hk_redeem();
 });

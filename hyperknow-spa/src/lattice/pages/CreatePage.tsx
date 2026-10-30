@@ -181,6 +181,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
         email: state.identity?.email || '',
         tier: state.identity?.tier || 'FREE',
         credits: remaining,
+        membershipExpiresAt: state.identity?.membershipExpiresAt ?? null,
       },
     });
   };
@@ -251,6 +252,7 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
               email: state.identity?.email || '',
               tier: state.identity?.tier || 'FREE',
               credits: latestCredits,
+              membershipExpiresAt: state.identity?.membershipExpiresAt ?? null,
             },
           }
         : {}),

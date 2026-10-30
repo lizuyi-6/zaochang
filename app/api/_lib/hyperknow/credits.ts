@@ -4,7 +4,8 @@ import { assertFounderRoleIdentityEligible, hasRole } from "../access-control";
 
 // hyperknow 独立积分与会员套餐(每日重置)。
 // - 每日额度根据会员套餐划分: FREE=20, PRO=100, MAX=500, 北京日界(UTC+8)零点整额续满;
-//   创始人号或 HK_MAX_USERS/HK_USER_TIERS 自动激活 MAX 套餐。
+//   创始人号或 HK_MAX_USERS/HK_USER_TIERS 自动激活 MAX 套餐;
+//   兑换码授权(hk_redeem_grants)是第三条持久开通途径,与环境/角色档位取最高者。
 // - 懒重置:读取/消费时发现 reset_date 落后当天即续满,不需要定时任务,错过的日子自然归零重来。
 // - 扣减是条件 UPDATE(balance >= cost),SQLite 写串行化保证并发下不可能透支;
 //   changes=0 即余额不足。调用方约定"先校验后扣费"。
@@ -22,6 +23,8 @@ export const TIER_CONFIG: Record<SubscriptionTier, { maxCredits: number; label: 
   PRO: { maxCredits: 100, label: "PRO" },
   MAX: { maxCredits: 500, label: "MAX" },
 };
+
+const TIER_RANK: Record<SubscriptionTier, number> = { FREE: 0, PRO: 1, MAX: 2 };
 
 /** 解析用户的订阅等级：支持环境变量指定、指定名单，以及创始人号默认激活 MAX 套餐 */
 export function resolveUserTier(user: CreditIdentity): SubscriptionTier {
@@ -55,8 +58,39 @@ export function resolveUserTier(user: CreditIdentity): SubscriptionTier {
   return "FREE";
 }
 
-export function dailyCreditsFor(user: CreditIdentity): number {
-  const tier = resolveUserTier(user);
+// 兑换码开通的有效授权:取档位最高者;同档位永久(NULL)优先,其次到期最晚。
+// 授权行独立于码存在——撤码不回收已发授权,过期授权自然失活。
+async function activeGrant(
+  user: CreditIdentity,
+): Promise<{ tier: SubscriptionTier; expiresAt: string | null } | null> {
+  const row = await database()
+    .prepare(
+      `SELECT tier, expires_at AS expiresAt FROM hk_redeem_grants
+       WHERE user_email = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+       ORDER BY CASE tier WHEN 'MAX' THEN 0 WHEN 'PRO' THEN 1 ELSE 2 END,
+                expires_at IS NULL DESC, expires_at DESC
+       LIMIT 1`,
+    )
+    .bind(user.email)
+    .first<{ tier: SubscriptionTier; expiresAt: string | null }>();
+  return row ?? null;
+}
+
+/**
+ * 完整会员解析:环境/角色档位(resolveUserTier,行为不变)与兑换码授权取最高者。
+ * expiresAt 只在授权恰好是最高档时回报——env/角色档位没有到期概念,不虚构截止日。
+ */
+export async function resolveMembership(
+  user: CreditIdentity,
+): Promise<{ tier: SubscriptionTier; expiresAt: string | null }> {
+  const base = resolveUserTier(user);
+  const grant = await activeGrant(user);
+  if (!grant || TIER_RANK[grant.tier] <= TIER_RANK[base]) return { tier: base, expiresAt: null };
+  return { tier: grant.tier, expiresAt: grant.expiresAt };
+}
+
+export async function dailyCreditsFor(user: CreditIdentity): Promise<number> {
+  const { tier } = await resolveMembership(user);
   return TIER_CONFIG[tier].maxCredits;
 }
 
@@ -67,8 +101,7 @@ export function beijingToday(): string {
 
 // 懒重置 + 确保行存在;返回今日余额。INSERT..ON CONFLICT 里用 reset_date 比对:
 // 已是今天 → 保留余额;落后 → 整额续满(excluded.balance 即每日额度)。
-async function ensureFreshRow(user: CreditIdentity, today: string): Promise<void> {
-  const max = dailyCreditsFor(user);
+async function ensureFreshRow(user: CreditIdentity, today: string, max: number): Promise<void> {
   await database()
     .prepare(
       `INSERT INTO hk_credits (user_email, balance, reset_date) VALUES (?, ?, ?)
@@ -83,22 +116,23 @@ async function ensureFreshRow(user: CreditIdentity, today: string): Promise<void
 
 export async function currentCredits(
   user: CreditIdentity,
-): Promise<{ remaining: number; max: number; tier: SubscriptionTier }> {
+): Promise<{ remaining: number; max: number; tier: SubscriptionTier; expiresAt: string | null }> {
   const today = beijingToday();
-  const max = dailyCreditsFor(user);
-  const tier = resolveUserTier(user);
-  await ensureFreshRow(user, today);
+  const { tier, expiresAt } = await resolveMembership(user);
+  const max = TIER_CONFIG[tier].maxCredits;
+  await ensureFreshRow(user, today, max);
   const row = await database()
     .prepare(`SELECT balance FROM hk_credits WHERE user_email = ? AND reset_date = ?`)
     .bind(user.email, today)
     .first<{ balance: number }>();
-  return { remaining: row?.balance ?? max, max, tier };
+  return { remaining: row?.balance ?? max, max, tier, expiresAt };
 }
 
 // 条件扣减。成功返回扣后余额;余额不足(含 cost > 今日额度本身)返回 null。
 export async function consumeCredits(user: CreditIdentity, cost: number): Promise<number | null> {
   const today = beijingToday();
-  await ensureFreshRow(user, today);
+  const { tier } = await resolveMembership(user);
+  await ensureFreshRow(user, today, TIER_CONFIG[tier].maxCredits);
   const updated = await database()
     .prepare(
       `UPDATE hk_credits SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
@@ -216,7 +250,8 @@ export async function consumeCreditsIdempotent(
 
   // 2. 首次建课: D1 原子 batch 执行条件扣费与插入 pending 排他租约
   const today = beijingToday();
-  await ensureFreshRow(user, today);
+  const { tier: freshTier } = await resolveMembership(user);
+  await ensureFreshRow(user, today, TIER_CONFIG[freshTier].maxCredits);
 
   const deductStmt = database()
     .prepare(

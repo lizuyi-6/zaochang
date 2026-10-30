@@ -1,0 +1,37 @@
+import { requireAdminOrAgent } from "../../_lib/access-control";
+import { guardWrite } from "../../_lib/route-guards";
+import { createRedeemCodes, listRedeemCodes, revokeRedeemCode } from "../../_lib/hyperknow/redeem";
+import { jsonError } from "../../_lib/community";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    await requireAdminOrAgent();
+    return await listRedeemCodes();
+  } catch (error) {
+    return jsonError(error);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
+    if (guarded instanceof Response) return guarded;
+    const input = await request.json().catch(() => ({})) as Record<string, unknown>;
+    return await createRedeemCodes(guarded.member, input);
+  } catch (error) {
+    return jsonError(error);
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const guarded = await guardWrite(request, { member: "adminOrAgent", sameOrigin: true });
+    if (guarded instanceof Response) return guarded;
+    const input = await request.json().catch(() => ({})) as Record<string, unknown>;
+    return await revokeRedeemCode(guarded.member, input);
+  } catch (error) {
+    return jsonError(error);
+  }
+}

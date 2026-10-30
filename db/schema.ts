@@ -1285,3 +1285,49 @@ export const hkLectureImages = sqliteTable(
     index("hk_lecture_images_url_idx").on(table.url),
   ],
 );
+
+// 见界会员兑换码:管理台/机器通道发放,会员在 设置 → 兑换码 输入换取 PRO/MAX 套餐。
+// 与 invitation_codes 同纪律:库存只存 SHA-256 哈希,明文只在创建响应出现一次;
+// duration_days 为 NULL 表示永久授权。
+export const hkRedeemCodes = sqliteTable(
+  "hk_redeem_codes",
+  {
+    id: text("id").primaryKey(),
+    codeHash: text("code_hash").notNull().unique(),
+    label: text("label").notNull().default(""),
+    tier: text("tier").notNull(),
+    durationDays: integer("duration_days"),
+    maxUses: integer("max_uses").notNull().default(1),
+    usesCount: integer("uses_count").notNull().default(0),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastUsedAt: text("last_used_at"),
+  },
+  (table) => [
+    index("hk_redeem_codes_status_idx").on(table.revokedAt, table.expiresAt),
+    check("hk_redeem_codes_tier_valid", sql`${table.tier} in ('PRO', 'MAX')`),
+    check("hk_redeem_codes_max_uses_valid", sql`${table.maxUses} between 1 and 100`),
+    check("hk_redeem_codes_uses_valid", sql`${table.usesCount} between 0 and ${table.maxUses}`),
+  ],
+);
+
+// 兑换即授权:一次成功兑换插入一行,授权行独立于码存在(撤码不回收已发授权)。
+// expires_at 为 NULL 表示永久;UNIQUE(user_email, code_id) 保证同码同人只兑一次。
+export const hkRedeemGrants = sqliteTable(
+  "hk_redeem_grants",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    codeId: text("code_id").notNull().references(() => hkRedeemCodes.id),
+    tier: text("tier").notNull(),
+    expiresAt: text("expires_at"),
+    redeemedAt: text("redeemed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("hk_redeem_grants_user_code_idx").on(table.userEmail, table.codeId),
+    index("hk_redeem_grants_user_active_idx").on(table.userEmail, table.expiresAt),
+    check("hk_redeem_grants_tier_valid", sql`${table.tier} in ('PRO', 'MAX')`),
+  ],
+);

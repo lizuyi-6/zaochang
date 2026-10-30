@@ -573,7 +573,7 @@ export async function POST(request: Request) {
           try {
             push({ type: "course_generation_step", step_id: "boot", status: "loading", title: "Starting course generation", placeholder: "Crafting Courses..." });
             push({ type: "course_generation_started", course_uuid: courseUuid, query });
-            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: dailyCreditsFor(member) } });
+            push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: await dailyCreditsFor(member) } });
 
             push({
               type: "course_generation_step",

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BarChart3, ClipboardList, Cloud, FileSearch, Flag, Home,
+  BarChart3, ClipboardList, Cloud, FileSearch, Flag, Gift, Home,
   Lightbulb, MailPlus, RefreshCw, ScrollText, ShieldAlert, Ticket, Users,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -26,6 +26,7 @@ import { AuditSection } from "./sections/audit";
 import { ContentSection } from "./sections/content";
 import { DataSection } from "./sections/data";
 import { HostingGrantsSection } from "./sections/hosting-grants";
+import { HkRedeemCodesSection } from "./sections/hk-redeem-codes";
 import { InboxSection } from "./sections/inbox";
 import { IncubationSection } from "./sections/incubation";
 import { InvitationsSection } from "./sections/invitations";
@@ -34,7 +35,7 @@ import { RecruitSection } from "./sections/recruit";
 import { ReportsRiskSection } from "./sections/reports-risk";
 import { ReviewSection } from "./sections/review";
 
-type SectionId = "inbox" | "review" | "reports" | "members" | "content" | "data" | "invitations" | "hosting" | "incubation" | "audit" | "recruit";
+type SectionId = "inbox" | "review" | "reports" | "members" | "content" | "data" | "invitations" | "hk-redeem" | "hosting" | "incubation" | "audit" | "recruit";
 type Notice = { message: string; kind: "success" | "error" } | null;
 type MutationResult = Record<string, unknown>;
 
@@ -46,6 +47,7 @@ const sections: Array<{ id: SectionId; label: string; icon: typeof Home }> = [
   { id: "content", label: "内容", icon: FileSearch },
   { id: "data", label: "数据", icon: BarChart3 },
   { id: "invitations", label: "邀请码", icon: Ticket },
+  { id: "hk-redeem", label: "兑换码", icon: Gift },
   { id: "hosting", label: "托管授权", icon: Cloud },
   { id: "incubation", label: "孵化", icon: Lightbulb },
   { id: "recruit", label: "选拔", icon: MailPlus },
@@ -382,6 +384,7 @@ export function AdminConsole() {
           {section === "content" && <ContentSection refreshKey={sectionRefreshKey} busy={busy} onAction={moderateContent} onStatus={showStatus} />}
           {section === "data" && <DataSection overview={overview} onStatus={showStatus} />}
           {section === "invitations" && <InvitationsSection invitations={invitations} draft={invitationDraft} setDraft={setInvitationDraft} newCode={newInvitationCode} onCreate={() => void createInvitation()} onCopy={() => void copyInvitation()} onRevoke={revokeInvitation} busy={busy} />}
+          {section === "hk-redeem" && <HkRedeemCodesSection refreshKey={sectionRefreshKey} busy={busy} onStatus={showStatus} />}
           {section === "hosting" && <HostingGrantsSection grants={hostingGrants} draft={hostingGrantDraft} setDraft={setHostingGrantDraft} onSubmit={submitHostingGrant} onRevoke={revokeHostingGrant} busy={busy} />}
           {section === "incubation" && <IncubationSection projects={projects} stages={stages} onChange={changeProject} onSave={updateProject} busy={busy} />}
           {section === "recruit" && <RecruitSection refreshKey={sectionRefreshKey} busy={busy} onStatus={showStatus} />}

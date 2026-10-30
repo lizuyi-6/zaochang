@@ -7,6 +7,7 @@ import { memoryEntries } from './data';
 import { useI18n } from './i18n';
 import { L } from './i18n/content';
 import { openFeedbackMail } from './actions';
+import { fetchMe, redeemCoupon } from './backend';
 import { toast } from './toast';
 import './SettingsModal.css';
 
@@ -98,6 +99,41 @@ function GeneralTab({ state, set }: Pick<PageProps, 'state' | 'set'>) {
   const [memoryOn, setMemoryOn] = useState(true);
   const [coupon, setCoupon] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
+
+  /* 兑换码换取会员:成功后即时重拉身份(get_user_info 已含授权档位/到期),
+   * 订阅面板与 Header 徽标随之刷新;失败按结构化原因提示。
+   * 判别式用 === false 显式比较(同 ChatPage 惯例):SPA tsconfig 未开 strict,
+   * 非 strict 模式下 TS 5.x 不按 if (x.ok) 收窄布尔判别联合。 */
+  const handleRedeem = async () => {
+    const code = coupon.trim();
+    if (!code || redeeming) return;
+    setRedeeming(true);
+    try {
+      const result = await redeemCoupon(code);
+      if (result.ok === false) {
+        if (result.reason === 'already_used') {
+          toast(L('You have already redeemed this code.', '这张码你已经兑换过了。'));
+        } else if (result.reason === 'unavailable') {
+          toast(L('This code is no longer available.', '兑换码已失效(撤销/过期/用尽)。'));
+        } else if (result.reason === 'unauthorized') {
+          toast(L('Session expired, please sign in again.', '登录状态已失效,请重新登录。'));
+        } else if (result.reason === 'network') {
+          toast(L('Network unavailable, try again later.', '网络不可用,请稍后再试。'));
+        } else {
+          toast(L('Invalid coupon code.', '兑换码无效,请检查后重试。'));
+        }
+        return;
+      }
+      setCoupon('');
+      const identity = await fetchMe();
+      if (identity) set({ identity, plan: (identity.tier as 'FREE' | 'PRO' | 'MAX') || 'FREE' });
+      const expiry = result.expiresAt ? ` · ${L('valid until', '有效期至')} ${result.expiresAt.slice(0, 10)}` : L(' · permanent', ' · 永久有效');
+      toast(L(`Coupon redeemed: ${result.tier}${expiry}`, `兑换成功:已开通 ${result.tier}${expiry}`));
+    } finally {
+      setRedeeming(false);
+    }
+  };
 
   return (
     <>
@@ -120,7 +156,14 @@ function GeneralTab({ state, set }: Pick<PageProps, 'state' | 'set'>) {
       <div className="sm-section">
         <h3 className="sm-section-title">{t('settings.subscription')}</h3>
         <div className="sm-panel sm-row-between">
-          <span className="sm-free-chip">{state.plan}</span>
+          <div>
+            <span className="sm-free-chip">{state.plan}</span>
+            {state.identity?.membershipExpiresAt && (
+              <div className="sm-hint">
+                {L('Valid until', '有效期至')} {state.identity.membershipExpiresAt.slice(0, 10)}
+              </div>
+            )}
+          </div>
           <div className="sm-sub-actions">
             <button
               className="sm-link"
@@ -149,13 +192,13 @@ function GeneralTab({ state, set }: Pick<PageProps, 'state' | 'set'>) {
           />
           <button
             className="sm-redeem"
-            disabled
-            title={L('Coupon redemption is not live yet', '兑换码通道即将上线')}
+            disabled={redeeming || !coupon.trim()}
+            onClick={() => void handleRedeem()}
           >
-            {t('settings.redeem')}
+            {redeeming ? L('Redeeming…', '兑换中…') : t('settings.redeem')}
           </button>
         </div>
-        <div className="sm-hint">{L('Coupon redemption is not live yet.', '兑换码通道即将上线。')}</div>
+        <div className="sm-hint">{L('HK- code from the team. Membership takes effect immediately.', '输入 HK- 开头的兑换码,会员即时生效;档位与到期见上方订阅面板。')}</div>
       </div>
 
       <div className="sm-section">

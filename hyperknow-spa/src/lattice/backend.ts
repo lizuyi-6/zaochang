@@ -825,6 +825,8 @@ export interface MeInfo {
   tier: string;
   /** W7:null = 后端未回报余额(不可伪造为 20 误导"余额充足"),调用方显示 — 并择机重拉 */
   credits: number | null;
+  /** 兑换码授权的会员到期(null = env/角色档位或永久授权,没有到期概念) */
+  membershipExpiresAt: string | null;
 }
 
 /** 当前登录成员身份(造场会话);纯静态托管/未登录下返回 null,由调用方回退演示数据。 */
@@ -839,7 +841,7 @@ export async function fetchMe(): Promise<MeInfo | null> {
   try {
     const json = (await res.json()) as {
       success?: boolean;
-      data?: { username?: string; email?: string; subscription?: { tier?: string; remaining_credits?: number } };
+      data?: { username?: string; email?: string; subscription?: { tier?: string; remaining_credits?: number; expires_at?: string | null } };
     };
     if (!json.success || !json.data?.email) return null;
     return {
@@ -847,9 +849,48 @@ export async function fetchMe(): Promise<MeInfo | null> {
       email: json.data.email,
       tier: json.data.subscription?.tier || 'FREE',
       credits: json.data.subscription?.remaining_credits ?? null,
+      membershipExpiresAt: json.data.subscription?.expires_at ?? null,
     };
   } catch {
     return null;
+  }
+}
+
+export type RedeemFailureReason =
+  | 'invalid'      // 码不存在或格式不对
+  | 'unavailable'  // 已撤销 / 已过期 / 次数用尽
+  | 'already_used' // 本人已兑换过这张码
+  | 'unauthorized' // 未登录(会话失效)
+  | 'network';     // 网络不可达 / 超时 / 响应异常
+
+export type RedeemResult =
+  | { ok: true; tier: 'PRO' | 'MAX'; expiresAt: string | null }
+  | { ok: false; reason: RedeemFailureReason };
+
+/** 兑换码换取见界会员(POST /api/hyperknow/redeem);双轨纪律:失败返回结构化原因,由调用方 toast。 */
+export async function redeemCoupon(rawCode: string): Promise<RedeemResult> {
+  let res: Response;
+  try {
+    res = await fetch('/api/hyperknow/redeem', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: rawCode }),
+      signal: AbortSignal.timeout(JSON_FETCH_TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
+  if (res.status === 401) return { ok: false, reason: 'unauthorized' };
+  try {
+    const json = (await res.json()) as { error?: string; tier?: string; expiresAt?: string | null };
+    if (res.ok && (json.tier === 'PRO' || json.tier === 'MAX')) {
+      return { ok: true, tier: json.tier, expiresAt: json.expiresAt ?? null };
+    }
+    if (json.error === 'redeem_already_used') return { ok: false, reason: 'already_used' };
+    if (json.error === 'redeem_unavailable') return { ok: false, reason: 'unavailable' };
+    return { ok: false, reason: 'invalid' };
+  } catch {
+    return { ok: false, reason: 'network' };
   }
 }
 
