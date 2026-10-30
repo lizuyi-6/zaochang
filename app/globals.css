@@ -206,6 +206,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.012em; }
 /* 账户申请页 /apply:沿用 auth-invite-form,补多行输入、提交成功态,以及登录页的申请入口。 */
 .auth-invite-form > textarea { background: #fffdf8; border: 1px solid #c6c5bf; border-radius: 0; color: #171816; font-family: inherit; font-size: 12px; line-height: 1.6; min-height: 112px; padding: 10px 12px; resize: vertical; }.auth-invite-form > textarea:focus { border-color: #171816; outline: 2px solid rgb(216 180 106 / 28%); outline-offset: 1px; }
 .apply-done { display: grid; gap: 10px; }.apply-done strong { color: #171816; font-size: 15px; }.apply-done p { color: #474943; font-size: 11px; line-height: 1.7; margin: 0; }.apply-done .auth-provider { justify-content: center; margin-top: 6px; }
+.welcome-hint { color: #8a8b84; display: block; font-size: 9px; line-height: 1.5; margin-top: -3px; }
 .auth-apply-link { color: #171816; display: inline-block; font-size: 10px; margin-top: 10px; text-decoration: underline; text-underline-offset: 3px; }.auth-apply-link:hover { color: #ff5c3d; }
 /* 扫码登录:桌面 QR 面板 + 手机确认/扫一扫页。 */
 .auth-qr-panel { align-items: center; display: flex; flex-direction: column; gap: 10px; }
@@ -855,6 +856,7 @@ div.sakura-qr-stage { cursor: default; }
 .admin-member-name strong { font-size: 12px; }
 .admin-member-name span, .admin-member-main small { color: var(--muted); font-size: 9px; }
 .admin-member-name em { background: color-mix(in srgb, var(--coral) 12%, var(--surface)); color: var(--coral); font-size: 8px; font-style: normal; padding: 3px 6px; }
+.admin-member-name em.admin-member-tag { background: var(--paper); color: var(--muted); }
 .admin-member-main p { color: var(--muted); font-size: 9px; line-height: 1.6; margin: 0; overflow-wrap: anywhere; }
 .admin-member-actions { align-items: start; display: flex; flex-wrap: wrap; gap: 6px; }
 .admin-inline-link { border: 0 !important; color: var(--muted) !important; min-height: 28px !important; padding: 3px 5px !important; }
@@ -1369,6 +1371,15 @@ body:has(.reading-ai-panel.open) .reading-ai-rail { display: none; }
    .profile-edit-page 的版式变量(max-width/线框/mono 小字),独立类避免耦合。 */
 .auth-provider.passkey { color: var(--coral, #ff5c3d); }
 .passkey-manager { margin: 0 auto; max-width: 860px; }
+.profile-username { color: var(--muted); display: block; font-family: var(--font-geist-mono), monospace; font-size: 12px; margin: -2px 0 8px; }
+.identity-editor-grid { display: grid; gap: 14px; padding: 18px 0; }
+.identity-editor-grid label { display: grid; gap: 6px; }
+.identity-editor-grid label > span:first-child { color: var(--muted); font-size: 10px; }
+.identity-inline { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.identity-inline input { background: var(--surface); border: 1px solid var(--line); border-radius: 0; flex: 1 1 220px; min-height: 40px; padding: 0 11px; }
+.identity-inline input:focus { border-color: var(--ink); outline: none; }
+.identity-username { align-items: center; display: inline-flex; font-family: var(--font-geist-mono), monospace; font-size: 14px; gap: 4px; }
+.identity-username small { color: var(--muted); font-family: inherit; font-size: 9px; margin-left: 10px; }
 .passkey-manager > header { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 20px; justify-content: space-between; padding: 28px 0 18px; }
 .passkey-manager > header span { color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 8px; }
 .passkey-manager h2 { font-size: 22px; margin: 6px 0; }

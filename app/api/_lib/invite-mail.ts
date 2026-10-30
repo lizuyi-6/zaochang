@@ -91,3 +91,54 @@ export function invitationEmail(input: InvitationEmailInput): InvitationEmail {
 
   return { subject, text, html };
 }
+
+// ———— 管理员直接开通账户的通知 ————
+// 不含任何凭据:登录靠「邮箱验证码」,收件箱本身就是钥匙。所以这封信可以重发、发失败也不必回滚建号。
+
+export type ProvisionedEmailInput = { nickname: string; email: string; signinUrl: string };
+
+export const PROVISIONED_EMAIL_SUBJECT = "你的造场账户已开通";
+
+export function accountProvisionedEmail(input: ProvisionedEmailInput): InvitationEmail {
+  const name = input.nickname.trim() || "你好";
+  const subject = PROVISIONED_EMAIL_SUBJECT;
+  const text = [
+    `${name}：`,
+    "",
+    `造场管理员已经用这个邮箱（${input.email}）为你开通了造场账户，不需要邀请码。`,
+    "",
+    "怎么登录：",
+    `1. 打开造场登录页 ${input.signinUrl}`,
+    `2. 在「邮箱验证码」一栏填写 ${input.email}，邀请码一栏留空，点「发送验证码」，把收到的 6 位验证码填回去即可登录。`,
+    "3. 第一次登录会请你设置一个全站唯一的用户名（设定后不可修改）和昵称，之后就能正常使用了。",
+    "",
+    "如果你不认识造场或不需要这个账户，忽略这封邮件即可；没有收件箱里的验证码，任何人都无法登录。",
+    "",
+    "—— 造场 zaochang@aetherstudio.top",
+  ].join("\n");
+
+  const html = [
+    `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(subject)}</title></head>`,
+    `<body style="margin:0;padding:0;background:#f4f2ec;">`,
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f2ec;"><tr><td align="center" style="padding:28px 14px;">`,
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#fffdf8;border:1px solid #c6c5bf;">`,
+    `<tr><td style="background:#101416;padding:18px 28px;${FONT}color:#f4f1ea;font-size:17px;font-weight:900;letter-spacing:1px;">造场<span style="${MONO}color:#8c9691;font-size:10px;font-weight:400;letter-spacing:1px;margin-left:10px;">ZAOCHANG / ACCOUNT</span></td></tr>`,
+    `<tr><td style="padding:30px 28px 6px 28px;${FONT}color:#171816;">`,
+    `<p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;">${escape(name)}：</p>`,
+    `<p style="margin:0 0 6px 0;font-size:14px;line-height:1.8;color:#3a3c37;">造场管理员已经用这个邮箱为你开通了造场账户，不需要邀请码：</p>`,
+    `</td></tr>`,
+    `<tr><td style="padding:8px 28px 0 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="background:#f4f1ea;border:1px dashed #b8b6ad;padding:16px 8px;${MONO}font-size:15px;font-weight:700;color:#101416;word-break:break-all;">${escape(input.email)}</td></tr></table></td></tr>`,
+    `<tr><td style="padding:22px 28px 0 28px;${FONT}color:#171816;">`,
+    `<p style="margin:0 0 8px 0;font-size:14px;font-weight:700;">怎么登录</p>`,
+    `<ol style="margin:0;padding:0 0 0 20px;font-size:13px;line-height:1.9;color:#3a3c37;">`,
+    `<li>打开造场登录页（下方按钮）。</li>`,
+    `<li>在「邮箱验证码」一栏填写上面的邮箱，邀请码一栏留空，点「发送验证码」，把收到的 6 位验证码填回去即可登录。</li>`,
+    `<li>第一次登录会请你设置一个全站唯一的用户名（设定后不可修改）和昵称，之后就能正常使用了。</li>`,
+    `</ol></td></tr>`,
+    `<tr><td align="center" style="padding:26px 28px 6px 28px;"><a href="${escape(input.signinUrl)}" style="display:inline-block;background:#101416;color:#f4f1ea;${FONT}font-size:14px;font-weight:700;line-height:1;text-decoration:none;padding:14px 34px;">前往造场登录</a></td></tr>`,
+    `<tr><td align="center" style="padding:6px 28px 0 28px;${FONT}font-size:11px;line-height:1.6;color:#92948d;word-break:break-all;">按钮打不开时，复制到浏览器打开：${escape(input.signinUrl)}</td></tr>`,
+    `<tr><td style="padding:24px 28px 26px 28px;${FONT}font-size:11px;line-height:1.7;color:#92948d;border-top:1px solid #e4e2db;">如果你不认识造场或不需要这个账户，忽略这封邮件即可；没有收件箱里的验证码，任何人都无法登录。<br>造场 · zaochang@aetherstudio.top</td></tr>`,
+    `</table></td></tr></table></body></html>`,
+  ].join("");
+  return { subject, text, html };
+}

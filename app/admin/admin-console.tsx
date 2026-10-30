@@ -47,7 +47,7 @@ const sections: Array<{ id: SectionId; label: string; icon: typeof Home }> = [
   { id: "members", label: "会员", icon: Users },
   { id: "content", label: "内容", icon: FileSearch },
   { id: "data", label: "数据", icon: BarChart3 },
-  { id: "applications", label: "账户申请", icon: UserPlus },
+  { id: "applications", label: "账户申请与开通", icon: UserPlus },
   { id: "invitations", label: "邀请码", icon: Ticket },
   { id: "hk-redeem", label: "兑换码", icon: Gift },
   { id: "hosting", label: "托管授权", icon: Cloud },

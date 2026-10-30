@@ -18,6 +18,7 @@ import {
 import { prepareRequestBody } from "./request-body";
 import { handleWithAnonCache } from "./anon-cache";
 import { isLatticePath, cookieValue, latticeGateRedirect } from "./lattice-gate";
+import { isDocumentNavigation, isOnboardingGatedPath, onboardingRedirect } from "./onboarding-gate";
 import { SESSION_COOKIE, sessionUserFromTokenValue, safeReturnPath } from "../app/oauth-session";
 
 interface Env {
@@ -197,7 +198,23 @@ const worker = {
       if (!user) {
         return withSecurityHeaders(request, latticeGateRedirect(request.url), origin);
       }
+      // 未完成首次引导的新会员:整页进入见界前先去 /welcome(资源请求照常放行)。
+      if (user.onboardingRequired && isDocumentNavigation(request)) {
+        return withSecurityHeaders(request, onboardingRedirect(request.url), origin);
+      }
       return withSecurityHeaders(request, await env.ASSETS.fetch(request), origin);
+    }
+
+    // 首次登录引导门禁:带会话 cookie 的整页导航,若会员仍待引导(新注册/管理员开通)→ 302 /welcome。
+    // 只对整页导航查库(API/RSC/静态资源不查),豁免路径见 onboarding-gate.ts。
+    if (isDocumentNavigation(request) && isOnboardingGatedPath(url.pathname)) {
+      const raw = cookieValue(request.headers.get("cookie"), SESSION_COOKIE);
+      if (raw) {
+        const member = await sessionUserFromTokenValue(raw);
+        if (member?.onboardingRequired) {
+          return withSecurityHeaders(request, onboardingRedirect(request.url), origin);
+        }
+      }
     }
 
     // 匿访页面边缘缓存:命中直接返回(响应已含安全头,写入时经过同一管道)。

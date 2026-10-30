@@ -193,6 +193,7 @@ export function SiteShell({ children, member }: { children: ReactNode; member: M
   if (
     pathname.startsWith("/signin") ||
     pathname === "/apply" ||
+    pathname === "/welcome" ||
     pathname === "/callback" ||
     pathname.startsWith("/oauth")
   ) return <>{children}</>;

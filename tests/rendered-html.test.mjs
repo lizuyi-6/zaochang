@@ -23,6 +23,7 @@ import { register as register_17_hosting } from "./suites/17-hosting.tests.mjs";
 import { register as register_18_admin_platform } from "./suites/18-admin-platform.tests.mjs";
 import { register as register_19_hk_redeem } from "./suites/19-hk-redeem.tests.mjs";
 import { register as register_20_account_applications } from "./suites/20-account-applications.tests.mjs";
+import { register as register_21_member_onboarding } from "./suites/21-member-onboarding.tests.mjs";
 
 describe("造场社区集成流程", { concurrency: false }, () => {
   register_01_render();
@@ -45,4 +46,5 @@ describe("造场社区集成流程", { concurrency: false }, () => {
   register_18_admin_platform();
   register_19_hk_redeem();
   register_20_account_applications();
+  register_21_member_onboarding();
 });

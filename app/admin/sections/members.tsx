@@ -104,7 +104,7 @@ export function MembersSection({ refreshKey, busy, onSuspend, onStatus }: {
       {loading ? <p className="admin-muted">正在读取会员…</p> : members.length ? <div className="admin-member-list">{members.map((member) => <article className="admin-member-card" key={member.email}>
         <div className="admin-member-avatar"><UserRound size={19} /></div>
         <div className="admin-member-main">
-          <div className="admin-member-name"><strong>{member.displayName || "未设置昵称"}</strong>{member.memberNumber !== null && <span>#{String(member.memberNumber).padStart(4, "0")}</span>}{member.suspendedAt && <em>已停用</em>}</div>
+          <div className="admin-member-name"><strong>{member.displayName || "未设置昵称"}</strong>{member.username && <span>{`@${member.username}`}</span>}{member.memberNumber !== null && <span>#{String(member.memberNumber).padStart(4, "0")}</span>}{member.provisioned && <em className="admin-member-tag">管理员开通</em>}{member.onboardingRequired && <em className="admin-member-tag">待完善资料</em>}{member.suspendedAt && <em>已停用</em>}</div>
           <small>{member.email} · 加入于 {member.joinedAt}</small>
           <p>登录：{member.loginMethods.length ? member.loginMethods.join("、") : "无可用登录方式"} · 作品：待审 {member.products.pendingReview} / 已批准 {member.products.approved} / 已驳回 {member.products.rejected}</p>
           <p>钱包：{member.wallet.balance} 果可用 / {member.wallet.pendingBalance} 果待结算 · {member.wallet.status ?? "无钱包"} · 会话 {member.activeSessions} · 有效 API key {member.activeApiKeys}</p>

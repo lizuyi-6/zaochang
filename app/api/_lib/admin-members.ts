@@ -12,6 +12,9 @@ type MemberRow = {
   suspendedAt: string | null;
   suspendedReason: string;
   suspendedBy: string | null;
+  username: string | null;
+  onboardingRequired: number;
+  provisioned: number;
   oauthProviders: string;
   hasPasskey: number;
   pendingProducts: number;
@@ -28,6 +31,8 @@ const MEMBER_FIELDS = `
   m.email, m.display_name AS displayName, m.member_number AS memberNumber,
   m.joined_at AS joinedAt, m.suspended_at AS suspendedAt,
   m.suspended_reason AS suspendedReason, m.suspended_by AS suspendedBy,
+  m.username, m.onboarding_required AS onboardingRequired,
+  EXISTS(SELECT 1 FROM admin_provisioned_accounts pa WHERE pa.email = m.email) AS provisioned,
   COALESCE((SELECT group_concat(provider, ',') FROM (
     SELECT DISTINCT provider FROM oauth_accounts WHERE email = m.email ORDER BY provider
   )), '') AS oauthProviders,
@@ -47,6 +52,9 @@ function memberPayload(row: MemberRow) {
   return {
     email: row.email,
     displayName: row.displayName,
+    username: row.username ?? null,
+    onboardingRequired: Number(row.onboardingRequired) === 1,
+    provisioned: Number(row.provisioned) === 1,
     memberNumber: row.memberNumber,
     joinedAt: row.joinedAt,
     loginMethods,

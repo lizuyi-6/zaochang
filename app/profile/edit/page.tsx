@@ -8,6 +8,7 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { listCredentials, splitTransports } from "../../api/_lib/webauthn";
 import { listUserApiKeys } from "../../api/_lib/user-api-key";
 import { resolvePublicAppOrigin } from "../../lib/public-origin";
+import { IdentityEditor } from "./identity-editor";
 import { ProfileEditForm } from "./profile-edit-form";
 import { PasskeyManager, type PasskeyItem } from "./passkey-manager";
 import { ApiKeyManager, type ApiKeyItem } from "./api-key-manager";
@@ -26,8 +27,8 @@ export default async function ProfileEditPage() {
   const publicOrigin = resolvePublicAppOrigin(requestOrigin, values.APP_ENV, values.PUBLIC_APP_ORIGIN);
   const [profile, passkeyRows, apiKeyRows] = await Promise.all([
     database().prepare(
-      "SELECT display_name AS displayName, bio, location, website FROM members WHERE email = ?",
-    ).bind(user.email).first<{ displayName: string; bio: string; location: string; website: string }>(),
+      "SELECT display_name AS displayName, bio, location, website, username FROM members WHERE email = ?",
+    ).bind(user.email).first<{ displayName: string; bio: string; location: string; website: string; username: string | null }>(),
     listCredentials(user.email),
     user.authVia === "session" ? listUserApiKeys(user.email) : Promise.resolve([]),
   ]);
@@ -44,6 +45,7 @@ export default async function ProfileEditPage() {
   return (
     <div>
       <ProfileEditForm initial={profile ?? { displayName: user.displayName, bio: "正在把一个想法变成作品。", location: "杭州", website: "" }} />
+      {user.authVia === "session" && <IdentityEditor initial={{ username: profile?.username ?? null, nickname: profile?.displayName ?? user.displayName }} />}
       <PasskeyManager initial={passkeys} />
       {user.authVia === "session" && <ApiKeyManager initial={apiKeys} publicOrigin={publicOrigin} />}
     </div>

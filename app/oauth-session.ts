@@ -3,6 +3,7 @@ import { toBase64Url } from "./api/_lib/crypto-utils";
 import { cookies, headers } from "next/headers";
 import { resolvePublicAppOrigin } from "./lib/public-origin";
 import { accessError, isInvitationRegistrationRequiredError, isInvitationUnavailableError } from "./api/_lib/errors";
+import { EMAIL_REGISTER_MEMBER_SQL, OAUTH_REGISTER_MEMBER_SQL, SYNC_PROVIDER_DISPLAY_NAME_SQL } from "./api/_lib/member-identity-sql";
 
 export type OAuthProvider = "github";
 // 会话签发可用的 provider:OAuth 登录走 OAuthProvider,邮箱验证码登录走 "email",
@@ -16,6 +17,10 @@ export type SessionUser = {
   displayName: string;
   email: string;
   fullName: string | null;
+  // 仅会话查询(sessionUserFromTokenValue)填充:新注册/管理员开通且尚未完成首次引导。
+  // Worker 入口据此把整页导航 302 到 /welcome;其它来源的 SessionUser 不带此字段。
+  onboardingRequired?: boolean;
+  username?: string | null;
 };
 
 type ProviderConfig = {
@@ -160,13 +165,20 @@ export async function sessionUserFromTokenValue(raw: string | null | undefined):
   try {
     const tokenHash = await hashToken(raw);
     const row = await database().prepare(
-      `SELECT m.display_name AS displayName, m.email AS email
+      `SELECT m.display_name AS displayName, m.email AS email,
+              m.onboarding_required AS onboardingRequired, m.username AS username
        FROM auth_sessions s JOIN members m ON m.email = s.user_email
        WHERE s.token_hash = ? AND s.expires_at > CURRENT_TIMESTAMP
          AND m.suspended_at IS NULL`,
-    ).bind(tokenHash).first<{ displayName: string; email: string }>();
+    ).bind(tokenHash).first<{ displayName: string; email: string; onboardingRequired: number; username: string | null }>();
     if (!row) return null;
-    return { displayName: row.displayName, email: row.email, fullName: row.displayName };
+    return {
+      displayName: row.displayName,
+      email: row.email,
+      fullName: row.displayName,
+      onboardingRequired: Number(row.onboardingRequired) === 1,
+      username: row.username ?? null,
+    };
   } catch {
     return null;
   }
@@ -212,7 +224,8 @@ export async function ensureOAuthUser(
   if (existing) {
     const stable = { ...user, email: existing.email };
     await db.batch([
-      db.prepare(`UPDATE members SET display_name = ? WHERE email = ?`).bind(stable.displayName, stable.email),
+      // 本人设定过昵称(display_name_custom=1)后不再被 GitHub 昵称覆盖。
+      db.prepare(SYNC_PROVIDER_DISPLAY_NAME_SQL).bind(stable.displayName, stable.email),
       db.prepare(
         `UPDATE oauth_accounts
          SET display_name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
@@ -226,11 +239,8 @@ export async function ensureOAuthUser(
 
   try {
     await db.batch([
-    db.prepare(
-      `INSERT INTO members (email, display_name)
-       VALUES (?, ?)
-       ON CONFLICT(email) DO UPDATE SET display_name = excluded.display_name`,
-    ).bind(user.email, user.displayName),
+    // 新成员带 onboarding_required=1(首次登录先完善资料);同邮箱已是成员时不动引导标记。
+    db.prepare(OAUTH_REGISTER_MEMBER_SQL).bind(user.email, user.displayName),
     db.prepare(
       `INSERT OR IGNORE INTO wallets (user_email, balance, lifetime_earned, lifetime_spent)
        VALUES (?, 0, 0, 0)`,
@@ -261,7 +271,7 @@ export async function ensureOAuthUser(
       throw error;
     }
     const stable = { ...user, email: winner.email };
-    await db.prepare(`UPDATE members SET display_name = ? WHERE email = ?`).bind(stable.displayName, stable.email).run();
+    await db.prepare(SYNC_PROVIDER_DISPLAY_NAME_SQL).bind(stable.displayName, stable.email).run();
     return stable;
   }
   return user;
@@ -286,11 +296,8 @@ export async function ensureEmailUser(email: string, invitationHash: string | nu
   const redemptionId = `invite-redemption:${crypto.randomUUID()}`;
   try {
     await db.batch([
-      db.prepare(
-        `INSERT INTO members (email, display_name)
-         VALUES (?, ?)
-         ON CONFLICT(email) DO NOTHING`,
-      ).bind(email, displayName),
+      // 新成员带 onboarding_required=1(首次登录先完善资料)。
+      db.prepare(EMAIL_REGISTER_MEMBER_SQL).bind(email, displayName),
       db.prepare(
         `INSERT OR IGNORE INTO wallets (user_email, balance, lifetime_earned, lifetime_spent)
          VALUES (?, 0, 0, 0)`,

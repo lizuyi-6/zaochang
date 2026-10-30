@@ -24,8 +24,17 @@ export const members = sqliteTable("members", {
   suspendedAt: text("suspended_at"),
   suspendedReason: text("suspended_reason").notNull().default(""),
   suspendedBy: text("suspended_by"),
+  // 唯一用户名(0043):小写字母开头,小写字母/数字/下划线,3–20 位;设定后不可改。
+  // 格式与不可变由触发器 members_username_* 在 DB 层强制;老会员可为空。
+  username: text("username"),
+  // 首次登录引导(0043):新注册(邀请码/管理员开通)置 1,完成引导(必须先有 username)才能置 0。
+  // dev-login 与存量会员保持 0。Worker 入口对整页导航据此 302 到 /welcome。
+  onboardingRequired: integer("onboarding_required").notNull().default(0),
+  // 昵称是否由本人设定过(0043):置 1 后 GitHub 登录不再用 GitHub 昵称覆盖 display_name。
+  displayNameCustom: integer("display_name_custom").notNull().default(0),
 }, (table) => [
   uniqueIndex("members_member_number_idx").on(table.memberNumber),
+  uniqueIndex("members_username_idx").on(table.username),
 ]);
 
 export const apiKeys = sqliteTable("api_keys", {
@@ -1413,5 +1422,25 @@ export const accountApplications = sqliteTable(
     // 已通过必须挂着一张邀请码;未通过的不得挂码、不得有投递状态。
     check("account_applications_approved_has_invitation", sql`(${table.status} = 'approved') = (${table.invitationId} IS NOT NULL)`),
     check("account_applications_mail_requires_approval", sql`${table.status} = 'approved' OR ${table.mailStatus} = 'none'`),
+  ],
+);
+
+// 管理员直接开通的账户(0043):不经邀请码,管理员建 members + 钱包,再发「账户已开通」通知。
+// 通知里没有任何凭据(登录靠收件箱收验证码),所以发信失败不回滚建号,只记 mail_status。
+export const adminProvisionedAccounts = sqliteTable(
+  "admin_provisioned_accounts",
+  {
+    email: text("email").primaryKey().references(() => members.email),
+    createdBy: text("created_by").notNull(),
+    note: text("note").notNull().default(""),
+    mailStatus: text("mail_status").notNull().default("sending"),
+    mailError: text("mail_error"),
+    mailSentAt: text("mail_sent_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("admin_provisioned_accounts_created_idx").on(table.createdAt),
+    check("admin_provisioned_accounts_mail_status_valid", sql`${table.mailStatus} in ('sending', 'sent', 'failed')`),
   ],
 );

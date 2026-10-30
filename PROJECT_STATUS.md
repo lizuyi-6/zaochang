@@ -1,5 +1,25 @@
 # 造场项目账本
 
+## 2026-10-30 管理员直接开通账户 + 首次登录引导(唯一用户名/昵称)(部分完成:本地已验证;上线状态见本条末尾)
+
+- **范围**(用户本轮选定:新增管理员直接开通;所有新注册账户都要引导,存量会员不受影响;唯一用户名 + 可重复昵称;简介/所在地/主页选填):
+  - 迁移 0043:`members` 加 `username`(唯一索引)、`onboarding_required`、`display_name_custom`;新表 `admin_provisioned_accounts`;四个触发器(用户名格式 ×2、用户名不可改/不可清空、引导须先有用户名才能结束)。
+  - 管理员开通 `POST /api/admin/accounts`(仅人类管理员会话,不进 agent 能力表;建 members+钱包+开通记录+审计,并关闭同邮箱待审申请;不写 `oauth_accounts`,所以不经邀请码触发器,对方用邮箱验证码走「已是成员」分支登录)+ 开通通知邮件(无任何凭据;发信失败不回滚建号,`PATCH resend_notice` 重发)。
+  - 新注册(邮箱/GitHub 邀请码、管理员开通)置 `onboarding_required=1`;dev-login、`ensureMember`、0043 之前的会员保持 0。
+  - Worker 入口 `worker/onboarding-gate.ts`:带会话的整页导航(`sec-fetch-mode: navigate`,无该头时 Accept 含 text/html)在非豁免路径上 302 到 `/welcome?return_to=`;`/lattice` 分支同样处理;API/RSC/静态资源不拦(体验门槛,不是安全边界)。
+  - `/welcome` → `POST /api/onboarding`;资料页可改昵称、存量会员可一次性认领用户名(`/api/profile/identity`);两者只认 Cookie 会话。
+  - 本人设过昵称后 GitHub 登录不再覆盖 `display_name`。
+  - 管理台分区改名「账户申请与开通」:直接开通表单、待审申请上的「直接开通」、开通账户列表(首次登录/完善资料/通知状态/重发);会员列表显示 @用户名、「管理员开通」「待完善资料」。
+- **证据**:
+  - `tests/member-onboarding.test.mjs` 14 例:规则、门禁判定/路径/响应、开通通知模板、node:sqlite + 全量迁移执行共享 SQL 与触发器、0043 升级语义(存量会员不被拦)、源码契约。
+  - `tests/suites/21-member-onboarding.tests.mjs` 5 例(真预览):开通安全矩阵;开通→通知→免邀请码登录→整页导航 302 `/welcome?return_to=/profile`、API 200、RSC 不拦→校验分支→用户名被占 409→完成后门禁解除、主页含 @用户名、不可重复引导;邀请码注册同样被引导、dev-login 不被拦;资料页改昵称/认领一次;开通发信失败保号可重发、待审申请被关闭。
+  - 变异:去掉 worker 门禁 → 集成 2 例变红;邮箱注册不置引导标记/GitHub 覆盖自定义昵称/删用户名不可改触发器 → sqlite 层 3 例变红,均已还原。
+  - **踩坑**:Node 全局 `fetch`(undici)会把 `sec-fetch-mode` 改写成 `cors`(worker 侧调试端点实测),第一次跑时门禁看似不生效;整页导航测试改用 `node:http`,并用真 Chrome 复验。
+  - 无头 Chrome:管理台点「直接开通账户」→ 登录页邮箱验证码(不填邀请码)→ 落在 `/welcome?return_to=%2Fprofile` → 地址栏开 `/feed` 仍回引导页 → 完成后 `/profile` 显示 @用户名 → 再访问 `/welcome` 回首页;截图含引导页桌面/手机、资料页身份区、开通通知 640/320px。
+  - 生产快照(`backups/zaochang-db-2026-10-30-pre0043.sql`)预演 0043:4 位会员全部 onboarding=0/无用户名,外键违规 0,触发器 4 个,既有 upsert 照常。
+  - `npm test` 1000/1000、fail 0、skipped 0、todo 0(上一轮 981 + 本轮新增 19);tsc/`git diff --check`/`db:generate` 无漂移 exit 0;lint 排除未跟踪 `tmp/`、已忽略 `promo/` 后 exit 0。
+- **已知取舍/未做**:门禁只拦整页导航——会员可直接调 API 不设用户名(无安全影响,但会有「没有用户名」的会员);每个登录态整页导航多一次 D1 读(与页面渲染里的会话查询同一行,未合并);用户名目前只在主页/管理台展示,没有 @提及、按用户名访问主页;开通账户不能经 GitHub 首登(GitHub 新身份仍要邀请码),通知里只写了邮箱验证码登录;保留名单是静态列表;昵称冒充词只拦 4 个片段。
+
 ## 2026-10-30 账户申请页 /apply + 邀请码邮件发放(管理台「账户申请」)(已上线 `a17b10f`;线上冒烟通过,真实邮件是否进收件箱未肉眼确认)
 
 - **范围**:公开页 `/apply`(称呼/邮箱/想做什么/作品链接)→ `POST /api/account-applications`(同源、Turnstile 已配置时校验、每 IP 5/h + 每邮箱 3/天 + 全局 200/天;新建/重复待审/已是会员三态统一 202,提交不发任何邮件)→ 表 `account_applications`(迁移 0042)→ 管理台「账户申请」分区:通过/拒绝/重发(换新码)/直接邀请(人类专属)。通过 = 一个 db.batch 原子生成单次 `invitation_codes`(max_uses=1,默认 14 天,1–90)+ 申请置 approved + 审计,三条都以申请当前状态为前提(SQL 抽到 `account-application-sql.ts`);落库后经 `EMAIL` binding 从 zaochang@aetherstudio.top 发模板邮件(`invite-mail.ts`,零 import,管理台预览同函数换占位码)。明文只在邮件里:不进响应/审计/链接。发信失败立即撤销该码并记 `mail_status=failed`;重发撤销未用旧码再发新码。登录页加「还没有邀请码？申请造场账户」入口;站壳免壳名单加 `/apply`;CSP 的 Turnstile 源放行从 `/signin` 扩到 `/apply`(精确匹配)。机器通道能力表加 `PATCH /api/admin/account-applications`。

@@ -20,6 +20,9 @@ export type AdminData = { moderation: ModerationData; projects: Project[]; stage
 export type Member = {
   email: string;
   displayName: string;
+  username: string | null;
+  onboardingRequired: boolean;
+  provisioned: boolean;
   memberNumber: number | null;
   joinedAt: string;
   loginMethods: string[];
