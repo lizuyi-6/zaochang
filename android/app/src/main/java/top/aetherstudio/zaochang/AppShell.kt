@@ -41,6 +41,8 @@ data class AndroidUpdateInfo(
   val latestVersionCode: Int,
   val latestVersionName: String,
   val downloadUrl: String?,
+  /** 安装包 SHA-256(小写十六进制,64 字符):下载后本地校验,不符不安装。 */
+  val sha256: String?,
 )
 
 object AppShell {
@@ -110,7 +112,14 @@ object AppShell {
         downloadUrl = rawUrl
       }
     }
-    return AndroidUpdateInfo(latestVersionCode = code, latestVersionName = name, downloadUrl = downloadUrl)
+    return AndroidUpdateInfo(
+      latestVersionCode = code,
+      latestVersionName = name,
+      downloadUrl = downloadUrl,
+      // sha256 形态不对时置 null(不校验),但不能是任意字符串——只接受 64 位十六进制。
+      sha256 = android.optString("sha256").trim().lowercase(Locale.ROOT)
+        .takeIf { it.length == 64 && it.all { c -> c in '0'..'9' || c in 'a'..'f' } },
+    )
   }
 
   /** 有界读取;超过上限视为清单异常(截断的 JSON 会解析失败,同样 fail-closed)。 */

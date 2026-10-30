@@ -360,3 +360,48 @@ test("app-shell-ua: 壳 UA 必须追加 ZaochangApp/<版本名>,且与站点发�
   const { APP_DOWNLOAD } = await import("../app/api/_lib/app-download.ts");
   assert.equal(APP_DOWNLOAD.versionName, versionName, "站点发布常量与壳 versionName 必须一致");
 });
+
+test("app-links: assetlinks.json 必须与发布常量一致,否则 https 深链进不了 App", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { APP_LINKS } = await import("../app/api/_lib/app-download.ts");
+  const raw = readFileSync(new URL("../public/.well-known/assetlinks.json", import.meta.url), "utf8");
+  const parsed = JSON.parse(raw);
+  assert.ok(Array.isArray(parsed) && parsed.length > 0, "assetlinks.json 必须是非空数组");
+  const entry = parsed.find((item) => item?.target?.namespace === "android_app");
+  assert.ok(entry, "assetlinks.json 必须声明 android_app 目标");
+  assert.ok(
+    entry.relation.includes("delegate_permission/common.handle_all_urls"),
+    "必须声明 delegate_permission/common.handle_all_urls,否则系统不把链接交给 App",
+  );
+  assert.equal(entry.target.package_name, APP_LINKS.packageName, "包名必须与发布常量一致");
+  assert.ok(
+    entry.target.sha256_cert_fingerprints.includes(APP_LINKS.signingCertSha256),
+    "证书指纹必须与发布常量一致(换签名证书要同步改 assetlinks.json)",
+  );
+});
+
+test("安卓壳:深链 intent-filter 必须 autoVerify,且声明麦克风权限", async () => {
+  const { readFileSync } = await import("node:fs");
+  const manifest = readFileSync(
+    new URL("../android/app/src/main/AndroidManifest.xml", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    manifest,
+    /<intent-filter android:autoVerify="true">/,
+    "深链 intent-filter 必须 autoVerify=true,否则系统会把 https 链接交给浏览器",
+  );
+  assert.match(
+    manifest,
+    /android\.permission\.RECORD_AUDIO/,
+    "见界课堂的语音输入需要 RECORD_AUDIO 权限",
+  );
+  const { readFileSync: read } = await import("node:fs");
+  const kt = read(new URL("../android/app/src/main/java/top/aetherstudio/zaochang/MainActivity.kt", import.meta.url), "utf8");
+  assert.match(kt, /RESOURCE_AUDIO_CAPTURE/, "壳必须放行本站的麦克风请求,否则壳内无法录音");
+  assert.doesNotMatch(
+    kt,
+    /resources\.all \{ it == android\.webkit\.PermissionRequest\.RESOURCE_VIDEO_CAPTURE \}/,
+    "旧的「只放行纯视频」判定必须移除,它让壳内语音输入永远失败",
+  );
+});

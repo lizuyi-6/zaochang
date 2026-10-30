@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 网络:壳本体。相机:扫一扫(getUserMedia 由 onPermissionRequest 只对本站、
-         只视频放行;API <33 的 WebView 授权需要 CAMERA 运行时权限背书,不弹系统
-         对话框由 WebView 面板呈现)。安装:应用内更新自装的 APK,受系统「安装
-         未知应用」门控,首次触发时系统弹授权页。 -->
+    <!-- 网络:壳本体。相机:扫一扫(getUserMedia 由 onPermissionRequest 只对本站放行);
+         麦克风:见界课堂的语音输入(MediaRecorder → 服务端 ASR),2026-10-30 起放行。
+         二者在 API 31+ 的 WebView 取流都以本 App 持有对应运行时权限为前提。
+         安装:应用内更新自装的 APK,受系统「安装未知应用」门控,首次触发时系统弹授权页。 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 录音取流(见界语音输入):Chromium 的音频采集要求 App 同时持有
+         RECORD_AUDIO 与 MODIFY_AUDIO_SETTINGS,缺后者会打印
+         "Requires MODIFY_AUDIO_SETTINGS and RECORD_AUDIO" 并开不出录音设备。 -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- API 30+ 包可见性:解析「查看 APK」的安装器 Activity。 -->
@@ -37,9 +42,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 深链:仅站点本体(未做 assetlinks 验证,系统会弹一次"用哪个应用打开";
-                 MainActivity 中仍按主机白名单校验后才加载)。 -->
-            <intent-filter>
+            <!-- 深链(App Links):仅站点本体。autoVerify=true 让系统用
+                 /.well-known/assetlinks.json 校验域名与本 App 的签名指纹,
+                 校验通过后 https 链接直接进 App(不再弹"用哪个应用打开",
+                 也不再被浏览器抢走);校验需站点同步提供该资产。
+                 MainActivity 中仍按主机白名单校验后才加载。 -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
@@ -47,5 +55,10 @@
                 <data android:scheme="https" android:host="www.aetherstudio.top" />
             </intent-filter>
         </activity>
+
+        <!-- 应用内更新:PackageInstaller 会话提交后的结果回调(只在本进程内)。 -->
+        <receiver
+            android:name=".InstallResultReceiver"
+            android:exported="false" />
     </application>
 </manifest>

@@ -17,7 +17,15 @@
     <string name="button_update_now">立即更新</string>
     <string name="button_dismiss">关闭</string>
     <string name="button_download_update">下载新版本</string>
+    <string name="update_downloading">正在下载新版本…</string>
+    <string name="update_checksum_failed">安装包校验失败,请重试或到浏览器下载</string>
+    <string name="update_install_failed">安装失败,请到浏览器下载后安装</string>
     <string name="update_enable_install_hint">允许「安装未知应用」后,回到应用再点一次立即更新即可安装。</string>
     <string name="update_install_permission_hint">APK 已下载。允许「安装未知应用」后安装会自动继续。</string>
     <string name="update_install_unavailable">这台设备没有可用的安装器,请在浏览器打开站点下载安装。</string>
+    <string name="permission_camera">相机</string>
+    <string name="permission_microphone">麦克风</string>
+    <string name="permission_needed_title">需要系统权限</string>
+    <string name="permission_needed_message">请在系统设置里允许造场使用%1$s权限,开启后回到应用再点一次即可。</string>
+    <string name="permission_open_settings">打开设置</string>
 </resources>

@@ -21,10 +21,10 @@ function inAppWebview(): boolean {
 function cameraErrorText(error: unknown): string {
   const name = error instanceof DOMException ? error.name : "";
   if (name === "NotAllowedError") {
-    // WebView 已知行为:页面 Permissions-Policy 允许 + 系统权限已授,
-    // 首次授权当次取流仍可能被拒;重启进程后即恢复。
+    // WebView 已知行为:首次授权当次取流可能被拒。壳(2026-10-30 起)在授权
+    // 成功后直接放行同一次请求,页面这边再自动重试一次,用户不必退出 App 重进。
     if (inAppWebview()) {
-      return "相机没有打开。请完全退出造场 App 后重新进入,再点一次「打开相机扫码」;或直接用系统相机扫码。";
+      return "相机没有打开。请再点一次「打开相机扫码」;若仍失败,请到系统设置里允许造场使用相机。";
     }
     return "相机权限被拒绝。请在系统/浏览器设置里允许使用相机;或直接用系统相机扫码后点开链接。";
   }
@@ -108,7 +108,18 @@ export function QrScanner() {
       } catch (err) {
         lastError = err;
         const name = err instanceof DOMException ? err.name : "";
-        if (name === "NotAllowedError") break; // 权限问题,换约束没有意义
+        if (name === "NotAllowedError") {
+          // 安卓壳:系统权限刚授予时,当次取流可能被 WebView 拒;等权限落地后
+          // 自动重试一次(用户不该被要求「退出 App 重进」)。
+          await new Promise((resolve) => window.setTimeout(resolve, 600));
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            break;
+          } catch (retryErr) {
+            lastError = retryErr;
+            break;
+          }
+        }
       }
     }
     if (!stream) {

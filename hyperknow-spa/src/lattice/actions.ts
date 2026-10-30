@@ -746,6 +746,21 @@ function showMicrophoneError(error: unknown): void {
   }
 }
 
+/**
+ * 取麦克风流:安卓壳里首次授权当次取流可能被 WebView 拒,等系统权限落地后
+ * 自动重试一次——用户不该被要求「退出 App 重进」才能录音。
+ */
+async function requestAudioStream(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (error) {
+    const name = (error as { name?: string } | null)?.name;
+    if (name !== 'NotAllowedError' && name !== 'SecurityError') throw error;
+    await new Promise((resolve) => window.setTimeout(resolve, 600));
+    return navigator.mediaDevices.getUserMedia({ audio: true });
+  }
+}
+
 /** 页面独占录音控制器:第二次点击结束录音,卸载时 cancel() 停轨并终止在途请求。 */
 export function createVoiceInputController(): VoiceInputController {
   let callbacks: VoiceInputCallbacks = { onText: () => {}, onState: () => {} };
@@ -850,7 +865,7 @@ export function createVoiceInputController(): VoiceInputController {
       setState('requesting');
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('media_devices_unavailable');
-        const capturedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const capturedStream = await requestAudioStream();
         if (token !== generation) {
           stopTracks(capturedStream);
           return;

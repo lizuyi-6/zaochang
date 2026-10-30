@@ -15,7 +15,7 @@ export const SHELL_MANIFEST = {
   web: {
     // 信息性构建号:仅用于日志/观测,不参与门禁判断(壳不缓存站点资源,
     // 每次启动都直连生产 URL,站点更新天然即时生效——Mode 1 restart-to-latest)。
-    buildId: "2026-10-05.4",
+    buildId: "2026-10-30.1",
     mode: "remote",
     minShellVersionCode: 1,
     maxShellVersionCode: null,

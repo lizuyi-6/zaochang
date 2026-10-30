@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 // 只认本站两类登录码(解析在 qr-login-core,单测钉死),按路径分流到确认页
 // (正向:手机已登录)或配对页(反向:手机未登录,扫码后输配对码)。页面本身
 // 公开可访——扫码动作不泄露任何信息,两种落点各自有自己的验证;相机走
-// getUserMedia,App 壳在 onPermissionRequest 里只对本站放行视频捕获。
+// getUserMedia,App 壳在 onPermissionRequest 里对本站放行相机(与麦克风)。
 export default async function QrScanPage() {
   return (
     <main className="qr-scan-page">

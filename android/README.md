@@ -62,8 +62,9 @@ APK 托管在站点自身:`public/downloads/zaochang-<version>.apk`(文件名带
 2. `gradlew assembleRelease` 出签名 APK;
 3. 拷贝为 `public/downloads/zaochang-<version>.apk`(不删旧文件,留作回滚);
 4. 更新 `app/api/_lib/app-download.ts` 的全部常量(sha256/sizeBytes/fileName/versionCode/versionName);
-5. 跑 `npm test`——集成测试会**字节级校验**下载文件与常量的 sha256/大小一致,并断言 `/api/app-shell` 清单指向同一文件,不一致即红。
-6. **GitHub Release(用户要求,每次发包必做)**:标签 `android-v<versionName>`,附 APK 文件,notes 写变更摘要 + SHA-256 + 大小 + 系统要求 + 升级路径。例:`gh release create android-v1.2.2 --title "造场 App v1.2.2(Android 壳)" --notes "…" public/downloads/zaochang-1.2.2.apk`。
+5. 确认 `public/.well-known/assetlinks.json` 里的证书指纹与发布证书一致(换证书才需要改;`app/api/_lib/app-download.ts` 的 `APP_LINKS.signingCertSha256` 是同一事实源,测试会钉住两者一致);
+6. 跑 `npm test`——集成测试会**字节级校验**下载文件与常量的 sha256/大小一致,并断言 `/api/app-shell` 清单指向同一文件,不一致即红;
+7. **GitHub Release(用户要求,每次发包必做)**:标签 `android-v<versionName>`,附 APK 文件,notes 写变更摘要 + SHA-256 + 大小 + 系统要求 + 升级路径。例:`gh release create android-v1.2.3 --title "造场 App v1.2.3(Android 壳)" --notes "…" public/downloads/zaochang-1.2.3.apk`。
 
 用户入口:站点 `/app` 页(下载按钮 + 校验值 + 安装说明);`/api/app-shell` 清单的 `android.downloadUrl` 同源直链,供壳与第三方程序化获取;GitHub Releases 为第二分发渠道与历史档案。缓存策略见 `public/_headers`(文件名版本化 → immutable)。
 
@@ -73,8 +74,8 @@ APK 托管在站点自身:`public/downloads/zaochang-<version>.apk`(文件名带
 2. SSL 错误永远 `handler.cancel()`;不放宽混合内容;`allowFileAccess`/`allowContentAccess`/定位全关。
 3. 无 `addJavascriptInterface`,无任何原生桥。
 4. WebView 调试仅 debuggable 构建开启;`allowBackup=false`(会话 cookie 不进云备份)。
-5. 权限仅 `INTERNET` + `CAMERA`(扫一扫:getUserMedia 只对本站、只视频放行;运行时权限未授予先弹系统对话框)+ `REQUEST_INSTALL_PACKAGES`(应用内更新自装,受系统「安装未知应用」门控)。文件选择走系统 SAF、下载走自研 MediaStore 下载器(公共 Downloads,带会话 Cookie、还原中文文件名;失败清理残留行)。
-6. 深链仅接受 `https://aetherstudio.top` / `www.aetherstudio.top`,进 Activity 前仍做主机校验。
+5. 权限仅 `INTERNET` + `CAMERA`(扫一扫)+ `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`(见界课堂语音输入;Chromium 的音频采集要求这两项同时在位,缺 `MODIFY_AUDIO_SETTINGS` 会打印 "Requires MODIFY_AUDIO_SETTINGS and RECORD_AUDIO" 并开不出录音设备)+ `REQUEST_INSTALL_PACKAGES`(应用内更新自装,受系统「安装未知应用」门控)。getUserMedia 只对本站放行相机与麦克风;缺运行时权限时先弹系统对话框,**授权后直接放行同一次请求**(不再 deny + 重载页面——那会吞掉用户那一次点击);用户勾了「不再询问」时壳弹原生对话框引导去系统设置。文件选择走系统 SAF;普通附件下载走自研 MediaStore 下载器(公共 Downloads,带会话 Cookie、还原中文文件名;失败清理残留行);**安装包走 App 私有目录 + PackageInstaller 会话安装**(不落公共 Downloads,不依赖跨应用 URI 授权——国产 ROM 上「下到了却装不上」的根因),下载后按清单里的 SHA-256 校验,不符即删包拒绝安装。
+6. 深链仅接受 `https://aetherstudio.top` / `www.aetherstudio.top`,进 Activity 前仍做主机校验。manifest 的深链 intent-filter 带 `android:autoVerify="true"`:系统用站点 `/.well-known/assetlinks.json` 校验域名与本 App 的签名证书指纹,校验通过后 https 链接直接进 App(不再弹"用哪个应用打开",也不再被浏览器抢走)。换签名证书必须同步更新 `public/.well-known/assetlinks.json` 与 `app/api/_lib/app-download.ts` 的 `APP_LINKS.signingCertSha256`。
 
 ## 构建命令
 
@@ -88,6 +89,13 @@ cd android
 - 版本三件套:AGP `android/build.gradle.kts`、Gradle wrapper(`gradle/wrapper/gradle-wrapper.properties`)、`app/build.gradle.kts` 的 `versionCode/versionName`。
 
 ## 更新记录
+
+- **v1.2.3(versionCode 7,2026-10-30)**:壳与站点脱节的四项修复,全部按用户真机反馈定位。
+  - **壳内语音输入(见界课堂录音)**:壳的 `onPermissionRequest` 此前只放行纯视频请求,音频一律 deny,且 manifest 没有录音权限 → 壳内录音必然失败。现放行本站的相机与麦克风两种资源,并补 `RECORD_AUDIO` 与 `MODIFY_AUDIO_SETTINGS`(Chromium 音频采集要求后者同时在位,缺它会打印 "Requires MODIFY_AUDIO_SETTINGS and RECORD_AUDIO" 并开不出录音设备——模拟器实测抓到)。站点侧:见界语音输入与扫码页在 `NotAllowedError` 后自动重试一次(覆盖 WebView「授权当次被拒」),扫码页文案改为「再点一次,仍失败去系统设置允许相机」(旧文案让用户「完全退出 App 重进」)。
+  - **相机/扫码**:授权后壳**直接放行同一次请求**,不再 deny + 重载页面(旧逻辑吞掉用户那一次点击,页面回到"相机未开启",用户以为坏了);用户勾「不再询问」后壳弹原生对话框引导去系统设置(此前壳是唯一能给出路的地方却什么都不做)。模拟器实测:授权后页面直接拿到实时取流。
+  - **应用内更新**:此前「安装未知应用」未授权时壳直接跳设置页并 return(根本不下载),下载后 APK 落在公共 Downloads 并用 MediaStore URI 拉安装器——该 URI 不归本 App 所有,给安装器的临时授权在国产 ROM 上常被拒,表现为"下载成功但装不上"。现改为:先下到 App 私有目录 → 按清单里的 SHA-256 校验(不符即删包拒绝安装)→ `PackageInstaller` 会话安装(不依赖任何跨应用 URI 授权),安装结果由 `InstallResultReceiver` 回收并清理安装包;未授权时先把包下完再引导授权,授权回来自动续装。
+  - **深链(https 链接进 App)**:此前 manifest 无 `autoVerify`、站点也没有 `/.well-known/assetlinks.json`,任何 https 链接都被系统交给浏览器/选择器("点开是错的页面")。现启用 Android App Links:manifest 的深链 filter 带 `autoVerify="true"`,站点提供 `/.well-known/assetlinks.json`(发布证书指纹),系统校验通过后链接直接进 App;换证书必须同步该资产与 `APP_LINKS.signingCertSha256`。
+  - 契约钉新增 2 条(`tests/modularization-contracts.test.mjs`):assetlinks.json 与发布常量一致、manifest 必须 autoVerify 且声明麦克风权限。
 
 - **v1.2.2(versionCode 6,2026-10-05)**:WebView UA 末尾追加 `ZaochangApp/<versionName>` 标记(取自 PackageManager,与 `versionCode()` 同源;不启用 AGP9 默认关闭的 BuildConfig)。站点新增 `/app/version` 页:据此展示当前安装版本并与清单最新版比对(已是最新/可更新/浏览器未安装三态);旧壳(≤1.2.1)无此标记,页面显示「版本未上报」并引导更新到本版。`; wv)` 特征段保持不动,既有 WebView 检测(qr-scanner)不受影响。
 
@@ -109,7 +117,7 @@ cd android
 
 ## 已知取舍
 
-- 深链未做 Digital Asset Links 验证(需在站点发 `/.well-known/assetlinks.json` 才能免确认弹窗),首次点链接系统会问"用哪个应用打开"。
+- 深链已启用 Digital Asset Links(`autoVerify="true"` + 站点 `/.well-known/assetlinks.json`):校验通过后 https 链接直接进 App;换签名证书后未同步该资产前,深链会退回浏览器/选择器。
 - 预测性返回仅 API 33+ 动态启停;低版本返回行为不变(legacy `onBackPressed`)。
 - `configChanges` 吸收旋转/键盘形态变化(WebView 不重载);深色模式跟随系统 UI 但站点自身是固定浅色主题。
 - Google 登录在国内网络环境依赖 `accounts.google.com` 可达性,与网页端一致;邮箱验证码登录不受影响。

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "top.aetherstudio.zaochang",
+      "sha256_cert_fingerprints": [
+        "71:E2:E8:40:4B:DB:A1:C4:90:30:FE:85:5E:8C:65:BD:5E:68:C6:CC:EE:A2:EA:C1:BE:A0:16:F3:D9:FC:A3:59"
+      ]
+    }
+  }
+]

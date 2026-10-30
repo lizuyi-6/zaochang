@@ -2,10 +2,13 @@ package top.aetherstudio.zaochang
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInstaller
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
@@ -40,10 +43,12 @@ import android.widget.TextView
 import android.widget.Toast
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
+import java.security.MessageDigest
 import java.util.Locale
 
 /**
@@ -81,10 +86,11 @@ class MainActivity : Activity() {
   private var latestManifest: ShellManifest? = null
   // 横幅被用户划掉的版本:同版本不再打扰,更新版本号后重新出现。
   private var updateBannerDismissedFor: Int? = null
-  // 已下载、等待「安装未知应用」授权的 APK(MediaStore 行 URI)。
-  private var pendingInstallApkUri: Uri? = null
-  // 等待 CAMERA 运行时权限的 getUserMedia 请求(扫一扫)。
-  private var pendingCameraRequest: android.webkit.PermissionRequest? = null
+  // 已下载、等待「安装未知应用」授权的 APK(App 私有目录里的文件)。
+  private var pendingInstallApkFile: File? = null
+  // 等待运行时权限的媒体请求(相机/麦克风):授权后直接 grant 同一个请求。
+  private var pendingMediaRequest: android.webkit.PermissionRequest? = null
+  private var pendingMediaPermissions: Array<String> = emptyArray()
   private lateinit var updateBanner: LinearLayout
   private lateinit var updateBannerText: TextView
   private lateinit var upgradeDownload: Button
@@ -182,10 +188,10 @@ class MainActivity : Activity() {
     web.onResume()
     web.resumeTimers()
     // 用户从「安装未知应用」授权页回来:若此前已下好 APK,自动续上安装。
-    val pending = pendingInstallApkUri
+    val pending = pendingInstallApkFile
     if (pending != null && canInstallPackages()) {
-      pendingInstallApkUri = null
-      launchInstaller(pending)
+      pendingInstallApkFile = null
+      installApkFile(pending)
     }
     if (SystemClock.elapsedRealtime() - lastCompatCheckAt > COMPAT_RECHECK_INTERVAL_MS) {
       checkShellCompatibility(initial = false)
@@ -255,7 +261,12 @@ class MainActivity : Activity() {
     view.webViewClient = ShellWebViewClient()
     view.webChromeClient = ShellChromeClient()
     view.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
-      startFileDownload(url, mimeType, contentDisposition)
+      // 安装包走壳内安装器;其余附件存到公共 Downloads。
+      if (url.lowercase(Locale.ROOT).substringBefore('?').endsWith(".apk")) {
+        startApkUpdate(url)
+      } else {
+        startFileDownload(url, mimeType, contentDisposition)
+      }
     }
     return view
   }
@@ -291,7 +302,7 @@ class MainActivity : Activity() {
           }
         }
         if (shouldEnqueue) {
-          runOnUiThread { if (!destroyed) startFileDownload(key, null, null) }
+          runOnUiThread { if (!destroyed) startApkUpdate(key) }
         }
       }
       return null
@@ -414,30 +425,52 @@ class MainActivity : Activity() {
     }
 
     /**
-     * getUserMedia(扫一扫):只对本站页面、且只请求摄像头时放行;麦克风/其余
-     * 资源一律 deny。WebView 的 grant() 以 App 自身持有 CAMERA 运行时权限为前提
-     * (API 31+ 起系统强制):未授予时先 requestPermissions,系统对话框回来在
-     * onRequestPermissionsResult 里续授——首次扫码弹一次,拒绝则由页面自行提示。
+     * getUserMedia(扫一扫取相机 / 见界课堂录音取麦克风):只对本站页面放行,
+     * 且只放行摄像头与麦克风两种资源(WebView 的 grant() 以 App 自身持有对应
+     * 运行时权限为前提:API 31+ 起系统强制)。缺权限时先 requestPermissions,
+     * 在 onRequestPermissionsResult 里**直接 grant 同一个请求**——不再用
+     * 「deny + 重载页面」的旧路子:那会把用户那一次点击吞掉,页面回到未开启态,
+     * 用户以为功能坏了。
      */
     override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
       val host = request.origin?.host?.lowercase(Locale.ROOT)
       val resources = request.resources ?: emptyArray()
-      val videoOnly = resources.isNotEmpty() &&
-        resources.all { it == android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE }
-      if (host == null || host !in ShellConfig.INTERNAL_HOSTS || !videoOnly) {
+      val supported = resources.isNotEmpty() && resources.all {
+        it == android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE ||
+          it == android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE
+      }
+      if (host == null || host !in ShellConfig.INTERNAL_HOSTS || !supported) {
         runOnUiThread { if (!destroyed) request.deny() }
         return
       }
       runOnUiThread {
         if (destroyed) return@runOnUiThread
-        if (checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        val missing = requiredRuntimePermissions(resources)
+        if (missing.isEmpty()) {
           request.grant(request.resources)
         } else {
-          pendingCameraRequest = request
-          requestPermissions(arrayOf(android.Manifest.permission.CAMERA), REQUEST_CAMERA)
+          pendingMediaRequest = request
+          pendingMediaPermissions = missing
+          requestPermissions(missing, REQUEST_MEDIA)
         }
       }
     }
+  }
+
+  /** getUserMedia 所需但尚未授予的 Android 运行时权限(相机/麦克风)。 */
+  private fun requiredRuntimePermissions(resources: Array<String>): Array<String> {
+    val missing = mutableListOf<String>()
+    if (resources.contains(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE) &&
+      checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED
+    ) {
+      missing += android.Manifest.permission.CAMERA
+    }
+    if (resources.contains(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE) &&
+      checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED
+    ) {
+      missing += android.Manifest.permission.RECORD_AUDIO
+    }
+    return missing.toTypedArray()
   }
 
   /**
@@ -448,11 +481,11 @@ class MainActivity : Activity() {
     val scheme = uri.scheme?.lowercase(Locale.ROOT) ?: return true
     val host = uri.host?.lowercase(Locale.ROOT)
     if (scheme == "https" && host != null && host in ShellConfig.INTERNAL_HOSTS) {
-      // 安装包/附件直链接给自研下载器(MediaStore):本镜像 WebView 对 .apk URL 连网络
-      // 请求都不发出(DownloadListener/shouldInterceptRequest 双失效),只有这里拦得到;
+      // 安装包直链接给壳内安装器(私有目录下载 + PackageInstaller):公共
+      // Downloads + ACTION_VIEW 在国产 ROM 上常被拒,表现为"下到了却装不上"。
       // 站点 /app 按钮因此保持普通导航链接(不带 download 属性)。return true 吃掉导航。
       if (uri.path?.lowercase(Locale.ROOT)?.endsWith(".apk") == true) {
-        startFileDownload(uri.toString(), null, null)
+        startApkUpdate(uri.toString())
         return true
       }
       return false
@@ -516,21 +549,57 @@ class MainActivity : Activity() {
     callback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
   }
 
-  /** 系统相机权限对话框回来:授权则拒绝旧请求并重载页面——WebView 已知行为是
-   *  「授权前发起的取流请求,当次 grant() 仍可能被拒」(首次授权需重启才生效),
-   *  重载让页面在权限已持有的状态下重新发起,再点一次立即成功,无需重启 App。 */
+  /** 系统权限对话框回来:授予则直接放行挂起的媒体请求(取流随后由 WebView 发起);
+   *  拒绝则放行 deny,并在用户勾了「不再询问」时引导去系统设置——那种情况下系统
+   *  不会再弹窗,壳是唯一能给出出路的地方。 */
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-    if (requestCode != REQUEST_CAMERA) return
-    val request = pendingCameraRequest
-    pendingCameraRequest = null
+    if (requestCode != REQUEST_MEDIA) return
+    val request = pendingMediaRequest
+    val requested = pendingMediaPermissions
+    pendingMediaRequest = null
+    pendingMediaPermissions = emptyArray()
     if (request == null || destroyed) return
-    val granted = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
-    if (granted) {
-      runCatching { request.deny() }
-      if (this::web.isInitialized) web.reload()
-    } else {
-      request.deny()
+    val allGranted = requested.isNotEmpty() && requested.indices.all { index ->
+      grantResults.getOrNull(index) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+    if (allGranted) {
+      runCatching { request.grant(request.resources) }
+        .onFailure { Log.w(TAG, "grant media request failed", it) }
+      return
+    }
+    runCatching { request.deny() }
+    // 拒绝后系统若不再弹窗(「不再询问」),只能由用户去系统设置里开。
+    val permanentlyDenied = requested.any { !shouldShowRequestPermissionRationale(it) }
+    if (permanentlyDenied) {
+      runOnUiThread { if (!destroyed) promptOpenAppSettings(requested) }
+    }
+  }
+
+  /** 提示用户去系统设置授予相机/麦克风权限(系统不再弹窗时的唯一出路)。 */
+  private fun promptOpenAppSettings(permissions: Array<String>) {
+    val labels = permissions.map {
+      if (it == android.Manifest.permission.CAMERA) getString(R.string.permission_camera)
+      else getString(R.string.permission_microphone)
+    }.joinToString("、")
+    AlertDialog.Builder(this)
+      .setTitle(R.string.permission_needed_title)
+      .setMessage(getString(R.string.permission_needed_message, labels))
+      .setPositiveButton(R.string.permission_open_settings) { _, _ -> openAppSettings() }
+      .setNegativeButton(R.string.button_dismiss, null)
+      .show()
+  }
+
+  private fun openAppSettings() {
+    try {
+      startActivity(
+        Intent(
+          Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+          Uri.parse("package:$packageName"),
+        ),
+      )
+    } catch (e: ActivityNotFoundException) {
+      Log.w(TAG, "no app details settings activity", e)
     }
   }
 
@@ -544,7 +613,6 @@ class MainActivity : Activity() {
     url: String,
     mimeType: String?,
     contentDisposition: String?,
-    onDownloaded: ((Uri) -> Unit)? = null,
   ) {
     if (Build.VERSION.SDK_INT < 29) {
       openExternal(Uri.parse(url))
@@ -578,11 +646,8 @@ class MainActivity : Activity() {
             connection.disconnect()
           }
         } ?: throw IOException("openOutputStream returned null")
-        val downloaded = target
         runOnUiThread {
-          // 有回调(应用内更新)时由回调接管反馈;普通下载 toast。
-          if (onDownloaded != null) onDownloaded(downloaded)
-          else Toast.makeText(activity, R.string.download_done, Toast.LENGTH_SHORT).show()
+          Toast.makeText(activity, R.string.download_done, Toast.LENGTH_SHORT).show()
         }
       } catch (e: Exception) {
         Log.w(TAG, "file download failed: $url", e)
@@ -718,54 +783,121 @@ class MainActivity : Activity() {
   }
 
   /**
-   * 应用内更新:APK 走自研下载器(带会话 Cookie,服务器/manifest 校验其完整性),
-   * 下载完弹安装器。安装受「安装未知应用」门控:未授权时先跳系统授权页,
-   * 授权回来在 onResume 续装。
+   * 应用内更新:APK 先下到 App 私有目录,校验 SHA-256(清单里的事实源),再交给
+   * PackageInstaller 会话安装。
+   * 为什么不用「公共 Downloads + ACTION_VIEW」:MediaStore 的 content:// URI 不归
+   * 本 App 所有,给安装器的临时 URI 授权在国产 ROM 上常被拒,表现就是「下载成功
+   * 但装不上」;PackageInstaller 会话直接写入安装器,不依赖任何跨应用 URI 授权。
+   * 「安装未知应用」授权缺失时**先把包下完**,再引导授权,授权回来自动续装。
    */
   private fun startApkUpdate(url: String) {
-    if (!canInstallPackages()) {
-      try {
-        startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
-        Toast.makeText(this, R.string.update_enable_install_hint, Toast.LENGTH_LONG).show()
-      } catch (e: ActivityNotFoundException) {
-        Log.w(TAG, "no unknown-app-sources settings activity", e)
-        Toast.makeText(this, R.string.update_install_unavailable, Toast.LENGTH_LONG).show()
+    // 只有当下载的就是清单里那一份(同 URL)才比对摘要,避免用别的版本的摘要卡住安装。
+    val expectedSha = latestManifest?.androidUpdate?.takeIf { it.downloadUrl == url }?.sha256
+    Toast.makeText(this, R.string.update_downloading, Toast.LENGTH_SHORT).show()
+    Thread {
+      val file = downloadApkToAppStorage(url)
+      if (file == null) {
+        runOnUiThread { if (!destroyed) Toast.makeText(this, R.string.download_failed, Toast.LENGTH_LONG).show() }
+        return@Thread
       }
-      return
-    }
-    startFileDownload(url, "application/vnd.android.package-archive", null) { uri -> tryShowInstallPrompt(uri) }
+      if (expectedSha != null && !sha256Matches(file, expectedSha)) {
+        file.delete()
+        runOnUiThread {
+          if (!destroyed) Toast.makeText(this, R.string.update_checksum_failed, Toast.LENGTH_LONG).show()
+        }
+        return@Thread
+      }
+      runOnUiThread { if (!destroyed) installApkFile(file) }
+    }.start()
   }
 
-  private fun canInstallPackages(): Boolean =
-    Build.VERSION.SDK_INT < 26 || packageManager.canRequestPackageInstalls()
+  /** 下载安装包到 App 私有目录(外部私有优先,失败退回内部存储);失败返回 null。 */
+  private fun downloadApkToAppStorage(url: String): File? {
+    return try {
+      val base = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+      val dir = File(base, "update")
+      if (!dir.exists() && !dir.mkdirs()) return null
+      val target = File(dir, "zaochang-update.apk")
+      val connection = URL(url).openConnection() as HttpURLConnection
+      try {
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 60_000
+        connection.instanceFollowRedirects = true
+        CookieManager.getInstance().getCookie(url)?.let { connection.setRequestProperty("Cookie", it) }
+        connection.setRequestProperty("User-Agent", WebSettings.getDefaultUserAgent(this))
+        if (connection.responseCode !in 200..299) return null
+        connection.inputStream.use { input ->
+          target.outputStream().use { out -> input.copyTo(out, DEFAULT_COPY_BUFFER) }
+        }
+      } finally {
+        connection.disconnect()
+      }
+      target.takeIf { it.length() > 0 }
+    } catch (e: Exception) {
+      Log.w(TAG, "apk download failed: $url", e)
+      null
+    }
+  }
 
-  private fun tryShowInstallPrompt(uri: Uri) {
+  /** 文件 SHA-256 与清单里的十六进制摘要比对。 */
+  private fun sha256Matches(file: File, expected: String): Boolean = try {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+      val buffer = ByteArray(64 * 1024)
+      while (true) {
+        val read = input.read(buffer)
+        if (read < 0) break
+        digest.update(buffer, 0, read)
+      }
+    }
+    digest.digest().joinToString("") { "%02x".format(it) } == expected.lowercase(Locale.ROOT)
+  } catch (e: Exception) {
+    Log.w(TAG, "sha256 verify failed", e)
+    false
+  }
+
+  /** PackageInstaller 会话安装:不需要任何跨应用 URI 授权,国产 ROM 也稳。 */
+  private fun installApkFile(file: File) {
     if (!canInstallPackages()) {
-      pendingInstallApkUri = uri
+      pendingInstallApkFile = file
       try {
         startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
         Toast.makeText(this, R.string.update_install_permission_hint, Toast.LENGTH_LONG).show()
       } catch (e: ActivityNotFoundException) {
-        pendingInstallApkUri = null
+        pendingInstallApkFile = null
         Log.w(TAG, "no unknown-app-sources settings activity", e)
         Toast.makeText(this, R.string.update_install_unavailable, Toast.LENGTH_LONG).show()
       }
       return
     }
-    launchInstaller(uri)
-  }
-
-  private fun launchInstaller(uri: Uri) {
     try {
-      startActivity(Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "application/vnd.android.package-archive")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-      })
-    } catch (e: ActivityNotFoundException) {
-      Log.w(TAG, "no package installer activity", e)
-      Toast.makeText(this, R.string.update_install_unavailable, Toast.LENGTH_LONG).show()
+      val installer = packageManager.packageInstaller
+      val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+      val sessionId = installer.createSession(params)
+      installer.openSession(sessionId).use { session ->
+        session.openWrite("zaochang.apk", 0, file.length()).use { out ->
+          file.inputStream().use { input -> input.copyTo(out) }
+        }
+        // commit(IntentSender):系统弹出安装确认界面,装完把结果广播给
+        // InstallResultReceiver(清理私有目录里的安装包)。系统只公开这一
+        // 个重载,无参 commit() 在 SDK stub 里已不存在。
+        val result = PendingIntent.getBroadcast(
+          this,
+          0,
+          Intent(this, InstallResultReceiver::class.java)
+            .setAction("top.aetherstudio.zaochang.INSTALL_RESULT"),
+          PendingIntent.FLAG_IMMUTABLE,
+        )
+        session.commit(result.intentSender)
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "apk install failed", e)
+      Toast.makeText(this, R.string.update_install_failed, Toast.LENGTH_LONG).show()
     }
   }
+
+  private fun canInstallPackages(): Boolean =
+    Build.VERSION.SDK_INT < 26 || packageManager.canRequestPackageInstalls()
 
   // ————————————————————————— 预测性返回(API 33+) —————————————————————————
 
@@ -920,7 +1052,7 @@ class MainActivity : Activity() {
   companion object {
     private const val TAG = "ZaochangShell"
     private const val REQUEST_FILE_CHOOSER = 1001
-    private const val REQUEST_CAMERA = 1002
+    private const val REQUEST_MEDIA = 1002
     private const val KEY_PENDING_INITIAL_URL = "pendingInitialUrl"
     private const val COMPAT_TIMEOUT_MS = 6_000
     private const val COMPAT_RECHECK_INTERVAL_MS = 5 * 60 * 1000L
