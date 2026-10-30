@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 
     // 扣费点:LLM 预取成功(上游可达)之后、发流之前。配置缺失/上游故障已在上面
     // 返回,不扣费;流开始后的中途失败不退费。条件 UPDATE 原子扣减,不透支。
-    const remainingCredits = await consumeCredits(member, HK_CHAT_COST);
+    const remainingCredits = await consumeCredits(member, HK_CHAT_COST, "chat", conversationId);
     if (remainingCredits === null) {
       void generator.return(undefined as never).catch(() => {}); // 收掉已启的上游流
       const { remaining, max } = await currentCredits(member);

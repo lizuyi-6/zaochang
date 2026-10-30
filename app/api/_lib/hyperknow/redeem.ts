@@ -147,9 +147,9 @@ export async function redeemCodeForMember(member: MemberIdentity, rawCode: unkno
       // "今天早上查过一次余额(FREE 20)、下午兑换后仍显示 20"的割裂——
       // 会员权益属于兑换当天,不属于下个北京日界。
       db.prepare(
-        `UPDATE hk_credits SET balance = max(balance, ?), updated_at = CURRENT_TIMESTAMP
+        `UPDATE hk_credits SET balance = max(balance, ?), change_reason = 'plan_change', change_ref = ?, updated_at = CURRENT_TIMESTAMP
          WHERE user_email = ? AND reset_date = ?`,
-      ).bind(TIER_CONFIG[code.tier].maxCredits, member.email, beijingToday()),
+      ).bind(TIER_CONFIG[code.tier].maxCredits, grantId, member.email, beijingToday()),
       adminAuditStatement(
         member.email,
         "hk_redeem_code.redeem",

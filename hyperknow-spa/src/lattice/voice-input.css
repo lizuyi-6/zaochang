@@ -1,0 +1,51 @@
+.hk-voice-spinner {
+  animation: hk-voice-spin 0.9s linear infinite;
+}
+
+.hm-ghost-icon.recording,
+.cp-icon.recording,
+.wb-composer .mic.recording {
+  position: relative;
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.hm-ghost-icon.recording::after,
+.cp-icon.recording::after,
+.wb-composer .mic.recording::after,
+.wb-dock-btn.recording::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #DC2626;
+  animation: hk-voice-pulse 1s ease-out infinite;
+}
+
+.wb-dock-btn.recording { position: relative; }
+.hm-ghost-icon.processing,
+.cp-icon.processing,
+.wb-composer .mic.prep { color: #777; }
+
+@keyframes hk-voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); }
+  55% { box-shadow: 0 0 0 5px rgba(220, 38, 38, 0); }
+}
+
+@keyframes hk-voice-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hk-voice-spinner,
+  .hm-ghost-icon.recording::after,
+  .cp-icon.recording::after,
+  .wb-composer .mic.recording::after,
+  .wb-dock-btn.recording::after {
+    animation: none;
+  }
+}

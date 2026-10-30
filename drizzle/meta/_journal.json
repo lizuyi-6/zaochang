@@ -281,6 +281,20 @@
       "when": 1793338525725,
       "tag": "0039_hk_redeem_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1793342763452,
+      "tag": "0040_hk_credit_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1793346422743,
+      "tag": "0041_hk_feedback",
+      "breakpoints": true
     }
   ]
 }

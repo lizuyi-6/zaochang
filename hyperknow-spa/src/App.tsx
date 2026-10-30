@@ -15,6 +15,7 @@ import { toast } from './lattice/toast';
 import { L } from './lattice/i18n/content';
 import { ProLaunchModal, markProLaunchSeen, proLaunchSeen } from './lattice/ProLaunchModal';
 import { loadGenResume, saveGenResume } from './lattice/genResumeMemory';
+import { clearCourseSelectionPatch, courseCardStateFromQuery, courseHashForState } from './lattice/courseSelection';
 import './lattice/shell.css';
 
 /* 次级页面按需加载:登录/引导/首页保持同步(首屏体验),重页面(白板/聊天/课程等)
@@ -31,7 +32,7 @@ const WhiteboardPage = React.lazy(() => import('./lattice/whiteboard/WhiteboardP
 
 /* ---------------- hash routing ---------------- */
 
-function stateFromHash(): Partial<AppState> | null {
+function stateFromHash(current: AppState = initialAppState): Partial<AppState> | null {
   const raw = window.location.hash.replace(/^#/, '');
   const [path, query] = raw.split('?');
   const q = new URLSearchParams(query ?? '');
@@ -57,20 +58,23 @@ function stateFromHash(): Partial<AppState> | null {
     case '/courses':
       return { screen: 'courses', ...done, ...extras };
     case '/course/preview': {
+      const cardState = courseCardStateFromQuery(current, q);
+      if (cardState) return cardState;
       const uuid = q.get('uuid') || q.get('id');
       return {
-        screen: 'coursePreview',
+        ...clearCourseSelectionPatch('coursePreview'),
         activeCourseUuid: uuid || undefined,
         courseLoading: !!uuid,
         courseError: null,
-        courseJoined: false,
         ...extras,
       };
     }
     case '/course/journey': {
+      const cardState = courseCardStateFromQuery(current, q);
+      if (cardState) return cardState;
       const uuid = q.get('uuid') || q.get('id');
       return {
-        screen: 'courseJourney',
+        ...clearCourseSelectionPatch('courseJourney'),
         activeCourseUuid: uuid || undefined,
         courseJoined: true,
         courseLoading: !!uuid,
@@ -111,12 +115,10 @@ function hashFor(s: AppState): string {
     case 'onboarding':
       return `#/onboarding/${s.onboardingStep}`;
     case 'coursePreview': {
-      const uuid = s.activeCourseUuid || (s.generated as { courseUuid?: string })?.courseUuid;
-      return uuid ? `#/course/preview?uuid=${encodeURIComponent(uuid)}` : '#/course/preview';
+      return courseHashForState('coursePreview', s);
     }
     case 'courseJourney': {
-      const uuid = s.activeCourseUuid || (s.generated as { courseUuid?: string })?.courseUuid;
-      return uuid ? `#/course/journey?uuid=${encodeURIComponent(uuid)}` : '#/course/journey';
+      return courseHashForState('courseJourney', s);
     }
     case 'whiteboard': {
       if (s.whiteboardMode === 'practice') return '#/whiteboard?practice=1';
@@ -201,7 +203,7 @@ export const App: React.FC = () => {
   /* back/forward + manual hash edits */
   useEffect(() => {
     const onHash = () => {
-      const p = stateFromHash();
+      const p = stateFromHash(stateRef.current);
       if (p) set(p);
     };
     window.addEventListener('hashchange', onHash);

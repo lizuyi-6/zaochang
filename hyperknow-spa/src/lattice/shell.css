@@ -223,6 +223,17 @@
   font-weight: 600;
   color: var(--ink-900);
 }
+.hk-energy-button {
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.hk-energy-button:hover { background: var(--sand-100); border-color: var(--sand-300); }
+.hk-energy-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .hk-icon-btn {
   width: 32px;
   height: 32px;
@@ -599,6 +610,10 @@
 .hk-support-x { border: 0; background: none; color: var(--ink-300); cursor: pointer; display: flex; padding: 4px; border-radius: 6px; }
 .hk-support-x:hover { background: var(--sand-200); color: var(--ink-600); }
 .hk-support-sub { margin: 10px 0 14px; font-size: 12.5px; line-height: 1.65; color: var(--ink-500); }
+.hk-support-context-note { margin: 7px 0 0; font-size: 11px; line-height: 1.5; color: var(--ink-400); }
+.hk-support-error { margin: 9px 0 0; font-size: 12px; line-height: 1.5; color: #a33b32; }
+.hk-support-success { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--sand-300); border-radius: 10px; font-size: 13px; line-height: 1.6; color: var(--ink-700); }
+.hk-support-success strong { color: var(--ink-900); }
 .hk-support-text {
   width: 100%;
   box-sizing: border-box;
@@ -613,6 +628,7 @@
 }
 .hk-support-text:focus { border-color: var(--sand-450); }
 .hk-support-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.hk-support-fallbacks { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .hk-support-copy {
   display: inline-flex;
   align-items: center;
@@ -625,6 +641,9 @@
   padding: 4px 0;
 }
 .hk-support-copy:hover { color: var(--ink-900); }
+.hk-support-mail-fallback { border: 0; background: none; padding: 4px 0; color: var(--ink-400); font-size: 11px; text-decoration: underline; cursor: pointer; }
+.hk-support-mail-fallback:hover:not(:disabled) { color: var(--ink-700); }
+.hk-support-mail-fallback:disabled { cursor: default; opacity: 0.55; }
 .hk-support-send {
   display: inline-flex;
   align-items: center;

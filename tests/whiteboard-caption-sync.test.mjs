@@ -58,7 +58,15 @@ function loadTsModule(url) {
 }
 
 const whiteboardModule = loadTsModule(new URL('src/lattice/whiteboard/WhiteboardPage.tsx', spa));
-const { runCaptionSync, STARTUP_TIMEOUT_MS } = whiteboardModule;
+const {
+  runCaptionSync,
+  STARTUP_TIMEOUT_MS,
+  narrateMediaMs,
+  narrateMs,
+  recordNarrationSample,
+  calibratedMediaMs,
+  resetNarrationCalibration,
+} = whiteboardModule;
 const actionsModule = loadTsModule(new URL('src/lattice/actions.ts', spa));
 const { tts, DEFAULT_PLAYBACK_RATE } = actionsModule;
 const liveLessonModule = loadTsModule(new URL('src/lattice/whiteboard/liveLesson.ts', spa));
@@ -561,6 +569,221 @@ test('Regression 9: underestimated duration never completes captions before audi
   assert.equal(updates[updates.length - 1].count, total, '播完后字幕必须完整');
 });
 
+test('streaming unknown duration follows media time at 0.85x, 1.0x, and 1.5x', async () => {
+  const plain = `${'中'.repeat(75)}${'x'.repeat(8)}`; // 与实测样本一同为 83 字符,75 个 CJK 字符
+  const total = plain.length;
+  const actualDurationMs = 18264;
+
+  for (const speed of [0.85, 1.0, 1.5]) {
+    const updates = [];
+    let wallTimeMs = 0;
+    let mediaTimeMs = 0;
+    let endedResolved = false;
+    let resolveEnded;
+    const ended = new Promise((resolve) => { resolveEnded = resolve; });
+    const handle = {
+      started: Promise.resolve('started'),
+      ended,
+      getProgress: () => ({ currentTime: mediaTimeMs / 1000, duration: Infinity, ratio: -1 }),
+    };
+
+    await runCaptionSync({
+      total,
+      plain,
+      speed,
+      handle,
+      wait: async (ms) => {
+        wallTimeMs += ms;
+        mediaTimeMs = Math.min(actualDurationMs, mediaTimeMs + ms * speed);
+        if (mediaTimeMs >= actualDurationMs && !endedResolved) {
+          endedResolved = true;
+          resolveEnded();
+        }
+        await Promise.resolve();
+      },
+      isSkipped: () => false,
+      onUpdate: (count) => updates.push({ mediaTimeMs, count }),
+      stopAudio: () => {},
+      tickMs: 50,
+      nowMs: () => wallTimeMs,
+    });
+
+    const midpoint = updates.reduce((best, update) =>
+      Math.abs(update.mediaTimeMs - actualDurationMs / 2) < Math.abs(best.mediaTimeMs - actualDurationMs / 2) ? update : best,
+    updates[0]);
+    assert.ok(Math.abs(midpoint.count / total - 0.5) <= 0.07,
+      `${speed}x 时媒体时间 50% 的字幕应约为 50%,实际 ${(midpoint.count / total * 100).toFixed(1)}%`);
+
+    const preEnd = updates.filter((update) => update.mediaTimeMs < actualDurationMs);
+    const maxBeforeEnd = Math.max(...preEnd.map((update) => update.count));
+    assert.ok(maxBeforeEnd <= Math.floor(total * 0.97), `${speed}x 时媒体结束前字幕不能超过 97%`);
+    assert.equal(updates.at(-1).count, total, `${speed}x 音频 ended 后字幕必须完整`);
+  }
+});
+
+test('calibrated media-duration coefficients estimate the four measured TTS samples within 10%', () => {
+  const samples = [
+    { name: '中文长旁白', cjk: 75, other: 8, actualMs: 18264 },
+    { name: '中文短旁白', cjk: 29, other: 11, actualMs: 7488 },
+    { name: '中文练习旁白', cjk: 51, other: 6, actualMs: 12168 },
+    { name: '英文旁白', cjk: 0, other: 127, actualMs: 9936 },
+  ];
+
+  for (const sample of samples) {
+    const text = `${'中'.repeat(sample.cjk)}${'x'.repeat(sample.other)}`;
+    const estimateMs = narrateMediaMs(text);
+    const error = Math.abs(estimateMs - sample.actualMs) / sample.actualMs;
+    assert.ok(error <= 0.1, `${sample.name} 估算 ${estimateMs}ms 对比实测 ${sample.actualMs}ms,误差 ${(error * 100).toFixed(2)}%`);
+    assert.equal(narrateMs(text, 1), estimateMs, `${sample.name} 在 1.0x 时墙钟基线应等于媒体基线`);
+    assert.equal(narrateMs(text, 0.85), Math.max(4000, estimateMs / 0.85), `${sample.name} 静音墙钟估算应按 0.85x 延长`);
+  }
+});
+
+test('voice calibration converges independently and clamps outlier samples', () => {
+  resetNarrationCalibration();
+  for (let i = 0; i < 12; i++) recordNarrationSample('calm', 13050, 13050 * 0.895);
+  const calmMs = calibratedMediaMs('calm', 13050);
+  assert.ok(Math.abs(calmMs - 11688) / 11688 <= 0.05,
+    `calm 校准应收敛至 11688ms ±5%,实际 ${calmMs.toFixed(1)}ms`);
+  assert.equal(calibratedMediaMs('bright', 13050), 13050, '未采样的 bright 音色不得继承 calm 系数');
+
+  recordNarrationSample('outlier', 1000, 5000);
+  assert.equal(calibratedMediaMs('outlier', 1000), 1240,
+    '5.0 异常比值应先夹到 1.6,再按 alpha=0.4 从初值 1.0 更新为 1.24');
+  resetNarrationCalibration();
+});
+
+test('natural playback calibrates the next unknown-duration step for the same voice', async () => {
+  const voice = 'calm';
+  resetNarrationCalibration(voice);
+  const plain = '中'.repeat(50);
+  const total = plain.length;
+  const baseEstimateMs = narrateMediaMs(plain);
+  const actualDurationMs = baseEstimateMs * 0.9;
+
+  async function playStep({ unknownDuration }) {
+    const updates = [];
+    let wallTimeMs = 0;
+    let mediaTimeMs = 0;
+    let endedNaturally = false;
+    let resolveEnded;
+    const ended = new Promise((resolve) => { resolveEnded = resolve; });
+    const handle = {
+      started: Promise.resolve('started'),
+      ended,
+      didEndNaturally: () => endedNaturally,
+      getProgress: () => ({
+        currentTime: mediaTimeMs / 1000,
+        duration: unknownDuration ? Infinity : actualDurationMs / 1000,
+        ratio: unknownDuration ? -1 : mediaTimeMs / actualDurationMs,
+      }),
+    };
+
+    await runCaptionSync({
+      total,
+      plain,
+      voice,
+      handle,
+      wait: async (ms) => {
+        wallTimeMs += ms;
+        mediaTimeMs = Math.min(actualDurationMs, mediaTimeMs + ms);
+        if (mediaTimeMs >= actualDurationMs && !endedNaturally) {
+          endedNaturally = true;
+          resolveEnded();
+        }
+        await Promise.resolve();
+      },
+      isSkipped: () => false,
+      onUpdate: (count) => updates.push({ mediaTimeMs, count }),
+      stopAudio: () => {},
+      tickMs: 50,
+      nowMs: () => wallTimeMs,
+    });
+    return updates;
+  }
+
+  try {
+    const firstStep = await playStep({ unknownDuration: false });
+    const midpoint = (updates) => updates.reduce((best, update) =>
+      Math.abs(update.mediaTimeMs - actualDurationMs / 2) < Math.abs(best.mediaTimeMs - actualDurationMs / 2) ? update : best,
+    updates[0]);
+    assert.ok(Math.abs(midpoint(firstStep).count / total - 0.5) <= 0.06,
+      '已知 duration 的第一步应继续直接跟随真实 media ratio');
+    assert.ok(Math.abs(calibratedMediaMs(voice, baseEstimateMs) / baseEstimateMs - 0.96) < 0.002,
+      '第一步自然播完后应按 0.9 样本与 alpha=0.4 更新一次 EMA');
+
+    const secondStep = await playStep({ unknownDuration: true });
+    const halfway = midpoint(secondStep);
+    assert.ok(Math.abs(halfway.count / total - 0.5) <= 0.06,
+      `未知 duration 的媒体时间 50% 应显示约 50%,实际 ${(halfway.count / total * 100).toFixed(1)}%`);
+    const uncalibrated = Math.floor((actualDurationMs / 2 / baseEstimateMs) * total) / total;
+    assert.ok(Math.abs(uncalibrated - 0.45) <= 0.02,
+      `未校准基线应约为 45%,实际 ${(uncalibrated * 100).toFixed(1)}%`);
+
+    const thirdStep = await playStep({ unknownDuration: false });
+    assert.ok(Math.abs(midpoint(thirdStep).count / total - 0.5) <= 0.06,
+      '校准已有样本后,已知 duration 仍必须直接按真实媒体比例推进');
+  } finally {
+    resetNarrationCalibration(voice);
+  }
+});
+
+test('stopped, skipped, and fallback narration never changes a voice calibration', async () => {
+  const voice = 'calibration-negative-cases';
+  const plain = '字幕不得从中断音频学习系数';
+  const total = plain.length;
+  const baseEstimateMs = narrateMediaMs(plain);
+
+  async function runCase(mode) {
+    resetNarrationCalibration(voice);
+    let wallTimeMs = 0;
+    let mediaTimeMs = 0;
+    let skipped = false;
+    let endedNaturally = false;
+    let resolveEnded;
+    const ended = new Promise((resolve) => { resolveEnded = resolve; });
+    const handle = {
+      started: Promise.resolve('started'),
+      ended,
+      didEndNaturally: () => endedNaturally,
+      getProgress: () => ({ currentTime: mediaTimeMs / 1000, duration: Infinity, ratio: -1 }),
+    };
+
+    await runCaptionSync({
+      total,
+      plain,
+      voice,
+      handle,
+      wait: async (ms) => {
+        wallTimeMs += ms;
+        if (mode !== 'fallback') mediaTimeMs += ms;
+        if (mode === 'stop' && wallTimeMs >= 100) resolveEnded();
+        if (mode === 'skip' && wallTimeMs >= 100) skipped = true;
+        await Promise.resolve();
+      },
+      isSkipped: () => skipped,
+      onUpdate: () => {},
+      stopAudio: () => {
+        if (mode === 'skip' || mode === 'fallback') endedNaturally = true;
+      },
+      tickMs: 50,
+      stallMs: mode === 'fallback' ? 100 : 1000,
+      nowMs: () => wallTimeMs,
+    });
+
+    assert.equal(calibratedMediaMs(voice, baseEstimateMs), baseEstimateMs,
+      `${mode} 路径不得写入音色校准样本`);
+  }
+
+  try {
+    await runCase('stop');
+    await runCase('skip');
+    await runCase('fallback');
+  } finally {
+    resetNarrationCalibration(voice);
+  }
+});
+
 test('Regression 10: paused lesson clock never false-triggers stall fallback', async () => {
   /* 暂停 20s(超过 12s 止损线):授课时钟冻结,恢复后不得误判断流杀音频 */
   const plain = '暂停再恢复不应该被误判成断流冻结音频必须继续正常播放';
@@ -668,6 +891,72 @@ test('Regression 11: Dynamic client playbackRate updates active track immediatel
   }
 });
 
+test('explicitly returning the track speed to 1.0x updates the real Audio playbackRate', async () => {
+  const createdAudios = [];
+  class MockResetRateAudio {
+    constructor(url) {
+      this.url = url;
+      this.src = url;
+      this.currentTime = 0;
+      this.duration = 5;
+      this.paused = true;
+      this.playbackRate = 1;
+      createdAudios.push(this);
+    }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+    removeAttribute(attr) { if (attr === 'src') this.src = ''; }
+    load() {}
+  }
+
+  const originalAudio = globalThis.Audio;
+  globalThis.Audio = MockResetRateAudio;
+  try {
+    tts.setPlaybackRate(1.25);
+    const handle = tts.speakTrack('语速重新设为一倍', 'warm', 1.0);
+    await handle.started;
+    assert.equal(tts.getPlaybackRate(), 1.0, '显式 speed=1.0 必须覆盖之前的 1.25');
+    assert.equal(createdAudios[0].playbackRate, 1.0, '新 Audio 实例的 playbackRate 必须等于设置值');
+  } finally {
+    tts.stop();
+    globalThis.Audio = originalAudio;
+    tts.setPlaybackRate(0.85);
+  }
+});
+
+test('chat read-aloud track also honors an explicit 1.0x speed', async () => {
+  const createdAudios = [];
+  class MockChatRateAudio {
+    constructor(url) {
+      this.url = url;
+      this.src = url;
+      this.currentTime = 0;
+      this.duration = 5;
+      this.paused = true;
+      this.playbackRate = 1;
+      createdAudios.push(this);
+    }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+    removeAttribute(attr) { if (attr === 'src') this.src = ''; }
+    load() {}
+  }
+
+  const originalAudio = globalThis.Audio;
+  globalThis.Audio = MockChatRateAudio;
+  try {
+    tts.setPlaybackRate(1.25);
+    const handle = tts.speakChatTrack('聊天朗读语速重新设为一倍', 'warm', 1.0);
+    await handle.started;
+    assert.equal(tts.getPlaybackRate(), 1.0, '聊天轨道显式 speed=1.0 必须覆盖之前的 1.25');
+    assert.equal(createdAudios[0].playbackRate, 1.0, '聊天 Audio 实例的 playbackRate 必须等于设置值');
+  } finally {
+    tts.stopChat();
+    globalThis.Audio = originalAudio;
+    tts.setPlaybackRate(0.85);
+  }
+});
+
 test('Regression 12: Tutor interjection does not destroy paused lecture audio or prematurely settle lecture ended promise', async () => {
   const audioInstances = [];
   class MockInterjectAudio {
@@ -703,6 +992,7 @@ test('Regression 12: Tutor interjection does not destroy paused lecture audio or
     // 1. 主线旁白开始播放
     const lectureHandle = tts.speakTrack('主线讲座：从背景到本质推导');
     await lectureHandle.started;
+    assert.equal(lectureHandle.didEndNaturally(), false, '尚未自然结束时不得提供校准样本资格');
     assert.equal(audioInstances.length, 1);
     const lectureAudio = audioInstances[0];
     assert.equal(lectureAudio.paused, false, '主线音频正在播放');
@@ -740,9 +1030,12 @@ test('Regression 12: Tutor interjection does not destroy paused lecture audio or
     assert.equal(lectureAudio.paused, true, '答疑期间解除用户暂停仍不得提前播放主线');
 
     // 4. 导师答疑播完
+    tutorAudio.currentTime = 10.0;
     tutorAudio.ended = true;
     if (tutorAudio.onended) tutorAudio.onended();
     await tutorHandle.ended;
+    assert.equal(tutorHandle.didEndNaturally(), true, '原生 ended 事件必须标记为自然播完');
+    assert.equal(tutorHandle.getProgress()?.currentTime, 10, '自然 ended 后必须保留最终媒体 currentTime');
 
     // 5. 答疑结束后恢复主线
     tts.resumeAudio();
@@ -756,6 +1049,8 @@ test('Regression 12: Tutor interjection does not destroy paused lecture audio or
     if (lectureAudio.onended) lectureAudio.onended();
     await lectureHandle.ended;
     assert.equal(lectureEndedSettled, true, '主线在真正播完时自然触发 ended');
+    assert.equal(lectureHandle.didEndNaturally(), true, '主线原生 ended 事件必须标记为自然播完');
+    assert.equal(lectureHandle.getProgress()?.currentTime, 10, '主线自然 ended 后必须保留最终媒体 currentTime');
 
     tts.stop();
   } finally {
@@ -808,6 +1103,10 @@ test('Regression 13: Stop/Unmount stops both lecture and tutor audio channels wi
     assert.equal(tts.speaking(), false, 'stop 之后 speaking 必须为 false');
     assert.equal(lEnded, true, '主线 ended 必须被解冻');
     assert.equal(tEnded, true, '导师 ended 必须被解冻');
+    assert.equal(lHandle.didEndNaturally(), false, 'stop/unmount 结算不能冒充自然播完');
+    assert.equal(tHandle.didEndNaturally(), false, 'stop/unmount 结算不能冒充自然播完');
+    assert.equal(lHandle.getProgress(), null, '主动 stop 后不应暴露为自然结束进度');
+    assert.equal(tHandle.getProgress(), null, '主动 stop 后不应暴露为自然结束进度');
   } finally {
     globalThis.Audio = origAudio;
   }
@@ -1061,4 +1360,92 @@ test('Regression 19: INTERJECTION_ANSWER_PROMPT uses the Socratic distance rule 
   assert.match(INTERJECTION_ANSWER_PROMPT, /never about the person/i, '反馈必须指向任务而非人身');
   assert.match(INTERJECTION_ANSWER_PROMPT, /currently on the board/i, '回答必须锚定当前板书');
   assert.match(INTERJECTION_ANSWER_PROMPT, /no markdown or LaTeX/i, '答疑旁白必须纯口语(逐字进 TTS)');
+});
+
+test('Chat TTS: pause/resume keeps the same audio position and replacing a reply stops the old track', async () => {
+  const createdAudios = [];
+  const notifications = [];
+  class MockChatAudio {
+    constructor(url) {
+      this.url = url;
+      this.src = url;
+      this.currentTime = 0;
+      this.duration = 12;
+      this.paused = true;
+      this.ended = false;
+      this.playbackRate = 1;
+      this.onended = null;
+      this.onerror = null;
+      this.playCalls = 0;
+      this.pauseCalls = 0;
+      createdAudios.push(this);
+    }
+    play() {
+      this.playCalls += 1;
+      if (MockChatAudio.rejectNextPlay) {
+        MockChatAudio.rejectNextPlay = false;
+        this.paused = true;
+        return Promise.reject(new Error('play blocked'));
+      }
+      this.paused = false;
+      return Promise.resolve();
+    }
+    pause() {
+      this.pauseCalls += 1;
+      this.paused = true;
+    }
+    removeAttribute(attr) {
+      if (attr === 'src') this.src = '';
+    }
+    load() {}
+  }
+
+  const originalAudio = globalThis.Audio;
+  globalThis.Audio = MockChatAudio;
+  tts.stopChat();
+  const unsubscribe = tts.subscribe((on) => notifications.push(on));
+  try {
+    const first = tts.speakChatTrack('第一条导师回复');
+    assert.equal(await first.started, 'started');
+    assert.equal(createdAudios.length, 1, '第一条回复只创建一个 Audio 实例');
+    const audioA = createdAudios[0];
+    audioA.currentTime = 4.25;
+
+    assert.equal(tts.pauseChat(), true, '正在播放的聊天轨道可暂停');
+    assert.equal(audioA.paused, true, 'pause 调用暂停当前音频');
+    assert.equal(first.getProgress().currentTime, 4.25, '暂停后进度保持在原位置');
+    assert.equal(await tts.resumeChat(), 'resumed', '暂停中的聊天轨道可继续');
+    await Promise.resolve();
+    assert.equal(createdAudios.length, 1, '继续播放复用同一个 Audio 实例');
+    assert.equal(audioA.currentTime, 4.25, '继续播放没有把 currentTime 归零');
+    assert.equal(audioA.playCalls, 2, '继续只再次调用原音频 play');
+    assert.equal(notifications.includes(false), false, '聊天轨道启动/暂停/继续不发送会清空按钮状态的 false 通知');
+
+    const second = tts.speakChatTrack('第二条导师回复');
+    assert.equal(await second.started, 'started');
+    assert.equal(createdAudios.length, 2, '新回复创建自己的 Audio 实例');
+    assert.equal(audioA.paused, true, '开始第二条回复会停止第一条音频');
+    assert.equal(audioA.src, '', '替换时卸载第一条音频资源');
+    assert.equal(await first.ended, 'stopped', '替换旧回复会结束旧轨道并标记为 stopped');
+
+    const audioB = createdAudios[1];
+    audioB.currentTime = 12;
+    audioB.ended = true;
+    audioB.onended?.();
+    assert.equal(await second.ended, 'ended', '自然播完返回 ended');
+
+    const third = tts.speakChatTrack('第三条导师回复');
+    assert.equal(await third.started, 'started');
+    createdAudios[2].onerror?.();
+    assert.equal(await third.ended, 'error', '播放途中出错返回 error 供界面提示并复位');
+
+    MockChatAudio.rejectNextPlay = true;
+    const blocked = tts.speakChatTrack('无法启动的导师回复');
+    assert.equal(await blocked.started, 'error', 'play() 拒绝时开始状态返回 error');
+    assert.equal(await blocked.ended, 'error', 'play() 拒绝时结束状态返回 error');
+  } finally {
+    unsubscribe();
+    tts.stopChat();
+    globalThis.Audio = originalAudio;
+  }
 });

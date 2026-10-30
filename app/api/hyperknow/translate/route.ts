@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
     // 扣费点与 /chat 真正一致:上游探活成功(拿到首帧)之后才扣——上游 503/超时
     // 返回干净 JSON 时用户不白扣 2 分。流中失败不退费(与 /chat 同语义)。
-    const remainingCredits = await consumeCredits(member, HK_CHAT_COST);
+    const remainingCredits = await consumeCredits(member, HK_CHAT_COST, "translate");
     if (remainingCredits === null) {
       void generator.return(undefined as never).catch(() => {}); // 收掉已启的上游流
       const { remaining, max } = await currentCredits(member);

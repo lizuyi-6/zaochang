@@ -30,6 +30,7 @@ import { downloadIcs, shareLink } from '../actions';
 import { toast } from '../toast';
 import { formatSize, loadMaterials, removeMaterial, uploadMaterial, type CourseMaterial } from '../materials';
 import { courseJoinKey, isCourseJoined, markCourseJoined } from '../courseJoinMemory';
+import { createCourseFromCardPatch } from '../courseSelection';
 import { getCourseLang, setCourseLang } from '../courseLang';
 import { prefetchLecturePlan } from '../whiteboard/planPrefetch';
 import './CourseJourney.css';
@@ -146,12 +147,21 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
   const closeDialogs = () => setDialog('none');
   /* 课程 uuid 先于 lang 声明(默认值要从每课语言偏好读);未选择回退界面语言 */
   const journeyUuid = (PS as { courseUuid?: string }).courseUuid;
+  const demoCardNeedsGeneration = !!state.activeCourseCardNeedsGeneration && !journeyUuid;
+  const routeDemoToCreate = () => set(createCourseFromCardPatch(state));
   const [lang, setLang] = useState<'en' | 'zh'>(() => getCourseLang(journeyUuid) ?? (getBackendLang() === 'zh' ? 'zh' : 'en'));
 
   /* ---------------- 交互状态:简介展开 / 面板标签 / 当前单元 / 材料 ---------------- */
   const [expanded, setExpanded] = useState(false);
   const [panelTab, setPanelTab] = useState<'units' | 'materials' | 'practices'>('units');
   const [activeUnit, setActiveUnit] = useState(1);
+  useEffect(() => {
+    setDialog('none');
+    setExpanded(false);
+    setPanelTab('units');
+    setActiveUnit(1);
+    setLang(getCourseLang(journeyUuid) ?? (getBackendLang() === 'zh' ? 'zh' : 'en'));
+  }, [journeyUuid, state.activeCourseCardId]);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   /* 材料清单按"账户 + 课程"隔离;未登录(纯静态演示)退化为 demo 域 */
@@ -162,8 +172,9 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
   const joinScope = state.identity?.email ?? 'demo';
   const joinKey = courseJoinKey((PS as { courseUuid?: string }).courseUuid);
   useEffect(() => {
+    if (demoCardNeedsGeneration) return;
     if (!joined && isCourseJoined(joinScope, joinKey)) set({ courseJoined: true });
-  }, [joined, joinScope, joinKey, set]);
+  }, [demoCardNeedsGeneration, joined, joinScope, joinKey, set]);
 
   /* 进课堂前的预生成:旅程页就绪(已加入+真课)即为主 CTA 目标讲次后台生成白板 plan,
    * plan 到手立刻预热首两条旁白 TTS——用户点开课堂时 plan 与首音都已温,
@@ -242,6 +253,10 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
     mode: 'lecture' | 'practice',
     ctx?: { unitId?: string | number; lectureId?: string; sessionId?: string; topic?: string },
   ) => {
+    if (demoCardNeedsGeneration) {
+      routeDemoToCreate();
+      return;
+    }
     if (!joined) {
       setDialog('join');
       return;
@@ -352,7 +367,9 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
               </span>
               <span className="cj-curated-text">
                 <span className="cj-curated-by">{t('courseJourney.curatedByPrefix')}</span>
-                <span className="cj-curated-name">{L('Lattice Official', '见界官方')}</span>
+                <span className="cj-curated-name">
+                  {demoCardNeedsGeneration ? L('Marketplace preview', '集市课程预览') : L('Lattice Official', '见界官方')}
+                </span>
               </span>
             </div>
 
@@ -364,20 +381,24 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                 : t('courseJourney.showMoreButton')}
             </button>
 
-            <div className="cj-tags">
-              {PS.tags.map((t) => (
-                <span key={t} className="cj-tag">
-                  {t}
-                </span>
-              ))}
-            </div>
+            {!demoCardNeedsGeneration && (
+              <div className="cj-tags">
+                {PS.tags.map((t) => (
+                  <span key={t} className="cj-tag">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
 
-            {(!joined || dialog === 'joined') && (
+            {(demoCardNeedsGeneration || !joined || dialog === 'joined') && (
               <button
                 className="cj-join"
                 type="button"
                 onClick={() => {
-                  if (!joined) {
+                  if (demoCardNeedsGeneration) {
+                    routeDemoToCreate();
+                  } else if (!joined) {
                     setDialog('join');
                   } else {
                     openLesson('lecture', {
@@ -389,11 +410,24 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                   }
                 }}
               >
-                {joined ? t('home.marketplace.successStartLearning') : t('courseJourney.joinCourseButton')}
+                {demoCardNeedsGeneration
+                  ? L('Generate this course', '按此课题生成课程')
+                  : joined
+                    ? t('home.marketplace.successStartLearning')
+                    : t('courseJourney.joinCourseButton')}
               </button>
             )}
+            {demoCardNeedsGeneration && (
+              <p className="cj-unit-desc" style={{ marginTop: 10 }}>
+                {L(
+                  'This listing has no ready-made course yet. Continue to create it before learning.',
+                  '这门课还没有现成版本，点击后会进入课程生成流程，再开始学习。',
+                )}
+              </p>
+            )}
 
-            <div className="cj-panel">
+            {!demoCardNeedsGeneration && (
+              <div className="cj-panel">
               <div className="cj-panel-label">{t('courseJourney.panelSectionTitle')}</div>
               <div className="cj-panel-tabs">
                 <button
@@ -522,11 +556,25 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                   )}
                 </div>
               )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* ---------------- Right column ---------------- */}
           <div className="cj-right">
+            {demoCardNeedsGeneration ? (
+              <>
+                <span className="cj-unit-chip">{L('COURSE PREVIEW', '课程预览')}</span>
+                <h2 className="cj-unit-heading">{L('This course is not ready yet', '这门课还没有现成版本')}</h2>
+                <p className="cj-unit-desc">
+                  {L(
+                    'This marketplace card is a topic preview, not a ready-made course. Choose “Generate this course” to continue in the course creator.',
+                    '这张集市卡展示的是课程主题，不是现成课程。点击“按此课题生成课程”后，会进入课程创建流程。',
+                  )}
+                </p>
+              </>
+            ) : (
+              <>
             <span className="cj-unit-chip">{unitChip}</span>
             <h2 className="cj-unit-heading">{unitTitle}</h2>
             <p className="cj-unit-desc">{unitDesc}</p>
@@ -811,12 +859,14 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                 </div>
               ))}
             </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       {/* ---------------- Dialog 24: Join this course? ---------------- */}
-      {dialog === 'join' && (
+      {!demoCardNeedsGeneration && dialog === 'join' && (
         <div
           className="hk-overlay dark"
           onClick={(e) => {
@@ -876,7 +926,7 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
       )}
 
       {/* ---------------- Dialog 25: You're in ---------------- */}
-      {dialog === 'joined' && (
+      {!demoCardNeedsGeneration && dialog === 'joined' && (
         <div
           className="hk-overlay dark"
           onClick={(e) => {

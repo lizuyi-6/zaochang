@@ -2,13 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, ArrowUpRight, Star } from 'lucide-react';
 import type { PageProps } from '../types';
 import { CourseCover, Sparkle } from '../illustrations';
-import { coverForTitle } from '../data';
+import { coverForTitle, homeCourses, type CourseCard } from '../data';
+import { openCourseCardState } from '../courseSelection';
 import { KandinskyCover, KnotMark } from './CourseJourney';
 import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
 import { courseFromBackend } from '../generate';
 import { normalizeBackendCourse } from '../backend-course';
-import { courseJoinKey, markCourseJoined } from '../courseJoinMemory';
+import { courseJoinKey, isCourseJoined, markCourseJoined } from '../courseJoinMemory';
 import './CoursesPage.css';
 
 /* ------------------------------------------------------------------ */
@@ -55,14 +56,21 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
   const joinedTitle = state.generated?.title ?? L('Public Speaking', '公开演讲');
   const joinedCover = state.generated?.cover;
 
-  /* 右侧精选课程行:优先从后端真实课程(D1/官方样例)聚合,确保每一行均有真实 UUID 可直达 */
+  /* 右侧精选课程行:聚合真实课程与内置公开演讲,点击统一打开对应课程预览。 */
   const marketRowsAll = useMemo(() => {
-    const list: Array<{ title: string; rating: string; cover: any; uuid?: string }> = [];
+    const list: Array<{
+      id: string;
+      title: string;
+      description: string;
+      rating: string;
+      cover: CourseCard['cover'] | 'kandinsky';
+      uuid?: string;
+    }> = [];
     const seen = new Set<string>();
 
     // 1. 公开演讲 (官方预置经典课)
     const pubTitle = L('Public Speaking', '公开演讲');
-    list.push({ title: pubTitle, rating: '4.6', cover: 'kandinsky' as const });
+    list.push({ id: 'public-speaking', title: pubTitle, description: '', rating: '4.6', cover: 'kandinsky' as const });
     seen.add(pubTitle.toLowerCase());
     seen.add('public speaking');
 
@@ -72,7 +80,9 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
         if (!m.title || seen.has(m.title.toLowerCase())) continue;
         seen.add(m.title.toLowerCase());
         list.push({
+          id: m.marketId,
           title: m.title,
+          description: m.description,
           rating: '4.5',
           cover: coverForTitle(m.title),
           uuid: m.uuid || undefined,
@@ -82,32 +92,33 @@ const CoursesPage: React.FC<PageProps> = ({ state, set }) => {
     } else {
       // 离线/加载中保底
       list.push(
-        { title: L('Introduction to Sociology', '社会学导论'), rating: '4.4', cover: 'sociology' as const, uuid: '091d5945-4f34-4bfc-9d3b-c34b76d62ee5' },
-        { title: L('Machine Learning Foundations', '机器学习基础'), rating: '4.5', cover: 'ml' as const, uuid: 'c18a2301-3f42-4bfc-9d3b-c34b76d62ea1' },
+        { id: 'sociology', title: L('Introduction to Sociology', '社会学导论'), description: homeCourses()[0].description, rating: '4.4', cover: 'sociology' as const, uuid: '091d5945-4f34-4bfc-9d3b-c34b76d62ee5' },
+        { id: 'ml', title: L('Machine Learning Foundations', '机器学习基础'), description: homeCourses()[2].description, rating: '4.5', cover: 'ml' as const, uuid: 'c18a2301-3f42-4bfc-9d3b-c34b76d62ea1' },
       );
     }
     return list;
   }, [state.marketCourses]);
 
-  const openMarketRow = (row: { title: string; uuid?: string; cover: any }) => {
-    markCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(row.uuid));
-    if (row.uuid) {
-      set({
-        screen: 'courseJourney',
-        activeCourseUuid: row.uuid,
-        courseJoined: true,
-        lectureDone: false,
-      });
-    } else {
-      // 默认公开演讲课
-      set({
-        screen: 'courseJourney',
-        generated: null,
-        activeCourseUuid: undefined,
-        courseJoined: true,
-        lectureDone: false,
-      });
-    }
+  const openMarketRow = (row: (typeof marketRowsAll)[number]) => {
+    const localPublicSpeaking = row.id === 'public-speaking';
+    const card: Pick<CourseCard, 'id' | 'title' | 'description' | 'cover'> = {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      cover: row.cover === 'kandinsky' ? coverForTitle(row.title) : row.cover,
+    };
+    const options = localPublicSpeaking
+      ? {
+          courseJoined: isCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(undefined)),
+          requiresGeneration: false,
+          cardId: null,
+          generated: null,
+        }
+      : {
+          courseUuid: row.uuid,
+          courseJoined: isCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(row.uuid)),
+        };
+    set(openCourseCardState(state, card, options));
   };
 
   /* 周条:真实日期按周偏移滚动(学习时长目前无后端记录,数值仍为 0) */

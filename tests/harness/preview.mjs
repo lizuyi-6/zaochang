@@ -42,6 +42,9 @@ export let blueprintUpstreamCount = 0;
 export let lastTtsRequest = null;
 export let lastTtsBodyNonAscii = false;
 export let ttsUpstreamCount = 0;
+export let lastAsrRequest = null;
+export let asrUpstreamCount = 0;
+let asrMockOutcome = "success";
 export let lastImageRequest = null;
 export let imageUpstreamCount = 0;
 let unitResponseDelayMs = 0;
@@ -161,6 +164,13 @@ export function setImageUpstreamDelay(ms) {
   imageResponseDelayMs = ms;
 }
 
+export function setAsrMockOutcome(outcome) {
+  if (!new Set(["success", "no_speech", "error"]).has(outcome)) {
+    throw new TypeError("unsupported ASR mock outcome");
+  }
+  asrMockOutcome = outcome;
+}
+
 export function resetAiUpstream() {
   lastChatCompletion = null;
   aiUpstreamCount = 0;
@@ -168,6 +178,9 @@ export function resetAiUpstream() {
   lastTtsRequest = null;
   lastTtsBodyNonAscii = false;
   ttsUpstreamCount = 0;
+  lastAsrRequest = null;
+  asrUpstreamCount = 0;
+  asrMockOutcome = "success";
   lastImageRequest = null;
   imageUpstreamCount = 0;
   searchRequests.length = 0;
@@ -198,18 +211,20 @@ export async function startFakeAiUpstream() {
     return "";
   };
     aiServer = createServer(async (request, response) => {
-      // 六种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
+      // 七种传输:/v1/chat/completions(OpenAI 风格)、/v1/messages(Anthropic 风格,
       // 专家模型与见界 Agent 共用)、/v1/audio/speech(见界 TTS)、
+      // /v1/audio/transcriptions(见界 ASR)、
       // /v1/images/generations(StepFun 生图)、/v1/search(StepFun 独立搜索——
       // 课程研学与首页资讯)、/search(假 Tavily)。
       const isMessages = request.url === "/v1/messages";
       const isTts = request.url === "/v1/audio/speech";
+      const isAsr = request.url === "/v1/audio/transcriptions";
       const isSearch = request.url === "/search";
       const isImages = request.url === "/v1/images/generations";
       const isStepSearch = request.url === "/v1/search";
       if (
         request.method !== "POST" ||
-        (!isMessages && !isTts && !isSearch && !isImages && !isStepSearch && request.url !== "/v1/chat/completions" && request.url !== "/v1/mcp/web_search/mcp")
+        (!isMessages && !isTts && !isAsr && !isSearch && !isImages && !isStepSearch && request.url !== "/v1/chat/completions" && request.url !== "/v1/mcp/web_search/mcp")
       ) {
         response.writeHead(404).end();
         return;
@@ -221,7 +236,34 @@ export async function startFakeAiUpstream() {
     }
     const chunks = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
-    const rawBody = Buffer.concat(chunks).toString("utf8");
+    const rawBytes = Buffer.concat(chunks);
+    const rawBody = rawBytes.toString("utf8");
+    if (isAsr) {
+      // 仅记录 MIME/模型/大小等元数据;假上游不保留音频字节。
+      const multipartText = rawBytes.toString("latin1");
+      lastAsrRequest = {
+        contentType: request.headers["content-type"] ?? "",
+        bodyBytes: rawBytes.byteLength,
+        model: multipartText.match(/name="model"\r\n\r\n([^\r\n]+)/)?.[1] ?? null,
+        responseFormat: multipartText.match(/name="response_format"\r\n\r\n([^\r\n]+)/)?.[1] ?? null,
+        fileMime: multipartText.match(/name="file"; filename="[^"]+"\r\nContent-Type: ([^\r\n]+)/i)?.[1] ?? null,
+        hasFile: /name="file"; filename="[^"]+"/.test(multipartText),
+      };
+      asrUpstreamCount += 1;
+      if (asrMockOutcome === "no_speech") {
+        response.writeHead(400, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { message: "no speech found", type: "request_params_invalid" } }));
+        return;
+      }
+      if (asrMockOutcome === "error") {
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { message: "simulated ASR failure" } }));
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ text: "阶跃假上游识别的语音文本。" }));
+      return;
+    }
     const body = JSON.parse(rawBody);
     // H3 旋钮:指定模型 404(messages 与 chat/completions 双通道),驱动 llm.ts 降级路径
     if (aiUpstreamMissingModel && (isMessages || request.url === "/v1/chat/completions")
@@ -530,8 +572,14 @@ export async function startFakeAiUpstream() {
 export let emailServer;
 export let emailPort;
 export let sentEmails = [];
+let emailFailureResponsesRemaining = 0;
+
+export function failNextFakeEmailSend(count = 1) {
+  emailFailureResponsesRemaining = Math.max(0, Math.floor(Number(count) || 0));
+}
 
 export async function startFakeEmailUpstream() {
+  emailFailureResponsesRemaining = 0;
   emailServer = createServer(async (request, response) => {
     const match = request.url?.match(/^\/accounts\/([^/]+)\/email\/sending\/send$/);
     if (request.method !== "POST" || !match) {
@@ -547,6 +595,12 @@ export async function startFakeEmailUpstream() {
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     sentEmails.push({ account: decodeURIComponent(match[1]), ...body });
+    if (emailFailureResponsesRemaining > 0) {
+      emailFailureResponsesRemaining -= 1;
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "injected_email_failure" }));
+      return;
+    }
     if (String(body.to?.[0] ?? "").includes("fail-email-test")) {
       response.writeHead(500, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "boom" }));
@@ -698,6 +752,7 @@ export function previewServerArgs() {
     "--var", "AI_CHAT_EXPERT_TRANSPORT:messages",
     "--var", "AI_CHAT_VISION:1",
     "--var", `HYPERKNOW_TTS_BASE_URL:http://127.0.0.1:${aiPort}/v1`,
+    "--var", `HYPERKNOW_ASR_BASE_URL:http://127.0.0.1:${aiPort}/v1`,
     "--var", "HK_TAVILY_API_KEY:test-search-key",
     "--var", `HK_WEB_SEARCH_BASE_URL:http://127.0.0.1:${aiPort}`,
     "--var", `EMAIL_SEND_BASE_URL:http://127.0.0.1:${emailPort}`,
@@ -980,7 +1035,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql", "0032_page_hosting.sql", "0033_external_payment_guard_client_state.sql", "0034_follow_creator_email_identity.sql", "0035_member_suspension.sql", "0036_quiet_freak.sql", "0037_steady_tag.sql", "0038_archive_candidates.sql", "0039_hk_redeem_codes.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql", "0032_page_hosting.sql", "0033_external_payment_guard_client_state.sql", "0034_follow_creator_email_identity.sql", "0035_member_suspension.sql", "0036_quiet_freak.sql", "0037_steady_tag.sql", "0038_archive_candidates.sql", "0039_hk_redeem_codes.sql", "0040_hk_credit_events.sql", "0041_hk_feedback.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))

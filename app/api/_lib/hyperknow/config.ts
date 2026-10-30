@@ -27,6 +27,9 @@ export type HyperknowAiConfig = {
   // 同一请求形状(model/input/voice/speed),且兼容 step-tts 时代的 voice-tone ID。
   ttsBaseUrl: string;
   ttsModel: string;
+  // ASR 同样复用主 AI API key,但使用独立的 /v1 转录基址与模型配置。
+  asrBaseUrl: string;
+  asrModel: string;
 };
 
 // StepFun 官方已下线 step-explore(2026-10-29 实测 step_plan 端点 /models 已无此 id,
@@ -42,6 +45,7 @@ export function resolveHyperknowAiConfig(): HyperknowAiConfig | null {
   if (!baseUrl || !apiKey) return null;
   const ttsBaseUrl = values.HYPERKNOW_TTS_BASE_URL || "https://api.stepfun.com/v1";
   const defaultTtsModel = ttsBaseUrl.includes("step_plan") ? "stepaudio-2.5-tts" : "stepaudio-3-tts";
+  const asrBaseUrl = values.HYPERKNOW_ASR_BASE_URL || "https://api.stepfun.com/v1";
   const model = normalizeModelAlias(values.HYPERKNOW_AI_MODEL || values.AI_CHAT_MODEL);
   return {
     baseUrl,
@@ -49,6 +53,8 @@ export function resolveHyperknowAiConfig(): HyperknowAiConfig | null {
     model,
     ttsBaseUrl,
     ttsModel: values.HYPERKNOW_TTS_MODEL || defaultTtsModel,
+    asrBaseUrl,
+    asrModel: values.HYPERKNOW_ASR_MODEL || "stepaudio-2.5-asr",
   };
 }
 

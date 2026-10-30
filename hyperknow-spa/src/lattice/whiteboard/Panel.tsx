@@ -9,6 +9,7 @@ import {
   Plus,
   MicOff,
   Mic,
+  LoaderCircle,
   Sparkles,
   Square,
   X,
@@ -17,8 +18,9 @@ import type { PanelEntry, Rich } from './lessonScript';
 import { getSystemEndText } from './lessonScript';
 import { useI18n } from '../i18n';
 import { L } from '../i18n/content';
+import type { VoiceInputStatus } from '../actions';
 
-export type VoiceState = 'off' | 'preparing' | 'listening';
+export type VoiceState = VoiceInputStatus;
 export type PlayStatus = 'explaining' | 'yourturn' | 'ended' | 'idle';
 
 const ChipIcon: React.FC<{ icon: NonNullable<PanelEntry['chipIcon']> }> = ({ icon }) => {
@@ -143,14 +145,15 @@ export const ConversationPanel: React.FC<{
         ) : null}
       </div>
       <div className="wb-composer-wrap">
-        {voice === 'preparing' && <div className="wb-voice-strip">{L('Getting the microphone ready...', '正在准备麦克风…')}</div>}
-        {voice === 'listening' && <div className="wb-voice-strip">{L('Voice input on — the tutor is listening', '语音输入已开启——老师正在听')}</div>}
-        <div className={`wb-composer${voice !== 'off' ? ' joined' : ''}`}>
+        {voice === 'requesting' && <div className="wb-voice-strip">{L('Getting the microphone ready...', '正在准备麦克风…')}</div>}
+        {voice === 'recording' && <div className="wb-voice-strip">{L('Recording — click the microphone to finish', '正在录音，点击麦克风结束')}</div>}
+        {voice === 'recognizing' && <div className="wb-voice-strip"><LoaderCircle size={14} className="hk-voice-spinner" />{L('Recognizing speech…', '正在识别语音…')}</div>}
+        <div className={`wb-composer${voice !== 'idle' ? ' joined' : ''}`}>
           <button
-            className={`plus${voice === 'listening' ? ' dim' : ''}`}
+            className={`plus${voice === 'recording' || voice === 'requesting' ? ' dim' : ''}`}
             aria-label="Add image"
             onClick={onAddImage}
-            disabled={voice === 'listening'}
+            disabled={voice === 'recording' || voice === 'requesting'}
           >
             <Plus size={15} />
           </button>
@@ -159,7 +162,7 @@ export const ConversationPanel: React.FC<{
             ref={taRef}
             value={inputValue}
             onChange={(e) => onInput(e.target.value)}
-            placeholder={voice === 'listening' ? t('courseSession.voiceListeningPlaceholder') : placeholder}
+            placeholder={voice === 'recording' ? t('courseSession.voiceListeningPlaceholder') : voice === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : placeholder}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -168,13 +171,15 @@ export const ConversationPanel: React.FC<{
             }}
           />
           <button
-            className={`mic${voice === 'listening' ? ' on' : voice === 'preparing' ? ' prep' : ''}`}
+            className={`mic${voice === 'recording' ? ' on recording' : voice === 'requesting' || voice === 'recognizing' ? ' prep' : ''}`}
             onClick={onMic}
-            aria-label="Voice input"
+            aria-label={voice === 'recording' ? L('Click to finish', '点击结束') : voice === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : L('Voice input', '语音输入')}
+            title={voice === 'recording' ? L('Click to finish', '点击结束') : voice === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : L('Voice input', '语音输入')}
+            disabled={voice === 'requesting' || voice === 'recognizing'}
           >
-            {voice !== 'off' ? <Mic size={15} /> : <MicOff size={15} />}
+            {voice === 'recognizing' ? <LoaderCircle size={15} className="hk-voice-spinner" /> : voice !== 'idle' ? <Mic size={15} /> : <MicOff size={15} />}
           </button>
-          {status === 'explaining' && !canSend && voice !== 'listening' ? (
+          {status === 'explaining' && !canSend && voice !== 'recording' && voice !== 'requesting' ? (
             <button
               className="send stop"
               onClick={onStop}
@@ -183,7 +188,7 @@ export const ConversationPanel: React.FC<{
             >
               <Square size={13} fill="currentColor" />
             </button>
-          ) : voice === 'listening' ? (
+          ) : voice === 'recording' ? (
             <button className="send stop" onClick={onMic} aria-label="Stop listening">
               <Square size={13} fill="currentColor" />
             </button>

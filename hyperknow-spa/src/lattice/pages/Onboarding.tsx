@@ -7,6 +7,7 @@ import {
   Pause, Volume2, SlidersHorizontal, ChevronDown, BookOpen, AudioLines,
 } from 'lucide-react';
 import type { PageProps } from '../types';
+import type { CourseCard } from '../data';
 import {
   Logo, Ufo, UfoBadge, RocketGirl, Astronaut, DeskWriter, CatPerson, TrophyPerson,
   PlanetDoodle, AvatarCat, CourseCover,
@@ -15,6 +16,7 @@ import type { CoverKind } from '../illustrations';
 import { DarkPill } from '../ui';
 import { useI18n, LANGUAGES, TRich } from '../i18n';
 import { L } from '../i18n/content';
+import { findCourseCardById, openCourseCardState } from '../courseSelection';
 import './Onboarding.css';
 
 /* ================= shared bits ================= */
@@ -49,7 +51,7 @@ const TopCluster: React.FC = () => {
     <span className="ob-pill-pro">PRO</span>
     <span className="ob-energy">
       <Sparkles size={11} className="ob-energy-ico" />
-      100
+      —
     </span>
     <span className="ob-pill-en">EN</span>
     <span className="ob-pill-founders">
@@ -248,10 +250,24 @@ const MktCard: React.FC<{
   desc: string;
   onboard?: string;
   rating?: string;
-}> = ({ cover, enrolled, title, desc, onboard, rating }) => {
+  onClick?: () => void;
+}> = ({ cover, enrolled, title, desc, onboard, rating, onClick }) => {
   const { t } = useI18n();
   return (
-    <div className="ob-mcard">
+    <div
+      className="ob-mcard"
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? title : undefined}
+      style={onClick ? { cursor: 'pointer' } : undefined}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <div className="ob-mcover">
         <CourseCover kind={cover} seed={title} flat />
         {enrolled && <span className="ob-enrolled">{t('home.courseTicket.status.enrolled')}</span>}
@@ -281,8 +297,9 @@ const MktCard: React.FC<{
   );
 };
 
-const StepCraft: React.FC = () => {
+const StepCraft: React.FC<{ onOpenCourse: (card: CourseCard) => void }> = ({ onOpenCourse }) => {
   const { t } = useI18n();
+  const apWorldCard = findCourseCardById('ap-world');
   return (
   <div className="ob-show">
     <div className="ob-show-illus">
@@ -356,14 +373,12 @@ const StepCraft: React.FC = () => {
             )}
           />
           <MktCard
-            cover="history"
-            title={L('AP World History: Modern', 'AP 世界史：现代')}
-            desc={L(
-              'A comprehensive global history course examining major political, economic, social, cultural, and technological…',
-              '一门全面的全球史课程，考察重大政治、经济、社会、文化与技术变革…',
-            )}
+            cover={apWorldCard?.cover ?? 'history'}
+            title={apWorldCard?.title ?? L('AP World History: Modern', 'AP 世界史：现代')}
+            desc={apWorldCard?.description ?? L('A comprehensive global history course…', '一门全面的全球史课程…')}
             onboard="7.6K"
             rating="4.5"
+            onClick={() => apWorldCard && onOpenCourse(apWorldCard)}
           />
         </div>
       </div>
@@ -472,7 +487,7 @@ const StepCourse: React.FC = () => {
           <span className="ob-pill-pro">PRO</span>
           <span className="ob-energy">
             <Sparkles size={11} className="ob-energy-ico" />
-            100
+            —
           </span>
           <span className="ob-issue">
             <Flag size={11} /> {t('chatResponse.haveAnIssue')}
@@ -940,7 +955,11 @@ export const Onboarding: React.FC<PageProps> = ({ state, set }) => {
       {step === 5 && (
         <StepTalk shiftUp lines={[t('onboarding.handoverLine1')]} />
       )}
-        {step === 6 && <StepCraft />}
+        {step === 6 && (
+          <StepCraft
+            onOpenCourse={(card) => set(openCourseCardState(state, card))}
+          />
+        )}
         {step === 7 && <StepCourse />}
         {step === 8 && <StepBoard onBack={go(7)} onNext={go(9)} />}
         {step === 9 && <StepInstant />}

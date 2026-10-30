@@ -12,6 +12,7 @@ import {
   Flame,
   Star,
   AudioLines,
+  LoaderCircle,
   SlidersHorizontal,
   ChevronDown,
   Spline,
@@ -30,7 +31,7 @@ import {
 } from 'lucide-react';
 import type { PageProps } from '../types';
 import { placeholders, newsFeed, homeCourses, type CourseCard } from '../data';
-import { buildGeneratedCourse } from '../generate';
+import { openCourseCardState } from '../courseSelection';
 import { courseJoinKey, isCourseJoined } from '../courseJoinMemory';
 import { fetchDailyFeed, type DailyFeedItem } from '../backend';
 import { Logo, PlanetDoodle, CourseCover, Handshake, WelcomeReader, Ufo } from '../illustrations';
@@ -38,10 +39,11 @@ import { DarkPill } from '../ui';
 import { useI18n, TRich } from '../i18n';
 import { L } from '../i18n/content';
 import { WhatsNewModal } from '../WhatsNewModal';
-import { copyText, listenOnce, tts } from '../actions';
+import { copyText, createVoiceInputController, tts, type VoiceInputStatus } from '../actions';
 import { uploadMaterial } from '../materials';
 import { toast } from '../toast';
 import './Home.css';
+import '../voice-input.css';
 
 /** 能力 chips 预填的提问模板(点一下就把输入框变成一条可编辑的真实提问) */
 const CAP_PROMPTS: Record<string, [string, string]> = {
@@ -85,13 +87,21 @@ export const Home = ({ state, set }: PageProps) => {
   const [notesDraft, setNotesDraft] = useState('');
   const [attachments, setAttachments] = useState<Array<{ name: string; url: string }>>([]);
   const [uploading, setUploading] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceInputStatus>('idle');
   const [newsOffset, setNewsOffset] = useState(0);
   const [liveNews, setLiveNews] = useState<DailyFeedItem[] | null>(null);
   const [feedRound, setFeedRound] = useState(0);
   const [feedLoading, setFeedLoading] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const voiceInputRef = useRef<ReturnType<typeof createVoiceInputController> | null>(null);
+  if (!voiceInputRef.current) voiceInputRef.current = createVoiceInputController();
+  voiceInputRef.current.setCallbacks({
+    onText: (text) => setNote((prev) => (prev ? `${prev} ${text}` : text)),
+    onState: setVoiceStatus,
+  });
+
+  useEffect(() => () => voiceInputRef.current?.cancel(), []);
 
   // rotate the Craft Courses prompt placeholder through the topic examples
   useEffect(() => {
@@ -148,11 +158,9 @@ export const Home = ({ state, set }: PageProps) => {
     toast(L(`Attached “${material.name}”`, `已附加《${material.name}》`));
   };
 
-  const startVoice = (apply: (text: string) => void) => {
+  const startVoice = () => {
     setMenu('none');
-    if (listening) return;
-    const started = listenOnce(apply, () => setListening(false));
-    if (started) setListening(true);
+    void voiceInputRef.current?.toggle();
   };
 
   const copyInvite = async () => {
@@ -171,23 +179,13 @@ export const Home = ({ state, set }: PageProps) => {
     };
   }, []);
 
-  /** 首页课程卡:后端有同名课程(官方样例/本人课程)就直接打开那门课的预览,
-   * 否则才落到集市总览——旧实现每张卡都只跳集市,学员点了「社会学导论」还得再找一遍 */
+  /** 首页课程卡:有 UUID 就预览真实课程,否则仍预览所点演示卡并由其主按钮进入生成流程。 */
   const openHomeCourse = (c: CourseCard) => {
     const live = state.marketCourses?.find((m) => m.uuid && m.title.trim() === c.title.trim());
-    if (!live?.uuid) {
-      set({ screen: 'marketplace' });
-      return;
-    }
-    set({
-      screen: 'coursePreview',
-      generated: { ...buildGeneratedCourse(c.title), cover: c.cover },
-      courseJoined: isCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(live.uuid)),
-      lectureDone: false,
-      activeCourseUuid: live.uuid,
-      courseLoading: true,
-      courseError: null,
-    });
+    set(openCourseCardState(state, c, {
+      courseUuid: live?.uuid || undefined,
+      courseJoined: isCourseJoined(state.identity?.email ?? 'demo', courseJoinKey(live?.uuid)),
+    }));
   };
 
   const shuffleNews = async () => {
@@ -571,9 +569,13 @@ export const Home = ({ state, set }: PageProps) => {
                           {state.autoSpeak ? L('On', '开') : L('Off', '关')}
                         </span>
                       </button>
-                      <button className="hk-menu-item" onClick={() => startVoice((text) => setNote((prev) => (prev ? `${prev} ${text}` : text)))}>
-                        <AudioLines size={14} />
-                        {L('Voice input', '语音输入')}
+                        <button className="hk-menu-item" onClick={startVoice}>
+                          {voiceStatus === 'recognizing' ? <LoaderCircle size={14} className="hk-voice-spinner" /> : <AudioLines size={14} />}
+                          {voiceStatus === 'recording'
+                            ? L('Click to finish', '点击结束')
+                            : voiceStatus === 'recognizing'
+                              ? L('Recognizing speech…', '正在识别语音…')
+                              : L('Voice input', '语音输入')}
                       </button>
                       <div className="hk-menu-label">{L('Speech speed', '朗读语速')}</div>
                       {[0.5, 0.75, 0.85, 1, 1.25, 1.5].map((sp) => (
@@ -602,11 +604,13 @@ export const Home = ({ state, set }: PageProps) => {
                   )}
                 </div>
                 <button
-                  className={`hm-ghost-icon${listening ? ' on' : ''}`}
-                  aria-label={L('Voice input', '语音输入')}
-                  onClick={() => startVoice((text) => setNote((prev) => (prev ? `${prev} ${text}` : text)))}
+                  className={`hm-ghost-icon${voiceStatus === 'recording' ? ' on recording' : voiceStatus === 'recognizing' ? ' processing' : ''}`}
+                  aria-label={voiceStatus === 'recording' ? L('Click to finish', '点击结束') : voiceStatus === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : L('Voice input', '语音输入')}
+                  title={voiceStatus === 'recording' ? L('Click to finish', '点击结束') : voiceStatus === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : L('Voice input', '语音输入')}
+                  disabled={voiceStatus === 'requesting' || voiceStatus === 'recognizing'}
+                  onClick={startVoice}
                 >
-                  <AudioLines size={18} />
+                  {voiceStatus === 'recognizing' ? <LoaderCircle size={18} className="hk-voice-spinner" /> : <AudioLines size={18} />}
                 </button>
                 <div className="hm-toolbar-right">
                   <div className="hm-menu-anchor">

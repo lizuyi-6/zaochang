@@ -175,7 +175,6 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const writebackCredits = (remaining: number) => {
     remainingRef.current = remaining;
     set({
-      energy: remaining,
       identity: {
         username: state.identity?.username || 'You',
         email: state.identity?.email || '',
@@ -246,7 +245,6 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
       ...(persisted ? { marketStale: true } : {}),
       ...(typeof latestCredits === 'number'
         ? {
-            energy: latestCredits,
             identity: {
               username: state.identity?.username || 'You',
               email: state.identity?.email || '',
@@ -1210,7 +1208,14 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
         </aside>
       )}
 
-      {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} title={L('Contact the founders', '联系创始人')} />}
+      {supportOpen && (
+        <SupportModal
+          onClose={() => setSupportOpen(false)}
+          title={L('Contact the founders', '联系创始人')}
+          context={{ screen: 'create', courseUuid: state.activeCourseUuid }}
+          userEmail={state.identity?.email}
+        />
+      )}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import {
   Download,
   Flag,
   LocateFixed,
+  LoaderCircle,
   MessageCircleMore,
   Mic,
   MicOff,
@@ -23,7 +24,7 @@ import { getIntroCopy, type Rich } from './lessonScript';
 import { CaptionBar } from './CaptionBar';
 import { L } from '../i18n/content';
 import { CAMERA_ZOOM_STEPS } from './camera';
-import type { PlayStatus } from './Panel';
+import type { PlayStatus, VoiceState } from './Panel';
 import type { ExportFormat, ExportPage } from '../boardExport';
 
 export const WhiteboardChrome: React.FC<{
@@ -47,7 +48,7 @@ export const WhiteboardChrome: React.FC<{
   onTogglePanel: () => void;
   showDownloadDot: boolean;
   onMicFab: () => void;
-  voiceOn: boolean;
+  voiceState: VoiceState;
   titleOverride?: string;
   isFollowing?: boolean;
   onResumeFollow?: () => void;
@@ -219,12 +220,13 @@ export const WhiteboardChrome: React.FC<{
           {/* Right: Interaction actions */}
           <div className="wb-dock-actions">
             <button
-              className={`wb-dock-btn${p.voiceOn ? ' active' : ''}`}
+              className={`wb-dock-btn${p.voiceState === 'recording' ? ' active recording' : p.voiceState === 'recognizing' ? ' processing' : ''}`}
               onClick={p.onMicFab}
-              aria-label={p.voiceOn ? 'Microphone on' : 'Microphone off'}
-              title={p.voiceOn ? 'Microphone on' : 'Microphone off'}
+              aria-label={p.voiceState === 'recording' ? L('Click to finish voice input', '点击结束语音输入') : p.voiceState === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : L('Voice input', '语音输入')}
+              title={p.voiceState === 'recording' ? L('Click to finish voice input', '点击结束语音输入') : p.voiceState === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : p.voiceState === 'requesting' ? L('Getting the microphone ready…', '正在准备麦克风…') : L('Voice input', '语音输入')}
+              disabled={p.voiceState === 'requesting' || p.voiceState === 'recognizing'}
             >
-              {p.voiceOn ? <Mic size={18} /> : <MicOff size={18} />}
+              {p.voiceState === 'recognizing' ? <LoaderCircle size={18} className="hk-voice-spinner" /> : p.voiceState !== 'idle' ? <Mic size={18} /> : <MicOff size={18} />}
             </button>
             <button
               className={`wb-dock-btn${p.panelOpen ? ' panel-active' : ''}`}

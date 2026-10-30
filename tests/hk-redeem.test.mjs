@@ -65,9 +65,9 @@ test("hk redeem: redemption is an atomic guarded batch, errors stay non-enumerat
   assert.ok(existingIdx > 0 && unavailableIdx > existingIdx,
     "已持有授权的判定必须排在可用性之前(单次码用尽=本人重复,不该报成不可用)");
   assert.match(redeem, /durationDays === null \? null : isoStampAt/, "永久码授权不过期,计期码从兑换时刻起算");
-  assert.match(redeem, /UPDATE hk_credits SET balance = max\(balance, \?\), updated_at = CURRENT_TIMESTAMP\s+WHERE user_email = \? AND reset_date = \?/,
+  assert.match(redeem, /UPDATE hk_credits SET balance = max\(balance, \?\), change_reason = 'plan_change', change_ref = \?, updated_at = CURRENT_TIMESTAMP\s+WHERE user_email = \? AND reset_date = \?/,
     "升档当日即享当日额度(只升不降),与扣次数同批事务");
-  assert.match(redeem, /TIER_CONFIG\[code\.tier\]\.maxCredits, member\.email, beijingToday\(\)/,
+  assert.match(redeem, /TIER_CONFIG\[code\.tier\]\.maxCredits, grantId, member\.email, beijingToday\(\)/,
     "抬额上限取新档位每日额度,日期用北京日界(与 hk_credits 的 reset_date 同源)");
 });
 

@@ -1118,3 +1118,32 @@
 - **部分完成**:状态页(https://status.aetherstudio.top)从 8 条探针扩到 9 条,新增 `lattice-model`(显示名「见界模型」)——北京盒子每 5 分钟向见界学习 Agent 的 LLM 上游(`api.stepfun.com/step_plan/v1/messages`,Anthropic Messages 协议,`step-5-preview`、`max_tokens=64`、流式)发真实小补全,预期 200;模型 404/密钥 401→降级,不可达→故障。`server.mjs` 的 classify/sampleReason/严重度口径零改动。
 - 仓库与生产:`deploy/status/server.mjs`(SHA `2fc2151b…`)与首次入库的 `deploy/status/probe.sh`(SHA `a932c087…`)已替换到盒子并重启 `zc-status.service`(备份 `.bak-latticemodel-20261030T034529Z`,旧 server SHA `324d7eb5…` 无漂移);上游密钥在盒子 `/opt/zc-mon/stepfun.env`(root 600,缺失即探针跳过→显式 unknown)。首个 probe.sh 候选漏 `>> "$LOG"` 追加,验收时当场发现修正重发,坏版未进 cron,采样无缺口(细节见 `deploy/status/README.md` 2026-10-30 节)。
 - 验证:`npm run test:status` 64/64(ids 夹具与断言 8→9)、eslint/`git diff --check` exit0;源站与公网 API 均 overall=up、9 项探针、lattice-model up(http 200,ttfb≈0.7s),公网 HTML 渲染「见界模型」。未证明:探针不经 Worker,不代表生产 Worker→上游全链路;盒子 key 与线上 Worker secret 同值性无法读回验证;TTS/图片/搜索等其他上游能力不在监控内。
+
+## 见界积分显示与流水（2026-10-30）
+
+- 状态：部分完成。白板结课的前端扣 5 已移除，初始伪余额与 Onboarding 示意顶栏的 `PRO 100` 已替换为占位符；Chat/Create 的积分回写只接受服务端回调值；`MAX` 每日额度与后端 500 对齐。0040 新增积分流水表、余额触发器、90 天清理和会员私有分页接口；顶栏徽章打开双语记录弹窗。
+- 语义变更：从“白板结课会在浏览器本地扣 5；余额写入没有统一流水”改为“白板不改变余额；每次余额变化需在同一 UPDATE 声明原因，SQLite 同事务记录 delta 与 balance_after；原因缺失或过期会使 UPDATE abort”。依据：本轮 T1 A/B/C；迁移 `drizzle/0040_hk_credit_events.sql`。
+- 本地证据：`node --experimental-strip-types --test --test-isolation=none tests/credits-ledger.test.mjs tests/lattice-credit-history.test.mjs tests/hk-redeem.test.mjs tests/worker-contracts.test.mjs` 为 48 pass / 0 fail / 0 skipped / 0 todo；`npx tsc --noEmit` exit 0；`cd hyperknow-spa && npx tsc -b` exit 0。SQLite 断言覆盖 chat/translate/course/refund/daily_reset 字段、余额不足 changes=0、额度对账、90 天 purge 和触发器不变量。
+- 未运行：`tests/suites/11-hyperknow.tests.mjs` 与 Wrangler preview 未在沙箱运行；`npm run db:generate` 打印 `spawn EPERM`，未观察到 `No schema changes`。SPA build 未运行，按本轮约束由 Claude 统一处理 `public/lattice/` 构建产物。
+- 额外迁移门禁检查：`node --experimental-strip-types --test --test-isolation=none tests/migration-gate.test.mjs` 为 1 pass / 7 fail / 0 skipped；失败断言收到空输出，测试辅助函数未带出 `spawnSync.error`，所以不能判定为迁移校验逻辑缺陷或沙箱子进程拦截，需外部重跑。
+- 已知取舍/已知不证明事项：流水只从 0040 应用后记录，不回填旧余额或历史扣费；余额首行是对账基线而非一条虚构发放事件；跨北京日界的退款沿用现有策略，不在新一天余额中追加退款。
+- 未覆盖范围：未通过 Wrangler 验证 history HTTP 鉴权、A/B 隔离、50 条分页游标、对话事件字段；未测试 Cloudflare D1 上的并发扣费和 `batch` 回滚；未在浏览器验证积分弹窗布局、加载/错误/重试和实际点击；未取得 Drizzle generator 零漂移证据。
+- 本轮改动可能引入的新风险：`drizzle/meta/0040_snapshot.json` 与 journal 按 0039 手工续写，SQLite 迁移通过但 Drizzle generator 尚未校验快照与 schema 的零差异；history Worker 响应和前端运行时只经过类型/静态契约检查；迁移前的扣费流水不可恢复。
+
+## 见界语音输入与服务端 ASR（2026-10-30）
+
+- 状态：部分完成。改动新增 `POST /api/hyperknow/asr`（会员、同源、30 次/10 分钟、2 MiB、音频 MIME 白名单、20 秒上游超时）；前端 Home/Chat/Whiteboard 录音后追加识别文本，卸载时停止轨道；Android 未改。
+- 语义变更：从全站 `microphone=()` 改为仅 `/lattice` 与 `/lattice/*` 返回 `microphone=(self)`；`/api/auth/github/start`、`/signin`、`/api/*`、`/latticefoo`、`/product-apps/*` 仍关闭。触发依据：本轮 T5 A 明确限定路径。`tests/worker-contracts.test.mjs` 的字段断言覆盖这些路径，但只验证 `withSecurityHeaders`，不证明生产 Worker 响应。
+- 可复现检查：`node --experimental-strip-types --test --test-isolation=none tests/worker-contracts.test.mjs` 37 pass / 0 fail / 0 skipped / 0 todo；`npx tsc --noEmit` exit=0；SPA `tsconfig.app.json` 与 `tsconfig.node.json` 独立 typecheck exit=0（临时 `tsBuildInfoFile` 放在 `$TEMP`）。原样 `npx tsc -b` 因只读 `node_modules` 链接无法写 `.tmp/*.tsbuildinfo`，exit=1。
+- 未运行：`tests/suites/11-hyperknow.tests.mjs` 中 `hyperknow asr: 登录录音代理、字段映射、限体积/MIME/同源与 no_speech` 未在本沙箱启动 Wrangler preview；因此 ASR HTTP/D1/假上游路径、浏览器录音/权限/停止语义和真实 StepFun 上游均没有本轮运行证据。`public/lattice/` 未构建更新；Claude 合并时需在外部构建并运行 Worker 集成套件。无新增迁移/表/列。
+- 已知取舍/不证明事项：`worker-contracts` 证明路径 helper 输出字段，不证明部署响应；TypeScript 只证明可类型检查，不证明浏览器 API、音频编码或上游 multipart 互通。Android 壳仍拒绝麦克风权限，壳内无法录音。
+- 未覆盖范围：未运行 ASR preview suite（登录、401、403、413、415、422、上游错误/超时、限流、未配置字段断言）；未在 Chrome/Safari/Android WebView 运行 MediaRecorder；未用真实密钥调用 ASR；未部署或核对生产响应头。新增 HTTP suite 的相关源断言已写入，但本轮未执行。
+- 本轮改动可能引入的新风险：若 `/lattice` 前缀边界判断回归，非见界页面可能获得麦克风权限；ASR 代理与 413/415/422 的 Worker 实际状态映射尚无本轮集成结果；Android 壳能力不兼容仍需面向使用者说明。
+
+## 见界学员反馈 6 项修复——合并与外部验证(2026-10-30,随本提交部署;生产验证见后续条目)
+
+- **状态:部分完成**(本地合并 + 全量测试 + 浏览器验收通过;生产侧验证待部署后补记)。部署顺序:0040 含"余额变更须带原因"的 BEFORE 触发器,旧代码扣费会被拒,故 CI 通过后执行迁移并立即部署同一 SHA,把旧代码与新触发器并存的空窗压到最短。6 个工作包(T1 积分流水 / T2 字幕时长校准 / T3 反馈通道 / T4 聊天操作栏与朗读暂停 / T5 语音输入 ASR / T6 课程卡状态隔离)由 Codex 在独立 worktree 并发完成,Claude 三方合并进主工作区(暂存区)。上方各条目中"未在沙箱运行"的项已在本条外部补跑。
+- **合并决策**:T3 原在 worker 入口为 `/api/hyperknow/feedback` 加了复刻 vinext 路径归一化的 32 KiB 预缓冲闸(位于机器凭据闸之前),合并时未采纳——全局 11 MiB 闸不变,32 KiB 上限由路由内 `feedback_payload_too_large` 413 承担;对应契约测试改为断言 worker 入口无反馈专属分支。T3 迁移由 0040 重编号为 `0041_hk_feedback`(snapshot prevId 接 T1 的 0040)。另修:聊天朗读轨道 `speed !== 1` 致 1.0x 不生效(补回归测试,修前 fail/修后 pass);积分弹窗换页不收起;MAX 徽章 `✦ MAX` 文案恢复。
+- **外部证据**:`npm test` exit 0,958 tests / 958 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo(含 `hyperknow credits history`、`hyperknow feedback: submit persists…`、`hyperknow asr: 登录录音代理…` 三条 Wrangler 集成用例);`npm run db:generate` → "No schema changes";根 `tsc --noEmit`、SPA `tsc -b`、`oxlint src`、改动文件 eslint、`git diff --cached --check` 均 exit 0。
+- **浏览器验收**(headless Chrome + CDP,复用 tests/harness/preview.mjs 的真实 Wrangler 预览与假上游;TTS 经 CDP 替换为真实阶跃 mp3):两轮对话后每条回复下方各 1 行操作栏;朗读按钮 朗读→暂停朗读→继续朗读→暂停朗读;假麦克风录音态「点击结束」,识别文本回填输入框;反馈弹窗显示「已收到你的反馈(编号 #…)」且页面不跳转,D1 `hk_feedback.notify_status='sent'`;顶栏积分 20→16,积分记录列出两条「AI 对话 -2」,D1 流水 `[-2/18/chat, -2/16/chat]`;先开社会学导论(hash 带 uuid 091d5945…)再点 AP 生物学 → hash `card=ap-bio` 无旧 uuid,标题「AP 生物学」+「按此课题生成课程」。
+- **未覆盖/已知缺口**:①本地预览 `dist/server/wrangler.json` 无 `run_worker_first`,`/lattice/*` 不经 Worker,`permissions-policy: microphone=(self)` 只有 `worker-contracts` 单测证据,须部署后在生产实测响应头;②真实麦克风/真实 StepFun ASR 端到端未在浏览器跑(ASR 上游仅用 curl 以同套餐 key 实测 webm/m4a/wav 均 200);③安卓壳无 RECORD_AUDIO,壳内语音输入仍不可用;④字幕校准系数基于 6 音色实测拟合,流式未知时长下的真实浏览器表现未验证;⑤`hosting-deployer-process` 子进程测试在一次全量中偶发失败(WAL 状态 'result'≠'reported'),单独重跑 3/3 通过,最终全量通过,与本轮改动无关。

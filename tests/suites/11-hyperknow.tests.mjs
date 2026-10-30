@@ -4,17 +4,24 @@
 // - TTS 缓存语义(MISS → HIT)与音色/速度缓存 key 隔离
 // - 白板讲座规划(降级 fallback)与举手插话、归属 404
 // - 课程蓝图生成事件序列、市场列表隔离与详情 404
+// - 用户反馈提交、邮件通知转义、权限/限流及管理员分页读取
 // 执行顺序由 tests/rendered-html.test.mjs 的注册顺序保证(套件串行)。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  adminEmail,
   baseUrl,
   runId,
+  sentEmails,
+  failNextFakeEmailSend,
   lastChatCompletion,
   blueprintUpstreamCount,
   lastTtsRequest,
   lastTtsBodyNonAscii,
   ttsUpstreamCount,
+  lastAsrRequest,
+  asrUpstreamCount,
+  setAsrMockOutcome,
   lastImageRequest,
   imageUpstreamCount,
   resetAiUpstream,
@@ -36,6 +43,35 @@ import {
   setStepfunSearchMockOutcome,
 } from "../harness/preview.mjs";
 import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, resolveCourseGenBudgetMs } from "../../app/api/_lib/hyperknow/budgets.ts";
+
+const quoteSql = (value) => `'${String(value).replaceAll("'", "''")}'`;
+
+function sessionCookie(response) {
+  const cookies = typeof response.headers.getSetCookie === "function"
+    ? response.headers.getSetCookie()
+    : [response.headers.get("set-cookie") ?? ""];
+  return cookies.find((value) => value.startsWith("zaochang_session="))?.split(";")[0] ?? null;
+}
+
+async function feedbackLogin(email) {
+  const response = await fetch(`${baseUrl}/api/auth/dev-login?email=${encodeURIComponent(email)}`, {
+    headers: { origin: baseUrl },
+    redirect: "manual",
+  });
+  assert.equal(response.status, 307, `test login must create a session for ${email}`);
+  const cookie = sessionCookie(response);
+  assert.ok(cookie, "dev-login must issue zaochang_session");
+  return cookie;
+}
+
+async function submitFeedback(email, cookie, message, context, origin = baseUrl) {
+  const payload = context === undefined ? { message } : { message, context };
+  return fetch(`${baseUrl}/api/hyperknow/feedback`, {
+    method: "POST",
+    headers: { cookie, origin, "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
 
 // 见界 SSE 帧(`event: frame\ndata: {...}\n\n`)→ 按序解析出原始事件对象
 // (帧形状固定,断言逐帧对齐)。
@@ -62,6 +98,181 @@ async function readHkFrames(response) {
 }
 
 export function register() {
+  test("hyperknow feedback: submit persists bounded content, notifies team, and admin reads are gated", async () => {
+    const before = await queryLocalD1("SELECT COUNT(*) AS count FROM hk_feedback");
+    for (const [path, authorization] of [
+      ["/api/hyperknow/feedback", "Bearer zc_invalid"],
+      ["/api/hyperknow/feedback", "Bearer zch_invalid"],
+      ["/api/hyperknow/feedback", "Bearer test-agent-key"],
+      ["/api/hyperknow/feedback/", "Bearer zc_invalid"],
+      ["/api/hyperknow/%66eedback", "Bearer zc_invalid"],
+      ["/api//hyperknow/feedback", "Bearer zc_invalid"],
+    ]) {
+      // 机器凭据(个人 key / 托管令牌 / agent)不在任何写能力表里:worker 入口闸门直接拒绝,
+      // 路由不运行、不落库(下方 before 计数校验)。
+      const machineBearer = await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: { authorization, origin: baseUrl, "content-type": "application/json" },
+        body: JSON.stringify({ message: "machine credentials must not file feedback" }),
+      });
+      assert.ok([401, 403].includes(machineBearer.status), `${path} ${authorization.split(" ")[1]} must be rejected by the Worker credential gate, got ${machineBearer.status}`);
+      await machineBearer.body?.cancel();
+    }
+    const anonymous = await fetch(`${baseUrl}/api/hyperknow/feedback`, {
+      method: "POST",
+      headers: { origin: baseUrl, "content-type": "application/json" },
+      body: JSON.stringify({ message: "anonymous feedback" }),
+    });
+    assert.equal(anonymous.status, 401);
+    assert.equal((await queryLocalD1("SELECT COUNT(*) AS count FROM hk_feedback"))[0].count, before[0].count);
+
+    const invalidEmail = `hk-feedback-invalid-${runId}@example.com`;
+    const invalidCookie = await feedbackLogin(invalidEmail);
+    assert.equal((await submitFeedback(invalidEmail, invalidCookie, "valid", undefined, "https://evil.example")).status, 403);
+    assert.equal((await (await submitFeedback(invalidEmail, invalidCookie, "   ")).json()).error, "message_length_invalid");
+    assert.equal((await submitFeedback(invalidEmail, invalidCookie, "x".repeat(4001))).status, 400);
+    const oversizedContext = await fetch(`${baseUrl}/api/hyperknow/feedback`, {
+      method: "POST",
+      headers: { cookie: invalidCookie, origin: baseUrl, "content-type": "application/json" },
+      body: JSON.stringify({ message: "valid", context: { extra: "x".repeat(40_000) } }),
+    });
+    assert.equal(oversizedContext.status, 413);
+    assert.equal((await queryLocalD1(`SELECT COUNT(*) AS count FROM hk_feedback WHERE user_email = ${quoteSql(invalidEmail)}`))[0].count, 0);
+
+    const email = `hk-feedback-${runId}@example.com`;
+    const cookie = await feedbackLogin(email);
+    const message = "<script>alert(1)</script>\n页面跳转后无法确认反馈有没有送达。";
+    const context = {
+      screen: "c".repeat(60),
+      sessionId: "s".repeat(140),
+      courseUuid: "u".repeat(140),
+      userAgent: "browser-" + "x".repeat(200),
+      ignored: "this field is not accepted",
+    };
+    const submitted = await submitFeedback(email, cookie, message, context);
+    assert.equal(submitted.status, 200);
+    const result = await submitted.json();
+    assert.equal(result.ok, true);
+    assert.match(result.id, /^[0-9a-f-]{36}$/i);
+    assert.equal(result.notified, true);
+
+    const rows = await queryLocalD1(
+      `SELECT user_email AS userEmail, message, context_json AS contextJson, notify_status AS notifyStatus, notify_code AS notifyCode FROM hk_feedback WHERE id = ${quoteSql(result.id)}`,
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].userEmail, email);
+    assert.equal(rows[0].message, message);
+    assert.equal(rows[0].notifyStatus, "sent");
+    assert.equal(rows[0].notifyCode, null);
+    const savedContext = JSON.parse(rows[0].contextJson);
+    assert.deepEqual(Object.keys(savedContext).sort(), ["courseUuid", "screen", "sessionId", "userAgent"]);
+    assert.equal(savedContext.screen.length, 48);
+    assert.equal(savedContext.sessionId.length, 128);
+    assert.equal(savedContext.courseUuid.length, 128);
+    assert.equal(savedContext.userAgent.length, 180);
+
+    const sent = sentEmails.filter((entry) => entry.subject === `见界用户反馈 #${result.id}`);
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].to, [adminEmail]);
+    assert.equal(sent[0].text.includes(email), true);
+    assert.equal(sent[0].text.includes(message), true);
+    assert.equal(sent[0].text.includes(`screen: ${"c".repeat(48)}`), true);
+    assert.equal(sent[0].text.includes("ignored"), false);
+    assert.match(sent[0].html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+    assert.equal(sent[0].html.includes("<script>alert(1)</script>"), false);
+
+    const failedNotifyEmail = `hk-feedback-notify-fail-${runId}@example.com`;
+    const failedNotifyCookie = await feedbackLogin(failedNotifyEmail);
+    failNextFakeEmailSend();
+    const notifyFailure = await submitFeedback(failedNotifyEmail, failedNotifyCookie, "仍然要保存在 D1");
+    assert.equal(notifyFailure.status, 200);
+    const notifyFailureBody = await notifyFailure.json();
+    assert.equal(notifyFailureBody.ok, true);
+    assert.equal(notifyFailureBody.notified, false);
+    const persistedAfterNotifyFailure = await queryLocalD1(
+      `SELECT user_email AS userEmail, notify_status AS notifyStatus, notify_code AS notifyCode FROM hk_feedback WHERE id = ${quoteSql(notifyFailureBody.id)}`,
+    );
+    assert.equal(persistedAfterNotifyFailure.length, 1);
+    assert.equal(persistedAfterNotifyFailure[0].userEmail, failedNotifyEmail);
+    assert.equal(persistedAfterNotifyFailure[0].notifyStatus, "failed");
+    assert.equal(persistedAfterNotifyFailure[0].notifyCode, "email_send_http_500");
+
+    const failedStoreEmail = `hk-feedback-store-fail-${runId}@example.com`;
+    const failedStoreCookie = await feedbackLogin(failedStoreEmail);
+    await executeLocalD1(`CREATE TRIGGER hk_feedback_test_insert_failure BEFORE INSERT ON hk_feedback
+      WHEN NEW.user_email = ${quoteSql(failedStoreEmail)}
+      BEGIN SELECT RAISE(ABORT, 'feedback_insert_failure_test'); END`);
+    const sentBeforeStoreFailure = sentEmails.length;
+    try {
+      const storeFailure = await submitFeedback(failedStoreEmail, failedStoreCookie, "不可假装已收到");
+      assert.equal(storeFailure.status, 500);
+      assert.equal((await storeFailure.json()).error, "server_error");
+      assert.equal((await queryLocalD1(`SELECT COUNT(*) AS count FROM hk_feedback WHERE user_email = ${quoteSql(failedStoreEmail)}`))[0].count, 0);
+      assert.equal(sentEmails.length, sentBeforeStoreFailure, "落库失败时不能发出邮件通知");
+    } finally {
+      await executeLocalD1("DROP TRIGGER hk_feedback_test_insert_failure");
+    }
+
+    const fullList = await fetch(`${baseUrl}/api/admin/hk-feedback?limit=100`, {
+      headers: { cookie: await feedbackLogin(adminEmail), origin: baseUrl },
+    });
+    assert.equal(fullList.status, 200);
+    const list = await fullList.json();
+    const listed = list.items.find((item) => item.id === result.id);
+    assert.equal(listed.userEmail, email);
+    assert.equal(listed.message, message);
+    assert.deepEqual(listed.context, savedContext);
+    assert.equal(listed.notifyStatus, "sent");
+    const listedNotifyFailure = list.items.find((item) => item.id === notifyFailureBody.id);
+    assert.equal(listedNotifyFailure.userEmail, failedNotifyEmail);
+    assert.equal(listedNotifyFailure.notifyStatus, "failed");
+    assert.equal(listedNotifyFailure.notifyCode, "email_send_http_500");
+
+    const paged = await fetch(`${baseUrl}/api/admin/hk-feedback?limit=1&offset=0`, {
+      headers: { cookie: await feedbackLogin(adminEmail), origin: baseUrl },
+    });
+    const page = await paged.json();
+    assert.equal(page.limit, 1);
+    assert.equal(page.items.length, 1);
+    assert.equal(page.hasMore, true);
+    assert.equal(page.nextOffset, 1);
+
+    const regularEmail = `hk-feedback-reader-${runId}@example.com`;
+    const regularCookie = await feedbackLogin(regularEmail);
+    const denied = await fetch(`${baseUrl}/api/admin/hk-feedback`, {
+      headers: { cookie: regularCookie, origin: baseUrl },
+    });
+    assert.equal(denied.status, 403);
+    assert.equal((await denied.json()).error, "admin_forbidden");
+    const anonymousRead = await fetch(`${baseUrl}/api/admin/hk-feedback`);
+    assert.equal(anonymousRead.status, 401);
+
+    const agentRead = await fetch(`${baseUrl}/api/admin/hk-feedback`, {
+      headers: { authorization: "Bearer test-agent-key" },
+    });
+    assert.equal(agentRead.status, 403, "worker 放行 Agent GET 到路由,但 requireAdmin 不授予机器账号管理员权限");
+    const agentWrite = await fetch(`${baseUrl}/api/admin/hk-feedback`, {
+      method: "POST",
+      headers: { authorization: "Bearer test-agent-key", origin: baseUrl, "content-type": "application/json" },
+      body: JSON.stringify({ message: "agent must not write" }),
+    });
+    assert.equal(agentWrite.status, 403);
+    assert.equal((await agentWrite.json()).error, "agent_scope_forbidden");
+    assert.equal((await queryLocalD1(`SELECT COUNT(*) AS count FROM hk_feedback WHERE message = 'agent must not write'`))[0].count, 0);
+
+    const limitedEmail = `hk-feedback-limit-${runId}@example.com`;
+    const limitedCookie = await feedbackLogin(limitedEmail);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const message = attempt === 0 ? "x".repeat(4000) : `attempt ${attempt}`;
+      const response = await submitFeedback(limitedEmail, limitedCookie, message);
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).ok, true);
+    }
+    const overLimit = await submitFeedback(limitedEmail, limitedCookie, "attempt six");
+    assert.equal(overLimit.status, 429);
+    assert.equal((await queryLocalD1(`SELECT COUNT(*) AS count FROM hk_feedback WHERE user_email = ${quoteSql(limitedEmail)}`))[0].count, 5);
+  });
+
   test("hyperknow user info: 匿名 401,登录返回造场身份 + 真实积分(读取不扣减)", async () => {
     const anonymous = await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`);
     assert.equal(anonymous.status, 401, "匿名应为 401 auth_required");
@@ -190,6 +401,80 @@ export function register() {
     assert.equal((await calm.text()).includes("voice-tone-U5kvQekdQ8"), true, "假上游回声校验音色映射");
     assert.equal(ttsUpstreamCount, 3);
     assert.equal(lastTtsRequest.voice, "voice-tone-U5kvQekdQ8");
+  });
+
+  test("hyperknow asr: 登录录音代理、字段映射、限体积/MIME/同源与 no_speech", async () => {
+    resetAiUpstream();
+    const email = `hk-asr-${runId}@example.com`;
+    const identity = authHeaders("语音用户", email);
+    const creditsResponse = await fetch(`${baseUrl}/api/hyperknow/auth/get_user_info`, { headers: identity });
+    assert.equal(creditsResponse.status, 200);
+    const creditsBefore = await queryLocalD1(`SELECT balance FROM hk_credits WHERE user_email = '${email}'`);
+    assert.equal(creditsBefore[0]?.balance, 20);
+
+    const anonymous = await fetch(`${baseUrl}/api/hyperknow/asr`, {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body: Buffer.from("audio"),
+    });
+    assert.equal(anonymous.status, 401);
+    assert.equal((await anonymous.json()).error, "auth_required");
+
+    const audio = Buffer.from([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4]);
+    const transcribed = await fetch(`${baseUrl}/api/hyperknow/asr`, {
+      method: "POST",
+      headers: { ...identity, "content-type": "audio/webm;codecs=opus" },
+      body: audio,
+    });
+    assert.equal(transcribed.status, 200);
+    assert.deepEqual(await transcribed.json(), { text: "阶跃假上游识别的语音文本。" });
+    assert.equal(asrUpstreamCount, 1, "合法登录音频必须触达一次 ASR 上游");
+    assert.equal(lastAsrRequest.model, "stepaudio-2.5-asr");
+    assert.equal(lastAsrRequest.responseFormat, "json");
+    assert.equal(lastAsrRequest.hasFile, true);
+    assert.equal(lastAsrRequest.fileMime, "audio/webm;codecs=opus");
+    assert.ok(lastAsrRequest.bodyBytes > audio.byteLength, "multipart 请求包含模型字段与文件封装");
+
+    const wrongMime = await fetch(`${baseUrl}/api/hyperknow/asr`, {
+      method: "POST",
+      headers: { ...identity, "content-type": "application/octet-stream" },
+      body: audio,
+    });
+    assert.equal(wrongMime.status, 415);
+    assert.equal((await wrongMime.json()).error, "audio_type_unsupported");
+
+    const crossOrigin = await fetch(`${baseUrl}/api/hyperknow/asr`, {
+      method: "POST",
+      headers: { ...identity, "content-type": "audio/webm", origin: "https://attacker.example" },
+      body: audio,
+    });
+    assert.equal(crossOrigin.status, 403);
+    assert.equal((await crossOrigin.json()).error, "invalid_origin");
+
+    const oversized = await fetch(`${baseUrl}/api/hyperknow/asr`, {
+      method: "POST",
+      headers: { ...identity, "content-type": "audio/webm" },
+      body: Buffer.alloc(2 * 1024 * 1024 + 1, 1),
+    });
+    assert.equal(oversized.status, 413);
+    assert.equal((await oversized.json()).error, "audio_too_large");
+
+    setAsrMockOutcome("no_speech");
+    try {
+      const noSpeech = await fetch(`${baseUrl}/api/hyperknow/asr`, {
+        method: "POST",
+        headers: { ...identity, "content-type": "audio/mp4;codecs=mp4a.40.2" },
+        body: audio,
+      });
+      assert.equal(noSpeech.status, 422);
+      assert.equal((await noSpeech.json()).error, "no_speech");
+      assert.equal(asrUpstreamCount, 2, "no_speech 必须由上游 400 分支映射,不是本地伪造");
+    } finally {
+      setAsrMockOutcome("success");
+    }
+
+    const creditsAfter = await queryLocalD1(`SELECT balance FROM hk_credits WHERE user_email = '${email}'`);
+    assert.equal(creditsAfter[0]?.balance, creditsBefore[0].balance, "ASR 不扣见界积分");
   });
 
   test("hyperknow whiteboard: 计划降级落库,插话 fallback,归属 404", async () => {
@@ -1409,7 +1694,7 @@ export function register() {
     assert.equal(listed.conversations.length, 0, "翻译不得污染历史会话");
 
     // 余额不足:402 在发流之前(纯 JSON,带 credit_info)。
-    await executeD1Sql(`UPDATE hk_credits SET balance = 1 WHERE user_email = '${email}'`);
+    await executeD1Sql(`UPDATE hk_credits SET balance = 1, change_reason = 'plan_change' WHERE user_email = '${email}'`);
     const blocked = await fetch(`${baseUrl}/api/hyperknow/translate`, {
       method: "POST",
       headers,
@@ -1463,7 +1748,7 @@ export function register() {
     assert.equal(await info(), 20, "新账户每日额度 20");
 
     // 余额 3:对话(2)成功 → 剩 1。
-    await executeLocalD1(`UPDATE hk_credits SET balance = 3 WHERE user_email = '${email}'`);
+    await executeLocalD1(`UPDATE hk_credits SET balance = 3, change_reason = 'plan_change' WHERE user_email = '${email}'`);
     const chat = await fetch(`${baseUrl}/api/hyperknow/chat`, {
       method: "POST",
       headers,
@@ -1484,7 +1769,7 @@ export function register() {
     assert.deepEqual((await blocked.json()).credit_info, { remaining: 1, max: 20 });
 
     // 余额 1 < 课程 10 → 课程生成同样 402,且不得产生伪生成兜底空间(纯 JSON 响应)。
-    await executeLocalD1(`UPDATE hk_credits SET balance = 1 WHERE user_email = '${email}'`);
+    await executeLocalD1(`UPDATE hk_credits SET balance = 1, change_reason = 'plan_change' WHERE user_email = '${email}'`);
     const blockedCourse = await fetch(`${baseUrl}/api/hyperknow/course-generation`, {
       method: "POST",
       headers,
@@ -1512,6 +1797,47 @@ export function register() {
     const okFrames = await readHkFrames(await okCourse);
     assert.ok(okFrames.find((f) => f.type === "course_structure_ready"), "重置后应能真实生成");
     assert.equal(await info(), 10, "课程生成扣 10");
+  });
+
+  test("hyperknow credits history: 对话流水字段、用户隔离与匿名拒绝", async () => {
+    resetAiUpstream();
+    const email = `hk-credit-history-${runId}@example.com`;
+    const headers = authHeaders("积分流水用户", email);
+
+    const anonymous = await fetch(`${baseUrl}/api/hyperknow/credits/history`);
+    assert.equal(anonymous.status, 401);
+    assert.equal((await anonymous.json()).error, "auth_required");
+
+    const chat = await fetch(`${baseUrl}/api/hyperknow/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ message: "history contract probe" }),
+    });
+    assert.equal(chat.status, 200);
+    await readHkFrames(chat);
+
+    const response = await fetch(`${baseUrl}/api/hyperknow/credits/history`, { headers });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.success, true);
+    assert.equal(body.data.remaining, 18);
+    assert.equal(body.data.max, 20);
+    assert.equal(body.data.tier, "FREE");
+    assert.match(body.data.resets_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    assert.equal(body.data.events.length, 1);
+    const [event] = body.data.events;
+    assert.equal(event.delta, -2);
+    assert.equal(event.balanceAfter, 18);
+    assert.equal(event.reason, "chat");
+    assert.match(event.createdAt, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    assert.equal("user_email" in event, false, "响应不泄露流水属主字段");
+
+    const other = await fetch(`${baseUrl}/api/hyperknow/credits/history`, {
+      headers: authHeaders("另一位用户", `hk-credit-history-other-${runId}@example.com`),
+    });
+    assert.equal(other.status, 200);
+    const otherBody = await other.json();
+    assert.deepEqual(otherBody.data.events, [], "B 用户只能读取 B 自己的流水,看不到 A 的对话扣费");
   });
 
   test("hyperknow course-generation: StepFun MCP 成功路径命中且不打 /v1/search", async () => {

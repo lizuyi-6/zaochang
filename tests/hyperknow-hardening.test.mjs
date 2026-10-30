@@ -136,14 +136,40 @@ test('auth: legacy identity headers gate delegates to the pure dev/test-only hel
 
 test('chat: translation streams are aborted and seq-guarded per message (P1-T/W3)', () => {
   const page = read('hyperknow-spa/src/lattice/pages/ChatPage.tsx');
-  assert.match(page, /translateCtlRef\.current\.get\(idx\)\?\.abort\(\);/, '同一条消息重译(换语言)必须先 abort 旧流——两路 chunk 追加同一译文会出混合文本');
-  assert.match(page, /const stillCurrent = \(\) => translateSeqRef\.current\.get\(idx\) === seq;/, '迟到 chunk/完成写回必须按序号守卫丢弃');
+  assert.match(page, /translateCtlRef\.current\.get\(messageId\)\?\.abort\(\);/, '同一条消息重译(换语言)必须先 abort 旧流——两路 chunk 追加同一译文会出混合文本');
+  assert.match(page, /const stillCurrent = \(\) => translateSeqRef\.current\.get\(messageId\) === seq;/, '迟到 chunk/完成写回必须按消息 id 和序号守卫丢弃');
   assert.match(page, /onChunk: \(chunk\) => \{\s*if \(!stillCurrent\(\)\) return;/, 'onChunk 首行必须是序号守卫');
   assert.match(page, /if \(result\.reason === 'aborted'\) return;/, '主动取消不算失败:不弹 toast、不清译文');
   assert.match(page, /abortAllTranslations\(\);\s*\n\s*setTranslations\(\{\}\);/, '切会话必须 abort 全部在途翻译并清空译文(旧结果不得按 idx 漂进新视图)');
   assert.match(page, /if \(e\.key === 'Enter' && !e\.nativeEvent\.isComposing\) send\(input\);/, '中文输入法回车选词不得触发发送');
   const backend = read('hyperknow-spa/src/lattice/backend.ts');
   assert.match(backend, /reason: 'aborted'/, 'translateLive 必须把调用方中止归类为 aborted 而非 error');
+});
+
+test('chat: message actions and translations render under their own stable message key', () => {
+  const page = read('hyperknow-spa/src/lattice/pages/ChatPage.tsx');
+  const mapStart = page.indexOf('{msgs.map((m, i) => {');
+  assert.notEqual(mapStart, -1, '消息呈现必须由统一的 msgs.map 生成');
+  const mapEnd = page.indexOf('<div ref={colEndRef}', mapStart);
+  const messageMap = page.slice(mapStart, mapEnd);
+  const bubbleAt = messageMap.indexOf('className={`cp-bubble-row');
+  const actionsAt = messageMap.indexOf('className="cp-msg-actions"');
+  const translationAt = messageMap.indexOf('className="cp-translation"');
+  assert.ok(bubbleAt >= 0 && bubbleAt < actionsAt && actionsAt < translationAt, '对应气泡、操作行、译文必须依次处于同一次消息迭代');
+  assert.match(messageMap, /<React\.Fragment key=\{m\.id\}>/, '每条消息及其子项使用稳定消息 id');
+  assert.match(messageMap, /const isStreamingMessage = streaming && i === msgs\.length - 1;/, '只识别当前流式消息');
+  assert.match(messageMap, /m\.text\.trim\(\) && !isStreamingMessage/, '隐藏流式回复操作行时仍显示已完成历史回复操作行');
+  assert.doesNotMatch(page, /tts\.subscribe\(/, '聊天朗读状态不得再被无轨道身份的全局 false 通知清空');
+  assert.match(page, /const targetId = translateTargetId \?\? lastAssistantId;[\s\S]*?translateMessage\(targetId, l\.code\)/, '语言选择必须翻译点击操作行所指定的稳定消息 id');
+  assert.match(messageMap, /L\('Resume read aloud', '继续朗读'\)/, '暂停状态给出继续朗读标签');
+  assert.match(messageMap, /<Pause size=\{14\}/, '播放状态显示暂停图标');
+  assert.match(messageMap, /<Play size=\{14\}/, '暂停状态显示继续图标');
+  assert.match(page, /if \(started === 'error'\) toast\(L\('Read-aloud is unavailable right now', '朗读服务暂时不可用'\)\)/, 'Audio 无法启动时提示朗读服务暂时不可用');
+  assert.match(page, /if \(outcome === 'error'\) toast\(L\('Read-aloud is unavailable right now', '朗读服务暂时不可用'\)\)/, '播放途中出错后提示朗读服务暂时不可用');
+  assert.match(page, /if \(started !== 'started'\) \{\s*chatReadRef\.current = null;\s*setSpeakingId\(null\);\s*setSpeakingPaused\(false\);/, '未能开始时同步清除活动轨道与按钮状态');
+  const css = read('hyperknow-spa/src/lattice/pages/ChatPage.css');
+  assert.match(css, /\.cp-msg-actions\s*\{[^}]*margin:\s*2px 0 8px 2px;/s, '操作行紧贴回复气泡并保持左对齐');
+  assert.match(css, /\.cp-translation\s*\{[^}]*margin:\s*0 0 18px 2px;/s, '译文紧随操作行并与消息列左侧对齐');
 });
 
 test('journey: inner button keys are not swallowed by the outer row handler (P1-K)', () => {

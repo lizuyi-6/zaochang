@@ -32,7 +32,7 @@ test("request-body: GET 与无体请求原样透传", async () => {
 
 test("request-body: content-length 快路径超限直接 413,不读取 body", async () => {
   const stream = new ReadableStream({
-    start(controller) { controller.enqueue(bufferOf(16)); controller.close(); },
+    start(controller) { controller.enqueue(bufferOf(16)); },
   });
   const request = new Request(`${ORIGIN}/api/uploads`, {
     method: "POST",
@@ -344,6 +344,18 @@ test("security: 默认页 permissions-policy 放行同源相机(扫一扫),麦�
   assert.equal(secured.headers.get("permissions-policy"), "camera=(self), microphone=(), geolocation=(self), payment=()");
 });
 
+test("security: 仅 /lattice 路径放行同源麦克风,其它路径(含前缀近似项)仍关闭", () => {
+  const allowed = withSecurityHeaders(new Request(`${ORIGIN}/lattice/`), htmlResponse(), ORIGIN);
+  assert.equal(allowed.headers.get("permissions-policy"), "camera=(self), microphone=(self), geolocation=(self), payment=()");
+  const latticeRoot = withSecurityHeaders(new Request(`${ORIGIN}/lattice`), htmlResponse(), ORIGIN);
+  assert.equal(latticeRoot.headers.get("permissions-policy"), "camera=(self), microphone=(self), geolocation=(self), payment=()");
+
+  for (const path of ["/", "/signin", "/api/hyperknow/asr", "/latticex", "/product-apps/x", "/api/auth/github/start"]) {
+    const secured = withSecurityHeaders(new Request(`${ORIGIN}${path}`), htmlResponse(), ORIGIN);
+    assert.match(secured.headers.get("permissions-policy") ?? "", /microphone=\(\)/, `${path} must keep microphone disabled`);
+  }
+});
+
 test("security: /api/auth/github/start 使用连接页专用 CSP", () => {
   const secured = withSecurityHeaders(new Request(`${ORIGIN}/api/auth/github/start`), htmlResponse(), ORIGIN);
   assert.equal(secured.headers.get("referrer-policy"), "no-referrer");
@@ -409,10 +421,10 @@ function fakeD1(failLabels = []) {
   };
 }
 
-test("purge: retention statements register all 15 SQL labels in foreign-key-safe order", () => {
+test("purge: retention statements register all 16 SQL labels in foreign-key-safe order", () => {
   const db = fakeD1();
   const registry = purgeRegistry(db);
-  assert.equal(registry.length, 15);
+  assert.equal(registry.length, 17);
   assert.deepEqual(registry.map((entry) => entry.label), [
     "oauth.access_tokens",
     "oauth.refresh_tokens",
@@ -429,13 +441,17 @@ test("purge: retention statements register all 15 SQL labels in foreign-key-safe
     "hosting.upload_tokens",
     "hosting.exhausted_jobs.deploy",
     "hosting.exhausted_jobs.promote",
+    "hyperknow.credit_events",
+    "hyperknow.feedback",
   ]);
-  // 前 12 条逐字钉死;托管的 3 条(令牌清理 + 两条租约耗尽的状态收敛,语句较长)钉动作与目标表。
-  const hostingSql = db.prepared.map((entry) => entry.sql).slice(12);
+  // 前 12 条逐字钉死;托管 3 条、积分流水清理与反馈清理各自钉住目标语句。
+  const hostingSql = db.prepared.map((entry) => entry.sql).slice(12, 15);
   assert.equal(hostingSql.length, 3);
   assert.match(hostingSql[0], /^DELETE FROM hosting_upload_tokens\s/);
   assert.match(hostingSql[1], /^UPDATE product_hostings SET state = 'failed'/);
   assert.match(hostingSql[2], /^UPDATE product_hostings SET state = 'staged'/);
+  assert.match(db.prepared[15].sql, /^DELETE FROM hk_credit_events WHERE created_at <= datetime\('now', '-90 days'\)$/);
+  assert.equal(db.prepared[16].sql, "DELETE FROM hk_feedback WHERE created_at <= datetime('now', '-180 days')");
   assert.deepEqual(db.prepared.map((entry) => entry.sql).slice(0, 12), [
     "DELETE FROM oauth_provider_access_tokens WHERE expires_at <= CURRENT_TIMESTAMP",
     "DELETE FROM oauth_provider_refresh_tokens WHERE expires_at <= CURRENT_TIMESTAMP",
@@ -458,13 +474,15 @@ test("purge: 单条失败不阻断后续,日志含 label 且返回计数", async
   const errors = [];
   const logger = { log: (message) => logs.push(message), error: (message) => errors.push(message) };
   const result = await runPurgeRegistry(db, logger);
-  assert.deepEqual(result, { ok: 14, failed: 1 });
+  assert.deepEqual(result, { ok: 16, failed: 1 });
   assert.equal(errors.length, 1);
   assert.ok(errors[0].startsWith("[cron-purge] failed oauth.authorization_codes:"));
-  assert.equal(logs.length, 14);
+  assert.equal(logs.length, 16);
   assert.ok(logs.every((message) => /^\[cron-purge\] ok [\w.-]+ changes=3$/.test(message)));
-  // 最后一条(hosting.exhausted_jobs.promote)在失败之后仍执行——注册表顺序不受影响。
-  assert.ok(logs.at(-1).includes("hosting.exhausted_jobs.promote"));
+  // 末尾三条(托管状态收敛、积分流水清理、反馈清理)在失败之后仍执行——注册表顺序不受影响。
+  assert.ok(logs.at(-3).includes("hosting.exhausted_jobs.promote"));
+  assert.ok(logs.at(-2).includes("hyperknow.credit_events"));
+  assert.ok(logs.at(-1).includes("hyperknow.feedback"));
 });
 
 function createHyperknowCleanupFixture({ status = "clean", afterCandidateRead, failRowDelete = false } = {}) {

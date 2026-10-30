@@ -10,6 +10,8 @@ import { oauthProviderPurgeStatements } from "./oauth-provider.ts";
 import { sessionPurgeStatements } from "./sessions.ts";
 import { webauthnChallengePurgeStatements } from "./webauthn-challenges.ts";
 import { hostingPurgeStatements } from "./hosting.ts";
+import { hyperknowCreditPurgeStatements } from "./hyperknow-credits.ts";
+import { hyperknowFeedbackPurgeStatements } from "./hyperknow-feedback.ts";
 
 export type PurgeStatement = { label: string; statement: D1PreparedStatement };
 
@@ -21,6 +23,8 @@ export function purgeRegistry(db: D1Database): PurgeStatement[] {
     ...sessionPurgeStatements(db),
     ...webauthnChallengePurgeStatements(db),
     ...hostingPurgeStatements(db),
+    ...hyperknowCreditPurgeStatements(db),
+    ...hyperknowFeedbackPurgeStatements(db),
   ];
 }
 

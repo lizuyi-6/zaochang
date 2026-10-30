@@ -153,11 +153,11 @@ export async function audioCheck(opts: { muted?: boolean; speakAloud?: boolean }
   return { status: speedKbps < neededKbps ? 'slow_link' : 'ok', synthMs, speedKbps, neededKbps, played };
 }
 
-/* ---------------- 反馈/联系(邮件是唯一真实可达的通道) ---------------- */
+/* ---------------- 反馈/联系(邮件仅作为用户主动选择的备用方式) ---------------- */
 
 export const SUPPORT_EMAIL = 'zaochang@aetherstudio.top';
 
-/** 打开系统邮件客户端并带上正文;正文为空时提示而不是静默失败。 */
+/** 用户主动选择邮件兜底时打开系统邮件客户端;正文为空时提示。 */
 export function openFeedbackMail(text: string, subject = L('LATTICE feedback', '见界反馈')): boolean {
   const body = text.trim();
   if (!body) {
@@ -176,6 +176,7 @@ let currentPlaybackRate = DEFAULT_PLAYBACK_RATE;
 
 let lectureAudioEl: HTMLAudioElement | null = null;
 let tutorAudioEl: HTMLAudioElement | null = null;
+let chatAudioEl: HTMLAudioElement | null = null;
 
 const ttsListeners = new Set<(on: boolean) => void>();
 const notifyTts = (on: boolean) => ttsListeners.forEach((l) => l(on));
@@ -225,11 +226,21 @@ export interface SpeakHandle {
   started: Promise<SpeakStart>;
   ended: Promise<void>;
   getProgress: () => AudioProgress | null;
+  /** 仅原生 ended 事件结算时为 true;主动停止和播放失败均为 false。 */
+  didEndNaturally?: () => boolean;
+}
+export type ChatSpeakEnd = 'ended' | 'error' | 'stopped';
+export interface ChatSpeakHandle {
+  started: Promise<SpeakStart>;
+  ended: Promise<ChatSpeakEnd>;
+  getProgress: () => AudioProgress | null;
 }
 
 type Track = { settleStarted: (v: SpeakStart) => void; settleEnded: () => void };
+type ChatTrack = { settleStarted: (v: SpeakStart) => void; settleEnded: (v: ChatSpeakEnd) => void };
 let lectureTrack: Track | null = null;
 let tutorTrack: Track | null = null;
+let chatTrack: ChatTrack | null = null;
 
 function stopLectureAudio(): void {
   const el = lectureAudioEl;
@@ -273,7 +284,28 @@ function stopTutorAudio(): void {
   notifyIfStopped();
 }
 
+function stopChatAudio(): void {
+  const el = chatAudioEl;
+  const track = chatTrack;
+  chatAudioEl = null;
+  chatTrack = null;
+  if (el) {
+    el.pause();
+    try {
+      el.removeAttribute('src');
+      el.load();
+    } catch {}
+    el.onended = null;
+    el.onerror = null;
+  }
+  if (track) {
+    track.settleStarted('stopped');
+    track.settleEnded('stopped');
+  }
+}
+
 function stopAllAudio(): void {
+  stopChatAudio();
   stopTutorAudio();
   stopLectureAudio();
 }
@@ -282,17 +314,17 @@ function playTrackOnChannel(
   channel: 'lecture' | 'tutor',
   text: string,
   voice = 'warm',
-  speed = 1,
+  speed?: number,
 ): SpeakHandle {
   const body = text.trim();
-  if (!body) return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
+  if (!body) return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null, didEndNaturally: () => false };
 
   if (typeof Audio === 'undefined') {
-    return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null };
+    return { started: Promise.resolve('stopped'), ended: Promise.resolve(), getProgress: () => null, didEndNaturally: () => false };
   }
 
-  // 语速配置: 若调用方显式传入了有效非 1 语速，更新客户端基准播放倍率
-  if (typeof speed === 'number' && Number.isFinite(speed) && speed > 0 && speed !== 1) {
+  // 显式倍率(包括 1.0)就是当前设置值;省略倍率时沿用已有设置。
+  if (typeof speed === 'number' && Number.isFinite(speed) && speed > 0) {
     currentPlaybackRate = speed;
   }
 
@@ -314,6 +346,7 @@ function playTrackOnChannel(
 
   let resolveStarted!: (v: SpeakStart) => void;
   let resolveEnded!: () => void;
+  let endedNaturally = false;
   const started = new Promise<SpeakStart>((res) => { resolveStarted = res; });
   const ended = new Promise<void>((res) => { resolveEnded = res; });
   const track: Track = {
@@ -343,6 +376,7 @@ function playTrackOnChannel(
   };
 
   el.onended = () => {
+    endedNaturally = true;
     detach();
     track.settleStarted('started');
     track.settleEnded();
@@ -377,7 +411,99 @@ function playTrackOnChannel(
 
   const getProgress = (): AudioProgress | null => {
     const currentEl = channel === 'lecture' ? lectureAudioEl : tutorAudioEl;
-    if (!el || currentEl !== el) return null;
+    if (currentEl !== el && !endedNaturally) return null;
+    const cur = typeof el.currentTime === 'number' && Number.isFinite(el.currentTime) ? el.currentTime : 0;
+    const dur = el.duration;
+    const validDur = typeof dur === 'number' && Number.isFinite(dur) && dur > 0;
+    const ratio = validDur ? Math.max(0, Math.min(1, cur / dur)) : (Number.isFinite(cur) ? -1 : 0);
+    return { currentTime: cur, duration: dur, ratio };
+  };
+
+  return { started, ended, getProgress, didEndNaturally: () => endedNaturally };
+}
+
+/** 聊天朗读有独立轨道，避免复用白板 lecture/tutor 的暂停与订阅语义。 */
+function playChatTrack(text: string, voice = 'warm', speed = 1): ChatSpeakHandle {
+  const body = text.trim();
+  if (!body) return { started: Promise.resolve('stopped'), ended: Promise.resolve('stopped'), getProgress: () => null };
+  if (typeof Audio === 'undefined') return { started: Promise.resolve('error'), ended: Promise.resolve('error'), getProgress: () => null };
+
+  // 与白板轨道同语义:显式倍率(包括 1.0)就是当前设置值。
+  if (typeof speed === 'number' && Number.isFinite(speed) && speed > 0) {
+    currentPlaybackRate = speed;
+  }
+
+  stopChatAudio();
+
+  const url = ttsStreamUrl(body.slice(0, 1500), voice, 1);
+  let el: HTMLAudioElement;
+  try {
+    el = new Audio(url);
+  } catch {
+    return { started: Promise.resolve('error'), ended: Promise.resolve('error'), getProgress: () => null };
+  }
+  try {
+    el.playbackRate = currentPlaybackRate;
+  } catch {}
+
+  let resolveStarted!: (v: SpeakStart) => void;
+  let resolveEnded!: (v: ChatSpeakEnd) => void;
+  const started = new Promise<SpeakStart>((res) => { resolveStarted = res; });
+  const ended = new Promise<ChatSpeakEnd>((res) => { resolveEnded = res; });
+  const track: ChatTrack = {
+    settleStarted: (v) => resolveStarted(v),
+    settleEnded: (v) => resolveEnded(v),
+  };
+  chatAudioEl = el;
+  chatTrack = track;
+
+  const isCurrent = () => chatAudioEl === el && chatTrack === track;
+  const detach = () => {
+    if (chatAudioEl === el) chatAudioEl = null;
+    if (chatTrack === track) chatTrack = null;
+    el.onended = null;
+    el.onerror = null;
+  };
+
+  el.onended = () => {
+    detach();
+    track.settleStarted('started');
+    track.settleEnded('ended');
+  };
+  el.onerror = () => {
+    detach();
+    track.settleStarted('error');
+    track.settleEnded('error');
+  };
+
+  let playPromise: Promise<void>;
+  try {
+    playPromise = el.play();
+  } catch {
+    playPromise = Promise.reject();
+  }
+  void playPromise.then(
+    () => {
+      if (!isCurrent()) {
+        try {
+          el.pause();
+          el.removeAttribute('src');
+          el.load();
+        } catch {}
+        return;
+      }
+      track.settleStarted('started');
+    },
+    () => {
+      if (!isCurrent()) return;
+      detach();
+      track.settleStarted('error');
+      track.settleEnded('error');
+    },
+  );
+
+  const getProgress = (): AudioProgress | null => {
+    if (!isCurrent()) return null;
     const cur = typeof el.currentTime === 'number' && Number.isFinite(el.currentTime) ? el.currentTime : 0;
     const dur = el.duration;
     const validDur = typeof dur === 'number' && Number.isFinite(dur) && dur > 0;
@@ -411,6 +537,9 @@ export const tts = {
     if (tutorAudioEl) {
       try { tutorAudioEl.playbackRate = rate; } catch {}
     }
+    if (chatAudioEl) {
+      try { chatAudioEl.playbackRate = rate; } catch {}
+    }
   },
 
   getPlaybackRate(): number {
@@ -419,20 +548,49 @@ export const tts = {
 
   stop: stopAllAudio,
   stopTutor: stopTutorAudio,
+  stopChat: stopChatAudio,
 
   /**
    * 课程旁白主线通道:返回播放句柄,等"真正起声"与"播完"。
    * 新开主线步会停掉旧步,但不会被答疑插话销毁。
    */
-  speakTrack(text: string, voice = 'warm', speed = 1): SpeakHandle {
+  speakTrack(text: string, voice = 'warm', speed?: number): SpeakHandle {
     return playTrackOnChannel('lecture', text, voice, speed);
   },
 
   /**
    * 导师答疑独立通道:不影响主线暂停中的讲座音频与字幕时钟,答疑播完平滑释放。
    */
-  speakTutorTrack(text: string, voice = 'warm', speed = 1): SpeakHandle {
+  speakTutorTrack(text: string, voice = 'warm', speed?: number): SpeakHandle {
     return playTrackOnChannel('tutor', text, voice, speed);
+  },
+
+  /** 聊天朗读独立于白板通道，不发全局播放状态通知。 */
+  speakChatTrack(text: string, voice = 'warm', speed = 1): ChatSpeakHandle {
+    return playChatTrack(text, voice, speed);
+  },
+
+  pauseChat(): boolean {
+    if (!chatAudioEl || !chatTrack || chatAudioEl.ended) return false;
+    chatAudioEl.pause();
+    return true;
+  },
+
+  async resumeChat(): Promise<'resumed' | 'error' | 'stopped'> {
+    const el = chatAudioEl;
+    const track = chatTrack;
+    if (!el || !track || el.ended) return 'stopped';
+    if (!el.paused) return 'resumed';
+    try {
+      await el.play();
+      if (chatAudioEl !== el || chatTrack !== track) {
+        el.pause();
+        return 'stopped';
+      }
+      return 'resumed';
+    } catch {
+      return 'error';
+    }
   },
 
   /** 暂停全部音频(课程暂停):不销毁元素,恢复时从断点继续。 */
@@ -460,7 +618,7 @@ export const tts = {
     }
   },
 
-  async speak(text: string, voice = 'warm', speed = 1): Promise<void> {
+  async speak(text: string, voice = 'warm', speed?: number): Promise<void> {
     const handle = this.speakTrack(text, voice, speed);
     const how = await handle.started;
     if (how === 'error') toast(L('Read-aloud is unavailable right now', '朗读服务暂时不可用'));
@@ -474,13 +632,14 @@ interface SpeechRecognitionLike {
   interimResults: boolean;
   maxAlternatives: number;
   onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event?: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
 }
 
 type SpeechCtor = new () => SpeechRecognitionLike;
+let activeSpeechRecognition: SpeechRecognitionLike | null = null;
 
 function speechCtor(): SpeechCtor | null {
   const w = window as unknown as { SpeechRecognition?: SpeechCtor; webkitSpeechRecognition?: SpeechCtor };
@@ -489,6 +648,16 @@ function speechCtor(): SpeechCtor | null {
 
 export function speechSupported(): boolean {
   return speechCtor() !== null;
+}
+
+export function cancelListenOnce(): void {
+  const recognition = activeSpeechRecognition;
+  activeSpeechRecognition = null;
+  try {
+    recognition?.stop();
+  } catch {
+    // 已结束的 Web Speech 会话无需再处理。
+  }
 }
 
 /**
@@ -503,6 +672,7 @@ export function listenOnce(onText: (text: string) => void, onDone?: () => void):
   }
   try {
     const rec = new Ctor();
+    activeSpeechRecognition = rec;
     rec.lang = getCurrentLng();
     rec.interimResults = false;
     rec.maxAlternatives = 1;
@@ -512,12 +682,238 @@ export function listenOnce(onText: (text: string) => void, onDone?: () => void):
         .trim();
       if (said) onText(said);
     };
-    rec.onerror = () => toast(L('Voice input failed — please try again', '语音输入失败，请重试'));
-    rec.onend = () => onDone?.();
+    rec.onerror = (event) => {
+      const error = event?.error;
+      if (error === 'not-allowed' || error === 'service-not-allowed') {
+        toast(L('Microphone permission was denied. Allow microphone access in your browser settings.', '麦克风权限被拒绝，请在浏览器地址栏允许使用麦克风'));
+      } else if (error === 'audio-capture') {
+        toast(L('No microphone was detected', '没有检测到麦克风'));
+      } else if (error === 'no-speech') {
+        toast(L('No speech was heard — please try again', '没听清，请再说一次'));
+      } else {
+        toast(L('Voice recognition is temporarily unavailable', '语音识别暂时不可用'));
+      }
+    };
+    rec.onend = () => {
+      if (activeSpeechRecognition === rec) activeSpeechRecognition = null;
+      onDone?.();
+    };
     rec.start();
     return true;
   } catch {
+    activeSpeechRecognition = null;
     toast(L('Voice input is unavailable', '语音输入不可用'));
     return false;
   }
+}
+
+/* ---------------- 按住录音并服务端转写(见界主路径) ---------------- */
+
+export type VoiceInputStatus = 'idle' | 'requesting' | 'recording' | 'recognizing';
+export type VoiceInputCallbacks = {
+  onText: (text: string) => void;
+  onState: (state: VoiceInputStatus) => void;
+};
+
+export type VoiceInputController = {
+  setCallbacks: (callbacks: VoiceInputCallbacks) => void;
+  toggle: () => Promise<void>;
+  cancel: () => void;
+};
+
+function showAsrError(status: number): void {
+  if (status === 422) {
+    toast(L('No speech was heard — please try again', '没听清，请再说一次'));
+  } else if (status === 429) {
+    toast(L('You are speaking too often — please wait a moment', '说得太频繁了，请稍后再试'));
+  } else if (status === 413) {
+    toast(L('The recording is too large — please record a shorter clip', '录音文件过大，请缩短后重试'));
+  } else if (status === 415) {
+    toast(L('This recording format is not supported', '当前录音格式暂不支持'));
+  } else {
+    toast(L('Voice recognition is temporarily unavailable', '语音识别暂时不可用'));
+  }
+}
+
+function showMicrophoneError(error: unknown): void {
+  const name = (error as { name?: string } | null)?.name;
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    toast(L('Microphone permission was denied. Allow microphone access in your browser settings.', '麦克风权限被拒绝，请在浏览器地址栏允许使用麦克风'));
+  } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    toast(L('No microphone was detected', '没有检测到麦克风'));
+  } else {
+    toast(L('Voice recognition is temporarily unavailable', '语音识别暂时不可用'));
+  }
+}
+
+/** 页面独占录音控制器:第二次点击结束录音,卸载时 cancel() 停轨并终止在途请求。 */
+export function createVoiceInputController(): VoiceInputController {
+  let callbacks: VoiceInputCallbacks = { onText: () => {}, onState: () => {} };
+  let state: VoiceInputStatus = 'idle';
+  let recorder: MediaRecorder | null = null;
+  let stream: MediaStream | null = null;
+  let chunks: BlobPart[] = [];
+  let stopTimer: number | null = null;
+  let uploadController: AbortController | null = null;
+  let generation = 0;
+  let fallbackActive = false;
+
+  const setState = (next: VoiceInputStatus) => {
+    state = next;
+    callbacks.onState(next);
+  };
+  const clearStopTimer = () => {
+    if (stopTimer !== null) window.clearTimeout(stopTimer);
+    stopTimer = null;
+  };
+  const stopTracks = (target = stream) => {
+    target?.getTracks().forEach((track) => track.stop());
+    if (target === stream) stream = null;
+  };
+
+  const upload = async (blob: Blob, token: number) => {
+    const controller = new AbortController();
+    uploadController = controller;
+    try {
+      const response = await fetch('/api/hyperknow/asr', {
+        method: 'POST',
+        headers: { 'content-type': blob.type || 'audio/webm' },
+        body: blob,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        showAsrError(response.status);
+        return;
+      }
+      const result = await response.json() as { text?: unknown };
+      const text = typeof result.text === 'string' ? result.text.trim() : '';
+      if (text) callbacks.onText(text);
+      else showAsrError(422);
+    } catch (error) {
+      if ((error as { name?: string } | null)?.name !== 'AbortError') showAsrError(0);
+    } finally {
+      if (uploadController === controller) uploadController = null;
+      if (token === generation) setState('idle');
+    }
+  };
+
+  const stopRecording = (token: number) => {
+    clearStopTimer();
+    const activeRecorder = recorder;
+    if (!activeRecorder || activeRecorder.state === 'inactive') return;
+    try {
+      activeRecorder.stop();
+    } catch {
+      // 浏览器可能已由 60 秒自动停止;onstop 会负责释放轨道并上传最终数据。
+      if (token === generation) showAsrError(0);
+    }
+  };
+
+  const startFallback = () => {
+    const token = ++generation;
+    fallbackActive = true;
+    setState('recording');
+    const started = listenOnce(
+      (text) => { if (token === generation) callbacks.onText(text); },
+      () => {
+        fallbackActive = false;
+        if (token === generation) setState('idle');
+      },
+    );
+    if (!started) {
+      fallbackActive = false;
+      setState('idle');
+    }
+  };
+
+  return {
+    setCallbacks(next) { callbacks = next; },
+    async toggle() {
+      if (state === 'recording') {
+        if (fallbackActive) {
+          ++generation;
+          fallbackActive = false;
+          cancelListenOnce();
+          setState('idle');
+        } else {
+          stopRecording(generation);
+        }
+        return;
+      }
+      if (state !== 'idle') return;
+      if (typeof MediaRecorder === 'undefined') {
+        startFallback();
+        return;
+      }
+
+      const token = ++generation;
+      setState('requesting');
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error('media_devices_unavailable');
+        const capturedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (token !== generation) {
+          stopTracks(capturedStream);
+          return;
+        }
+        stream = capturedStream;
+        let activeRecorder: MediaRecorder;
+        try {
+          activeRecorder = new MediaRecorder(capturedStream, { audioBitsPerSecond: 64_000 });
+        } catch {
+          activeRecorder = new MediaRecorder(capturedStream);
+        }
+        recorder = activeRecorder;
+        chunks = [];
+        activeRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) chunks.push(event.data);
+        };
+        activeRecorder.onerror = () => {
+          ++generation;
+          clearStopTimer();
+          recorder = null;
+          stopTracks(capturedStream);
+          chunks = [];
+          setState('idle');
+          showAsrError(0);
+        };
+        activeRecorder.onstop = () => {
+          clearStopTimer();
+          if (recorder === activeRecorder) recorder = null;
+          stopTracks(capturedStream);
+          if (token !== generation) return;
+          const typedChunk = chunks.find((part) => part instanceof Blob && part.type);
+          const chunkType = typedChunk instanceof Blob ? typedChunk.type : '';
+          const blob = new Blob(chunks, { type: activeRecorder.mimeType || chunkType || 'audio/webm' });
+          chunks = [];
+          setState('recognizing');
+          void upload(blob, token);
+        };
+        activeRecorder.start();
+        setState('recording');
+        stopTimer = window.setTimeout(() => stopRecording(token), 60_000);
+      } catch (error) {
+        if (token !== generation) return;
+        stopTracks();
+        recorder = null;
+        setState('idle');
+        showMicrophoneError(error);
+      }
+    },
+    cancel() {
+      ++generation;
+      clearStopTimer();
+      fallbackActive = false;
+      cancelListenOnce();
+      uploadController?.abort();
+      uploadController = null;
+      const activeRecorder = recorder;
+      recorder = null;
+      if (activeRecorder && activeRecorder.state !== 'inactive') {
+        try { activeRecorder.stop(); } catch { /* 卸载期间的关闭竞态不影响轨道释放。 */ }
+      }
+      stopTracks();
+      chunks = [];
+      state = 'idle';
+    },
+  };
 }

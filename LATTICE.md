@@ -28,7 +28,7 @@ tests/                         # hyperknow-core(纯逻辑)+ suites/11-hyperknow(
 | --- | --- | --- |
 | `WS /api/v1/ws`,事件逐帧 JSON | `POST /api/hyperknow/chat` → SSE(`event: frame`) | 事件序列逐帧一致:conversation_created → credit_status → directorAgent thinking → content_chunk×N → recommend_next_step → complete |
 | `WS /api/v1/course-generation/ws` | `POST /api/hyperknow/course-generation` → SSE | 事件序列一致(含装饰性研学 sleep 1.2s/1s) |
-| `WS /api/v1/whiteboard/ws`,服务端 setTimeout 链按节奏推步、连接内存存计划 | `POST /api/hyperknow/whiteboard/plan` 一次返回完整计划;播放节奏由客户端适配器驱动(hyperknow-spa/src/lattice/backend.ts `planLectureLive` 拉计划 → whiteboard/liveLesson.ts 转成与演示脚本同构的板书脚本,与服务端 protocol.ts 同一条 `max(4000, 字数×180ms)` 公式;拉取失败/超时静默回退内置演示脚本) | 举手插话改独立 `POST /whiteboard/interject`;答疑后 5s 恢复主线。**顺带修复早期缺陷**:插话恢复后原服务端推进链因 isPaused 标记永久停摆,现从当前步继续推进 |
+| `WS /api/v1/whiteboard/ws`,服务端 setTimeout 链按节奏推步、连接内存存计划 | `POST /api/hyperknow/whiteboard/plan` 一次返回完整计划;播放节奏由客户端适配器驱动(hyperknow-spa/src/lattice/backend.ts `planLectureLive` 拉计划 → whiteboard/liveLesson.ts 转成与演示脚本同构的板书脚本;字幕优先按音频真实 duration 推进,未知时用独立于 playbackRate 的校准媒体时长估算;静音/失败回退才按用户语速缩放;protocol.ts `stepDurationMs` 为未被当前客户端调用的旧协议函数) | 举手插话改独立 `POST /whiteboard/interject`;答疑后 5s 恢复主线。**顺带修复早期缺陷**:插话恢复后原服务端推进链因 isPaused 标记永久停摆,现从当前步继续推进 |
 | TTS 未命中逐块 pipe 流式返回 | 未命中整段合成后返回(≤500 字短文本);命中内存/R2 毫秒级 | Workers 无 waitUntil 挂靠点时后台回填不可靠,取整段换取确定性;`X-Cache: HIT-MEMORY/HIT-R2/MISS` 语义保留 |
 | 启动时预热 6 音色试听缓存 | 惰性首次合成(Workers 无常驻启动钩子) | 首次试听慢(上游合成延迟),之后毫秒级 |
 | md5 缓存 key | SHA-256(寻址 key,不影响语义) | 内存缓存加 100 条 FIFO 上限(早期实现无界,isolate 内存 128MB 需守卫) |
@@ -51,6 +51,7 @@ TTS 请求体必须纯 ASCII(`asciiSafeJson` 做 `\u` 转义):上游 WAF 对该�
 | `HYPERKNOW_AI_BASE_URL` / `HYPERKNOW_AI_API_KEY` | 可选 | 覆盖位:上游与阅读 AI 不同时使用(如专门指向 StepFun) |
 | `HYPERKNOW_AI_MODEL` | 可选 | 默认回退 `AI_CHAT_MODEL`,再默认 `step-3.7-flash`(config.ts 实际值) |
 | `HYPERKNOW_TTS_BASE_URL` / `HYPERKNOW_TTS_MODEL` | 可选 | 默认 `https://api.stepfun.com/v1` / `stepaudio-3-tts`(测试注入假上游用) |
+| `HYPERKNOW_ASR_BASE_URL` / `HYPERKNOW_ASR_MODEL` | 可选 | 默认 `https://api.stepfun.com/v1` / `stepaudio-2.5-asr`;密钥复用 Hyperknow AI key,端点为 `/audio/transcriptions` |
 | `HK_WEB_SEARCH_PROVIDER` | 可选 | 课程研学供应商(`stepfun`/`tavily`/`brave`/`cloudflare`/`off`);未显式指定时默认优先现有 AI 渠道(`stepfun`),保留显式 Tavily/Brave;为 `off` 时跳过搜索 |
 | `HK_WEB_SEARCH_STEPFUN_MCP` | 可选 | StepFun 搜索默认优先 MCP web_search 端点(`{AI base}/mcp/web_search/mcp`),除 success/timeout 外任何异常回退 `/v1/search`;设 `off` 只走 `/v1/search` |
 | `HK_WEB_SEARCH_MCP_URL` | 可选 | 显式覆盖 StepFun MCP web_search 端点 |
@@ -70,11 +71,16 @@ SPA 里每个可点控件都必须有真实行为或显式失败反馈,不留静
 
 | 类别 | 实现 |
 | --- | --- |
+| 真实后端能力 | 翻译(`POST /api/hyperknow/translate`,SSE 逐帧、服务端扣 2 积分、余额不足 402);模型探针(`POST /api/hyperknow/model-check`,`max_tokens:16` 的最小 ping,**不计费、不落库**,限流 20/h,只回 `{ok,latency_ms}`);连接面板延迟(ping 真实往返);音频自检(真拉 TTS 样本,量首字节延迟与下载码率,阈值 32 kbps,再真回放);白板课程计划(`POST /api/hyperknow/whiteboard/plan`,板书动作 `card|formula|diagram|image|quick_check`——服务端按 `courseUuid`/`unitId`/`lectureId`/`sessionId` 校验归属权限与精确定位讲次,兼容旧课仅传 `topic`;`diagram` 支持结构化节点边与 Mermaid 子集,失败友好文字降级不显示代码;`quick_check` 落选择题等学员作答;服务端无 AI 密钥时回退话题模板计划,客户端拉取失败回退演示脚本,均不静默卡死);白板按需生图(`POST /api/hyperknow/whiteboard/image`,阶跃星辰生图同步官方规范:n=1,1024x1024,b64_json,prompt<=512,核对 finish_reason;图片不可信限制响应大小、1024x1024像素、MIME魔数检测拒SVG/HTML;复用上传隔离 ClamAV 扫描 fail-closed 入 R2,属主私有缓存;缓存 key 包含模型、参数、版本、课节、用户并发去重,每节最多 1 图,日配额 10 张,总开关 `HK_IMAGE_ENABLED`,不擅改课程 10 积分定价;前端按需配图 pending/ready/failed 状态机、固定比例容器、alt 图注、点击放大 Lightbox、音频有界等待 3.5s、失败文字优雅降级、切课取消请求不串图);课程前置问询(`POST /api/hyperknow/course-inquiry`,3-5 项推荐问询一键推荐继续,必要时最多 2 轮智能追问,限流 30/h,组装版本化 CourseBrief:目标、基础、时间、深度、偏好、语言、视觉);课程大纲质量校验与单元修复(目标/先修/完成标准/项目/测验,DAG 先修无环检测,失败单元最多 1 次 LLM 修复,不模板冒充成功,规模适应主题与时间,6-8 单元仅作参考;蓝图就绪帧 `blueprint_ready` 与检查点恢复/取消/并发幂等锁,严守 10 积分定价);白板举手插话(`POST /api/hyperknow/whiteboard/interject`,按讲座会话与当前 step_id 取上下文答疑;主线声画同步暂停、答案与过渡句回流对话面板并 TTS 朗读、答疑后 5s 恢复;端点不可用给本地可见反馈,不落空);学员称呼(讲座计划/插话提示词与无密钥回退计划的开场白均携带会话成员 displayName,导师旁白/答疑以登录名称呼学员;演示课脚本同步模板化——挂载时绑定登录用户名、开播前等启动身份结算 `bootReady`,匿名/纯静态托管保底录课默认称呼);语音提问(MediaRecorder 发往 /api/hyperknow/asr,识别追加到输入;浏览器不支持 MediaRecorder 时回退 Web Speech API,答步转写即作答、自由时段转写即插话);课程市场(`GET /api/hyperknow/marketplace/courses`:本人 D1 课程 + 官方样例,集市页与"我的课程"书架据此渲染,点击本人课程拉 `GET /courses/[uuid]` 详情进真实课程树;不可达回退演示卡);课程生成联网研学(`POST /api/hyperknow/course-generation` 供应商可插拔 StepFun/Tavily/Brave/Cloudflare,默认优先复用现有 AI 渠道的 StepFun Chat Completions 协议 tools:web_search,单次真搜无自动重试;亦支持传统搜索按 3 条派生查询真搜;研学资料以隔离边界明确标记为外部不可信参考而非指令防范注入;搜索未配置时移除假等待假轮数直接跳过,上游失败/超时一律优雅降级为无研学上下文继续生成,不影响积分扣减语义,轮次帧与完成帧的 `sources` 如实计数,不虚报来源);白板课程旁白(每教学步随字幕真声朗读,**音频是时钟**:字幕等起声才起跑、音频播完字幕立即补全、步进等播完才前进,杜绝冷合成延迟下的声画错位与截断;中英文按音节密度分别估窗 180ms/汉字、65ms/英文字符,暂停为同元素断点续播) |
+| 浏览器本地能力 | 复制(execCommand 回退)、分享链接(navigator.share 回退剪贴板)、日历 `.ics` 下载、附件/材料/反馈附件上传(`/api/uploads`,visibility=private)、语音输入(MediaRecorder 最长录 60 秒后发 `/api/hyperknow/asr`,追加转写;浏览器不支持 MediaRecorder 时回退 Web Speech API)、朗读(TTS 单例)、反馈邮件(mailto) |
+
 | 真实后端能力 | 翻译(`POST /api/hyperknow/translate`,SSE 逐帧、服务端扣 2 积分、余额不足 402);模型探针(`POST /api/hyperknow/model-check`,`max_tokens:16` 的最小 ping,**不计费、不落库**,限流 20/h,只回 `{ok,latency_ms}`);连接面板延迟(ping 真实往返);音频自检(真拉 TTS 样本,量首字节延迟与下载码率,阈值 32 kbps,再真回放);白板课程计划(`POST /api/hyperknow/whiteboard/plan`,板书动作 `card|formula|diagram|image|quick_check`——服务端按 `courseUuid`/`unitId`/`lectureId`/`sessionId` 校验归属权限与精确定位讲次,兼容旧课仅传 `topic`;`diagram` 支持结构化节点边与 Mermaid 子集,失败友好文字降级不显示代码;`quick_check` 落选择题等学员作答;服务端无 AI 密钥时回退话题模板计划,客户端拉取失败回退演示脚本,均不静默卡死);白板按需生图(`POST /api/hyperknow/whiteboard/image`,阶跃星辰生图同步官方规范:n=1,1024x1024,b64_json,prompt<=512,核对 finish_reason;图片不可信限制响应大小、1024x1024像素、MIME魔数检测拒SVG/HTML;复用上传隔离 ClamAV 扫描 fail-closed 入 R2,属主私有缓存;缓存 key 包含模型、参数、版本、课节、用户并发去重,每节最多 1 图,日配额 10 张,总开关 `HK_IMAGE_ENABLED`,不擅改课程 10 积分定价;前端按需配图 pending/ready/failed 状态机、固定比例容器、alt 图注、点击放大 Lightbox、音频有界等待 3.5s、失败文字优雅降级、切课取消请求不串图);课程前置问询(`POST /api/hyperknow/course-inquiry`,3-5 项推荐问询一键推荐继续,必要时最多 2 轮智能追问,限流 30/h,组装版本化 CourseBrief:目标、基础、时间、深度、偏好、语言、视觉);课程大纲质量校验与单元修复(目标/先修/完成标准/项目/测验,DAG 先修无环检测,失败单元最多 1 次 LLM 修复,不模板冒充成功,规模适应主题与时间,6-8 单元仅作参考;蓝图就绪帧 `blueprint_ready` 与检查点恢复/取消/并发幂等锁,严守 10 积分定价);白板举手插话(`POST /api/hyperknow/whiteboard/interject`,按讲座会话与当前 step_id 取上下文答疑;主线声画同步暂停、答案与过渡句回流对话面板并 TTS 朗读、答疑后 5s 恢复;端点不可用给本地可见反馈,不落空);学员称呼(讲座计划/插话提示词与无密钥回退计划的开场白均携带会话成员 displayName,导师旁白/答疑以登录名称呼学员;演示课脚本同步模板化——挂载时绑定登录用户名、开播前等启动身份结算 `bootReady`,匿名/纯静态托管保底录课默认称呼);语音提问(Web Speech API 真转写,答步转写即作答、自由时段转写即插话,不再有 canned 台词);课程市场(`GET /api/hyperknow/marketplace/courses`:本人 D1 课程 + 官方样例,集市页与"我的课程"书架据此渲染,点击本人课程拉 `GET /courses/[uuid]` 详情进真实课程树;不可达回退演示卡);课程生成联网研学(`POST /api/hyperknow/course-generation` 供应商可插拔 StepFun/Tavily/Brave/Cloudflare,默认优先复用现有 AI 渠道的 StepFun Chat Completions 协议 tools:web_search,单次真搜无自动重试;亦支持传统搜索按 3 条派生查询真搜;研学资料以隔离边界明确标记为外部不可信参考而非指令防范注入;搜索未配置时移除假等待假轮数直接跳过,上游失败/超时一律优雅降级为无研学上下文继续生成,不影响积分扣减语义,轮次帧与完成帧的 `sources` 如实计数,不虚报来源);白板课程旁白(每教学步随字幕真声朗读,**音频是时钟**:字幕等起声才起跑、音频播完字幕立即补全、步进等播完才前进,杜绝冷合成延迟下的声画错位与截断;中英文按音节密度分别估窗 180ms/汉字、65ms/英文字符,暂停为同元素断点续播) |
-| 浏览器本地能力 | 复制(execCommand 回退)、分享链接(navigator.share 回退剪贴板)、日历 `.ics` 下载、附件/材料/反馈附件上传(`/api/uploads`,visibility=private)、语音输入(Web Speech API 一次性识别)、朗读(TTS 单例)、反馈邮件(mailto) |
+| 浏览器本地能力 | 复制(execCommand 回退)、分享链接(navigator.share 回退剪贴板)、日历 `.ics` 下载、附件/材料/反馈附件上传(`/api/uploads`,visibility=private)、语音输入(Web Speech API 一次性识别)、朗读(TTS 单例)、反馈邮件客户端(仅作为用户主动选择的备用方式) |
 | 前端自绘 | 白板导出 JPG/PDF:Canvas 2D 按课堂数据重绘(Caveat/Handlee/Satoshi 用已加载 woff2,2200×1300 世界坐标,第 1/2 页按 x=1100 切分,表格波纹网格、荧光高亮带、红色圈注),非 DOM 截图;PDF 在点击内同步 `window.open` 再写 blob `<img>` 并 `print()` |
 
 未接线的装饰性按钮统一给可见反馈(顶部 toast 或 `SOON` 徽章),如 Canvas/Google 日历集成、外部记忆同步、付费档预览。兑换码已接线:管理台/机器通道(`POST /api/admin/hk-redeem-codes`)发放 `HK-` 码(库存只存哈希、明文只显示一次),会员在 设置 → 优惠券 输入即开通 PRO/MAX(`POST /api/hyperknow/redeem`,同源+限流,授权落 `hk_redeem_grants`,撤码不回收已发授权),档位解析在 `resolveMembership` 中与环境/角色档位取最高者。
+
+见界反馈由 `POST /api/hyperknow/feedback` 先写入 D1 `hk_feedback`,再尝试通知创始人邮箱;响应区分“已保存”与邮件通知状态。`GET /api/admin/hk-feedback` 仅管理员读取并支持 `limit/offset` 分页,反馈保留 180 天。弹窗自动附带有限长的页面、会话/课程标识与浏览器信息;邮件客户端只在用户主动选择备用按钮时打开。
 
 集市/课程列表每张卡打开**对应课程**的预览与学习旅程(深链 `#/course/preview?topic=…&cover=…`
 可分享/直开),不再是固定演示课;进入白板时按当前课程话题实时拉取讲解计划,无课程上下文时
@@ -83,9 +89,17 @@ SPA 里每个可点控件都必须有真实行为或显式失败反馈,不留静
 ## 安全与限流
 
 所有端点 `requireMember`;写端点(chat/plan/interject/course-generation/translate/model-check)加 `assertSameOrigin`;
+语音识别 `POST /api/hyperknow/asr` 同样要求 `assertSameOrigin`,每用户 30 次/10 分钟,音频最多 2 MiB;白板、TTS 与 ASR 不扣积分且音频不落库。
 限流(bucket/每小时):chat 30、tts 120、whiteboard plan 20、interject 30、course-gen 5、translate 60、model-check 20。
+
+所有见界会员端点 `requireMember`;写端点(chat/plan/interject/course-generation/translate/model-check/feedback)加 `assertSameOrigin`;
+限流(bucket/每小时):chat 30、tts 120、whiteboard plan 20、interject 30、course-gen 5、translate 60、model-check 20、feedback 每会员 5 且每 IP 30。
+反馈管理读取单独走 `requireAdmin`;Agent 的 GET 虽会通过 Worker 写能力闸,仍由路由角色检查拒绝,反馈路由不加入机器写能力表。清理在现有 6 小时保留期任务中删除 180 天前的反馈。
 答案侧无资金/证据语义,不需要 DB 触发器。白板板书 HTML 由 LLM 生成、前端
 `dangerouslySetInnerHTML` 渲染——如实记录(内容只能由本人触发生成)。
+
+安全头仅在 `/lattice` 与 `/lattice/*` 对同源开放麦克风;其它路径仍为 `microphone=()`。
+`/api/auth/github/start` 继续使用全锁定策略,静态 `/product-apps/*` 的头不随本路径分支改变。
 
 ## 重建 SPA
 
@@ -149,3 +163,33 @@ CI 不安装 hyperknow-spa 依赖、不参与主站 tsc/eslint(tsconfig/eslint �
 - **其他**:hash 后退回课程页永久"正在加载";页内弹窗遮罩盖不住侧栏(`screen-in` fill-mode both 留下 transform);发版后旧标签页懒加载分包 404 白屏(`vite:preloadError` 自动刷新一次);课程详情断网误报"不存在";上完白板课前端假扣 5 积分;暂停中答测验照播反馈音;热点刷新超 5 轮重复同批;中文界面英文残留;首页课程卡直达对应课程;计费租约过期接管/退费重开改比较-交换;蓝图重复 unitId 确定性改名。
 - **讲稿流式化(44f5427 部署后复测追加)**:生产 D1 近 14 天 `hk_whiteboard_sessions` 44 次备课 22 次降级;部署后线上实测 2/2 仍降级,tail 显示非流式 Messages 长连接在 72s/104s 收到上游 520,兼容通道重试随即撞上 130s 预算。直连上游对照(同一讲稿提示词,24 路):思考长度 0.9K~32K 字极不稳定,16384 上限下约三成在 max_tokens 截断;`thinking.budget_tokens`、`thinking.disabled`、`reasoning_effort`、`output_config.effort` 均不能稳定压住推理链;另有 2 路完整输出因 `sliceJsonPayload` 把字符串里的 ```` ```mermaid ```` 当外层围栏而整课降级,1 路漏写步骤左花括号。改动:`planLecture` 改为 `streamChat` + `collectStreamText`(截断/断流/预算中止都保留已收正文交给抢救;开流 30s 内即断且几乎无正文时换 chat/completions 流重试一次),`max_tokens` 16384→32768(思考 31.6K 字的请求 122.9s 正常结束);外层围栏只认第一个 `{` 之前的那一层;修复候选追加"补步骤左花括号",且修复路径与抢救同用 ≥4 步门槛。修复后 32768+新解析器 6 路:5 路 13 步、1 路(又坏又只有 3 步)按门槛降级。**未验证**:流式 /messages 在 Worker 出口是否同样避开 520(本机直连 24 路未复现 520),以部署后生产降级率为准。
 - **未验证/已知缺口**:生产 Workers 下客户端断开时 `request.signal` 是否触发(未开 `enable_request_signal`)未实测——断开后的租约只能等到期,恢复可能 409「仍在进行」最长约 6 分钟(Stage1)/16 分钟(Stage2);"退费后同键重试免费"的计费语义未改(待产品决策);相机下限与横屏改动只在无头 Chrome 视口模拟下验证,未上真机。
+
+## 2026-10-30 积分展示与流水
+
+- 顶栏余额只使用 `/api/hyperknow/auth/get_user_info` 或计费 SSE 的服务端余额；白板结课不扣积分。MAX 每日额度与后端 `TIER_CONFIG.MAX.maxCredits` 同为 500。
+- `/api/hyperknow/credits/history` 只读当前会员、最近 50 条并支持游标；D1 `hk_credits` 的余额 UPDATE 必须在同一语句写原因，SQLite 触发器同事务追加 `hk_credit_events`，事件只保留 90 天。原因覆盖对话、翻译、建课、退款、每日重置和套餐额度提升；引用只存会话/计费/授权标识，不存消息正文。
+- 流水从 0040 迁移应用后开始记录；旧余额和旧 `hk_credit_charges` 不回填为历史事件，历史页面不会伪造迁移前记录。
+
+## 2026-10-30 课程演示卡状态隔离与建课跳转
+
+- 状态: 部分完成(本 worktree 的源码与契约测试;按任务书未构建 SPA 产物)。
+- 根因:无 UUID 演示卡入口未覆盖 `activeCourseUuid` 清理,预览 hash 也没有保留卡片身份;旧课程 UUID 可继续驱动详情加载。
+- 改动:增加共享课程卡状态 patch 与快照 hash;集市、首页、课程页精选行、引导页 AP 世界史卡共用;无现成课程的卡片进入 CreatePage 并预填标题,不开放假课程讲次。
+- 本地证据:`node --experimental-strip-types --test --test-isolation=none tests/lattice-course.test.mjs tests/lattice-course-behavior.test.mjs tests/lattice-course-selection.test.mjs` 输出 `tests 17 / pass 17 / fail 0 / skipped 0 / todo 0`;根目录及 SPA app/node TypeScript 检查、SPA oxlint 均退出码 0。
+- 未覆盖:本 worktree 未执行 SPA 构建/浏览器端真实点击;`tsc -b` 的缓存写入命中只读 node_modules 链接(EPERM),已用 app/node 项目级检查替代。由统一合并方执行构建与真实浏览器验收。
+
+## 2026-10-30 白板朗读与字幕时长校准
+
+- **状态:部分完成**(当前 worktree 源码和契约测试;未重建 `public/lattice/`)。本轮计时改动将未知时长字幕估算与静音墙钟估算分开:前者使用不随 playbackRate 变化的媒体时长,后者仍按语速缩放;已知 `duration` 直接使用媒体比例。系数由三条中文及一条英文实测样本按 `actualMs = CJK字符数 × a + 其他字符数 × b` 做最小二乘拟合,取整为 `a=233ms`、`b=78ms`;回归用例 `streaming unknown duration follows media time at 0.85x, 1.0x, and 1.5x` 与 `calibrated media-duration coefficients estimate the four measured TTS samples within 10%`。
+- **播放倍率**:显式传入的有效倍率(包括 1.0)写入当前基准;省略倍率沿用当前设置。`explicitly returning the track speed to 1.0x updates the real Audio playbackRate` 对 `tts.getPlaybackRate()` 与新 Audio 实例 `playbackRate` 做字段断言。
+- **验证记录**:`node --experimental-strip-types --test --test-isolation=none tests/whiteboard-caption-sync.test.mjs tests/whiteboard-caption-window.test.mjs` → 31 tests, 31 pass, 0 fail, 0 skipped, 0 todo, exit 0;根目录 `npx tsc --noEmit` 与 `npx oxlint src`(SPA)退出 0。SPA 原命令 `npx tsc -b` 因其配置把 build info 写入只读 `node_modules/.tmp` 而报 EPERM;改为分别检查 `tsconfig.app.json`、`tsconfig.node.json`,并把 `--tsBuildInfoFile` 指向 `%TEMP%`,两项退出 0。
+- **未覆盖**:真实浏览器对流式 MP3 `duration` 的可用时点、不同语速下真实 StepFun TTS 与浏览器解码时长、以及本轮未构建的新 `public/lattice/` 产物。
+- **T2b 增量(2026-10-30)**:按音色维护会话内 EMA(α=0.4,初值 1.0,单样本比值夹在 `[0.6,1.6]`);未知 `duration` 使用校准媒体时长,有限 `duration` 仍走音频真实比例,静音/失败墙钟回退继续使用按语速缩放的原估算。`SpeakHandle.didEndNaturally()` 区分原生自然结束与 stop/error;只在起声、自然 ended、非 skip 且非 fallback 时采样,自然结束后保留最终媒体读数供无限时长流记录。
+- **T2b 验证记录**:`node --experimental-strip-types --test --test-isolation=none tests/whiteboard-caption-sync.test.mjs tests/whiteboard-caption-window.test.mjs` → 34 tests, 34 pass, 0 fail, 0 skipped, 0 todo, exit 0;`hyperknow-spa` 下 `npx tsc --project tsconfig.app.json --pretty false --incremental --tsBuildInfoFile "$env:TEMP\lattice-t2b-spa-app.tsbuildinfo"` 与对应 `tsconfig.node.json` 命令均 exit 0;`npx oxlint src` exit 0。
+- **T2b 本轮改动可能引入的新风险**:每音色系数在页面会话内保留,若会话中 TTS 音色输出特性改变,旧样本会继续影响后续未知时长估算(比值边界只限制幅度,不消除漂移);无限 `duration` 样本依赖浏览器在自然 `ended` 时报告的最终 `currentTime`,该媒体状态尚未在真实浏览器验证。该校准本轮只在模拟 handle 上验证,未以真实 StepFun 音频回放验证。
+- **T2b 未覆盖**:真实浏览器的自然结束/无限 `duration` 组合、StepFun 各预置音色跨多步的长期校准行为、静音/失败回退在校准后的真实步长;本轮未构建或改写 `public/lattice/`。
+
+## 2026-10-30 见界反馈通道
+
+- `POST /api/hyperknow/feedback` 对登录成员执行同源校验与每会员 5 次/小时、每 IP 30 次/小时限流;请求体上限 32 KiB,正文限制 1..4000 字,上下文只接受页面名、会话 ID、课程 UUID、浏览器信息的有限长字符串。先写 `hk_feedback`,邮件通知结果另写 `notify_status/notify_code`;邮件失败不改变 D1 已收到状态。管理员经 `GET /api/admin/hk-feedback` 分页读取。
+- `hk_feedback` 由迁移 `0040_hk_feedback.sql` 创建,6 小时保留清理任务删除超过 180 天的记录。SupportModal 成功态展示反馈编号与回复邮箱;网络失败时可重试,邮件客户端和邮箱复制均为用户主动选择的备用方式。

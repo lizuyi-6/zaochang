@@ -30,7 +30,6 @@ export interface AppState {
   lectureDone: boolean;
   /** lecture-complete practice prompt after leaving a finished session */
   lectureCompletePrompt: boolean;
-  energy: number;
   settingsOpen: boolean;
   settingsTab: 'general' | 'memory';
   avatarMenuOpen: boolean;
@@ -59,6 +58,9 @@ export interface AppState {
   /** 课程深链或详情加载状态 */
   courseLoading?: boolean;
   courseError?: string | null;
+  /** 当前无后端 UUID 的集市卡;用于恢复准确卡片预览与诚实的生成 CTA */
+  activeCourseCardId?: string;
+  activeCourseCardNeedsGeneration?: boolean;
   /** 已生成的课程(非空时课程页/白板壳层按其渲染) */
   generated: GeneratedCourse | null;
   /** 即时协助:用户实际输入的问题(空则回退演示消息) */
@@ -106,7 +108,7 @@ export const PLANS: Array<{
 }> = [
   { id: 'FREE', price: 0, creditsPerDay: 20 },
   { id: 'PRO', price: 12, creditsPerDay: 100 },
-  { id: 'MAX', price: 29, creditsPerDay: 300 },
+  { id: 'MAX', price: 29, creditsPerDay: 500 },
 ];
 
 export const initialAppState: AppState = {
@@ -122,7 +124,6 @@ export const initialAppState: AppState = {
   courseJoined: false,
   lectureDone: false,
   lectureCompletePrompt: false,
-  energy: 15,
   settingsOpen: false,
   settingsTab: 'general',
   avatarMenuOpen: false,

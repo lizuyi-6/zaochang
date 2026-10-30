@@ -9,11 +9,14 @@ import { assertFounderRoleIdentityEligible, hasRole } from "../access-control";
 // - 懒重置:读取/消费时发现 reset_date 落后当天即续满,不需要定时任务,错过的日子自然归零重来。
 // - 扣减是条件 UPDATE(balance >= cost),SQLite 写串行化保证并发下不可能透支;
 //   changes=0 即余额不足。调用方约定"先校验后扣费"。
-// - 消费档位:AI 对话 HK_CHAT_COST=2, 课程蓝图生成 HK_COURSE_COST=10 (白板/TTS 不计费)。
+// - 消费档位:AI 对话 HK_CHAT_COST=2, 课程蓝图生成 HK_COURSE_COST=10 (白板/TTS/ASR 不计费)。
 
 export const HK_DAILY_CREDITS = 20;
 export const HK_CHAT_COST = 2;
 export const HK_COURSE_COST = 10;
+
+export type CreditEventReason = "chat" | "translate" | "course" | "refund" | "daily_reset" | "plan_change";
+type CreditConsumptionReason = Extract<CreditEventReason, "chat" | "translate" | "course">;
 
 export type SubscriptionTier = "FREE" | "PRO" | "MAX";
 type CreditIdentity = Pick<MemberIdentity, "email" | "authVia">;
@@ -108,6 +111,8 @@ async function ensureFreshRow(user: CreditIdentity, today: string, max: number):
        ON CONFLICT(user_email) DO UPDATE SET
          balance = CASE WHEN reset_date = excluded.reset_date THEN balance ELSE excluded.balance END,
          reset_date = excluded.reset_date,
+         change_reason = 'daily_reset',
+         change_ref = NULL,
          updated_at = CURRENT_TIMESTAMP`,
     )
     .bind(user.email, max, today)
@@ -129,16 +134,21 @@ export async function currentCredits(
 }
 
 // 条件扣减。成功返回扣后余额;余额不足(含 cost > 今日额度本身)返回 null。
-export async function consumeCredits(user: CreditIdentity, cost: number): Promise<number | null> {
+export async function consumeCredits(
+  user: CreditIdentity,
+  cost: number,
+  reason: CreditConsumptionReason,
+  ref: string | null = null,
+): Promise<number | null> {
   const today = beijingToday();
   const { tier } = await resolveMembership(user);
   await ensureFreshRow(user, today, TIER_CONFIG[tier].maxCredits);
   const updated = await database()
     .prepare(
-      `UPDATE hk_credits SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
+      `UPDATE hk_credits SET balance = balance - ?, change_reason = ?, change_ref = ?, updated_at = CURRENT_TIMESTAMP
        WHERE user_email = ? AND reset_date = ? AND balance >= ?`,
     )
-    .bind(cost, user.email, today, cost)
+    .bind(cost, reason, ref, user.email, today, cost)
     .run();
   if (Number(updated.meta.changes ?? 0) === 0) return null;
   const row = await database()
@@ -161,6 +171,13 @@ export function parseTimestampMs(val: string | null | undefined): number {
   return Number.isNaN(t) ? 0 : t;
 }
 
+async function opaqueCreditRef(prefix: "charge", value: string | null | undefined): Promise<string | null> {
+  if (!value) return null;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${prefix}:${hex}`;
+}
+
 // 幂等扣减与原子任务租约: 幂等计费面只有建课一条(恒 10 积分,不接受参数改价——
 // 此前 cost 参数被三元表达式无视,是个一踩就炸的陷阱),支持任务恢复/并发竞争时
 // 409 拦截与 D1 batch 事务一致
@@ -175,9 +192,11 @@ export async function consumeCreditsIdempotent(
 
   const fixedCost = HK_COURSE_COST;
   const key = idempotencyKey?.trim();
+  // 幂等键可由客户端提供;流水只存哈希引用,不把任意用户输入写进 ref。
+  const eventRef = await opaqueCreditRef("charge", key);
 
   if (!key) {
-    const remaining = await consumeCredits(user, fixedCost);
+    const remaining = await consumeCredits(user, fixedCost, "course", eventRef);
     return { remaining, charged: remaining !== null, conflict: false };
   }
 
@@ -255,10 +274,10 @@ export async function consumeCreditsIdempotent(
 
   const deductStmt = database()
     .prepare(
-      `UPDATE hk_credits SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
+      `UPDATE hk_credits SET balance = balance - ?, change_reason = 'course', change_ref = ?, updated_at = CURRENT_TIMESTAMP
        WHERE user_email = ? AND reset_date = ? AND balance >= ?`,
     )
-    .bind(fixedCost, user.email, today, fixedCost);
+      .bind(fixedCost, eventRef, user.email, today, fixedCost);
 
   const insertStmt = database()
     .prepare(
@@ -362,13 +381,14 @@ export async function refundCreditCharge(
   cost: number = HK_COURSE_COST,
 ): Promise<void> {
   const today = beijingToday();
+  const eventRef = await opaqueCreditRef("charge", key);
   try {
     await database()
       .prepare(
-        `UPDATE hk_credits SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+        `UPDATE hk_credits SET balance = balance + ?, change_reason = 'refund', change_ref = ?, updated_at = CURRENT_TIMESTAMP
          WHERE user_email = ? AND reset_date = ?`,
       )
-      .bind(cost, userEmail, today)
+      .bind(cost, eventRef, userEmail, today)
       .run();
   } catch (err) {
     console.warn("[hyperknow-credits] refund balance failed:", err);

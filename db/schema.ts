@@ -1216,8 +1216,33 @@ export const hkCredits = sqliteTable("hk_credits", {
   userEmail: text("user_email").primaryKey().references(() => members.email),
   balance: integer("balance").notNull(),
   resetDate: text("reset_date").notNull(),
+  // 本次 balance UPDATE 的元数据由同一语句设置,触发器写事件后清空。
+  changeReason: text("change_reason"),
+  changeRef: text("change_ref"),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// 见界积分只追加流水。hk_credits 的 AFTER UPDATE 触发器是唯一写入入口,
+// 余额与流水在同一 SQLite 事务内提交;正文永不进入 ref。
+export const hkCreditEvents = sqliteTable(
+  "hk_credit_events",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    delta: integer("delta").notNull(),
+    balanceAfter: integer("balance_after").notNull(),
+    reason: text("reason").notNull(),
+    ref: text("ref"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("hk_credit_events_user_time_idx").on(table.userEmail, table.createdAt, table.id),
+    check(
+      "hk_credit_events_reason_valid",
+      sql`${table.reason} in ('chat', 'translate', 'course', 'refund', 'daily_reset', 'plan_change')`,
+    ),
+  ],
+);
 
 // 幂等扣费锁与任务租约表
 export const hkCreditCharges = sqliteTable(
@@ -1329,5 +1354,23 @@ export const hkRedeemGrants = sqliteTable(
     uniqueIndex("hk_redeem_grants_user_code_idx").on(table.userEmail, table.codeId),
     index("hk_redeem_grants_user_active_idx").on(table.userEmail, table.expiresAt),
     check("hk_redeem_grants_tier_valid", sql`${table.tier} in ('PRO', 'MAX')`),
+  ],
+);
+
+// 见界用户反馈:先持久化,邮件只是通知;邮件服务不可用时反馈仍可在管理端读取。
+export const hkFeedback = sqliteTable(
+  "hk_feedback",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email").notNull().references(() => members.email),
+    message: text("message").notNull(),
+    contextJson: text("context_json").notNull().default("{}"),
+    notifyStatus: text("notify_status").notNull().default("failed"),
+    notifyCode: text("notify_code"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("hk_feedback_created_idx").on(table.createdAt, table.id),
+    check("hk_feedback_notify_status_valid", sql`${table.notifyStatus} in ('sent', 'failed', 'not_configured')`),
   ],
 );

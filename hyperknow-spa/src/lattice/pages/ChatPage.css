@@ -332,8 +332,8 @@
 .cp-msg-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin: 2px 0 18px 2px;
+  gap: 12px;
+  margin: 2px 0 8px 2px;
 }
 .cp-msg-actions button {
   display: flex;
@@ -364,7 +364,7 @@
 
 .cp-translation {
   max-width: 640px;
-  margin: 0 0 18px;
+  margin: 0 0 18px 2px;
   border: 1px solid var(--sand-300);
   border-radius: 12px;
   background: var(--white);

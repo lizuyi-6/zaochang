@@ -13,7 +13,9 @@ import {
   Languages,
   Share,
   Volume2,
-  Square,
+  Pause,
+  Play,
+  LoaderCircle,
   X,
   FileText,
   RefreshCw,
@@ -27,14 +29,16 @@ import { L } from '../i18n/content';
 import { LANGUAGES, useI18n } from '../i18n';
 import { AvatarCat } from '../illustrations';
 import { SupportModal } from '../SupportModal';
-import { listenOnce, shareLink, tts, copyText } from '../actions';
+import { createVoiceInputController, shareLink, tts, copyText, type ChatSpeakHandle, type VoiceInputStatus } from '../actions';
 import { uploadMaterial } from '../materials';
 import { toast } from '../toast';
 import './ChatPage.css';
+import '../voice-input.css';
 
 
 /** 追加的对话消息(参考流水线之后)。 */
 interface ChatMsg {
+  id: string;
   role: 'user' | 'assistant';
   text: string;
   /** 用户消息随附的材料(上传到主站 /api/uploads 后的引用) */
@@ -54,22 +58,31 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   const [menu, setMenu] = useState<MenuKind>('none');
   const [supportOpen, setSupportOpen] = useState(false);
   const [feedback, setFeedback] = useState<Record<number, 'up' | 'down'>>({});
-  const [translations, setTranslations] = useState<Record<number, { lang: string; text: string; loading: boolean }>>({});
-  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  const [translations, setTranslations] = useState<Record<string, { lang: string; text: string; loading: boolean }>>({});
+  const [translateTargetId, setTranslateTargetId] = useState<string | null>(null);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [speakingPaused, setSpeakingPaused] = useState(false);
   const [ping, setPing] = useState<{ state: 'checking' | 'ok' | 'offline'; ms?: number }>({ state: 'checking' });
   const [attachments, setAttachments] = useState<Array<{ name: string; url: string }>>([]);
   const [uploading, setUploading] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceInputStatus>('idle');
   const abortRef = useRef<AbortController | null>(null);
   const seededRef = useRef(false);
   const colEndRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const voiceInputRef = useRef<ReturnType<typeof createVoiceInputController> | null>(null);
+  if (!voiceInputRef.current) voiceInputRef.current = createVoiceInputController();
+  voiceInputRef.current.setCallbacks({
+    onText: (text) => setInput((prev) => (prev ? `${prev} ${text}` : text)),
+    onState: setVoiceStatus,
+  });
   /** 每条消息在途翻译的控制器与序号(2026-10 审计 P1-T):同一条消息先选英文再选
    * 日文时,旧流必须被 abort 且其迟到 chunk 不得拼进新译文;切会话/换账户/卸载时
-   * 全量 abort 并清空,旧译文不得按 idx 漂进新视图。 */
-  const translateCtlRef = useRef(new Map<number, AbortController>());
-  const translateSeqRef = useRef(new Map<number, number>());
+   * 全量 abort 并清空,旧译文不得按消息下标漂进新视图。 */
+  const translateCtlRef = useRef(new Map<string, AbortController>());
+  const translateSeqRef = useRef(new Map<string, number>());
+  const chatReadRef = useRef<{ id: string; handle: ChatSpeakHandle } | null>(null);
   const abortAllTranslations = () => {
     for (const ctrl of translateCtlRef.current.values()) ctrl.abort();
     translateCtlRef.current.clear();
@@ -92,13 +105,18 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     abortRef.current = null;
     abortAllTranslations();
     setTranslations({});
+    tts.stopChat();
+    chatReadRef.current = null;
+    setSpeakingId(null);
+    setSpeakingPaused(false);
+    setTranslateTargetId(null);
     setStreaming(false);
     const id = state.activeConversationId;
     if (!id) return;
     const conv = conversationsRef.current?.find((c) => c.id === id);
     if (conv) {
       convIdRef.current = conv.id;
-      setMsgs(conv.messages.map((m) => ({ role: m.role, text: m.text })));
+      setMsgs(conv.messages.map((m, i) => ({ id: `${conv.id}:${i}`, role: m.role, text: m.text })));
     }
   }, [state.activeConversationId]);
 
@@ -116,12 +134,13 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     setStreaming(false);
     setMsgs([]);
     setTranslations({});
+    setTranslateTargetId(null);
     setFeedback({});
-    setSpeakingIdx(null);
+    tts.stopChat();
+    chatReadRef.current = null;
+    setSpeakingId(null);
+    setSpeakingPaused(false);
   }, [state.identity?.email]);
-
-  /* 朗读状态跟随播放器(播完自动熄灭按钮) */
-  useEffect(() => tts.subscribe((on) => !on && setSpeakingIdx(null)), []);
 
   /* 演示交换(参考截图的 ping 问答+流水线)只在纯演示态展示;一旦有真实会话内容即隐藏 */
 
@@ -129,16 +148,45 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].role === 'assistant' && msgs[i].text.trim()) return i;
     return -1;
   })();
+  const lastAssistantId = lastAssistantIdx >= 0 ? msgs[lastAssistantIdx].id : null;
+
+  const beginChatRead = (id: string, text: string) => {
+    if (!text.trim()) return;
+    const handle = tts.speakChatTrack(text, state.voice, state.speed);
+    const active = { id, handle };
+    chatReadRef.current = active;
+    setSpeakingId(id);
+    setSpeakingPaused(false);
+    void (async () => {
+      const started = await handle.started;
+      if (chatReadRef.current !== active) return;
+      if (started === 'error') toast(L('Read-aloud is unavailable right now', '朗读服务暂时不可用'));
+      if (started !== 'started') {
+        chatReadRef.current = null;
+        setSpeakingId(null);
+        setSpeakingPaused(false);
+        return;
+      }
+      const outcome = await handle.ended;
+      if (chatReadRef.current !== active) return;
+      if (outcome === 'error') toast(L('Read-aloud is unavailable right now', '朗读服务暂时不可用'));
+      chatReadRef.current = null;
+      setSpeakingId(null);
+      setSpeakingPaused(false);
+    })();
+  };
 
   const send = (raw: string, forcedAttachments?: Array<{ name: string; url: string }>) => {
     const text = raw.trim();
     if ((!text && attachments.length === 0) || streaming) return;
     setMenu('none'); // 发送即收起所有菜单,不留孤儿浮层
     const attached = forcedAttachments ?? attachments;
+    const userMessageId = crypto.randomUUID();
+    const assistantMessageId = crypto.randomUUID();
     setInput('');
     setAttachments([]);
-    setMsgs((m) => [...m, { role: 'user', text, attachments: attached.length ? attached : undefined }]);
-    setMsgs((m) => [...m, { role: 'assistant', text: '' }]);
+    setMsgs((m) => [...m, { id: userMessageId, role: 'user', text, attachments: attached.length ? attached : undefined }]);
+    setMsgs((m) => [...m, { id: assistantMessageId, role: 'assistant', text: '' }]);
     setStreaming(true);
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -162,7 +210,9 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
             acc += chunk;
             setMsgs((m) => {
               const next = [...m];
-              next[next.length - 1] = { role: 'assistant', text: acc };
+              const last = next[next.length - 1];
+              if (!last || last.id !== assistantMessageId) return m;
+              next[next.length - 1] = { ...last, text: acc };
               return next;
             });
           },
@@ -171,7 +221,6 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           },
           onRemaining: (remaining) => {
             set({
-              energy: remaining,
               identity: {
                 username: state.identity?.username || 'You',
                 email: state.identity?.email || '',
@@ -198,8 +247,10 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           const next = [...m];
           /* 流中断但已有半截正文:保留正文并标注中断点;整段替换会把用户正读到的内容吞掉 */
           const partial = next[next.length - 1]?.text ?? '';
-          next[next.length - 1] = {
-            role: 'assistant',
+            const last = next[next.length - 1];
+            if (!last || last.id !== assistantMessageId) return m;
+            next[next.length - 1] = {
+              ...last,
             text: partial.trim()
               ? `${partial}\n\n${L('— The reply was cut off here. Use ⟳ below to regenerate.', '——回复在此中断，可用下方 ⟳ 重新生成。')}`
               : fallback,
@@ -207,7 +258,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           return next;
         });
       } else if (state.autoSpeak && acc.trim()) {
-        void tts.speak(markupToPlain(acc), state.voice, state.speed);
+        beginChatRead(assistantMessageId, markupToPlain(acc));
       }
       setStreaming(false);
     })();
@@ -225,8 +276,11 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   }, []);
 
   useEffect(() => () => {
+    voiceInputRef.current?.cancel();
     abortRef.current?.abort();
     abortAllTranslations();
+    tts.stopChat();
+    chatReadRef.current = null;
   }, []);
   /* 自动跟随门控:用户往上翻阅时不得被每个流式 chunk 拽回底部;
    * 只有本就停在列底部附近才自动跟随。滚动容器是会话列本身(页内滚动布局)。 */
@@ -272,42 +326,56 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   };
 
   const readAloud = async (idx: number) => {
-    const text = markupToPlain(msgs[idx]?.text ?? '');
+    const message = msgs[idx];
+    if (!message) return;
+    const text = markupToPlain(message.text);
     if (!text.trim()) return;
-    if (speakingIdx === idx) {
-      tts.stop();
-      setSpeakingIdx(null);
+    const active = chatReadRef.current;
+    if (active?.id === message.id) {
+      if (speakingPaused) {
+        const resumed = await tts.resumeChat();
+        if (chatReadRef.current !== active) return;
+        if (resumed === 'resumed') {
+          setSpeakingPaused(false);
+        } else {
+          if (resumed === 'error') toast(L('Read-aloud is unavailable right now', '朗读服务暂时不可用'));
+          tts.stopChat();
+          chatReadRef.current = null;
+          setSpeakingId(null);
+          setSpeakingPaused(false);
+        }
+      } else if (tts.pauseChat()) {
+        setSpeakingPaused(true);
+      }
       return;
     }
-    setSpeakingIdx(idx);
-    await tts.speak(text, state.voice, state.speed);
+    beginChatRead(message.id, text);
   };
 
-  const translateMessage = async (idx: number, lang: string) => {
+  const translateMessage = async (messageId: string, lang: string) => {
     setMenu('none');
-    const text = msgs[idx]?.text ?? '';
+    const text = msgs.find((message) => message.id === messageId)?.text ?? '';
     if (!text.trim()) return;
     /* P1-T:同一条消息重译(换语言)先 abort 旧流并递增序号——旧流的迟到 chunk/
      * 完成写回按序号丢弃,不再拼进新译文(原实现两路 chunk 追加同一 cur.text 出混合文本)。 */
-    translateCtlRef.current.get(idx)?.abort();
-    const seq = (translateSeqRef.current.get(idx) ?? 0) + 1;
-    translateSeqRef.current.set(idx, seq);
+    translateCtlRef.current.get(messageId)?.abort();
+    const seq = (translateSeqRef.current.get(messageId) ?? 0) + 1;
+    translateSeqRef.current.set(messageId, seq);
     const ctrl = new AbortController();
-    translateCtlRef.current.set(idx, ctrl);
-    const stillCurrent = () => translateSeqRef.current.get(idx) === seq;
-    setTranslations((prev) => ({ ...prev, [idx]: { lang, text: '', loading: true } }));
+    translateCtlRef.current.set(messageId, ctrl);
+    const stillCurrent = () => translateSeqRef.current.get(messageId) === seq;
+    setTranslations((prev) => ({ ...prev, [messageId]: { lang, text: '', loading: true } }));
     const result = await translateLive(text, lang, {
       onChunk: (chunk) => {
         if (!stillCurrent()) return;
         setTranslations((prev) => {
-          const cur = prev[idx];
+          const cur = prev[messageId];
           if (!cur) return prev;
-          return { ...prev, [idx]: { ...cur, text: cur.text + chunk } };
+          return { ...prev, [messageId]: { ...cur, text: cur.text + chunk } };
         });
       },
       onRemaining: (remaining) => {
         set({
-          energy: remaining,
           identity: {
             username: state.identity?.username || 'You',
             email: state.identity?.email || '',
@@ -318,16 +386,16 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         });
       },
     }, ctrl.signal);
-    if (translateCtlRef.current.get(idx) === ctrl) translateCtlRef.current.delete(idx);
+    if (translateCtlRef.current.get(messageId) === ctrl) translateCtlRef.current.delete(messageId);
     if (!stillCurrent()) return;
     if (result.ok === true) {
-      setTranslations((prev) => ({ ...prev, [idx]: { lang, text: result.text, loading: false } }));
+      setTranslations((prev) => ({ ...prev, [messageId]: { lang, text: result.text, loading: false } }));
       return;
     }
     if (result.reason === 'aborted') return;
     setTranslations((prev) => {
       const next = { ...prev };
-      delete next[idx];
+      delete next[messageId];
       return next;
     });
     toast(
@@ -339,12 +407,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
 
   const startVoice = () => {
     setMenu('none');
-    if (listening) return;
-    const started = listenOnce(
-      (text) => setInput((prev) => (prev ? `${prev} ${text}` : text)),
-      () => setListening(false),
-    );
-    if (started) setListening(true);
+    void voiceInputRef.current?.toggle();
   };
 
   const pickAttachment = async (file: File | undefined) => {
@@ -382,7 +445,11 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     setMsgs([]);
     setTranslations({});
     setFeedback({});
-    setSpeakingIdx(null);
+    setTranslateTargetId(null);
+    tts.stopChat();
+    chatReadRef.current = null;
+    setSpeakingId(null);
+    setSpeakingPaused(false);
     setInput('');
     followRef.current = true;
     if (state.activeConversationId) set({ activeConversationId: null });
@@ -396,7 +463,15 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
         className="cp-util-btn"
         type="button"
         title={L('Translate', '翻译')}
-        onClick={() => (lastAssistantIdx >= 0 ? setMenu(menu === 'translate' ? 'none' : 'translate') : toast(L('Send a message first, then translate the reply.', '先发送一条消息，再翻译回复。')))}
+        onClick={() => {
+          if (lastAssistantIdx < 0) {
+            toast(L('Send a message first, then translate the reply.', '先发送一条消息，再翻译回复。'));
+            return;
+          }
+          const shouldClose = menu === 'translate' && translateTargetId === lastAssistantId;
+          setTranslateTargetId(lastAssistantId);
+          setMenu(shouldClose ? 'none' : 'translate');
+        }}
       >
         <Languages size={15} />
       </button>
@@ -419,9 +494,16 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
       <>
         <div className="cp-menu-veil" onClick={() => setMenu('none')} />
         <div className="hk-menu cp-menu" style={{ top: 62, right: 108 }}>
-          <div className="hk-menu-label">{L('Translate the last reply', '翻译最后一条回复')}</div>
+          <div className="hk-menu-label">
+            {translateTargetId === lastAssistantId
+              ? L('Translate the last reply', '翻译最后一条回复')
+              : L('Translate this reply', '翻译这条回复')}
+          </div>
           {translateTargets.map((l) => (
-            <button key={l.code} className="hk-menu-item" onClick={() => void translateMessage(lastAssistantIdx, l.code)}>
+            <button key={l.code} className="hk-menu-item" onClick={() => {
+              const targetId = translateTargetId ?? lastAssistantId;
+              if (targetId) void translateMessage(targetId, l.code);
+            }}>
               {l.nativeLabel}
               <span className="hk-menu-hint">{L('2 credits', '2 积分')}</span>
             </button>
@@ -487,114 +569,129 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
 
       {/* 追加对话:用户发送的真实消息 + 导师回复(在线流式)。
           导师回复走富文本渲染(Markdown + content-section 容器),用户消息保持纯文本。 */}
-      {msgs.map((m, i) => (
-        <div key={i} className={`cp-bubble-row ${m.role === 'user' ? ' user' : ''}`}>
-          <div className={`cp-bubble ${m.role === 'user' ? ' user' : ''}`}>
-            {m.role === 'assistant' && !m.text && streaming && i === msgs.length - 1 ? (
-              /* 首个 chunk 到达前的思考气泡:左侧不再是空白,卡没卡一眼可见 */
-              <span className="cp-typing" role="status" aria-label={L('The tutor is thinking…', '导师正在思考…')}>
-                <span className="cp-typing-dot" />
-                <span className="cp-typing-dot" />
-                <span className="cp-typing-dot" />
-                <span className="cp-typing-label">{L('Thinking…', '正在思考…')}</span>
-              </span>
-            ) : m.role === 'assistant' ? (
-              <AssistantMarkup text={m.text} />
-            ) : (
-              m.text
-            )}
-            {m.attachments && m.attachments.length > 0 && (
-              <div className="cp-bubble-files">
-                {m.attachments.map((a) => (
-                  <span className="cp-bubble-file" key={a.url || a.name}>
-                    <FileText size={12} />
-                    {a.name}
+      {msgs.map((m, i) => {
+        const translation = m.role === 'assistant' ? translations[m.id] : undefined;
+        const isStreamingMessage = streaming && i === msgs.length - 1;
+        const isSpeaking = speakingId === m.id;
+        const readTitle = isSpeaking
+          ? speakingPaused
+            ? L('Resume read aloud', '继续朗读')
+            : L('Pause read aloud', '暂停朗读')
+          : L('Read aloud', '朗读');
+        return (
+          <React.Fragment key={m.id}>
+            <div className={`cp-bubble-row ${m.role === 'user' ? ' user' : ''}`}>
+              <div className={`cp-bubble ${m.role === 'user' ? ' user' : ''}`}>
+                {m.role === 'assistant' && !m.text && isStreamingMessage ? (
+                  /* 首个 chunk 到达前的思考气泡:左侧不再是空白,卡没卡一眼可见 */
+                  <span className="cp-typing" role="status" aria-label={L('The tutor is thinking…', '导师正在思考…')}>
+                    <span className="cp-typing-dot" />
+                    <span className="cp-typing-dot" />
+                    <span className="cp-typing-dot" />
+                    <span className="cp-typing-label">{L('Thinking…', '正在思考…')}</span>
                   </span>
-                ))}
+                ) : m.role === 'assistant' ? (
+                  <AssistantMarkup text={m.text} />
+                ) : (
+                  m.text
+                )}
+                {m.attachments && m.attachments.length > 0 && (
+                  <div className="cp-bubble-files">
+                    {m.attachments.map((a) => (
+                      <span className="cp-bubble-file" key={a.url || a.name}>
+                        <FileText size={12} />
+                        {a.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {m.role === 'assistant' && m.text.trim() && !isStreamingMessage && (
+              <div className="cp-msg-actions">
+                <button type="button" title={t('chatResponse.copy')} onClick={() => void copyMessage(i)}>
+                  <Copy size={14} />
+                </button>
+                <button
+                  type="button"
+                  title={L('Regenerate this reply', '重新生成这条回复')}
+                  onClick={() => regenerateFrom(i)}
+                >
+                  <RefreshCw size={14} />
+                </button>
+                <button
+                  type="button"
+                  title={L('Translate', '翻译')}
+                  className={translation ? 'on' : ''}
+                  onClick={() => {
+                    const shouldClose = menu === 'translate' && translateTargetId === m.id;
+                    setTranslateTargetId(m.id);
+                    setMenu(shouldClose ? 'none' : 'translate');
+                  }}
+                >
+                  <Languages size={14} />
+                </button>
+                <button
+                  type="button"
+                  title={readTitle}
+                  aria-label={readTitle}
+                  className={isSpeaking ? 'on' : ''}
+                  onClick={() => void readAloud(i)}
+                >
+                  {isSpeaking ? speakingPaused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" /> : <Volume2 size={14} />}
+                </button>
+                <button
+                  type="button"
+                  title={L('Good response', '回答有帮助')}
+                  className={feedback[i] === 'up' ? 'on' : ''}
+                  onClick={() => {
+                    setFeedback((f) => ({ ...f, [i]: 'up' }));
+                    toast(L('Thanks for the feedback', '感谢反馈'));
+                  }}
+                >
+                  <ThumbsUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  title={L('Bad response', '回答没帮助')}
+                  className={feedback[i] === 'down' ? 'on' : ''}
+                  onClick={() => {
+                    setFeedback((f) => ({ ...f, [i]: 'down' }));
+                    toast(L('Thanks — we will use this to improve', '感谢反馈，我们会据此改进'));
+                  }}
+                >
+                  <ThumbsDown size={14} />
+                </button>
               </div>
             )}
-          </div>
-        </div>
-      ))}
 
-      {/* 每条导师回复的操作行(复制/翻译/朗读/评价) */}
-      {msgs.map((m, i) =>
-        m.role === 'assistant' && m.text.trim() && !streaming ? (
-          <div className="cp-msg-actions" key={`a${i}`}>
-            <button type="button" title={t('chatResponse.copy')} onClick={() => void copyMessage(i)}>
-              <Copy size={14} />
-            </button>
-            <button
-              type="button"
-              title={L('Regenerate this reply', '重新生成这条回复')}
-              onClick={() => regenerateFrom(i)}
-            >
-              <RefreshCw size={14} />
-            </button>
-            <button
-              type="button"
-              title={L('Translate', '翻译')}
-              className={translations[i] ? 'on' : ''}
-              onClick={() => setMenu(menu === 'translate' ? 'none' : 'translate')}
-            >
-              <Languages size={14} />
-            </button>
-            <button type="button" title={L('Read aloud', '朗读')} className={speakingIdx === i ? 'on' : ''} onClick={() => void readAloud(i)}>
-              {speakingIdx === i ? <Square size={12} fill="currentColor" /> : <Volume2 size={14} />}
-            </button>
-            <button
-              type="button"
-              title={L('Good response', '回答有帮助')}
-              className={feedback[i] === 'up' ? 'on' : ''}
-              onClick={() => {
-                setFeedback((f) => ({ ...f, [i]: 'up' }));
-                toast(L('Thanks for the feedback', '感谢反馈'));
-              }}
-            >
-              <ThumbsUp size={14} />
-            </button>
-            <button
-              type="button"
-              title={L('Bad response', '回答没帮助')}
-              className={feedback[i] === 'down' ? 'on' : ''}
-              onClick={() => {
-                setFeedback((f) => ({ ...f, [i]: 'down' }));
-                toast(L('Thanks — we will use this to improve', '感谢反馈，我们会据此改进'));
-              }}
-            >
-              <ThumbsDown size={14} />
-            </button>
-          </div>
-        ) : null,
-      )}
-
-      {/* 译文(不落库,消耗 2 积分) */}
-      {Object.entries(translations).map(([key, tr]) => {
-        const idx = Number(key);
-        return (
-          <div className="cp-translation" key={`t${key}`}>
-            <div className="cp-translation-head">
-              <span>
-                <Languages size={13} />
-                {LANGUAGES.find((l) => l.code === tr.lang)?.nativeLabel ?? tr.lang}
-                {tr.loading && <span className="cp-translation-dots">…</span>}
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  setTranslations((prev) => {
-                    const next = { ...prev };
-                    delete next[idx];
-                    return next;
-                  })
-                }
-                aria-label={L('Close translation', '关闭译文')}
-              >
-                <X size={13} />
-              </button>
-            </div>
-            <div className="cp-translation-body">{tr.text ? <AssistantMarkup text={tr.text} /> : L('Translating…', '翻译中…')}</div>
-          </div>
+            {translation && (
+              <div className="cp-translation" key={`translation:${m.id}`}>
+                <div className="cp-translation-head">
+                  <span>
+                    <Languages size={13} />
+                    {LANGUAGES.find((l) => l.code === translation.lang)?.nativeLabel ?? translation.lang}
+                    {translation.loading && <span className="cp-translation-dots">…</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTranslations((prev) => {
+                        const next = { ...prev };
+                        delete next[m.id];
+                        return next;
+                      })
+                    }
+                    aria-label={L('Close translation', '关闭译文')}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                <div className="cp-translation-body">{translation.text ? <AssistantMarkup text={translation.text} /> : L('Translating…', '翻译中…')}</div>
+              </div>
+            )}
+          </React.Fragment>
         );
       })}
       <div ref={colEndRef} className="cp-col-end" />
@@ -669,8 +766,12 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
                   </span>
                 </button>
                 <button className="hk-menu-item" onClick={startVoice}>
-                  <AudioWaveform size={14} />
-                  {L('Voice input', '语音输入')}
+                  {voiceStatus === 'recognizing' ? <LoaderCircle size={14} className="hk-voice-spinner" /> : <AudioWaveform size={14} />}
+                  {voiceStatus === 'recording'
+                    ? L('Click to finish', '点击结束')
+                    : voiceStatus === 'recognizing'
+                      ? L('Recognizing speech…', '正在识别语音…')
+                      : L('Voice input', '语音输入')}
                 </button>
                 <div className="hk-menu-label">{L('Speech speed', '朗读语速')}</div>
                 {SPEEDS.map((sp) => (
@@ -691,12 +792,14 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           )}
         </div>
         <button
-          className={`cp-icon${listening ? ' on' : ''}`}
+          className={`cp-icon${voiceStatus === 'recording' ? ' on recording' : voiceStatus === 'recognizing' ? ' processing' : ''}`}
           type="button"
-          title={L('Voice input', '语音输入')}
+          title={voiceStatus === 'recording' ? L('Click to finish', '点击结束') : voiceStatus === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : L('Voice input', '语音输入')}
+          aria-label={voiceStatus === 'recording' ? L('Click to finish', '点击结束') : voiceStatus === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : L('Voice input', '语音输入')}
+          disabled={voiceStatus === 'requesting' || voiceStatus === 'recognizing'}
           onClick={startVoice}
         >
-          <AudioWaveform size={16} />
+          {voiceStatus === 'recognizing' ? <LoaderCircle size={16} className="hk-voice-spinner" /> : <AudioWaveform size={16} />}
         </button>
         <input
           ref={inputRef}
@@ -708,7 +811,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
             /* 中文输入法回车选词不得触发发送(isComposing 期间的 Enter 属于组词确认) */
             if (e.key === 'Enter' && !e.nativeEvent.isComposing) send(input);
           }}
-          placeholder={listening ? L('Listening…', '正在听…') : t('home.inputPlaceholder')}
+          placeholder={voiceStatus === 'recording' ? L('Recording… click the microphone to finish', '正在录音…点击麦克风结束') : voiceStatus === 'recognizing' ? L('Recognizing speech…', '正在识别语音…') : t('home.inputPlaceholder')}
         />
         <div className="cp-anchor">
           <button className="cp-mode" type="button" onClick={() => setMenu(menu === 'mode' ? 'none' : 'mode')}>
@@ -817,7 +920,14 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
 
     </div>
 
-    {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} title={t('chatResponse.haveAnIssue')} />}
+    {supportOpen && (
+      <SupportModal
+        onClose={() => setSupportOpen(false)}
+        title={t('chatResponse.haveAnIssue')}
+        context={{ screen: 'chat', sessionId: convIdRef.current ?? state.activeConversationId ?? undefined, courseUuid: state.activeCourseUuid }}
+        userEmail={state.identity?.email}
+      />
+    )}
   </div>
   );
 };

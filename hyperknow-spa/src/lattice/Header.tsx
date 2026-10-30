@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Headset, Sparkles, CreditCard, Gift, Smile, SlidersHorizontal, Podcast, LogOut, Flag } from 'lucide-react';
 import { AvatarCat } from './illustrations';
 import { LanguageSwitcher } from './i18n/LanguageSwitcher';
 import { useI18n } from './i18n';
 import { L } from './i18n/content';
 import { SupportModal } from './SupportModal';
+import { CreditHistoryModal } from './CreditHistoryModal';
 import { WhatsNewModal } from './WhatsNewModal';
 import { copyText } from './actions';
 import { toast } from './toast';
@@ -14,17 +15,20 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
   const { t } = useI18n();
   const [supportTitle, setSupportTitle] = useState<string | null>(null);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);
+  /* 头部跨页常驻:换页(含浏览器后退的 hash 跳转)即收起积分记录,免得弹窗跟到下一页 */
+  useEffect(() => {
+    setCreditsOpen(false);
+  }, [state.screen]);
   /* Header cluster varies per screen (reference: 17/22/23/26/20; feed/history/marketplace have none).
    * chat/create 也隐藏:两页都有自己的右上工具簇(翻译/分享/遇到问题/头像),
    * 壳层头部若同屏渲染,其隐形按钮会劫持工具簇的点击(实测 elementFromPoint 实锤)。 */
   const s = state.screen;
   if (s === 'marketplace' || s === 'history' || s === 'feed' || s === 'chat' || s === 'create') return null;
 
-  const energy = state.identity?.credits ?? state.energy ?? (state.lectureDone ? 15 : 20);
   const showPlan = true;
-  /* 身份未落定前不渲染真实套餐/积分:初始默认是 FREE/15,直绘会先闪一帧
-   * 「FREE 15」再跳成真实账户(用户报告的右上角闪变)。骨架占位保布局不跳。 */
-  const identityPending = !state.bootReady;
+  /* 身份未落定前不渲染套餐/积分数值,避免占位值被误读为账户余额。 */
+  const identityPending = !state.bootReady || !state.identity;
   /* 邀请:复制造场链接(邀请码体系在主站注册侧,这里给的是可直接打开的入口) */
   const copyInvite = async () => {
     const ok = await copyText(`${window.location.origin}/?utm_source=lattice&utm_medium=invite`);
@@ -65,14 +69,20 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
             ) : (
               <>
                 <span
-                  className={`hk-free-badge${(state.identity?.tier || state.plan) === 'MAX' ? ' hk-tier-max' : ''}`}
+                  className={`hk-free-badge${state.identity?.tier === 'MAX' ? ' hk-tier-max' : ''}`}
                 >
-                  {(state.identity?.tier || state.plan) === 'MAX' ? '✦ MAX' : (state.identity?.tier ?? 'FREE')}
+                  {state.identity?.tier === 'MAX' ? '✦ MAX' : (state.identity?.tier ?? '—')}
                 </span>
-                <span className="hk-energy" title={L('Energy', '能量')}>
+                <button
+                  type="button"
+                  className="hk-energy hk-energy-button"
+                  title={L('Open credit history', '查看积分记录')}
+                  aria-label={L('Open credit history', '查看积分记录')}
+                  onClick={() => setCreditsOpen(true)}
+                >
                   <Sparkles size={16} />
-                  <span>{energy}</span>
-                </span>
+                  <span>{state.identity?.credits ?? '—'}</span>
+                </button>
               </>
             )}
           </>
@@ -136,7 +146,15 @@ export const LatticeHeader: React.FC<{ state: AppState; set: AppAction }> = ({ s
         </>
       )}
 
-      {supportTitle && <SupportModal title={supportTitle} onClose={() => setSupportTitle(null)} />}
+      {supportTitle && (
+        <SupportModal
+          title={supportTitle}
+          onClose={() => setSupportTitle(null)}
+          context={{ screen: s, sessionId: state.activeSessionId ?? state.activeConversationId ?? undefined, courseUuid: state.activeCourseUuid }}
+          userEmail={state.identity?.email}
+        />
+      )}
+      {creditsOpen && <CreditHistoryModal onClose={() => setCreditsOpen(false)} />}
       {whatsNewOpen && <WhatsNewModal onClose={() => setWhatsNewOpen(false)} />}
     </>
   );
