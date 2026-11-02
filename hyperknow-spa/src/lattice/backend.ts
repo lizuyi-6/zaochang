@@ -65,6 +65,7 @@ interface GenHandlers {
   /** selectedUnits:恢复回放时服务端已锁定的单元选择(Stage2 确认过才有) */
   onBlueprint?: (blueprint: BlueprintData, requiresConfirmation?: boolean, courseUuid?: string, selectedUnits?: string[]) => void;
   onUnitProgress?: (data: CourseUnitProgressData) => void;
+  onMaterialStatus?: (data: { key: string; name: string; status: string; truncated?: boolean }) => void;
   /** credit_status 帧:后端扣费后的真实余额(每日 20,课程 10/次) */
   onRemaining?: (remaining: number, max: number) => void;
   /** H3:model_degraded 帧——主模型 404 降级到候选模型,调用方负责用户提示 */
@@ -147,6 +148,7 @@ interface CourseGenParams {
   action?: 'confirm_blueprint' | 'generate_units';
   selectedUnits?: string[];
   requireConfirmation?: boolean;
+  materialKeys?: string[];
   /** 对话模型:flash=step-3.7-flash(默认),pro=step-5-preview;蓝图与单元生成都用它 */
   model?: 'flash' | 'pro';
 }
@@ -304,6 +306,9 @@ export async function generateCourseLive(
         }
       } else if (type === 'course_unit_progress') {
         handlers.onUnitProgress?.(data.data as CourseUnitProgressData);
+      } else if (type === 'material_status'
+        && typeof data.key === 'string' && typeof data.name === 'string' && typeof data.status === 'string') {
+        handlers.onMaterialStatus?.({ key: data.key, name: data.name, status: data.status, truncated: data.truncated === true });
       } else if (type === 'course_structure_ready') {
         found.course = normalizeBackendCourse(data.course);
         if (!found.course) found.failed = true;
@@ -343,6 +348,7 @@ interface ChatHandlers {
   onConversationId?: (id: string) => void;
   /** credit_status 帧:后端扣费后的真实余额(每日 20,对话 2/次)。 */
   onRemaining?: (remaining: number, max: number) => void;
+  onMaterialStatus?: (data: { key: string; name: string; status: string; truncated?: boolean }) => void;
 }
 
 type ChatResult = { ok: true; text: string } | { ok: false; reason: LiveFailureReason };
@@ -355,6 +361,7 @@ interface ChatSendOptions {
   mode?: string;
   /** 对话模型:flash=step-3.7-flash(默认),pro=step-5-preview;后端白名单回落 flash */
   model?: 'flash' | 'pro';
+  attachments?: Array<{ key: string; name: string }>;
 }
 
 /** 真实主对话。传 conversationId 则续聊同一会话;失败按 reason 二分(见 LiveFailureReason)。 */
@@ -402,6 +409,7 @@ export async function chatLive(message: string, handlers: ChatHandlers, options:
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         message,
+        ...(options.attachments?.length ? { attachments: options.attachments.map(({ key, name }) => ({ key, name })) } : {}),
         ...(options.conversationId ? { conversation_id: options.conversationId } : {}),
         ...(options.mode ? { mode: options.mode } : {}),
         ...(options.model ? { model: options.model } : {}),
@@ -425,6 +433,11 @@ export async function chatLive(message: string, handlers: ChatHandlers, options:
       frame: (data) => {
         if (data.type === 'conversation_created' && typeof data.conversation_id === 'string') {
           handlers.onConversationId?.(data.conversation_id);
+          return;
+        }
+        if (data.type === 'material_status'
+          && typeof data.key === 'string' && typeof data.name === 'string' && typeof data.status === 'string') {
+          handlers.onMaterialStatus?.({ key: data.key, name: data.name, status: data.status, truncated: data.truncated === true });
           return;
         }
         const info = creditInfoOf(data);
@@ -488,7 +501,14 @@ export async function translateLive(
 
 /* ---------------- 白板讲座计划(直播放适配器) ---------------- */
 
-const ACTION_TYPES = ['card', 'formula', 'diagram', 'image', 'quick_check'] as const;
+const ACTION_TYPES = ['card', 'formula', 'diagram', 'image', 'quick_check', 'recall_check'] as const;
+
+export interface LiveFocus {
+  step: string;
+  bullet?: number;
+  node?: string;
+  kind: 'circle' | 'highlight' | 'underline';
+}
 
 interface LiveBoardAction {
   type: (typeof ACTION_TYPES)[number];
@@ -505,12 +525,16 @@ interface LiveBoardAction {
   options?: string[];
   answer?: number;
   explanation?: string;
+  reference_answer?: string;
+  rubric?: string[];
+  hint?: string;
 }
 
 interface LiveLectureStep {
   step_id: string;
   spoken_text: string;
   board_action: LiveBoardAction;
+  focus?: LiveFocus;
 }
 
 export interface LiveLecturePlan {
@@ -538,6 +562,25 @@ export interface PlanLectureParams {
  * (契约由 tests/whiteboard-plan-budget.test.mjs 锁定)。
  */
 export const PLAN_CLIENT_TIMEOUT_MS = 310_000;
+
+function normalizeLiveFocus(raw: unknown): LiveFocus | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const value = raw as Record<string, unknown>;
+  if (Object.keys(value).some((key) => !['step', 'bullet', 'node', 'kind'].includes(key))) return undefined;
+  if (typeof value.step !== 'string' || !value.step.trim()) return undefined;
+  if (value.kind !== 'circle' && value.kind !== 'highlight' && value.kind !== 'underline') return undefined;
+  const hasBullet = Object.prototype.hasOwnProperty.call(value, 'bullet');
+  const hasNode = Object.prototype.hasOwnProperty.call(value, 'node');
+  if (hasBullet && hasNode) return undefined;
+  if (hasBullet && (!Number.isInteger(value.bullet) || (value.bullet as number) < 1)) return undefined;
+  if (hasNode && (typeof value.node !== 'string' || !value.node.trim())) return undefined;
+  return {
+    step: value.step,
+    ...(hasBullet ? { bullet: value.bullet as number } : {}),
+    ...(hasNode ? { node: (value.node as string).trim() } : {}),
+    kind: value.kind,
+  };
+}
 
 /**
  * 真实白板讲座计划(无状态化端点,见 LATTICE.md)。
@@ -591,8 +634,19 @@ export async function planLectureLive(
           : {}),
         ...(typeof action.answer === 'number' ? { answer: action.answer } : {}),
         ...(typeof action.explanation === 'string' && action.explanation ? { explanation: action.explanation } : {}),
+        ...(typeof action.reference_answer === 'string' && action.reference_answer ? { reference_answer: action.reference_answer } : {}),
+        ...(Array.isArray(action.rubric)
+          ? { rubric: action.rubric.filter((point): point is string => typeof point === 'string' && !!point).slice(0, 4) }
+          : {}),
+        ...(typeof action.hint === 'string' && action.hint ? { hint: action.hint } : {}),
       };
-      steps.push({ step_id: String(step.step_id ?? `step_${steps.length + 1}`), spoken_text: step.spoken_text, board_action });
+      const focus = normalizeLiveFocus(step.focus);
+      steps.push({
+        step_id: String(step.step_id ?? `step_${steps.length + 1}`),
+        spoken_text: step.spoken_text,
+        board_action,
+        ...(focus ? { focus } : {}),
+      });
     }
     return steps.length
       ? {
@@ -602,6 +656,61 @@ export async function planLectureLive(
           ...(json.degraded === true ? { degraded: true } : {}),
         }
       : null;
+  } catch {
+    return null;
+  }
+}
+
+export type RecallVerdict = 'correct' | 'partial' | 'incorrect';
+export type RecallGradeLiveResult =
+  | { graded: true; verdict: RecallVerdict; feedback: string; matched: string[]; missing: string[] }
+  | { graded: false; reason: 'grader_unavailable'; reference_answer: string; rubric: string[] };
+
+/** 将本人的会话/步骤/作答发给服务端;评分答案与要点不从客户端回传。 */
+export async function gradeRecallLive(
+  params: { sessionId: string; stepId: string; answer: string; language?: string },
+  signal?: AbortSignal,
+): Promise<RecallGradeLiveResult | null> {
+  try {
+    const res = await fetch('/api/hyperknow/whiteboard/grade', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: params.sessionId,
+        stepId: params.stepId,
+        answer: params.answer,
+        ...(params.language ? { language: params.language } : {}),
+      }),
+      signal,
+    });
+    if (!res.ok) return null;
+    const value = (await res.json()) as Record<string, unknown>;
+    if (value.graded === false && value.reason === 'grader_unavailable') {
+      if (typeof value.reference_answer !== 'string' || !Array.isArray(value.rubric)) return null;
+      if (!value.rubric.every((point) => typeof point === 'string')) return null;
+      return {
+        graded: false,
+        reason: 'grader_unavailable',
+        reference_answer: value.reference_answer,
+        rubric: value.rubric as string[],
+      };
+    }
+    if (
+      value.graded !== true
+      || !(['correct', 'partial', 'incorrect'] as unknown[]).includes(value.verdict)
+      || typeof value.feedback !== 'string'
+      || !Array.isArray(value.matched)
+      || !Array.isArray(value.missing)
+      || !value.matched.every((point) => typeof point === 'string')
+      || !value.missing.every((point) => typeof point === 'string')
+    ) return null;
+    return {
+      graded: true,
+      verdict: value.verdict as RecallVerdict,
+      feedback: value.feedback,
+      matched: value.matched as string[],
+      missing: value.missing as string[],
+    };
   } catch {
     return null;
   }

@@ -12,6 +12,7 @@ import { webauthnChallengePurgeStatements } from "./webauthn-challenges.ts";
 import { hostingPurgeStatements } from "./hosting.ts";
 import { hyperknowCreditPurgeStatements } from "./hyperknow-credits.ts";
 import { hyperknowFeedbackPurgeStatements } from "./hyperknow-feedback.ts";
+import { hyperknowLearningProgressPurgeStatements } from "./hyperknow-learning-progress.ts";
 
 export type PurgeStatement = { label: string; statement: D1PreparedStatement };
 
@@ -25,6 +26,7 @@ export function purgeRegistry(db: D1Database): PurgeStatement[] {
     ...hostingPurgeStatements(db),
     ...hyperknowCreditPurgeStatements(db),
     ...hyperknowFeedbackPurgeStatements(db),
+    ...hyperknowLearningProgressPurgeStatements(db),
   ];
 }
 

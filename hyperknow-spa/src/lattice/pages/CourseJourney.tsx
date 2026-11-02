@@ -41,6 +41,18 @@ import './CourseJourney.css';
 /* KnotMark 收敛为 illustrations 的 LatticeCube(2026-10 审计重构 #12);别名保持既有 import 面。 */
 export const KnotMark = LatticeCube;
 
+type MasteryLevel = 'notStarted' | 'attempted' | 'familiar' | 'proficient' | 'mastered';
+type CourseLectureProgress = {
+  unitId: string;
+  lectureId: string;
+  status: 'notStarted' | 'started' | 'completed';
+  masteryLevel: MasteryLevel;
+  firstTryAccuracy: number | null;
+  firstTryCorrect: number;
+  firstTryCount: number;
+};
+type CourseProgress = { courseUuid: string; lectures: CourseLectureProgress[] };
+
 /* Original editorial knowledge-symphony plate (Kandinsky-inspired Bauhaus geometric composition). */
 export const KandinskyCover: React.FC<{ size?: number; radius?: number }> = ({ size = 248, radius = 14 }) => (
   <svg width={size} height={size} viewBox="0 0 248 248" aria-hidden="true" style={{ display: 'block', borderRadius: radius, flexShrink: 0 }}>
@@ -113,6 +125,19 @@ const Ring: React.FC<{ size?: number; pct?: number; color?: string; track?: stri
   );
 };
 
+const MasteryIndicator: React.FC<{ level: MasteryLevel }> = ({ level }) => {
+  if (level === 'mastered') {
+    return (
+      <span className="cj-lg-mastered" aria-hidden="true">
+        <Check size={11} strokeWidth={3.2} />
+      </span>
+    );
+  }
+  const pct = level === 'proficient' ? 75 : level === 'familiar' ? 45 : level === 'attempted' ? 15 : 0;
+  const color = level === 'proficient' ? '#445F91' : level === 'familiar' ? '#7896C5' : '#C4B191';
+  return <Ring size={24} pct={pct} color={color} track={pct ? '#F3EADA' : undefined} />;
+};
+
 /* Fanned DOC / XLS / PDF file icons for the "Add materials" card — 精绘:折角高光、徽记、回形针。 */
 const FileFan: React.FC = () => (
   <svg width="58" height="38" viewBox="0 0 58 38" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
@@ -142,13 +167,45 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
   const PS = state.generated ?? psCourse();
   const UNITS = state.generated ? state.generated.units : publicSpeaking();
   const joined = state.courseJoined;
-  const done = state.lectureDone;
-  const [dialog, setDialog] = useState<'none' | 'join' | 'joined'>('none');
-  const closeDialogs = () => setDialog('none');
   /* 课程 uuid 先于 lang 声明(默认值要从每课语言偏好读);未选择回退界面语言 */
   const journeyUuid = (PS as { courseUuid?: string }).courseUuid;
   const demoCardNeedsGeneration = !!state.activeCourseCardNeedsGeneration && !journeyUuid;
   const routeDemoToCreate = () => set(createCourseFromCardPatch(state));
+  const [courseProgress, setCourseProgress] = useState<CourseProgress | null>(null);
+  useEffect(() => {
+    let active = true;
+    setCourseProgress(null);
+    if (!journeyUuid) return () => { active = false; };
+    void fetch(`/api/hyperknow/progress?courseUuid=${encodeURIComponent(journeyUuid)}`, { cache: 'no-store' })
+      .then(async (response) => response.ok ? await response.json() as CourseProgress : null)
+      .then((result) => {
+        if (!active) return;
+        setCourseProgress(
+          result && result.courseUuid === journeyUuid && Array.isArray(result.lectures) ? result : null,
+        );
+      })
+      .catch(() => {
+        if (active) setCourseProgress(null);
+      });
+    return () => { active = false; };
+  }, [journeyUuid]);
+  const progressFor = (unit: (typeof UNITS)[number], lecture: (typeof UNITS)[number]['lectures'][number]) => {
+    if (!journeyUuid || !courseProgress || courseProgress.courseUuid !== journeyUuid) return null;
+    const unitId = unit.unitId ?? String(unit.id);
+    const lectureId = lecture.lectureId ?? lecture.id;
+    return courseProgress.lectures.find((item) => item.unitId === unitId && item.lectureId === lectureId) ?? null;
+  };
+  const firstLectureProgress = UNITS[0]?.lectures[0] ? progressFor(UNITS[0], UNITS[0].lectures[0]) : null;
+  const done = journeyUuid ? firstLectureProgress?.status === 'completed' : state.lectureDone;
+  const masteryLabel = (level: MasteryLevel) => ({
+    mastered: t('courseJourney.progressLegend.mastered'),
+    proficient: t('courseJourney.progressLegend.proficient'),
+    familiar: t('courseJourney.progressLegend.familiar'),
+    attempted: t('courseJourney.progressLegend.attempted'),
+    notStarted: t('courseJourney.progressLegend.notStarted'),
+  })[level];
+  const [dialog, setDialog] = useState<'none' | 'join' | 'joined'>('none');
+  const closeDialogs = () => setDialog('none');
   const [lang, setLang] = useState<'en' | 'zh'>(() => getCourseLang(journeyUuid) ?? (getBackendLang() === 'zh' ? 'zh' : 'en'));
 
   /* ---------------- 交互状态:简介展开 / 面板标签 / 当前单元 / 材料 ---------------- */
@@ -187,8 +244,8 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
     prefetchLecturePlan({
       topic: targetLecture?.sessions[0]?.title ?? targetLecture?.title ?? PS.title,
       courseUuid: journeyUuid,
-      unitId: String(activeUnit),
-      lectureId: targetLecture?.id,
+      unitId: targetUnit?.unitId ?? String(activeUnit),
+      lectureId: targetLecture?.lectureId ?? targetLecture?.id,
       sessionId: targetLecture?.sessions[0]?.sessionId,
       language: getCourseLang(journeyUuid) ?? getBackendLang() ?? getCurrentLng() ?? 'en',
     });
@@ -215,8 +272,9 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
           {
             topic: ctx.topic ?? PS.title,
             courseUuid: journeyUuid,
-            unitId: String(ctx.unitId),
-            lectureId: ctx.lectureId,
+            unitId: UNITS.find((item) => String(item.id) === String(ctx.unitId) || item.unitId === String(ctx.unitId))?.unitId ?? String(ctx.unitId),
+            lectureId: UNITS.find((item) => String(item.id) === String(ctx.unitId) || item.unitId === String(ctx.unitId))
+              ?.lectures.find((item) => item.id === ctx.lectureId || item.lectureId === ctx.lectureId)?.lectureId ?? ctx.lectureId,
             sessionId: ctx.sessionId,
             language: getCourseLang(journeyUuid) ?? getBackendLang() ?? getCurrentLng() ?? 'en',
           },
@@ -261,12 +319,17 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
       setDialog('join');
       return;
     }
+    const selectedUnitId = String(ctx?.unitId ?? activeUnit);
+    const selectedUnit = UNITS.find((item) => String(item.id) === selectedUnitId || item.unitId === selectedUnitId);
+    const selectedLecture = selectedUnit?.lectures.find(
+      (item) => item.id === ctx?.lectureId || item.lectureId === ctx?.lectureId,
+    );
     set({
       screen: 'whiteboard',
       whiteboardMode: mode,
       activeCourseUuid: (PS as { courseUuid?: string }).courseUuid,
-      activeUnitId: ctx?.unitId ?? activeUnit,
-      activeLectureId: ctx?.lectureId,
+      activeUnitId: selectedUnit?.unitId ?? selectedUnitId,
+      activeLectureId: selectedLecture?.lectureId ?? ctx?.lectureId,
       activeSessionId: ctx?.sessionId,
       activeTopic: ctx?.topic,
     });
@@ -644,9 +707,10 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                   }
                   return lec.sessions.map((_, si) => {
                     const isFirst = lec.id === 'l1' && si === 0;
-                    return isFirst && done ? (
+                    const level = progressFor(unit, lec)?.masteryLevel ?? 'notStarted';
+                    return isFirst && level !== 'notStarted' ? (
                       <span key={`${lec.id}-${si}`} className="cj-node ringed">
-                        <Ring size={22} pct={35} />
+                        <MasteryIndicator level={level} />
                       </span>
                     ) : (
                       <span key={`${lec.id}-${si}`} className="cj-node" />
@@ -846,9 +910,15 @@ const CourseJourney: React.FC<PageProps> = ({ state, set }) => {
                                     </button>
                                   </>
                                 )}
-                                <span className="cj-session-ring">
-                                  <Ring size={24} pct={isFirst && done ? 35 : 0} />
-                                </span>
+                                {(() => {
+                                  const level = progressFor(unit, lec)?.masteryLevel ?? 'notStarted';
+                                  const label = masteryLabel(level);
+                                  return (
+                                    <span className="cj-session-ring" title={label} aria-label={label}>
+                                      <MasteryIndicator level={level} />
+                                    </span>
+                                  );
+                                })()}
                               </span>
                             </div>
                           );

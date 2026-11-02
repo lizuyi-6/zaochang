@@ -4,6 +4,7 @@
 // 会话历史由路由层从 D1 读出再传入(连接级内存 history 数组随 WS 一起退役)。
 
 import { chat, streamChat, streamChatOpenAI, HyperknowNotConfiguredError, HyperknowUpstreamError, type LlmMessage } from "./llm";
+import { formatLearnerMaterialBoundary, type LearnerMaterialText } from "./material-content";
 import {
   CONTENT_GENERATOR_SYSTEM_PROMPT,
   COURSE_INQUIRY_PROMPT,
@@ -14,6 +15,7 @@ import {
   UNIT_REPAIR_PROMPT,
   WHITEBOARD_INSTRUCTOR_PROMPT,
   buildNextStepsPrompt,
+  buildRecallGradePrompt,
   fallbackInterjectionAnswer,
   fallbackUnit,
   formatUntrustedResearchNote,
@@ -24,6 +26,7 @@ import {
   parseLecturePlan,
   parseNextSteps,
   parseRepairedUnit,
+  parseRecallGradeResponse,
   parseUnitDetails,
   refineCourseTitle,
   type CourseBlueprint,
@@ -32,6 +35,8 @@ import {
   type InterjectionAnswer,
   type LecturePlan,
   type NextStepsData,
+  type RecallGrade,
+  type RecallGradePromptInput,
 } from "./prompts";
 import {
   collectStreamText,
@@ -44,6 +49,10 @@ import {
   type StreamChunk,
 } from "./protocol";
 import type { WebSearchHit } from "./websearch";
+import { formatLectureCourseContext, type LectureCourseContext } from "./lecture-context";
+
+export { formatLectureCourseContext } from "./lecture-context";
+export type { LectureCourseContext } from "./lecture-context";
 
 export type ConversationHistory = Array<{ role: string; content: string }>;
 
@@ -169,65 +178,6 @@ export async function generateNextSteps(userQuery: string, responseText: string,
 }
 
 // ── Whiteboard Instructor(白板讲师)───────────────────────────────────────
-/** 讲课上下文:课程/单元/讲次全链路信息,让讲师不再"看题讲课"——
- *  深度按 intake 档位校准、例子贴学员背景、开场承接上一讲、收尾预告下一讲。 */
-export interface LectureCourseContext {
-  courseTitle?: string;
-  courseDescription?: string;
-  targetLearner?: string;
-  brief?: CourseBrief;
-  unitTitle?: string;
-  unitObjectives?: string[];
-  lectureTitle?: string;
-  sessionTitles?: string[];
-  prevLectureTitle?: string;
-  nextLectureTitle?: string;
-  lecturePosition?: string;
-}
-
-function buildLectureContextNote(ctx?: LectureCourseContext): string {
-  if (!ctx) {
-    // 自由讲座(无课程归属):讲师会沿用课程课的"承接上一讲"惯性虚构前文,
-    // 而学员根本没有上一讲(实测:开场白凭空"上一讲我们学完…")——显式声明
-    // 独立讲次,杜绝幻影承接。
-    return "\n\n## COURSE CONTEXT\nThis is a STANDALONE lecture, not part of any course: there is NO previous lecture and NO next lecture. Never reference prior or future lectures/units; teach the topic as a complete, self-contained session.";
-  }
-  const parts: string[] = [];
-  if (ctx.courseTitle) {
-    parts.push(`Course: "${ctx.courseTitle}"${ctx.courseDescription ? ` — ${ctx.courseDescription}` : ""}`);
-  }
-  if (ctx.targetLearner) parts.push(`Target learner: ${ctx.targetLearner}`);
-  const b = ctx.brief;
-  if (b) {
-    const profile = [
-      b.goal ? `goal=${b.goal}` : "",
-      b.background ? `background=${b.background}` : "",
-      b.depth ? `depth=${b.depth}` : "",
-      b.preference ? `preference=${b.preference}` : "",
-    ]
-      .filter(Boolean)
-      .join("; ");
-    if (profile) parts.push(`Learner intake profile (authoritative for depth & examples): ${profile}`);
-  }
-  if (ctx.unitTitle) {
-    parts.push(
-      `This unit: "${ctx.unitTitle}"${ctx.unitObjectives?.length ? ` (unit objectives: ${ctx.unitObjectives.join("; ")})` : ""}`,
-    );
-  }
-  if (ctx.lectureTitle) {
-    parts.push(
-      `This lecture: "${ctx.lectureTitle}"${ctx.sessionTitles?.length ? ` (sessions: ${ctx.sessionTitles.join("; ")})` : ""}`,
-    );
-  }
-  if (ctx.lecturePosition) {
-    parts.push(
-      `Position in course: lecture ${ctx.lecturePosition}${ctx.prevLectureTitle ? `; previous lecture: "${ctx.prevLectureTitle}" (recall it briefly in the opening)` : ""}${ctx.nextLectureTitle ? `; next lecture: "${ctx.nextLectureTitle}" (tease it in the closing)` : ""}`,
-    );
-  }
-  if (parts.length === 0) return "";
-  return `\n\n## COURSE CONTEXT (authoritative — follow the Course & Learner Context rules for this lecture)\n${parts.join("\n")}`;
-}
-
 export async function planLecture(
   topic: string,
   signal?: AbortSignal,
@@ -246,7 +196,7 @@ export async function planLecture(
     { role: "system", content: `${WHITEBOARD_INSTRUCTOR_PROMPT}\nIMPORTANT: You must respond in valid JSON format only.` },
     {
       role: "user",
-      content: `Create a step-by-step whiteboard lecture for: "${topic}"${langNote}${nameNote}${buildLectureContextNote(context)}`,
+      content: `Create a step-by-step whiteboard lecture for: "${topic}"${langNote}${nameNote}${formatLectureCourseContext(context)}`,
     },
   ];
   /* 流式而非一次性 chat():2026-10-16 生产日志与直连对照实验——
@@ -305,6 +255,27 @@ export async function planLecture(
   return parseLecturePlan(partial, topic, learnerName, effLang);
 }
 
+/** 按服务端讲稿中的标准答案和评分点批改一条回忆题答案。 */
+export async function gradeRecallAnswer(
+  input: RecallGradePromptInput,
+  signal?: AbortSignal,
+): Promise<RecallGrade | null> {
+  const prompt = buildRecallGradePrompt(input);
+  try {
+    const text = await chat(
+      [
+        { role: "system", content: prompt.system },
+        { role: "user", content: prompt.user },
+      ],
+      // 混合推理模型的思维链也计入 max_tokens,JSON 输出至少保留 4096 预算。
+      { jsonMode: true, signal, maxTokens: 4096 },
+    );
+    return parseRecallGradeResponse(text, input.rubric);
+  } catch {
+    return null;
+  }
+}
+
 /** 讲稿生成的 token 上限:混合推理模型的思维链计入 max_tokens(实测 budget_tokens 参数
  * 不被尊重,思考量不可控)。2026-10-29 直连实测完整计划 output ≈15-16K tokens
  * (思考 3 万字 + 正文 8-9K 字),65536 给超长思考留足余量,再长的由续写轮兜住。 */
@@ -361,8 +332,10 @@ export async function repairUnit(
   language = "zh-CN",
   budget?: { expectedUnitId?: string; expectedLectures?: number; expectedSessions?: number },
   model?: string,
+  learnerMaterials: LearnerMaterialText[] = [],
 ): Promise<CourseUnit | null> {
   const effLang = resolveEffectiveLanguage(language);
+  const materialNote = formatLearnerMaterialBoundary(learnerMaterials);
   const budgetReq = budget
     ? `\nBudget Constraints: unitId must be "${budget.expectedUnitId}", must have exactly ${budget.expectedLectures} lectures and total ${budget.expectedSessions} sessions.`
     : "";
@@ -371,7 +344,7 @@ export async function repairUnit(
       { role: "system", content: UNIT_REPAIR_PROMPT },
       {
         role: "user",
-        content: `Course Context: "${courseContext}"\nTarget Language: ${effLang}${budgetReq}\nValidation Errors:\n${errors.map((e) => `- ${e}`).join("\n")}\nDamaged Unit JSON:\n${JSON.stringify(unit)}`,
+        content: `Course Context: "${courseContext}"${materialNote}\nTarget Language: ${effLang}${budgetReq}\nValidation Errors:\n${errors.map((e) => `- ${e}`).join("\n")}\nDamaged Unit JSON:\n${JSON.stringify(unit)}`,
       },
     ],
     { jsonMode: true, signal, maxTokens: 4096, model },
@@ -395,8 +368,10 @@ export async function generateCourseBlueprint(
   brief?: CourseBrief,
   model?: string,
   onModelDowngrade?: (fromModel: string, toModel: string) => void,
+  learnerMaterials: LearnerMaterialText[] = [],
 ): Promise<CourseBlueprint> {
   const researchNote = formatUntrustedResearchNote(research);
+  const materialNote = formatLearnerMaterialBoundary(learnerMaterials);
   const briefNote = formatCourseBrief(brief);
   const effLang = resolveEffectiveLanguage(brief?.language);
   const normDepth = normalizeCourseDepth(brief?.depth);
@@ -415,7 +390,7 @@ export async function generateCourseBlueprint(
           { role: "system", content: COURSE_BLUEPRINT_PROMPT },
           {
             role: "user",
-            content: `Design a structured course blueprint for: "${query}" (Target Depth: ${normDepth}, reference unit scale: ${scale.refUnits} units, Language: ${effLang})${briefNote}${researchNote}`,
+            content: `Design a structured course blueprint for: "${query}" (Target Depth: ${normDepth}, reference unit scale: ${scale.refUnits} units, Language: ${effLang})${briefNote}${researchNote}${materialNote}`,
           },
         ],
         { jsonMode: true, signal, maxTokens: 8192, model, onModelDowngrade },
@@ -468,8 +443,10 @@ export async function generateUnitDetails(
   language = "zh-CN",
   model?: string,
   onModelDowngrade?: (fromModel: string, toModel: string) => void,
+  learnerMaterials: LearnerMaterialText[] = [],
 ): Promise<CourseUnit> {
   const researchNote = formatUntrustedResearchNote(research);
+  const materialNote = formatLearnerMaterialBoundary(learnerMaterials);
   const effLang = resolveEffectiveLanguage(language);
   const prevSummary = previousUnits.length
     ? `\nPrevious Units Context: ${previousUnits.map((u) => u.title).join(", ")}`
@@ -483,7 +460,7 @@ export async function generateUnitDetails(
       { role: "system", content: UNIT_GENERATION_PROMPT },
       {
         role: "user",
-        content: `Course Context: "${courseTitle}"${prevSummary}${researchNote}\nTarget Language: ${effLang}\nUnit: "${blueprintUnit.unitId}" - "${blueprintUnit.title}"\nRequirements: generate EXACTLY ${expectedLectures} lectures and total ${expectedSessions} sessions.\nPrerequisites: ${JSON.stringify(blueprintUnit.prerequisites ?? [])}\nObjectives: ${JSON.stringify(blueprintUnit.objectives ?? [])}\nCompletion Criteria: ${JSON.stringify(blueprintUnit.completionCriteria ?? [])}\nGenerate concrete lectures and sessions for this unit in ${effLang}.`,
+        content: `Course Context: "${courseTitle}"${prevSummary}${researchNote}${materialNote}\nTarget Language: ${effLang}\nUnit: "${blueprintUnit.unitId}" - "${blueprintUnit.title}"\nRequirements: generate EXACTLY ${expectedLectures} lectures and total ${expectedSessions} sessions.\nPrerequisites: ${JSON.stringify(blueprintUnit.prerequisites ?? [])}\nObjectives: ${JSON.stringify(blueprintUnit.objectives ?? [])}\nCompletion Criteria: ${JSON.stringify(blueprintUnit.completionCriteria ?? [])}\nGenerate concrete lectures and sessions for this unit in ${effLang}.`,
       },
     ],
     { jsonMode: true, signal, maxTokens: 4096, model, onModelDowngrade },
@@ -513,7 +490,7 @@ export async function generateUnitDetails(
   const check = validateUnitStructure(unit, budget);
   if (!check.valid) {
     try {
-      const repaired = await repairUnit(unit, check.errors, courseTitle, signal, effLang, budget, model);
+      const repaired = await repairUnit(unit, check.errors, courseTitle, signal, effLang, budget, model, learnerMaterials);
       if (repaired && validateUnitStructure(repaired, budget).valid) {
         unit = repaired;
       }

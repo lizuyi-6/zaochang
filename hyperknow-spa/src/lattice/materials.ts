@@ -6,6 +6,7 @@
 
 export interface CourseMaterial {
   id: string;
+  key: string;
   name: string;
   size: number;
   type: string;
@@ -69,8 +70,10 @@ export async function uploadFile(file: File): Promise<CourseMaterial | null> {
     size?: number;
     url?: string;
   };
+  if (typeof data.key !== 'string' || !data.key) return null;
   return {
-    id: data.key ?? `${Date.now()}`,
+    id: data.key,
+    key: data.key,
     name: data.name ?? file.name,
     size: data.size ?? file.size,
     type: data.type ?? file.type,

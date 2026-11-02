@@ -429,10 +429,10 @@ function fakeD1(failLabels = []) {
   };
 }
 
-test("purge: retention statements register all 16 SQL labels in foreign-key-safe order", () => {
+test("purge: retention statements register all 18 SQL labels in foreign-key-safe order", () => {
   const db = fakeD1();
   const registry = purgeRegistry(db);
-  assert.equal(registry.length, 17);
+  assert.equal(registry.length, 18);
   assert.deepEqual(registry.map((entry) => entry.label), [
     "oauth.access_tokens",
     "oauth.refresh_tokens",
@@ -451,6 +451,7 @@ test("purge: retention statements register all 16 SQL labels in foreign-key-safe
     "hosting.exhausted_jobs.promote",
     "hyperknow.credit_events",
     "hyperknow.feedback",
+    "hyperknow.check-attempts",
   ]);
   // 前 12 条逐字钉死;托管 3 条、积分流水清理与反馈清理各自钉住目标语句。
   const hostingSql = db.prepared.map((entry) => entry.sql).slice(12, 15);
@@ -460,6 +461,7 @@ test("purge: retention statements register all 16 SQL labels in foreign-key-safe
   assert.match(hostingSql[2], /^UPDATE product_hostings SET state = 'staged'/);
   assert.match(db.prepared[15].sql, /^DELETE FROM hk_credit_events WHERE created_at <= datetime\('now', '-90 days'\)$/);
   assert.equal(db.prepared[16].sql, "DELETE FROM hk_feedback WHERE created_at <= datetime('now', '-180 days')");
+  assert.equal(db.prepared[17].sql, "DELETE FROM hk_check_attempts WHERE created_at <= datetime('now', '-365 days')");
   assert.deepEqual(db.prepared.map((entry) => entry.sql).slice(0, 12), [
     "DELETE FROM oauth_provider_access_tokens WHERE expires_at <= CURRENT_TIMESTAMP",
     "DELETE FROM oauth_provider_refresh_tokens WHERE expires_at <= CURRENT_TIMESTAMP",
@@ -482,15 +484,16 @@ test("purge: 单条失败不阻断后续,日志含 label 且返回计数", async
   const errors = [];
   const logger = { log: (message) => logs.push(message), error: (message) => errors.push(message) };
   const result = await runPurgeRegistry(db, logger);
-  assert.deepEqual(result, { ok: 16, failed: 1 });
+  assert.deepEqual(result, { ok: 17, failed: 1 });
   assert.equal(errors.length, 1);
   assert.ok(errors[0].startsWith("[cron-purge] failed oauth.authorization_codes:"));
-  assert.equal(logs.length, 16);
+  assert.equal(logs.length, 17);
   assert.ok(logs.every((message) => /^\[cron-purge\] ok [\w.-]+ changes=3$/.test(message)));
-  // 末尾三条(托管状态收敛、积分流水清理、反馈清理)在失败之后仍执行——注册表顺序不受影响。
-  assert.ok(logs.at(-3).includes("hosting.exhausted_jobs.promote"));
-  assert.ok(logs.at(-2).includes("hyperknow.credit_events"));
-  assert.ok(logs.at(-1).includes("hyperknow.feedback"));
+  // 末尾四条(托管状态收敛、积分流水、反馈、快测作答清理)在失败之后仍执行——注册表顺序不受影响。
+  assert.ok(logs.at(-4).includes("hosting.exhausted_jobs.promote"));
+  assert.ok(logs.at(-3).includes("hyperknow.credit_events"));
+  assert.ok(logs.at(-2).includes("hyperknow.feedback"));
+  assert.ok(logs.at(-1).includes("hyperknow.check-attempts"));
 });
 
 function createHyperknowCleanupFixture({ status = "clean", afterCandidateRead, failRowDelete = false } = {}) {
@@ -820,4 +823,12 @@ test("doc-data-cache: 失效前发起的旧查询结果不得回填(generation �
   cache.setBody("doc:1", "新正文", cache.generation(), 6_000);
   assert.deepEqual(cache.getMetas(6_001), [{ id: "new" }]);
   assert.equal(cache.getBody("doc:1", 6_001), "新正文");
+});
+
+test("worker-configuration.d.ts: 类型不得经 import 引入构建产物 dist/", () => {
+  // wrangler types 默认生成 mainModule: typeof import("./dist/server/index");allowJs 下 tsc 会把整个
+  // dist/ 纳入程序,unpdf 的 pdfjs chunk 构建后本地 `npx tsc --noEmit` 栈溢出。重新生成类型后须保留手改。
+  const types = readFileSync(new URL("../worker-configuration.d.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(types, /import\(["']\.\/dist\//);
+  assert.match(types, /mainModule: typeof import\("\.\/worker\/index"\);/);
 });

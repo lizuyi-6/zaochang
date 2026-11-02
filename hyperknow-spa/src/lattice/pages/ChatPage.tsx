@@ -37,12 +37,19 @@ import '../voice-input.css';
 
 
 /** 追加的对话消息(参考流水线之后)。 */
+interface ChatAttachment {
+  key: string;
+  name: string;
+  status?: string;
+  truncated?: boolean;
+}
+
 interface ChatMsg {
   id: string;
   role: 'user' | 'assistant';
   text: string;
   /** 用户消息随附的材料(上传到主站 /api/uploads 后的引用) */
-  attachments?: Array<{ name: string; url: string }>;
+  attachments?: ChatAttachment[];
 }
 
 type MenuKind = 'none' | 'translate' | 'tools' | 'mode' | 'status';
@@ -63,7 +70,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [speakingPaused, setSpeakingPaused] = useState(false);
   const [ping, setPing] = useState<{ state: 'checking' | 'ok' | 'offline'; ms?: number }>({ state: 'checking' });
-  const [attachments, setAttachments] = useState<Array<{ name: string; url: string }>>([]);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<VoiceInputStatus>('idle');
   const abortRef = useRef<AbortController | null>(null);
@@ -176,7 +183,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     })();
   };
 
-  const send = (raw: string, forcedAttachments?: Array<{ name: string; url: string }>) => {
+  const send = (raw: string, forcedAttachments?: ChatAttachment[]) => {
     const text = raw.trim();
     if ((!text && attachments.length === 0) || streaming) return;
     setMenu('none'); // 发送即收起所有菜单,不留孤儿浮层
@@ -185,7 +192,12 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
     const assistantMessageId = crypto.randomUUID();
     setInput('');
     setAttachments([]);
-    setMsgs((m) => [...m, { id: userMessageId, role: 'user', text, attachments: attached.length ? attached : undefined }]);
+    setMsgs((m) => [...m, {
+      id: userMessageId,
+      role: 'user',
+      text,
+      attachments: attached.length ? attached.map((attachment) => ({ ...attachment, status: 'pending' })) : undefined,
+    }]);
     setMsgs((m) => [...m, { id: assistantMessageId, role: 'assistant', text: '' }]);
     setStreaming(true);
     const ctrl = new AbortController();
@@ -196,14 +208,10 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
      * 两次发送的 convAtSend 同为 null,只比会话 ID 时被中断的旧流会把错误写进新回复、
      * 并提前解除新流的 streaming 锁。 */
     const stillMine = () => activeConvRef.current === convAtSend && abortRef.current === ctrl;
-    /* 附件以引用形式并入发给导师的正文(后端暂不解析文件本体) */
-    const wire = attached.length
-      ? `${text}${text ? '\n\n' : ''}${attached.map((a) => `[Attachment: ${a.name} — ${a.url}]`).join('\n')}`
-      : text;
     (async () => {
       let acc = '';
       const result = await chatLive(
-        wire,
+        text,
         {
           onChunk: (chunk) => {
             if (!stillMine()) return;
@@ -219,6 +227,17 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           onConversationId: (id) => {
             convIdRef.current = id;
           },
+          onMaterialStatus: (status) => {
+            if (!stillMine()) return;
+            setMsgs((messages) => messages.map((item) => item.id === userMessageId
+              ? {
+                  ...item,
+                  attachments: item.attachments?.map((attachment) => attachment.key === status.key
+                    ? { ...attachment, name: status.name, status: status.status, truncated: status.truncated }
+                    : attachment),
+                }
+              : item));
+          },
           onRemaining: (remaining) => {
             set({
               identity: {
@@ -231,7 +250,13 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
             });
           },
         },
-        { signal: ctrl.signal, conversationId: convIdRef.current ?? undefined, mode: state.replyMode, model: state.chatModel },
+        {
+          signal: ctrl.signal,
+          conversationId: convIdRef.current ?? undefined,
+          mode: state.replyMode,
+          model: state.chatModel,
+          attachments: attached.map(({ key, name }) => ({ key, name })),
+        },
       );
       if (!stillMine()) return;
       /* 工程未开 strict:真值检查不收窄判别联合,必须用字面量判别 */
@@ -412,6 +437,10 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
 
   const pickAttachment = async (file: File | undefined) => {
     if (!file) return;
+    if (attachments.length >= 3) {
+      toast(L('Attach up to 3 files per message', '每条消息最多附加 3 份资料'));
+      return;
+    }
     setUploading(true);
     const material = await uploadMaterial(`chat:${state.identity?.email ?? 'demo'}`, file);
     setUploading(false);
@@ -419,7 +448,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
       toast(L('Upload failed — please try again', '上传失败，请重试'));
       return;
     }
-    setAttachments((prev) => [...prev, { name: material.name, url: material.url }]);
+    setAttachments((prev) => [...prev, { key: material.key, name: material.name }]);
     toast(L(`Attached “${material.name}”`, `已附加《${material.name}》`));
   };
 
@@ -598,9 +627,22 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
                 {m.attachments && m.attachments.length > 0 && (
                   <div className="cp-bubble-files">
                     {m.attachments.map((a) => (
-                      <span className="cp-bubble-file" key={a.url || a.name}>
+                      <span className="cp-bubble-file" key={a.key || a.name}>
                         <FileText size={12} />
                         {a.name}
+                        {a.status && (
+                          <small className="cp-bubble-file-status">
+                            {a.status === 'pending'
+                              ? L('Reading…', '正在解析…')
+                              : a.status === 'ready'
+                              ? L('Read', '已读取')
+                              : a.status === 'truncated'
+                                ? L('Read · truncated', '已读取·内容截断')
+                                : a.status === 'unsupported_format'
+                                  ? L('Unsupported format', '格式不支持')
+                                  : L('Could not read', '无法读取')}
+                          </small>
+                        )}
                       </span>
                     ))}
                   </div>
@@ -702,7 +744,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
       {attachments.length > 0 && (
         <div className="hk-attach-row">
           {attachments.map((a, i) => (
-            <span className="hk-attach-chip" key={`${a.url}-${i}`}>
+            <span className="hk-attach-chip" key={`${a.key}-${i}`}>
               <FileText size={12} />
               {a.name}
               <button type="button" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} aria-label={L('Remove', '移除')}>
@@ -717,7 +759,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           ref={fileRef}
           type="file"
           hidden
-          accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx,image/*"
+          accept=".pdf,.docx,.txt,.md"
           onChange={(e) => {
             void pickAttachment(e.target.files?.[0]);
             e.target.value = '';
@@ -727,7 +769,7 @@ export const ChatPage: React.FC<PageProps> = ({ state, set }) => {
           className="cp-plus"
           type="button"
           title={L('Add attachment', '添加附件')}
-          disabled={uploading}
+          disabled={uploading || attachments.length >= 3}
           onClick={() => fileRef.current?.click()}
         >
           <Plus size={16} />

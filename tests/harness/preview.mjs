@@ -36,6 +36,9 @@ export const hostingDeployerToken = `zch_${randomBytes(48).toString("base64url")
 export let aiServer;
 export let aiPort;
 export let lastChatCompletion = null;
+/** resetAiUpstream 以来的全部上游请求(lastChatCompletion 只留最后一个;一次对话会先流正文、
+ * 再生成下一步建议,断言"某段内容进入/未进入上游"须查整份日志) */
+export const chatCompletionLog = [];
 export let aiUpstreamCount = 0;
 /** 蓝图形状(CourseBlueprint)的非流式调用计数——C2 双跑断言用,与单元调用区分 */
 export let blueprintUpstreamCount = 0;
@@ -122,6 +125,7 @@ export let mcpMockOutcome = "success";
 /** 置对象后,Messages/chat-completions 调用(流式与非流式)以该对象的 JSON 串作为回复文本
  * (白板讲座计划 quick_check/diagram 透传断言用);resetAiUpstream 会复位。 */
 export let aiUpstreamJsonOverride = null;
+export let aiUpstreamRawOverride = null;
 /** 置数字后,流式调用只吐出覆盖正文的前 N 个字符,随后以 stop_reason=max_tokens 收尾
  * (测讲稿流式截断后的步骤抢救);resetAiUpstream 会复位。 */
 export let aiUpstreamStreamTruncateAt = null;
@@ -156,6 +160,10 @@ export function setAiUpstreamJsonResponse(value) {
   aiUpstreamJsonOverride = value === null || value === undefined ? null : JSON.stringify(value);
 }
 
+export function setAiUpstreamRawResponse(value) {
+  aiUpstreamRawOverride = value === null || value === undefined ? null : String(value);
+}
+
 export function setAiUpstreamUnitDelay(ms) {
   unitResponseDelayMs = ms;
 }
@@ -173,6 +181,7 @@ export function setAsrMockOutcome(outcome) {
 
 export function resetAiUpstream() {
   lastChatCompletion = null;
+  chatCompletionLog.length = 0;
   aiUpstreamCount = 0;
   blueprintUpstreamCount = 0;
   lastTtsRequest = null;
@@ -192,6 +201,7 @@ export function resetAiUpstream() {
   mcpUpstreamCount = 0;
   mcpMockOutcome = "success";
   aiUpstreamJsonOverride = null;
+  aiUpstreamRawOverride = null;
   aiUpstreamStreamTruncateAt = null;
   aiUpstreamStreamScript = null;
   aiUpstreamStreamScriptIndex = 0;
@@ -359,6 +369,7 @@ export async function startFakeAiUpstream() {
       messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
       transport: isMessages ? "messages" : "chat",
     };
+    chatCompletionLog.push(lastChatCompletion);
     aiUpstreamCount += 1;
     if (aiUpstreamForceFail || (lastChatCompletion.user ?? "").includes("AI-UPSTREAM-FAIL-TEST")) {
       response.writeHead(500, { "content-type": "application/json" });
@@ -368,8 +379,8 @@ export async function startFakeAiUpstream() {
     // 非流式调用的正文计算(llm.chat 走 Messages 或 404 降级回退到 chat/completions
     // 时共用同一套确定性生成:蓝图/单元形状识别 + aiUpstreamJsonOverride 透传)。
     const computeNonStreamText = async () => {
-      let text = aiUpstreamJsonOverride;
-      if (!text) {
+      let text = aiUpstreamRawOverride ?? aiUpstreamJsonOverride;
+      if (text === null) {
         const sys = String(lastChatCompletion.system || "");
         const usr = String(lastChatCompletion.user || "");
         if (sys.includes("CourseBlueprint") || sys.includes("Curriculum Architect") || usr.includes("course blueprint")) {
@@ -1035,7 +1046,7 @@ before(async () => {
   await startFakeUploadScanner();
   await startFakeAiUpstream();
   await startFakeEmailUpstream();
-  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql", "0032_page_hosting.sql", "0033_external_payment_guard_client_state.sql", "0034_follow_creator_email_identity.sql", "0035_member_suspension.sql", "0036_quiet_freak.sql", "0037_steady_tag.sql", "0038_archive_candidates.sql", "0039_hk_redeem_codes.sql", "0040_hk_credit_events.sql", "0041_hk_feedback.sql", "0042_account_applications.sql", "0043_member_onboarding.sql"];
+  const migrationFiles = ["0000_silky_karen_page.sql", "0001_oauth_accounts.sql", "0002_community_interactions.sql", "0003_strange_sandman.sql", "0004_lush_gambit.sql", "0005_flimsy_magus.sql", "0006_release_readiness.sql", "0007_product_like_counters.sql", "0008_noisy_jazinda.sql", "0009_moderation_remediation.sql", "0010_invite_upload_security.sql", "0011_redundant_phalanx.sql", "0012_eminent_satana.sql", "0013_lovely_lord_hawal.sql", "0014_furry_vapor.sql", "0015_complex_eddie_brock.sql", "0016_wise_synch.sql", "0017_workable_wraith.sql", "0018_stale_speed_demon.sql", "0019_community_counter_triggers.sql", "0020_exotic_the_renegades.sql", "0021_brainy_jack_power.sql", "0022_hyperknow_tasks_and_leases.sql", "0023_cool_madame_hydra.sql", "0024_hyperknow_image_cleanup.sql", "0025_hyperknow_image_cleanup_claim.sql", "0026_far_spyke.sql", "0027_numerous_lily_hollister.sql", "0028_confused_maximus.sql", "0029_public_marten_broadcloak.sql", "0030_personal_api_keys.sql", "0031_mcp_oauth.sql", "0032_page_hosting.sql", "0033_external_payment_guard_client_state.sql", "0034_follow_creator_email_identity.sql", "0035_member_suspension.sql", "0036_quiet_freak.sql", "0037_steady_tag.sql", "0038_archive_candidates.sql", "0039_hk_redeem_codes.sql", "0040_hk_credit_events.sql", "0041_hk_feedback.sql", "0042_account_applications.sql", "0043_member_onboarding.sql", "0044_hk_learning_progress.sql"];
   const bootstrapSql = migrationFiles
     .slice(0, 8)
     .map((migrationFile) => readFileSync(join(projectRoot, "drizzle", migrationFile), "utf8"))

@@ -10,6 +10,8 @@ import { FALLBACK_GUIDELINE } from "../../_lib/hyperknow/prompts";
 import { saveConversation, getConversation } from "../../_lib/hyperknow/store";
 import { consumeCredits, currentCredits, dailyCreditsFor, HK_CHAT_COST } from "../../_lib/hyperknow/credits";
 import { decodeRequestBodyJson, type StreamChunk } from "../../_lib/hyperknow/protocol";
+import { readOwnedCleanUpload } from "../../_lib/hyperknow/materials";
+import { extractMaterialText, formatLearnerMaterialBoundary, type LearnerMaterialText } from "../../_lib/hyperknow/material-content";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +34,29 @@ type ChatRequestInput = {
   model?: unknown;
   ui_language?: unknown;
   conversation_id?: unknown;
+  attachments?: unknown;
 };
 
 const MAX_MESSAGE_CHARS = 8000;
+const MAX_ATTACHMENT_NAME_CHARS = 180;
+
+type ChatAttachment = { key: string; name: string };
+
+function parseChatAttachments(value: unknown): ChatAttachment[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 3) return null;
+  const attachments: ChatAttachment[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const record = item as Record<string, unknown>;
+    if (typeof record.key !== "string" || typeof record.name !== "string") return null;
+    const key = record.key.trim();
+    const name = record.name.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, MAX_ATTACHMENT_NAME_CHARS);
+    if (!key || !name) return null;
+    attachments.push({ key, name });
+  }
+  return attachments;
+}
 
 
 export async function POST(request: Request) {
@@ -45,7 +67,9 @@ export async function POST(request: Request) {
     const rawBody = await request.arrayBuffer();
     const input = decodeRequestBodyJson<ChatRequestInput>(new Uint8Array(rawBody)) ?? {};
     const message = String(input.message ?? "").trim().slice(0, MAX_MESSAGE_CHARS);
-    if (!message) return Response.json({ error: "message_required" }, { status: 400 });
+    const attachments = parseChatAttachments(input.attachments);
+    if (!attachments) return Response.json({ error: "attachments_invalid" }, { status: 400 });
+    if (!message && attachments.length === 0) return Response.json({ error: "message_required" }, { status: 400 });
     // mode/ui_language 为原 WS 协议字段,接受但从不分支(原版同样只透传不使用)。
 
     await enforceRateLimit(await rateLimitKey("hyperknow-chat", member.email), 30, 60 * 60);
@@ -65,6 +89,34 @@ export async function POST(request: Request) {
      * 只带最近 40 条(模型实际能消化的窗口),完整历史仍按落库上限保存。 */
     const modelHistory = history.slice(-40);
 
+    const learnerPrompt = message || "Please help me understand the attached learning materials.";
+    const materialStatuses: Array<{ key: string; name: string; status: string; truncated?: boolean }> = [];
+    const learnerMaterials: LearnerMaterialText[] = [];
+    for (const attachment of attachments) {
+      const upload = await readOwnedCleanUpload(attachment.key, member.email);
+      if (!upload) {
+        materialStatuses.push({ key: attachment.key, name: attachment.name, status: "unreadable" });
+        continue;
+      }
+      const result = await extractMaterialText(upload.name, upload.mediaType, upload.bytes);
+      if (!result.ok) {
+        materialStatuses.push({ key: attachment.key, name: upload.name, status: result.status });
+        continue;
+      }
+      materialStatuses.push({
+        key: attachment.key,
+        name: upload.name,
+        status: result.truncated ? "truncated" : "ready",
+        truncated: result.truncated,
+      });
+      learnerMaterials.push({ key: attachment.key, name: upload.name, text: result.text, truncated: result.truncated });
+    }
+    const historyMessage = [
+      message,
+      ...attachments.map((attachment) => `[Attachment: ${attachment.name}]`),
+    ].filter(Boolean).join("\n\n");
+    const modelMessage = `${learnerPrompt}${formatLearnerMaterialBoundary(learnerMaterials)}`;
+
     // H8(2026-10 审计):Workers 运行时恒有 AbortSignal.any,typeof 分支是死代码
     // (360s 兜底不可达);总预算提为导出常量,与重试层级(llm 候选 ≤2 + chat 回退 1 次)
     // 的耗时上限可核算——契约钉在 hyperknow-hardening。
@@ -75,7 +127,7 @@ export async function POST(request: Request) {
     // thinking_delta 增量实时映射)。模型二选一:见界 Flash=step-3.7-flash /
     // 见界 Pro=step-5-preview,白名单外的值一律回落 Flash。
     const model = resolveChatModel(input.model);
-    const generator = contentGenerateStream(message, FALLBACK_GUIDELINE, modelHistory, signal, model);
+    const generator = contentGenerateStream(modelMessage, FALLBACK_GUIDELINE, modelHistory, signal, model);
     let firstChunk: StreamChunk | null = null;
     let generatorDone = false;
     try {
@@ -122,6 +174,7 @@ export async function POST(request: Request) {
           try {
             push({ type: "conversation_created", data: { conversation_id: conversationId }, conversation_id: conversationId });
             push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: await dailyCreditsFor(member) } });
+            for (const status of materialStatuses) push({ type: "material_status", ...status });
             push({
               type: "tool_execution",
               tool_name: "directorAgent",
@@ -176,16 +229,16 @@ export async function POST(request: Request) {
             });
 
             push({ type: "tool_selection", tool_name: "recommend_next_step", tool_status: "started", display: "display" });
-            const nextStepsData = await generateNextSteps(message, fullResponse, signal);
+            const nextStepsData = await generateNextSteps(learnerPrompt, fullResponse, signal);
             push({ type: "tool_execution", tool_name: "recommend_next_step", tool_status: "completed", display: "display", data: nextStepsData });
 
-            const title = message.slice(0, 30) + (message.length > 30 ? "..." : "");
+            const title = learnerPrompt.slice(0, 30) + (learnerPrompt.length > 30 ? "..." : "");
             await saveConversation({
               id: conversationId,
               userEmail: member.email,
               title,
               /* 落库上限 200 条:无界增长会推高每次读写与列表接口的负载,超限丢最旧 */
-              history: [...history, { role: "user", content: message }, { role: "assistant", content: fullResponse }].slice(-200),
+              history: [...history, { role: "user", content: historyMessage }, { role: "assistant", content: fullResponse }].slice(-200),
             });
 
             push({ type: "complete", conversation_id: conversationId });

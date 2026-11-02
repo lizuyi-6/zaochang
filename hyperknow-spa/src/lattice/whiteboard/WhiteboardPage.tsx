@@ -31,7 +31,7 @@ import {
   type Rich,
 } from './lessonScript';
 import { liveLessonFromPlan, type LessonScript } from './liveLesson';
-import { fetchLectureImageLive, interjectLive, planLectureLive, PLAN_CLIENT_TIMEOUT_MS } from '../backend';
+import { fetchLectureImageLive, gradeRecallLive, interjectLive, planLectureLive, PLAN_CLIENT_TIMEOUT_MS } from '../backend';
 import { getBackendLang, getCurrentLng } from '../i18n';
 import { getCourseLang } from '../courseLang';
 import { L } from '../i18n/content';
@@ -42,6 +42,8 @@ import { createVoiceInputController, prefetchTts, tts, type SpeakHandle, type Sp
 import { takePrefetchedEntry } from './planPrefetch';
 import { lessonDelay } from './lessonDelay';
 import { choiceIndexFromInput } from './choiceInput';
+import { SessionSummary } from './SessionSummaryCard';
+import { mergeSessionSummary, type ClientCheckQuestions, type SessionQuestionResult, type SessionSummaryResponse } from './sessionSummary';
 import './whiteboard.css';
 import '../voice-input.css';
 
@@ -396,6 +398,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
    * 不把 5 步通用提纲当成本讲的正式讲稿静默开播 */
   const [planDegraded, setPlanDegraded] = useState(false);
   const [planAttempt, setPlanAttempt] = useState(0);
+  const recallGradeAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!liveTopic) return;
@@ -513,6 +516,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     return () => {
       alive = false;
       ctrl.abort();
+      recallGradeAbortRef.current?.abort();
       imageWaitResolvers.current.forEach((res) => res());
       imageWaitResolvers.current.clear();
     };
@@ -521,6 +525,25 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
   const lesson = liveScript ?? DEMO_SCRIPT;
   const LESSON_STEPS = lesson.steps;
+  const summaryQuestions = useMemo<ClientCheckQuestions>(() => LESSON_STEPS.flatMap((item): Array<ClientCheckQuestions[number]> => {
+    if (item.awaitChoice) {
+      return [{
+        stepId: item.sid ?? String(item.id),
+        type: 'quick_check' as const,
+        question: item.awaitChoice.question,
+        correctAnswer: item.awaitChoice.options[item.awaitChoice.answer] ?? '',
+      }];
+    }
+    if (item.awaitRecall) {
+      return [{
+        stepId: item.sid ?? String(item.id),
+        type: 'recall_check' as const,
+        question: item.awaitRecall.question,
+        correctAnswer: item.awaitRecall.referenceAnswer,
+      }];
+    }
+    return [];
+  }), [LESSON_STEPS]);
   const BOARD_ITEMS = lesson.items;
   const BOARD_TABLE = lesson.table;
   const BOARD_ANNOTS = lesson.annots;
@@ -551,7 +574,77 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const [annotActive, setAnnotActive] = useState<string | null>(null);
   const [panX, setPanX] = useState(0);
   const [status, setStatus] = useState<PlayStatus>('idle');
+  const progressSessionRef = useRef<string | null>(null);
+  const progressStartedRef = useRef(false);
+  const progressCompletedRef = useRef(false);
+  const reportLectureEvent = useCallback((event: 'started' | 'completed') => {
+    if (!state.activeCourseUuid || !state.activeUnitId || !state.activeLectureId || !liveScript?.sessionId) return;
+    // 进度是授课遥测：只发一次，不重试；网络失败不得阻塞或重放课堂流程。
+    void fetch('/api/hyperknow/progress/lecture', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        courseUuid: state.activeCourseUuid,
+        unitId: String(state.activeUnitId),
+        lectureId: state.activeLectureId,
+        sessionId: liveScript.sessionId,
+        event,
+      }),
+    }).catch(() => {});
+  }, [liveScript?.sessionId, state.activeCourseUuid, state.activeLectureId, state.activeUnitId]);
+  const reportCheckAttempt = useCallback((stepId: string, choice: number) => {
+    if (!state.activeCourseUuid || !state.activeUnitId || !state.activeLectureId || !liveScript?.sessionId) return;
+    // 快测写入同样只 fire-and-forget；离线或限流时不改变授课反馈，也不自动重试。
+    void fetch('/api/hyperknow/progress/check', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId: liveScript.sessionId, stepId, choice }),
+    }).catch(() => {});
+  }, [liveScript?.sessionId, state.activeCourseUuid, state.activeLectureId, state.activeUnitId]);
+  useEffect(() => {
+    const sessionId = liveScript?.sessionId ?? null;
+    if (progressSessionRef.current === sessionId) return;
+    progressSessionRef.current = sessionId;
+    progressStartedRef.current = false;
+    progressCompletedRef.current = false;
+  }, [liveScript?.sessionId]);
+  useEffect(() => {
+    if (status !== 'explaining' || progressStartedRef.current) return;
+    if (!state.activeCourseUuid || !state.activeUnitId || !state.activeLectureId || !liveScript?.sessionId) return;
+    progressStartedRef.current = true;
+    reportLectureEvent('started');
+  }, [liveScript?.sessionId, reportLectureEvent, state.activeCourseUuid, state.activeLectureId, state.activeUnitId, status]);
+  useEffect(() => {
+    if (status !== 'ended' || !progressStartedRef.current || progressCompletedRef.current) return;
+    progressCompletedRef.current = true;
+    reportLectureEvent('completed');
+  }, [reportLectureEvent, status]);
   const [systemEnd, setSystemEnd] = useState(false);
+  const [clientCheckResults, setClientCheckResults] = useState<Record<string, SessionQuestionResult>>({});
+  const [serverSessionSummary, setServerSessionSummary] = useState<SessionSummaryResponse | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const summary = useMemo(
+    () => mergeSessionSummary(summaryQuestions, clientCheckResults, serverSessionSummary),
+    [clientCheckResults, serverSessionSummary, summaryQuestions],
+  );
+  useEffect(() => {
+    if (!systemEnd || !state.activeCourseUuid || !state.activeUnitId || !state.activeLectureId || !liveScript?.sessionId) return;
+    let active = true;
+    setSummaryLoading(true);
+    // 最后一题的进度请求是 fire-and-forget；本地结果先展示，服务端首答随后覆盖同题冲突。
+    void fetch(`/api/hyperknow/progress/session?sessionId=${encodeURIComponent(liveScript.sessionId)}`)
+      .then(async (response) => response.ok ? await response.json() as SessionSummaryResponse : null)
+      .then((result) => {
+        if (active && result && Array.isArray(result.questions)) setServerSessionSummary(result);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setSummaryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [liveScript?.sessionId, state.activeCourseUuid, state.activeLectureId, state.activeUnitId, systemEnd]);
   const [popup, setPopup] = useState<PopupKind | null>(null);
   const [quickCheck, setQuickCheck] = useState<{
     stepId: number;
@@ -808,6 +901,13 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   const runStep = useCallback(
     async (s: LessonStep) => {
       setStep(s.id);
+      const focusTask = Promise.all(
+        lessonRef.current.annots
+          .filter((an) => an.transient && an.step === s.id)
+          .map((an) => drawAnnot(an.id)),
+      );
+      // 聚光绘制与旁白/板书并行;等本步主线结束后再清理任务,不额外打断字幕或测验。
+      void focusTask.catch(() => {});
       if (s.pan) {
         setPanX(PAN_X);
         await wait(880);
@@ -839,11 +939,12 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         await writeItem(it.id);
         if (!ctl.current.skipped) await wait(240);
       }
-      for (const an of lessonRef.current.annots.filter((a) => a.step === s.id)) await drawAnnot(an.id);
+      for (const an of lessonRef.current.annots.filter((a) => a.step === s.id && !a.transient)) await drawAnnot(an.id);
       const narration = await capTask;
       // 旁白播完才进下一步(60s 安全上限防上游挂起)——否则下一步一开讲就把
       // 还在播的音频截断,这正是上一版"字幕跑完、声音被掐"的根源。
       if (narration) await Promise.race([narration.ended, wait(60_000)]);
+      await focusTask;
 
       if (s.awaitChoice) {
         // quick check: no "your turn" status line in the panel (ref 53)
@@ -874,6 +975,10 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
         const isCorrect = idx === choice.answer;
         const fbKind: 'correct' | 'incorrect' = isCorrect ? 'correct' : 'incorrect';
+        if (!auto && !ctl.current.skipped) {
+          const summaryStepId = s.sid ?? String(s.id);
+          setClientCheckResults((previous) => ({ ...previous, [summaryStepId]: fbKind }));
+        }
         setQuickCheck((prev) => (prev ? { ...prev, selected: idx, feedback: fbKind } : null));
         setEntries((prev) => [...prev, userBubble(`u${s.id}`, choice.options[idx])]);
 
@@ -915,6 +1020,95 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         setCaption(null);
         setQuickCheck(null);
         setStatus('explaining');
+      }
+
+      if (s.awaitRecall) {
+        setStatus('yourturn');
+        setPanelOpen(true);
+        setEntries((prev) => [...prev, tutorBubble(`recall-q-${s.id}`, s.awaitRecall!.question)]);
+
+        let answer: string;
+        if (auto) {
+          await wait(1200);
+          answer = s.awaitRecall.referenceAnswer;
+        } else if (ctl.current.skipped) {
+          answer = '';
+        } else {
+          answer = await new Promise<string>((resolve) => {
+            answerResolver.current = resolve;
+          });
+        }
+        answerResolver.current = null;
+        if (answer) {
+          setEntries((prev) => [...prev, userBubble(`recall-a-${s.id}`, answer)]);
+          setStatus('grading');
+          setCaption([{ t: L('Grading your answer…', '正在批改…') }]);
+          setCapShown(L('Grading your answer…', '正在批改…').length);
+          setTyping(false);
+
+          const gradingSessionId = lessonRef.current.sessionId ?? '';
+          const controller = new AbortController();
+          recallGradeAbortRef.current?.abort();
+          recallGradeAbortRef.current = controller;
+          const result = gradingSessionId && s.sid
+            ? await gradeRecallLive({ sessionId: gradingSessionId, stepId: s.sid, answer }, controller.signal)
+            : null;
+          if (recallGradeAbortRef.current === controller) recallGradeAbortRef.current = null;
+          if (controller.signal.aborted || lessonRef.current.sessionId !== gradingSessionId) return;
+          if (result?.graded && s.sid) {
+            setClientCheckResults((previous) => ({ ...previous, [s.sid!]: result.verdict }));
+          }
+
+          let feedbackText: string;
+          if (!result || !result.graded) {
+            const reference = result && !result.graded ? result.reference_answer : s.awaitRecall.referenceAnswer;
+            const rubric = result && !result.graded ? result.rubric : s.awaitRecall.rubric;
+            feedbackText = `${L('Automatic grading was unavailable. Please self-check against the reference answer: ', '未能自动批改，请对照参考答案自评：')}${reference} ${L('Key points: ', '评分要点：')}${rubric.join('；')}`;
+          } else {
+            const verdictLabel = result.verdict === 'correct'
+              ? L('Correct. ', '回答正确。')
+              : result.verdict === 'partial'
+                ? L('Partly correct. ', '部分正确。')
+                : L('Not quite yet. ', '还需要补充。');
+            const missingText = result.missing.length
+              ? `${L('Missing points: ', '缺少要点：')}${result.missing.join('；')}`
+              : '';
+            const hintText = result.verdict !== 'correct' && s.awaitRecall.hint
+              ? `${L('Hint: ', '提示：')}${s.awaitRecall.hint}`
+              : '';
+            feedbackText = [verdictLabel, result.feedback, missingText, hintText].filter(Boolean).join(' ');
+          }
+
+          setEntries((prev) => [...prev, tutorBubble(`recall-fb-${s.id}-${Date.now()}`, feedbackText)]);
+          setCaption([{ t: feedbackText }]);
+          setCapShown(feedbackText.length);
+          setTyping(false);
+          /* 暂停或插话期间先保留批改结果,待主线恢复后再朗读,避免反馈音打断现有流程。 */
+          if (!auto && (pausedRef.current || askingRef.current)) await wait(1);
+          if (ctl.current.cancelled || controller.signal.aborted) return;
+
+          setStatus('explaining');
+          const { voice: vk, speed: spkSpeed, muted: silent } = narrationRef.current;
+          const spokenFeedback = !silent ? tts.speakTutorTrack(feedbackText, vk, spkSpeed) : null;
+          try {
+            if (auto) {
+              await wait(1500);
+              if (spokenFeedback) await Promise.race([spokenFeedback.ended, wait(4000)]);
+            } else {
+              if (spokenFeedback) await Promise.race([spokenFeedback.ended, wait(8000)]);
+              await wait(silent || !spokenFeedback ? 2600 : 700);
+            }
+          } catch (error) {
+            console.warn('[whiteboard] recall feedback playback interrupted:', error);
+          } finally {
+            if (spokenFeedback) tts.stopTutor();
+          }
+          setCaption(null);
+          setStatus('explaining');
+        } else {
+          setCaption(null);
+          setStatus('explaining');
+        }
       }
 
       if (s.awaitAnswer) {
@@ -1030,6 +1224,7 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
   useEffect(
     () => () => {
       ctl.current.cancelled = true;
+      recallGradeAbortRef.current?.abort();
       voiceInputRef.current?.cancel();
       pendingTimers.current.forEach((t) => window.clearTimeout(t));
       if (choiceResolver.current) {
@@ -1149,6 +1344,11 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
       choiceResolver.current = null;
       resolve(index);
     } else if (answerResolver.current) {
+      const activeStep = lessonRef.current.steps.find((lessonStep) => lessonStep.id === stepRef.current);
+      if (activeStep?.awaitRecall && Array.from(text).length > 1000) {
+        toast(L('Answers are limited to 1000 characters', '答案最多 1000 个字符'));
+        return;
+      }
       setInput('');
       const res = answerResolver.current;
       answerResolver.current = null;
@@ -1251,6 +1451,37 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
     });
   }, [finished, set]);
 
+  const nextLecture = summary.course?.nextLecture ?? null;
+  const nextLocalUnit = nextLecture
+    ? GEN?.units.find((unit) => String((unit as { unitId?: string }).unitId ?? unit.id) === nextLecture.unitId)
+    : undefined;
+  const nextLocalLecture = nextLecture
+    ? nextLocalUnit?.lectures.find((item) => String((item as { lectureId?: string }).lectureId ?? item.id) === nextLecture.lectureId)
+    : undefined;
+  const nextLocalSession = nextLocalLecture?.sessions[0];
+  const handleNextLecture = () => {
+    if (!nextLecture) return;
+    ctl.current.cancelled = true;
+    set({
+      screen: 'whiteboard',
+      whiteboardMode: 'lecture',
+      activeUnitId: nextLecture.unitId,
+      activeLectureId: nextLecture.lectureId,
+      activeSessionId: nextLocalSession?.sessionId,
+      activeTopic: nextLocalSession?.title ?? nextLecture.title,
+      lectureDone: false,
+      lectureCompletePrompt: false,
+    });
+  };
+  const handleSummaryBack = () => {
+    if (freeTopicMode) {
+      ctl.current.cancelled = true;
+      set({ screen: 'home', lectureDone: true, lectureCompletePrompt: true });
+      return;
+    }
+    handleExit();
+  };
+
   /* 自由讲座:学员命题提交。相同话题重试也必须重新触发备课 effect,故 planAttempt
    * 递增——effect 依赖里的真正"点火器"。 */
   const commitFreeTopic = useCallback(
@@ -1306,6 +1537,8 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
               explanation={quickCheck.explanation}
               onSelect={(i) => {
                 if (quickCheck.selected === null && choiceResolver.current) {
+                  const serverStepId = LESSON_STEPS.find((item) => item.id === quickCheck.stepId)?.sid;
+                  if (serverStepId) reportCheckAttempt(serverStepId, i);
                   const res = choiceResolver.current;
                   choiceResolver.current = null;
                   res(i);
@@ -1504,6 +1737,16 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
         />
       )}
       {stage === 'talk' && <TalkModeOverlay onStart={() => setStage('play')} />}
+
+      {systemEnd && (
+        <SessionSummary
+          summary={summary}
+          masteryLoading={summaryLoading && !summary.course}
+          onNext={nextLecture ? handleNextLecture : undefined}
+          onBack={handleSummaryBack}
+          backLabel={freeTopicMode ? L('Back to LATTICE', '返回见界') : undefined}
+        />
+      )}
     </div>
   );
 };

@@ -184,6 +184,8 @@ export interface SessionRow {
 
 export interface Lecture {
   id: string;
+  /** 后端课程树中的稳定 ID；CourseJourney 的展示 ID 仍独立保留。 */
+  lectureId?: string;
   title: string;
   description: string;
   kind?: 'lecture' | 'project' | 'exam';
@@ -192,6 +194,8 @@ export interface Lecture {
 
 export interface Unit {
   id: number;
+  /** 后端课程树中的稳定 ID；界面仍用数字索引选择单元。 */
+  unitId?: string;
   title: string;
   lectures: Lecture[];
 }

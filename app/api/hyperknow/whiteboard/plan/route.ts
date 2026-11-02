@@ -2,8 +2,12 @@ import { requireMember } from "../../../_lib/access-control";
 import { jsonError } from "../../../_lib/errors";
 import { assertSameOrigin } from "../../../_lib/request-origin";
 import { enforceRateLimit, rateLimitKey } from "../../../_lib/rate-limit";
+import { database } from "../../../_lib/community";
 import { planLecture, PLAN_ROUTE_BUDGET_MS, type LectureCourseContext } from "../../../_lib/hyperknow/agents";
+import { parseCourseTaskBrief, sanitizeCourseMaterialExcerpts } from "../../../_lib/hyperknow/material-content";
 import { getCourse, getCourseTask, saveWhiteboardSession } from "../../../_lib/hyperknow/store";
+import { courseHasExactLecture } from "../../../_lib/hyperknow/mastery";
+import { buildCourseReviewItems, buildCourseReviewQuery, type CourseReviewAttemptRow } from "../../../_lib/hyperknow/retrieval";
 import { getSampleCourse } from "../../../_lib/hyperknow/samples";
 import { resolveEffectiveLanguage } from "../../../_lib/hyperknow/protocol";
 
@@ -36,6 +40,7 @@ export async function POST(request: Request) {
 
     let resolvedTopic = rawTopic || DEFAULT_TOPIC;
     let courseSavedLanguage: string | null = null;
+    let progressContext: { courseUuid: string; unitId: string; lectureId: string } | null = null;
     // 讲课上下文:课程 meta + intake brief + 单元目标 + 讲次在课程中的位置。
     // 讲师不再"看题讲课"——深度按学员档位校准、例子贴背景、开场承接上一讲。
     let lectureContext: LectureCourseContext | undefined;
@@ -49,6 +54,10 @@ export async function POST(request: Request) {
       }
 
       const courseData = (stored ? stored.course : sample) as Record<string, unknown>;
+      // 进度上下文只附在本人持有且课程树中唯一精确匹配的讲次上；样例课与自由命题不落课程进度。
+      if (stored && unitId && lectureId && courseHasExactLecture(courseData, unitId, lectureId)) {
+        progressContext = { courseUuid, unitId, lectureId };
+      }
       // 从已保存课程中读取 language 或 brief.language
       let courseBrief = (courseData.brief ?? (courseData as { courseBrief?: unknown }).courseBrief) as
         | Record<string, unknown>
@@ -111,17 +120,16 @@ export async function POST(request: Request) {
           // 老课的 brief 不在课程 JSON 里:从生成任务的 brief_json 兜底
           if (!courseBrief) {
             const task = await getCourseTask(courseUuid, member.email).catch(() => null);
-            if (task?.briefJson) {
-              try {
-                courseBrief = JSON.parse(task.briefJson) as Record<string, unknown>;
-              } catch {}
-            }
+            // brief_json 可能带资料键字段(见 serializeCourseTaskBrief):只取 brief 本体,
+            // 不把上传 key 当成学员画像注入讲师提示词;旧纯 brief 行解析结果不变。
+            if (task?.briefJson) courseBrief = parseCourseTaskBrief(task.briefJson).brief;
           }
           lectureContext = {
             courseTitle: typeof courseData.courseTitle === "string" ? courseData.courseTitle : undefined,
             courseDescription: typeof courseData.courseDescription === "string" ? courseData.courseDescription : undefined,
             targetLearner: typeof courseData.targetLearner === "string" ? courseData.targetLearner : undefined,
             brief: courseBrief && typeof courseBrief === "object" ? (courseBrief as LectureCourseContext["brief"]) : undefined,
+            materials: sanitizeCourseMaterialExcerpts(courseData.materials),
             unitTitle: cur.unitTitle || undefined,
             unitObjectives: cur.unitObjectives.length ? cur.unitObjectives : undefined,
             lectureTitle: cur.lectureTitle || undefined,
@@ -130,6 +138,17 @@ export async function POST(request: Request) {
             nextLectureTitle: matched < flat.length - 1 ? flat[matched + 1].lectureTitle || undefined : undefined,
             lecturePosition: `${matched + 1}/${flat.length}`,
           };
+          // 只从本人课程中当前讲次之前的首答错题回读题干和标准答案。
+          if (stored && unitId && lectureId) {
+            const reviewQuery = buildCourseReviewQuery(courseData, { unitId, lectureId }, member.email, courseUuid);
+            if (reviewQuery) {
+              const { results } = await database().prepare(reviewQuery.sql)
+                .bind(...reviewQuery.bindings)
+                .all<CourseReviewAttemptRow>();
+              const reviewItems = buildCourseReviewItems(results ?? [], courseData, { unitId, lectureId });
+              if (reviewItems.length > 0) lectureContext.reviewItems = reviewItems;
+            }
+          }
         } else if (rawTopic) {
           resolvedTopic = rawTopic;
         }
@@ -156,6 +175,9 @@ export async function POST(request: Request) {
       topic: resolvedTopic,
       plan,
       language: effectiveLanguage,
+      courseUuid: progressContext?.courseUuid,
+      unitId: progressContext?.unitId,
+      lectureId: progressContext?.lectureId,
     });
 
     return Response.json({

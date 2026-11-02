@@ -13,6 +13,7 @@ const compiled = ts.transpileModule(source, {
 const mod = { exports: {} };
 new Function('require', 'module', 'exports', compiled)((spec) => {
   if (spec === './diagram') return { diagramBox, renderDiagram };
+  if (spec === './focus') return { focusAnnotationsForPlan: () => [] };
   if (spec === './lessonScript') return { VIOLET: '#7654aa' };
   if (spec === './sanitizeNarration') return { sanitizeNarration: (t) => t };
   if (spec === '../i18n/content') return { L: (_en, zh) => zh };

@@ -226,12 +226,14 @@ export function courseFromBackend(cs: BackendCourse, fallbackTopic: string): Gen
   let li = 0;
   const units: Unit[] = cs.units.map((u, ui) => ({
     id: ui + 1,
+    ...(u.unitId ? { unitId: u.unitId } : {}),
     title: stripUnitPrefix(u.title),
     lectures: (u.lectures ?? []).map((l) => {
       li += 1;
       const lec: Lecture = {
         /* CourseJourney 以 id==='l1' 判定首讲;顺序重排保证首讲可学 */
         id: li === 1 ? 'l1' : `lb${li}`,
+        ...(l.lectureId ? { lectureId: l.lectureId } : {}),
         title: l.title,
         description: '',
         kind: kindOfTitle(l.title),

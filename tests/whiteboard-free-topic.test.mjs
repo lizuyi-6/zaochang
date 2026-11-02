@@ -50,10 +50,13 @@ test("演示课不消灭:只作明确选择的兜底出口(匿名体验/备课�
 });
 
 const agents = readFileSync(new URL("../app/api/_lib/hyperknow/agents.ts", import.meta.url), "utf8");
+// 讲次上下文格式化已从 agents.ts 抽到 lecture-context.ts(错题回捞一并在此渲染)。
+const lectureContext = readFileSync(new URL("../app/api/_lib/hyperknow/lecture-context.ts", import.meta.url), "utf8");
 
 test("幻影承接:无课程上下文时讲师提示显式声明独立讲次(没有上一讲)", () => {
-  assert.match(agents, /STANDALONE lecture/, "自由讲座必须有 STANDALONE 上下文声明");
-  assert.match(agents, /NO previous lecture and NO next lecture/, "必须明令禁止引用前后讲次");
+  assert.match(lectureContext, /STANDALONE lecture/, "自由讲座必须有 STANDALONE 上下文声明");
+  assert.match(lectureContext, /NO previous lecture and NO next lecture/, "必须明令禁止引用前后讲次");
+  assert.match(agents, /formatLectureCourseContext\(context\)/, "讲稿请求必须经 formatLectureCourseContext 拼入上下文");
 });
 
 test("备课页文案:介绍正文跟话题走,不落回演示课修辞三角文案", () => {

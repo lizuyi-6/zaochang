@@ -6,7 +6,10 @@ interface __BaseEnv_Env {
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
-		mainModule: typeof import("./dist/server/index");
+		// 手改:wrangler types 生成的 mainModule 指向构建产物 dist/server/index,会让 tsc 顺着构建产物
+		// 把 dist/ 全部纳入类型检查(allowJs);unpdf 的 pdfjs chunk 进入 dist 后本地"先构建再 tsc"
+		// 直接栈溢出。mainModule 未被代码使用,改指源码入口;契约见 tests/worker-contracts.test.mjs。
+		mainModule: typeof import("./worker/index");
 	}
 	interface Env extends __BaseEnv_Env {}
 }

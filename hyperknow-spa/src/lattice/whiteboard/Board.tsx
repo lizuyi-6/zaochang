@@ -332,18 +332,21 @@ export const Board: React.FC<BoardProps> = ({
     const vpRect = vp.getBoundingClientRect();
     if (vpRect.width <= 0 || vpRect.height <= 0) return;
 
-    // Collect elements in this step
+    // 回指旧板书时优先把聚光目标带入视野;无聚光时保持按当前步自动跟随。
+    const stepFocus = annots.filter((an) => an.transient && an.step === targetStep);
     const latestBoardStep = Math.max(...items.filter((it) => it.step <= targetStep).map((it) => it.step));
     const stepItems = items.filter((it) => it.step === latestBoardStep);
-    let targetElements = stepItems.map((it) => {
-      const d = it.diagram ? diagrams.get(it.id) : null;
-      return {
-        x: it.x,
-        y: it.y,
-        width: d ? d.w : (it.w ?? 340),
-        height: d ? d.h : it.image ? (it.image.width ?? 340) + 64 : it.formula ? 120 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
-      };
-    });
+    let targetElements = stepFocus.length
+      ? stepFocus.map((an) => ({ x: an.x, y: an.y, width: an.w, height: an.h }))
+      : stepItems.map((it) => {
+          const d = it.diagram ? diagrams.get(it.id) : null;
+          return {
+            x: it.x,
+            y: it.y,
+            width: d ? d.w : (it.w ?? 340),
+            height: d ? d.h : it.h ?? (it.image ? (it.image.width ?? 340) + 64 : it.formula ? 120 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24))),
+          };
+        });
 
     if (targetElements.length === 0 && targetWritingId) {
       const it = items.find((i) => i.id === targetWritingId);
@@ -353,7 +356,7 @@ export const Board: React.FC<BoardProps> = ({
           x: it.x,
           y: it.y,
           width: d ? d.w : (it.w ?? 340),
-          height: d ? d.h : it.image ? (it.image.width ?? 340) + 64 : it.formula ? 120 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24)),
+          height: d ? d.h : it.h ?? (it.image ? (it.image.width ?? 340) + 64 : it.formula ? 120 : (it.lines.length * (it.mono ? MONO_LH : it.size * 1.24))),
         }];
       }
     }
@@ -397,7 +400,7 @@ export const Board: React.FC<BoardProps> = ({
       }
       return next;
     });
-  }, [isFollowing, items, diagrams, insets, onZoomChange]);
+  }, [isFollowing, items, diagrams, annots, insets, onZoomChange]);
 
   // Auto-focus on writingId, step change, or resume following
   useEffect(() => {
@@ -769,11 +772,17 @@ export const Board: React.FC<BoardProps> = ({
 
           {/* annotations */}
           {annots.map((an) => {
+            if (an.transient) {
+              // 当前聚光在本步保持清晰,跨步后变浅保留一拍,再移除以免整板积满圈注。
+              if (an.step < step - 1 || an.step > step) return null;
+              const active = annotActive === an.id;
+              return <AnnotView key={an.id} an={an} animate={active} dimmed={an.step < step} />;
+            }
             if (an.step > step) return null;
             const done = an.step < step || annotsDone.has(an.id);
             const active = annotActive === an.id;
             if (!done && !active) return null;
-            return <AnnotView key={an.id} an={an} animate={active} />;
+            return <AnnotView key={an.id} an={an} animate={active} dimmed={false} />;
           })}
 
           {pencilPos && (
@@ -899,20 +908,22 @@ const TableBlock: React.FC<{ table: BoardTable; rowsShown: number; standard: boo
   );
 };
 
-const AnnotView: React.FC<{ an: BoardAnnot; animate: boolean }> = ({ an, animate }) => {
-  if (an.kind === 'highlight') {
+const AnnotView: React.FC<{ an: BoardAnnot; animate: boolean; dimmed: boolean }> = ({ an, animate, dimmed }) => {
+  if (an.kind === 'highlight' || an.kind === 'underline') {
     return (
       <div
-        className="wb-annot highlight"
+        className={`wb-annot ${an.kind}`}
         style={{
           left: an.x,
           top: an.y,
           width: an.w,
           height: an.h,
+          opacity: dimmed ? 0.22 : 1,
+          transition: 'opacity 450ms ease',
           animation: animate ? 'wb-highlight-wipe 0.55s ease-out forwards' : undefined,
         }}
       >
-        <BoardUnderline w={an.w} />
+        <BoardUnderline w={an.w} animate={animate} />
       </div>
     );
   }
@@ -926,9 +937,11 @@ const AnnotView: React.FC<{ an: BoardAnnot; animate: boolean }> = ({ an, animate
           width: an.w,
           height: an.h,
           transform: 'translate(-10px, -8px)',
+          opacity: dimmed ? 0.22 : 1,
+          transition: 'opacity 450ms ease',
         }}
       >
-        <BoardCircle w={an.w + 20} h={an.h + 16} />
+        <BoardCircle w={an.w + 20} h={an.h + 16} animate={animate} />
       </div>
     );
   }

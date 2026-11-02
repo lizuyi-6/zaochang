@@ -138,27 +138,65 @@ export type StoredWhiteboardSession = {
   id: string;
   topic: string;
   createdAt: string;
+  courseUuid: string | null;
+  unitId: string | null;
+  lectureId: string | null;
   plan: { steps: Array<{ step_id: string; spoken_text: string; board_action: Record<string, unknown> }>; language?: string };
 };
 
-export async function saveWhiteboardSession(input: { id: string; userEmail: string; topic: string; plan: StoredWhiteboardSession["plan"]; language?: string }): Promise<void> {
+export async function saveWhiteboardSession(input: {
+  id: string;
+  userEmail: string;
+  topic: string;
+  plan: StoredWhiteboardSession["plan"];
+  language?: string;
+  courseUuid?: string | null;
+  unitId?: string | null;
+  lectureId?: string | null;
+}): Promise<void> {
   // language 并入 plan_json 存储(免迁移):插话答疑端点据此恢复讲座语言。
   const planJson = JSON.stringify(input.language ? { ...input.plan, language: input.language } : input.plan);
   await database()
-    .prepare(`INSERT INTO hk_whiteboard_sessions (id, user_email, topic, plan_json) VALUES (?, ?, ?, ?)`)
-    .bind(input.id, input.userEmail, input.topic, planJson)
+    .prepare(`INSERT INTO hk_whiteboard_sessions (id, user_email, topic, plan_json, course_uuid, unit_id, lecture_id)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .bind(
+      input.id,
+      input.userEmail,
+      input.topic,
+      planJson,
+      input.courseUuid ?? null,
+      input.unitId ?? null,
+      input.lectureId ?? null,
+    )
     .run();
 }
 
 export async function getWhiteboardSession(id: string, userEmail: string): Promise<StoredWhiteboardSession | null> {
   const row = await database()
-    .prepare(`SELECT id, topic, plan_json, created_at FROM hk_whiteboard_sessions WHERE id = ? AND user_email = ?`)
+    .prepare(`SELECT id, topic, plan_json, created_at, course_uuid, unit_id, lecture_id
+              FROM hk_whiteboard_sessions WHERE id = ? AND user_email = ?`)
     .bind(id, userEmail)
-    .first<{ id: string; topic: string; plan_json: string; created_at: string }>();
+    .first<{
+      id: string;
+      topic: string;
+      plan_json: string;
+      created_at: string;
+      course_uuid: string | null;
+      unit_id: string | null;
+      lecture_id: string | null;
+    }>();
   if (!row) return null;
   const plan = safeJson(row.plan_json) as StoredWhiteboardSession["plan"];
   if (!plan || !Array.isArray(plan.steps)) return null;
-  return { id: row.id, topic: row.topic, createdAt: row.created_at, plan };
+  return {
+    id: row.id,
+    topic: row.topic,
+    createdAt: row.created_at,
+    courseUuid: row.course_uuid,
+    unitId: row.unit_id,
+    lectureId: row.lecture_id,
+    plan,
+  };
 }
 
 export type StoredCourseTask = {

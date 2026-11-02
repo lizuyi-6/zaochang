@@ -195,6 +195,8 @@ function drawAnnots(ctx: CanvasRenderingContext2D, annots: BoardAnnot[], step: n
   ctx.lineWidth = 1.6;
   ctx.lineCap = 'round';
   for (const an of annots) {
+    // 直播聚光随当前快照导出;历史聚光不叠加,避免整页板书被旧圈注覆盖。
+    if (an.transient && an.step !== step) continue;
     if (an.step > step) continue;
     ctx.beginPath();
     if (an.kind === 'circle') {
@@ -255,6 +257,7 @@ function contentCrop(ctx: CanvasRenderingContext2D, snap: BoardSnapshot): Crop {
     grow(table.x, table.y, table.colW.reduce((a, b) => a + b, 0), table.rowH.reduce((a, b) => a + b, 0));
   }
   for (const an of annots) {
+    if (an.transient && an.step !== snap.step) continue;
     if (an.step <= snap.step) grow(an.x, an.y, an.w, an.h);
   }
   if (!Number.isFinite(x0)) return { x: 0, y: 0, w: 900, h: 700 };

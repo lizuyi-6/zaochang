@@ -1215,8 +1215,68 @@ export const hkWhiteboardSessions = sqliteTable("hk_whiteboard_sessions", {
   userEmail: text("user_email").notNull().references(() => members.email),
   topic: text("topic").notNull(),
   planJson: text("plan_json").notNull(),
+  courseUuid: text("course_uuid"),
+  unitId: text("unit_id"),
+  lectureId: text("lecture_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// 课程讲次进度只保留稳定的开始/完成状态；小测正确率另由首答记录计算。
+export const hkLectureProgress = sqliteTable(
+  "hk_lecture_progress",
+  {
+    memberEmail: text("member_email").notNull().references(() => members.email),
+    courseUuid: text("course_uuid").notNull(),
+    unitId: text("unit_id").notNull(),
+    lectureId: text("lecture_id").notNull(),
+    sessionId: text("session_id"),
+    status: text("status").notNull().default("started"),
+    startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    completedAt: text("completed_at"),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("hk_lecture_progress_member_course_unit_lecture_idx").on(
+      table.memberEmail,
+      table.courseUuid,
+      table.unitId,
+      table.lectureId,
+    ),
+    index("hk_lecture_progress_member_course_idx").on(table.memberEmail, table.courseUuid),
+    check("hk_lecture_progress_status_valid", sql`${table.status} in ('started', 'completed')`),
+  ],
+);
+
+// 快测尝试逐次保留 365 天；mastery.ts 按 session_id + step_id 只读首答。
+// recall 的 verdict 为 T2 留接口，本轮只写 choice。
+export const hkCheckAttempts = sqliteTable(
+  "hk_check_attempts",
+  {
+    id: text("id").primaryKey(),
+    memberEmail: text("member_email").notNull().references(() => members.email),
+    sessionId: text("session_id"),
+    courseUuid: text("course_uuid"),
+    unitId: text("unit_id"),
+    lectureId: text("lecture_id"),
+    stepId: text("step_id").notNull(),
+    kind: text("kind").notNull(),
+    correct: integer("correct").notNull(),
+    verdict: text("verdict"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("hk_check_attempts_member_course_lecture_idx").on(
+      table.memberEmail,
+      table.courseUuid,
+      table.unitId,
+      table.lectureId,
+    ),
+    index("hk_check_attempts_session_step_idx").on(table.sessionId, table.stepId, table.kind),
+    check("hk_check_attempts_kind_valid", sql`${table.kind} in ('choice', 'recall')`),
+    check("hk_check_attempts_correct_valid", sql`${table.correct} in (0, 1)`),
+    check("hk_check_attempts_verdict_valid", sql`${table.verdict} is null or ${table.verdict} in ('correct', 'partial', 'incorrect')`),
+  ],
+);
 
 // hyperknow 独立积分(每日重置):balance 为今日剩余,reset_date 是额度归属的
 // 北京日期(UTC+8,YYYY-MM-DD)。懒重置:读取/消费时发现 reset_date 落后即整额

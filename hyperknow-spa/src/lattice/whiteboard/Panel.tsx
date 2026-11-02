@@ -21,7 +21,7 @@ import { L } from '../i18n/content';
 import type { VoiceInputStatus } from '../actions';
 
 export type VoiceState = VoiceInputStatus;
-export type PlayStatus = 'explaining' | 'yourturn' | 'ended' | 'idle';
+export type PlayStatus = 'explaining' | 'yourturn' | 'grading' | 'ended' | 'idle';
 
 const ChipIcon: React.FC<{ icon: NonNullable<PanelEntry['chipIcon']> }> = ({ icon }) => {
   switch (icon) {
@@ -136,6 +136,11 @@ export const ConversationPanel: React.FC<{
           <div className="wb-status">
             <span className="dots">•••</span>
             <span>{t('courseSession.narratingReply')}</span>
+          </div>
+        ) : status === 'grading' ? (
+          <div className="wb-status">
+            <LoaderCircle size={12} className="hk-voice-spinner" />
+            <span>{L('Grading your answer…', '正在批改…')}</span>
           </div>
         ) : status === 'yourturn' ? (
           <div className="wb-status">

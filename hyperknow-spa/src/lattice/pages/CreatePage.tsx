@@ -10,6 +10,7 @@ import {
   Square,
   RefreshCw,
   TriangleAlert,
+  FileText,
 } from 'lucide-react';
 import type { PageProps } from '../types';
 import {
@@ -33,6 +34,7 @@ import { AvatarCat, Astronaut, DeskWriter, RocketGirl, Ufo } from '../illustrati
 import { SupportModal } from '../SupportModal';
 import { placeholders } from '../data';
 import { toast } from '../toast';
+import { formatSize, loadMaterials, removeMaterial, uploadMaterial, type CourseMaterial } from '../materials';
 import './CreatePage.css';
 
 /**
@@ -143,6 +145,10 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [input, setInput] = useState('');
+  const materialScope = `create:${state.identity?.email ?? 'demo'}`;
+  const [courseMaterials, setCourseMaterials] = useState<CourseMaterial[]>(() => loadMaterials(materialScope).slice(0, 3));
+  const [materialStatuses, setMaterialStatuses] = useState<Record<string, string>>({});
+  const [uploadingMaterial, setUploadingMaterial] = useState(false);
 
   const runRef = useRef(0);
   const seededRef = useRef(false);
@@ -150,6 +156,29 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
   const columnRef = useRef<HTMLDivElement | null>(null);
   const followRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
+  const materialInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setCourseMaterials(loadMaterials(materialScope).slice(0, 3));
+    setMaterialStatuses({});
+  }, [materialScope]);
+
+  const addCourseMaterial = async (file: File | undefined) => {
+    if (!file) return;
+    if (courseMaterials.length >= 3) {
+      toast(L('Add up to 3 materials to a course', '每门课程最多添加 3 份资料'));
+      return;
+    }
+    setUploadingMaterial(true);
+    const material = await uploadMaterial(materialScope, file);
+    setUploadingMaterial(false);
+    if (!material) {
+      toast(L('Upload failed — please try again', '上传失败，请重试'));
+      return;
+    }
+    setCourseMaterials(loadMaterials(materialScope).slice(0, 3));
+    setMaterialStatuses((current) => ({ ...current, [material.key]: 'pending' }));
+  };
 
   /* 生成请求生命周期(原 GenerationOverlay 语义,逐字保留) */
   const stage1CtrlRef = useRef<AbortController | null>(null);
@@ -458,6 +487,10 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
             const ids = locked ?? allIds;
             if (ids) setSelectedUnits(ids);
           },
+          onMaterialStatus: (material) => {
+            if (runRef.current !== run) return;
+            setMaterialStatuses((current) => ({ ...current, [material.key]: material.status }));
+          },
           onRemaining: (remaining) => {
             if (runRef.current !== run) return;
             writebackCredits(remaining);
@@ -493,8 +526,16 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
     resetGenerationView();
     lastBriefRef.current = brief;
     set({ generating: true, genQuery: query, courseBrief: brief, generated: null });
+    setMaterialStatuses(Object.fromEntries(courseMaterials.map((material) => [material.key, 'pending'])));
     updateBlueprintUuid('');
-    runStage1({ query, brief, idempotencyKey: crypto.randomUUID(), requireConfirmation: true, model: state.chatModel });
+    runStage1({
+      query,
+      brief,
+      materialKeys: [...new Set(courseMaterials.map((material) => material.key).filter(Boolean))].sort(),
+      idempotencyKey: crypto.randomUUID(),
+      requireConfirmation: true,
+      model: state.chatModel,
+    });
   };
 
   /** 断点恢复(中断/失败/取消后、「我的课程」交接、刷新后):把同一任务 UUID 交给服务端判定——
@@ -751,6 +792,75 @@ export const CreatePage: React.FC<PageProps> = ({ state, set }) => {
 
       {/* conversation / activity feed */}
       <div className="cr-column" ref={columnRef}>
+        <section className="cr-materials" aria-label={L('Course materials', '课程资料')}>
+          <div className="cr-materials-head">
+            <div>
+              <b>{L('Course materials', '课程资料')}</b>
+              <span>{L('Up to 3 clean files · text is extracted when you generate the course', '最多 3 份已扫描资料 · 建课时读取文本内容')}</span>
+            </div>
+            <input
+              ref={materialInputRef}
+              type="file"
+              hidden
+              accept=".txt,.md,.docx,.pdf"
+              onChange={(event) => {
+                void addCourseMaterial(event.target.files?.[0]);
+                event.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              className="cr-material-add"
+              disabled={uploadingMaterial || courseMaterials.length >= 3 || phase === 'generating'}
+              onClick={() => materialInputRef.current?.click()}
+            >
+              <FileText size={14} />
+              {uploadingMaterial ? L('Uploading…', '上传中…') : L('Add files', '添加资料')}
+            </button>
+          </div>
+          {courseMaterials.length > 0 ? (
+            <div className="cr-material-list">
+              {courseMaterials.map((material) => {
+                const status = materialStatuses[material.key];
+                const statusLabel = !status || status === 'pending'
+                  ? phase === 'generating' && status === 'pending'
+                    ? L('Reading…', '正在解析…')
+                    : L('Waiting to parse', '待解析')
+                  : status === 'ready'
+                    ? L('Read', '已读取')
+                    : status === 'truncated'
+                      ? L('Read · truncated', '已读取·内容截断')
+                      : status === 'unsupported_format'
+                        ? L('Unsupported format', '格式不支持')
+                        : L('Could not read', '无法读取');
+                return (
+                  <div className="cr-material-file" key={material.key}>
+                    <FileText size={14} />
+                    <span className="cr-material-name">{material.name}</span>
+                    <small>{formatSize(material.size)} · {statusLabel}</small>
+                    <button
+                      type="button"
+                      disabled={phase === 'generating'}
+                      aria-label={L(`Remove ${material.name}`, `移除${material.name}`)}
+                      onClick={() => {
+                        setCourseMaterials(removeMaterial(materialScope, material.id).slice(0, 3));
+                        setMaterialStatuses((current) => {
+                          const next = { ...current };
+                          delete next[material.key];
+                          return next;
+                        });
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="cr-material-empty">{L('No course materials added yet.', '尚未添加课程资料。')}</p>
+          )}
+        </section>
         {!topic ? (
           <div className="cr-welcome">
             <GraduationCap size={44} strokeWidth={1.4} />

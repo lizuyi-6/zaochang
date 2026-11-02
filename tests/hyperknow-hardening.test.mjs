@@ -214,7 +214,8 @@ test('auth-hardening: email REST override is production-blind, agent identity is
 
 test('hyperknow-hardening: H1 task brief / H4 fixed search copy / H7 reading same-origin / H8 chat budget', () => {
   const route = read('app/api/hyperknow/course-generation/route.ts');
-  assert.match(route, /taskBrief = task\.briefJson \? \(JSON\.parse\(task\.briefJson\) as CourseBrief\) : undefined;/, 'H1:Stage2 的 brief 必须来自任务行,请求体 brief 不得覆写');
+  // 任务行 brief 的解析收进 parseCourseTaskBrief(兼容旧纯 brief 行,剥离资料键字段),语义不变。
+  assert.match(route, /const parsedTaskBrief = parseCourseTaskBrief\(task\.briefJson\);\s+const taskBrief = parsedTaskBrief\.brief as CourseBrief \| undefined;/, 'H1:Stage2 的 brief 必须来自任务行,请求体 brief 不得覆写');
   assert.doesNotMatch(route, /reason: err instanceof Error \? err\.message/, 'H4:检索错误原文不得推给客户端(固定文案 + 日志)');
   assert.match(route, /reason: "search_upstream_failed"/, 'H4:检索失败固定文案');
   assert.match(route, /hyperknow-course-confirm/, 'H5:蓝图确认必须与新建课分桶限流;回放不计数');

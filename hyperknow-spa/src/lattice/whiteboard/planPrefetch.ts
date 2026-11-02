@@ -10,6 +10,7 @@
  * 触发时机:页面就绪自动一次(主 CTA 目标讲次)+ 悬停讲次行 650ms 意图(任意讲次)。
  * 浪费控制:同 key 15min TTL 去重;悬停预热每次页面挂载限 4 次(plan=1 次 LLM,限 20/h);
  * key 不含 topic(服务端按 courseUuid+lecture 上下文权威解析主题)。
+ * 跨讲次错题回捞取舍:下一讲若在上一讲答题前已预热并在 15 分钟内复用,新错题不会进入该计划。
  */
 import {
   fetchLectureImageLive,

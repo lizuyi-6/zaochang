@@ -75,6 +75,26 @@ test("伪生成课程骨架:4 单元,每单元 3 讲 + 1 项目 + 1 测验,节�
   for (const unit of course.units) assert.doesNotMatch(unit.title, /^\s*(unit\s*\d+|第\s*\d+\s*单元)/i);
 });
 
+test("真实课程映射保留后端 unitId/lectureId/sessionId 供精确进度绑定", () => {
+  const course = gen.courseFromBackend({
+    courseUuid: "course-uuid",
+    courseTitle: "稳定 ID 课程",
+    units: [{
+      unitId: "backend-unit-7",
+      title: "单元七",
+      lectures: [{
+        lectureId: "backend-lecture-3",
+        title: "第三讲",
+        sessions: [{ sessionId: "backend-session-9", title: "快测" }],
+      }],
+    }],
+  }, "备用标题");
+  assert.equal(course.units[0].id, 1, "展示索引继续供课程页选中态使用");
+  assert.equal(course.units[0].unitId, "backend-unit-7");
+  assert.equal(course.units[0].lectures[0].lectureId, "backend-lecture-3");
+  assert.equal(course.units[0].lectures[0].sessions[0].sessionId, "backend-session-9");
+});
+
 test("市场/首页卡片节数 = 点进去的实际节数(同一生成器现算)", () => {
   for (const card of [...data.homeCourses(), ...data.marketplaceFeatured()]) {
     assert.equal(card.lessons, gen.GENERATED_LESSON_COUNT, card.id);

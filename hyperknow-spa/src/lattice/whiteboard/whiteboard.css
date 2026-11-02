@@ -1517,6 +1517,70 @@
 .wb-user-image img { display: block; max-width: 100%; border-radius: 8px; }
 .wb-user-image-name { display: block; font-size: 11px; color: #6B7280; margin-top: 6px; word-break: break-all; }
 
+/* 讲次结束摘要:独立于聊天结束提示与成就弹窗，保留 systemEnd 的原有流程。 */
+.wb-summary-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(16, 24, 40, 0.48);
+  backdrop-filter: blur(5px);
+}
+.wb-summary-card {
+  width: min(680px, 100%);
+  max-height: min(88vh, 820px);
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 22px;
+  background: #FFFEFA;
+  box-shadow: 0 24px 72px rgba(20, 30, 45, 0.24);
+  color: #1F2937;
+}
+.wb-summary-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
+.wb-summary-eyebrow { color: #8A7351; font-size: 10px; font-weight: 700; letter-spacing: 1.8px; }
+.wb-summary-heading h2 { margin: 6px 0 0; color: #1D2939; font-size: 26px; line-height: 1.2; }
+.wb-summary-score { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; white-space: nowrap; }
+.wb-summary-score strong { color: #284D42; font-size: 23px; font-variant-numeric: tabular-nums; }
+.wb-summary-score span, .wb-summary-meta { color: #667085; font-size: 12px; }
+.wb-summary-meta { display: flex; flex-wrap: wrap; gap: 18px; margin: 18px 0 14px; }
+.wb-summary-meta strong { color: #344054; }
+.wb-summary-questions { display: grid; gap: 10px; max-height: 48vh; overflow: auto; margin: 0; padding: 0 2px 2px 0; list-style: none; }
+.wb-summary-question { min-width: 0; padding: 14px 16px; border: 1px solid #E9E4D9; border-radius: 14px; background: #fff; }
+.wb-summary-question-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wb-summary-question-number { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; background: #F3EFE5; color: #66563D; font-size: 12px; font-weight: 700; }
+.wb-summary-result { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 650; }
+.wb-summary-result.is-correct { color: #287252; }
+.wb-summary-result.is-partial { color: #A56B16; }
+.wb-summary-result.is-incorrect { color: #B54745; }
+.wb-summary-result.is-unanswered { color: #667085; }
+.wb-summary-question-text { margin: 10px 0 11px; color: #273444; font-size: 14px; font-weight: 600; line-height: 1.55; overflow-wrap: anywhere; }
+.wb-summary-answer { display: grid; gap: 3px; margin: 0; color: #667085; font-size: 12px; line-height: 1.5; }
+.wb-summary-answer strong { color: #344054; font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+.wb-summary-empty { margin: 22px 0; padding: 20px; border-radius: 14px; background: #F7F5EF; color: #667085; font-size: 13px; text-align: center; }
+.wb-summary-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.wb-summary-actions button { min-height: 44px; padding: 0 18px; border-radius: 12px; font-size: 13px; font-weight: 650; cursor: pointer; }
+.wb-summary-next { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #284D42; background: #284D42; color: #fff; }
+.wb-summary-next:hover { background: #1E3D34; }
+.wb-summary-back { border: 1px solid #D0D5DD; background: #fff; color: #344054; }
+.wb-summary-back:hover { background: #F8F7F3; }
+
+@media (max-width: 640px) {
+  .wb-summary-overlay { align-items: flex-end; padding: 10px; }
+  .wb-summary-card { width: 100%; max-height: calc(100dvh - 20px); padding: 22px 16px max(16px, env(safe-area-inset-bottom)); border-radius: 20px; }
+  .wb-summary-heading { align-items: flex-start; gap: 10px; }
+  .wb-summary-heading h2 { font-size: 22px; }
+  .wb-summary-score strong { font-size: 20px; }
+  .wb-summary-meta { gap: 12px; }
+  .wb-summary-questions { max-height: 46dvh; }
+  .wb-summary-question { padding: 12px; }
+  .wb-summary-actions { display: grid; grid-template-columns: 1fr; }
+  .wb-summary-actions button { width: 100%; min-height: 48px; }
+}
+
 /* Apple HIG 触控目标 ≥44px:触屏(粗指针)设备抬升白板课堂小控件,桌面鼠标密度不变 */
 @media (pointer: coarse) {
   .wb-composer .plus, .wb-composer .mic, .wb-composer .send { width: 44px; height: 44px; }

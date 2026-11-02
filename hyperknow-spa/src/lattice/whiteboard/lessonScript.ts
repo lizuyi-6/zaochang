@@ -28,6 +28,7 @@ export interface BoardItem {
   x: number;
   y: number;
   w?: number; // wrap width (px)
+  h?: number; // 相机与聚光共用的高度估算(公式/图片按保守值布局)
   size: number; // font size px (Caveat)
   weight?: 400 | 600 | 700;
   color?: string;
@@ -58,6 +59,8 @@ export interface BoardAnnot {
   y: number;
   w: number;
   h: number;
+  /** 直播聚光只在当前步保留,下一步变浅后移除;演示课批注保持原有持久语义。 */
+  transient?: boolean;
 }
 
 /** Hand-drawn Audience Type table. */
@@ -101,6 +104,8 @@ export interface LessonStep {
   popup?: PopupKind;
   /** pause point: wait for typed answer */
   awaitAnswer?: boolean;
+  /** 服务端批改的短答回忆题,评分依据随计划透传但不由客户端提交回服务端。 */
+  awaitRecall?: { question: string; referenceAnswer: string; rubric: string[]; hint?: string };
   /** quick-check choice popup on the board */
   awaitChoice?: { question: string; options: string[]; answer: number; explanation?: string };
   /** pan the board to PAN_X at step start */

@@ -13,6 +13,56 @@
   position: relative;
 }
 
+.cr-materials {
+  max-width: 898px;
+  margin: 0 auto 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, var(--sand-300));
+  border-radius: 12px;
+  background: var(--panel-bg, var(--white));
+}
+.cr-materials-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cr-materials-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.cr-materials-head b { color: var(--ink-800); font-size: 12px; }
+.cr-materials-head span { color: var(--ink-400); font-size: 11px; line-height: 1.4; }
+.cr-material-add {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--sand-300);
+  border-radius: 8px;
+  color: var(--ink-700);
+  background: var(--white);
+  font-size: 11px;
+}
+.cr-material-add:disabled { opacity: 0.5; }
+.cr-material-list { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+.cr-material-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink-600);
+  font-size: 11px;
+}
+.cr-material-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-800); }
+.cr-material-file small { flex: 0 0 auto; color: var(--ink-400); }
+.cr-material-file button { display: inline-flex; margin-left: auto; color: var(--ink-400); }
+.cr-material-file button:disabled { opacity: 0.35; }
+.cr-material-empty { margin: 9px 0 0; color: var(--ink-400); font-size: 11px; }
+
 /* floating top-right utility cluster */
 .cr-utility {
   position: fixed;

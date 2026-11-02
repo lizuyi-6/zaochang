@@ -9,6 +9,7 @@ import type { LiveLecturePlan } from '../backend';
 import type { BoardAnnot, BoardItem, BoardTable, LessonStep, Rich } from './lessonScript';
 import { VIOLET } from './lessonScript';
 import { diagramBox, renderDiagram } from './diagram';
+import { focusAnnotationsForPlan } from './focus';
 import { sanitizeNarration } from './sanitizeNarration';
 import { L } from '../i18n/content';
 
@@ -294,6 +295,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
         size: 16,
         mono: true, // 书写节奏/导出文本沿用等宽语义;Board 渲染走 formula 分支
         formula: { latex },
+        h: formH,
         w: COL_W,
         lines: [plain(latex)],
         x: COL_X[cursor.col],
@@ -338,6 +340,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
         size: 14,
         w: COL_W,
         diagram: code,
+        h: diagH,
         lines: fallbackDisplayLines,
         x: COL_X[cursor.col],
         y: cursor.y,
@@ -368,6 +371,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
           width: action.width ?? 320,
           height: action.height ?? 220,
         },
+        h: imgH,
         lines: [
           plain(caption ? `[${caption}]` : '[Visual Note]'),
           plain(prompt || narrationText),
@@ -408,6 +412,20 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
       }
     }
 
+    if (action.type === 'recall_check') {
+      const question = sanitizeNarration(action.question ?? '');
+      const referenceAnswer = sanitizeNarration(action.reference_answer ?? '');
+      const rubric = (action.rubric ?? []).map(sanitizeNarration).filter(Boolean).slice(0, 4);
+      if (question && referenceAnswer && rubric.length >= 2) {
+        lessonStep.awaitRecall = {
+          question,
+          referenceAnswer,
+          rubric,
+          ...(action.hint ? { hint: sanitizeNarration(action.hint) } : {}),
+        };
+      }
+    }
+
     const aType = action.type as string;
     if (
       aType === 'question' ||
@@ -433,7 +451,7 @@ export function liveLessonFromPlan(plan: LiveLecturePlan): LessonScript {
     steps,
     items,
     table: null,
-    annots: [],
+    annots: focusAnnotationsForPlan(plan, items),
     userAnswers: {},
     pageSplitX: maxX >= 1180 ? 1180 : 0,
     sessionId: plan.session_id || undefined,

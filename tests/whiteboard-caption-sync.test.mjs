@@ -1112,7 +1112,7 @@ test('Regression 13: Stop/Unmount stops both lecture and tutor audio channels wi
   }
 });
 
-test('Regression 14: liveLessonFromPlan handles intermediate quick_checks with explanations, and awaitAnswer questions', () => {
+test('Regression 14: liveLessonFromPlan handles quick_checks, recall_check answers, and awaitAnswer questions', () => {
   const plan = {
     steps: [
       {
@@ -1139,6 +1139,17 @@ test('Regression 14: liveLessonFromPlan handles intermediate quick_checks with e
       },
       {
         step_id: 's4',
+        spoken_text: '请用一两句话回忆这两个条件。',
+        board_action: {
+          type: 'recall_check',
+          question: '打开闸门的两个条件是什么？',
+          reference_answer: '密钥与匹配的验证码都必须存在。',
+          rubric: ['指出密钥条件。', '指出匹配验证码条件。'],
+          hint: '回想流程图里的两个输入。',
+        },
+      },
+      {
+        step_id: 's5',
         spoken_text: '总结验证。',
         board_action: {
           type: 'quick_check',
@@ -1152,7 +1163,7 @@ test('Regression 14: liveLessonFromPlan handles intermediate quick_checks with e
   };
 
   const script = liveLessonFromPlan(plan);
-  assert.equal(script.steps.length, 5, '4 步讲座 + 1 步结课 popup');
+  assert.equal(script.steps.length, 6, '5 步讲座 + 1 步结课 popup');
 
   // Step 2: 随堂中间快测
   const s2 = script.steps[1];
@@ -1165,11 +1176,20 @@ test('Regression 14: liveLessonFromPlan handles intermediate quick_checks with e
   const s3 = script.steps[2];
   assert.equal(s3.awaitAnswer, true, 'await_answer 标记必须正确映射为 step.awaitAnswer');
 
-  // Step 4: 结课测试
+  // Step 4: 服务端批改回忆题
   const s4 = script.steps[3];
-  assert.ok(s4.awaitChoice, '终末测试生成 awaitChoice');
-  assert.equal(s4.awaitChoice.explanation, '正确选项概括了全部要素。');
-  assert.equal(s4.systemEnd, true, '最后一步讲座带有 systemEnd 标志');
+  assert.deepEqual(s4.awaitRecall, {
+    question: '打开闸门的两个条件是什么？',
+    referenceAnswer: '密钥与匹配的验证码都必须存在。',
+    rubric: ['指出密钥条件。', '指出匹配验证码条件。'],
+    hint: '回想流程图里的两个输入。',
+  });
+
+  // Step 5: 结课测试
+  const s5 = script.steps[4];
+  assert.ok(s5.awaitChoice, '终末测试生成 awaitChoice');
+  assert.equal(s5.awaitChoice.explanation, '正确选项概括了全部要素。');
+  assert.equal(s5.systemEnd, true, '最后一步讲座带有 systemEnd 标志');
 });
 
 test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures (10-14 steps, 3-5 sentence narration), diagram invariant, and answer-gated checks', () => {
@@ -1188,7 +1208,10 @@ test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures 
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /never put the LEARNER.*unfortunate/is, '举例不得让学生充当倒霉/尴尬主体(实测"如果你检测结果呈阳性"被用户指冒犯)');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /neutral third party/i, '负面领域例子必须改用中立第三方');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /NEVER lay out tables or matrices as ASCII art/i, '必须明令禁止 ASCII 摆阵(矩阵走 LaTeX,结构走 diagram)——实测收益矩阵写成斜杠表格无法阅读');
-  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /3 quick_check steps/i, '必须保留 3 处 quick_check(含终末)不变量');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /exactly 3 assessment steps total/i, '每讲仍须恰有 3 次快测(含终测)');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /1 or 2 use board_action\.type "recall_check"/i, '三次快测中须有 1-2 次回忆题');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /answerable in 1-2 sentences/i, '回忆题答案必须限于 1-2 句');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /reference_answer.*rubric/is, '回忆题必须提供参考答案与评分要点');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Worked Example/i, '必须包含实例演示步');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Common Mistakes/i, '必须包含常见误区步');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /4-6 substantive bullet points/i, '卡片必须要求 4-6 条实质要点');
@@ -1207,6 +1230,11 @@ test('Regression 15: WHITEBOARD_INSTRUCTOR_PROMPT mandates full-length lectures 
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /NO markdown, bullet characters, or LaTeX in spoken_text/i, '旁白必须纯口语(逐字进 TTS)');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /narration language is ABSOLUTE/i, '中文旁白不得混入英文术语(实测模型把 worked/faded/mastery 读进了 TTS)');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /silently verify/i, '必须要求输出前静默自检');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /at least 4 steps in every lecture MUST include focus/i, '每讲至少四步必须带 focus 聚光目标');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /may name only this step or an earlier step/i, 'focus 不得引用未来或不存在步骤');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /1-based card bullet/i, 'focus 卡片要点采用从 1 开始的序号');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /spoken_text pointer MUST describe the same target as focus/i, '旁白中的指向语必须与 focus 目标一致');
+  assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /focus only card bullets, diagram nodes, whole formulas, or whole images/i, 'focus 目标类型限制为可见板书元素');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Faded Worked Example/i, '进度结构必须含渐撤例题步');
   assert.match(WHITEBOARD_INSTRUCTOR_PROMPT, /Synthesis & Closure/i, '进度结构必须含综合收束步');
 

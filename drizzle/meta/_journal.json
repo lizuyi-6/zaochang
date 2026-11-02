@@ -309,6 +309,13 @@
       "when": 1793360636957,
       "tag": "0043_member_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1793608364201,
+      "tag": "0044_hk_learning_progress",
+      "breakpoints": true
     }
   ]
 }

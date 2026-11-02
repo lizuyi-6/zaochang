@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { frame, sseResponse } from "../../_lib/hyperknow/sse";
 import { requireMember } from "../../_lib/access-control";
+import { UPLOAD_KEY_PATTERN } from "../../_lib/upload-core";
 import { jsonError } from "../../_lib/errors";
 import { COURSE_STAGE1_BUDGET_MS, COURSE_STAGE2_BUDGET_MS, CREDIT_LEASE_MARGIN_MS, resolveCourseGenBudgetMs } from "../../_lib/hyperknow/budgets";
 import { assertSameOrigin } from "../../_lib/request-origin";
@@ -41,6 +42,18 @@ import {
   type CourseBrief,
 } from "../../_lib/hyperknow/protocol";
 import type { CourseBlueprint, CourseUnit } from "../../_lib/hyperknow/prompts";
+import { readOwnedCleanUpload } from "../../_lib/hyperknow/materials";
+import {
+  buildCourseMaterialExcerpts,
+  canonicalMaterialKeys,
+  courseRequestMatches,
+  extractMaterialText,
+  parseCourseTaskBrief,
+  sanitizeCourseMaterialExcerpts,
+  serializeCourseTaskBrief,
+  type CourseMaterialExcerpt,
+  type LearnerMaterialText,
+} from "../../_lib/hyperknow/material-content";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +83,7 @@ async function runUnitGeneration(args: {
   requestSignal: AbortSignal;
   courseTitle: string;
   researchHits: WebSearchHit[];
+  learnerMaterials: LearnerMaterialText[];
   language: string;
   chatModel: string;
   courseUuid: string;
@@ -78,7 +92,7 @@ async function runUnitGeneration(args: {
   saveCheckpoint: (unit: CourseUnit, index: number, total: number) => Promise<void>;
   push: (data: Record<string, unknown>) => void;
 }): Promise<void> {
-  const { units, completed, signal, requestSignal, courseTitle, researchHits, language, chatModel, courseUuid, onModelDowngrade, restoreCached, saveCheckpoint, push } = args;
+  const { units, completed, signal, requestSignal, courseTitle, researchHits, learnerMaterials, language, chatModel, courseUuid, onModelDowngrade, restoreCached, saveCheckpoint, push } = args;
   const totalUnits = units.length;
   for (let i = 0; i < totalUnits; i++) {
     // 客户端断开:静默收尾(任务可恢复)。服务端自身超时:抛出走失败路径——
@@ -120,7 +134,7 @@ async function runUnitGeneration(args: {
       course_uuid: courseUuid,
     });
 
-    const unit = await generateUnitDetails(courseTitle, blueprintUnit, completed, signal, i, researchHits, language, chatModel, onModelDowngrade);
+    const unit = await generateUnitDetails(courseTitle, blueprintUnit, completed, signal, i, researchHits, language, chatModel, onModelDowngrade, learnerMaterials);
 
     completed[i] = unit;
     await saveCheckpoint(unit, i, totalUnits);
@@ -138,6 +152,34 @@ async function runUnitGeneration(args: {
       course_uuid: courseUuid,
     });
   }
+}
+
+async function readCourseMaterials(materialKeys: string[], memberEmail: string): Promise<{
+  learnerMaterials: LearnerMaterialText[];
+  excerpts: CourseMaterialExcerpt[];
+  statuses: Array<{ key: string; name: string; status: string; truncated?: boolean }>;
+}> {
+  const learnerMaterials: LearnerMaterialText[] = [];
+  const statuses: Array<{ key: string; name: string; status: string; truncated?: boolean }> = [];
+  for (const key of materialKeys) {
+    const upload = await readOwnedCleanUpload(key, memberEmail);
+    if (!upload) {
+      statuses.push({ key, name: "学员资料", status: "unreadable" });
+      continue;
+    }
+    const result = await extractMaterialText(upload.name, upload.mediaType, upload.bytes);
+    if (!result.ok) {
+      statuses.push({ key, name: upload.name, status: result.status });
+      continue;
+    }
+    learnerMaterials.push({ key, name: upload.name, text: result.text, truncated: result.truncated });
+    statuses.push({ key, name: upload.name, status: result.truncated ? "truncated" : "ready", truncated: result.truncated });
+  }
+  return { learnerMaterials, excerpts: buildCourseMaterialExcerpts(learnerMaterials), statuses };
+}
+
+function learnerMaterialsFromExcerpts(excerpts: CourseMaterialExcerpt[]): LearnerMaterialText[] {
+  return excerpts.map(({ key, name, excerpt }) => ({ key, name, text: excerpt }));
 }
 
 /** 已完成课程的直接回放(2026-10 审计重构 #3):三个恢复分支(确认流/任务恢复/
@@ -200,6 +242,7 @@ export async function POST(request: Request) {
       selectedUnits?: unknown;
       requireConfirmation?: unknown;
       model?: unknown;
+      materialKeys?: unknown;
     };
 
     let query = String(input.query ?? input.prompt ?? "").trim().slice(0, 300);
@@ -212,6 +255,12 @@ export async function POST(request: Request) {
     const explicitKey = typeof input.idempotencyKey === "string" && input.idempotencyKey.trim()
       ? input.idempotencyKey.trim().slice(0, 128)
       : null;
+    const requestedMaterialKeys = canonicalMaterialKeys(input.materialKeys);
+    if (!requestedMaterialKeys || requestedMaterialKeys.some((key) => !UPLOAD_KEY_PATTERN.test(key))) {
+      return Response.json({ error: "material_keys_invalid" }, { status: 400 });
+    }
+    const materialKeysWereProvided = input.materialKeys !== undefined;
+    let materialKeys = requestedMaterialKeys;
     const action = typeof input.action === "string" ? input.action.trim() : undefined;
     const requireConfirmation = Boolean(input.requireConfirmation);
     const selectedUnits = Array.isArray(input.selectedUnits) ? input.selectedUnits.map(String) : undefined;
@@ -312,12 +361,12 @@ export async function POST(request: Request) {
 
               // ── H1:brief 一律以任务行落库的为准(briefJson),请求体携带的 brief
               // 可能与任务不一致,且会被持久化进讲师 prompt 与课程记录。
-              let taskBrief: CourseBrief | undefined;
-              try {
-                taskBrief = task.briefJson ? (JSON.parse(task.briefJson) as CourseBrief) : undefined;
-              } catch {
-                taskBrief = undefined;
-              }
+              const parsedTaskBrief = parseCourseTaskBrief(task.briefJson);
+              const taskBrief = parsedTaskBrief.brief as CourseBrief | undefined;
+              const courseMaterials = sanitizeCourseMaterialExcerpts(
+                (blueprint as CourseBlueprint & { materials?: unknown }).materials,
+              );
+              const learnerMaterials = learnerMaterialsFromExcerpts(courseMaterials);
               const taskLanguage = blueprint.language || taskBrief?.language || "zh-CN";
 
               let taskResearchHits: WebSearchHit[] = [];
@@ -340,6 +389,7 @@ export async function POST(request: Request) {
                 requestSignal: request.signal,
                 courseTitle: blueprint.courseTitle,
                 researchHits: taskResearchHits,
+                learnerMaterials,
                 language: taskLanguage,
                 chatModel,
                 courseUuid: resumeUuid,
@@ -350,7 +400,7 @@ export async function POST(request: Request) {
               });
 
               await finalizeCourseDependencies(completedUnits,
-                (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, taskLanguage, undefined, chatModel), signal);
+                (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, taskLanguage, undefined, chatModel, learnerMaterials), signal);
 
               const completeCourse = {
                 courseUuid: resumeUuid,
@@ -359,6 +409,7 @@ export async function POST(request: Request) {
                 targetLearner: blueprint.targetLearner,
                 tags: blueprint.tags,
                 units: completedUnits,
+                materials: courseMaterials,
                 // brief 随课程持久化:白板讲师据此做深度校准与个性化举例(H1:取任务行)
                 ...(taskBrief ? { brief: taskBrief } : {}),
               };
@@ -433,11 +484,12 @@ export async function POST(request: Request) {
       // 同纪律)。请求体只带 resumeUuid 时 query 为空——不回填会用空主题重跑 Stage1,
       // 并经 createCourseTask 的 upsert 把任务行原 query/brief 覆写为空。
       query = existingTask.query;
-      try {
-        brief = existingTask.briefJson ? (JSON.parse(existingTask.briefJson) as CourseBrief) : undefined;
-      } catch {
-        brief = undefined;
+      const savedRequest = parseCourseTaskBrief(existingTask.briefJson);
+      if (materialKeysWereProvided && JSON.stringify(requestedMaterialKeys) !== JSON.stringify(savedRequest.materialKeys)) {
+        return Response.json({ error: "idempotency_key_reused" }, { status: 409 });
       }
+      brief = savedRequest.brief as CourseBrief | undefined;
+      materialKeys = savedRequest.materialKeys;
     }
 
     const courseUuid = resumeUuid || (explicitKey
@@ -456,7 +508,7 @@ export async function POST(request: Request) {
     if (!resumeUuid && explicitKey) {
       const task = await getCourseTask(courseUuid, member.email);
       if (task) {
-        if (task.query !== query || task.briefJson !== (brief ? JSON.stringify(brief) : null)) {
+        if (!courseRequestMatches(task, { query, brief: brief as Record<string, unknown> | undefined, materialKeys })) {
           return Response.json({ error: "idempotency_key_reused" }, { status: 409 });
         }
         const course = await getCourse(courseUuid, member.email);
@@ -476,6 +528,9 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    const resolvedMaterials = await readCourseMaterials(materialKeys, member.email);
+    const taskBriefJson = serializeCourseTaskBrief(brief as Record<string, unknown> | undefined, materialKeys);
 
     // ── 分支 3: 新建课程任务 (Stage 1: 蓝图生成与可选自动级联) ───────────────────
     // 配置缺失在流开始前暴露(fail-closed,干净 JSON)。
@@ -528,7 +583,7 @@ export async function POST(request: Request) {
     if (!resumeUuid && explicitKey && !charged) {
       // Legacy completed keys lack a task binding; do not give them fresh free work.
       const task = await getCourseTask(courseUuid, member.email);
-      if (!task || task.query !== query || task.briefJson !== (brief ? JSON.stringify(brief) : null)) {
+      if (!task || !courseRequestMatches(task, { query, brief: brief as Record<string, unknown> | undefined, materialKeys })) {
         return Response.json({ error: "idempotency_key_reused" }, { status: 409 });
       }
     }
@@ -548,7 +603,7 @@ export async function POST(request: Request) {
       userEmail: member.email,
       query,
       creditKey: chargeKey,
-      briefJson: brief ? JSON.stringify(brief) : null,
+      briefJson: taskBriefJson,
       status: "pending",
     });
 
@@ -573,6 +628,7 @@ export async function POST(request: Request) {
           try {
             push({ type: "course_generation_step", step_id: "boot", status: "loading", title: "Starting course generation", placeholder: "Crafting Courses..." });
             push({ type: "course_generation_started", course_uuid: courseUuid, query });
+            for (const status of resolvedMaterials.statuses) push({ type: "material_status", ...status });
             push({ type: "credit_status", message: "Processing request", credit_info: { remaining: remainingCredits, max: await dailyCreditsFor(member) } });
 
             push({
@@ -736,13 +792,25 @@ export async function POST(request: Request) {
             };
 
             // 真实蓝图生成
-            const blueprint = await generateCourseBlueprint(query, signal, researchHits.slice(0, 8), brief, chatModel, pushModelDegraded);
+            const blueprint = await generateCourseBlueprint(
+              query,
+              signal,
+              researchHits.slice(0, 8),
+              brief,
+              chatModel,
+              pushModelDegraded,
+              resolvedMaterials.learnerMaterials,
+            );
+            const blueprintWithMaterials: CourseBlueprint & { materials: CourseMaterialExcerpt[] } = {
+              ...blueprint,
+              materials: resolvedMaterials.excerpts,
+            };
 
             // 更新任务状态与蓝图落库
             await updateCourseTaskBlueprint(
               courseUuid,
               member.email,
-              JSON.stringify(blueprint),
+              JSON.stringify(blueprintWithMaterials),
               blueprint.units.length,
               "blueprint_ready",
             );
@@ -804,6 +872,7 @@ export async function POST(request: Request) {
               requestSignal: request.signal,
               courseTitle: blueprint.courseTitle,
               researchHits: researchHits.slice(0, 8),
+              learnerMaterials: resolvedMaterials.learnerMaterials,
               language: blueprintLanguage,
               chatModel,
               courseUuid,
@@ -814,7 +883,7 @@ export async function POST(request: Request) {
             });
 
             await finalizeCourseDependencies(generatedUnits,
-              (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, blueprintLanguage, undefined, chatModel), signal);
+              (unit, errors) => repairUnit(unit, errors, blueprint.courseTitle, signal, blueprintLanguage, undefined, chatModel, resolvedMaterials.learnerMaterials), signal);
 
             const course = {
               courseUuid,
@@ -823,6 +892,7 @@ export async function POST(request: Request) {
               targetLearner: blueprint.targetLearner,
               tags: blueprint.tags,
               units: generatedUnits,
+              materials: resolvedMaterials.excerpts,
               // brief 随课程持久化:白板讲师据此做深度校准与个性化举例
               ...(brief ? { brief } : {}),
             };

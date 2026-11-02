@@ -155,7 +155,7 @@ test('status: missing timing data cannot be classified up', async t => {
   const server = await start(t, { clock: true, rows: rs }); assert.equal((await server.json()).probes[0].status, 'down');
 });
 test('status: service list precedes normal announcements with a persistent legend and timestamp table', async t => {
-  const server = await start(t, { incidents: [event('info')] }); const html = await server.html();
+  const server = await start(t, { clock: true, incidents: [event('info')] }); const html = await server.html();
   assert.ok(html.indexOf('id="probe-home"') < html.indexOf('<h2 class="sec-title">历史事件与公告'));
   assert.match(html, /aria-label="历史状态图例"/); assert.match(html, /<th scope="col">时间（UTC\+8）/);
   assert.match(html, /title="10-/); assert.match(html, /id="refresh-status"/); assert.doesNotMatch(html, /http-equiv="refresh"/);

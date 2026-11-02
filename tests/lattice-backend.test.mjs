@@ -203,20 +203,29 @@ test('course: errors stay terminal and incomplete streams fail', async (t) => {
   }
 });
 
-test('whiteboard plan: parser preserves quick_check explanation and degraded flag', async (t) => {
+test('whiteboard plan: parser preserves quick_check and recall_check fields plus degraded flag', async (t) => {
   // 回归:planLectureLive 曾把 quick_check 的 explanation 丢掉(预热与直取两路都经它解析,
   // UI 答错反馈因此拿不到解析);degraded 标记也曾不透传,预热缓存会把 5 步模板课当正常计划发给学员。
   t.mock.method(globalThis, 'fetch', async () => Response.json({
     session_id: 's-1', topic: 'GDP', degraded: true,
     steps: [
-      { step_id: 'step_1', spoken_text: '旁白', board_action: { type: 'card', title: 'T', content: '<p>x</p>' } },
+      {
+        step_id: 'step_1', spoken_text: '旁白', focus: { step: 'step_1', bullet: 1, kind: 'highlight' },
+        board_action: { type: 'card', title: 'T', content: '<ul><li>x</li></ul>' },
+      },
       { step_id: 'step_2', spoken_text: '检测', board_action: { type: 'quick_check', question: 'Q', options: ['A', 'B'], answer: 0, explanation: 'A 对因为符合机制;B 错在把 X 和 Y 混淆' } },
+      { step_id: 'step_3', spoken_text: '回忆', board_action: { type: 'recall_check', question: 'State the mechanism.', reference_answer: 'Both gates must hold.', rubric: ['Names gate one.', 'Names gate two.'], hint: 'Recall the diagram.' } },
     ],
   }));
   const plan = await planLectureLive({ topic: 'GDP' });
   assert.ok(plan);
   assert.equal(plan.degraded, true, 'degraded 标记必须透传(预热缓存靠它拒存模板课)');
+  assert.deepEqual(plan.steps[0].focus, { step: 'step_1', bullet: 1, kind: 'highlight' }, 'planLectureLive 必须透传 focus(预热与直取共用解析器)');
   assert.equal(plan.steps[1].board_action.explanation, 'A 对因为符合机制;B 错在把 X 和 Y 混淆', 'quick_check 解析必须保留 explanation');
+  assert.equal(plan.steps[2].board_action.type, 'recall_check');
+  assert.equal(plan.steps[2].board_action.reference_answer, 'Both gates must hold.');
+  assert.deepEqual(plan.steps[2].board_action.rubric, ['Names gate one.', 'Names gate two.']);
+  assert.equal(plan.steps[2].board_action.hint, 'Recall the diagram.');
 
   t.mock.method(globalThis, 'fetch', async () => Response.json({
     session_id: 's-2', topic: 'GDP',

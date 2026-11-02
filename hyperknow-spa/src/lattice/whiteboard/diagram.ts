@@ -34,6 +34,8 @@ export interface RenderedDiagram {
   svg: string;
   w: number;
   h: number;
+  /** 渲染时的节点框,供聚光指示复用同一套布局坐标。 */
+  nodeBoxes: Array<{ id: string; label: string; x: number; y: number; w: number; h: number }>;
 }
 
 /** 图在板上的显示盒:等比缩到 maxW×maxH 内(diagram.ts 与 Board/导出共用同一算法)。 */
@@ -452,5 +454,10 @@ export function renderDiagram(code: string): RenderedDiagram | null {
     nodeSvg +
     '</svg>';
 
-  return { svg, w: W, h: H };
+  return {
+    svg,
+    w: W,
+    h: H,
+    nodeBoxes: g.nodes.map((node) => ({ id: node.id, label: node.label, ...pos.get(node.id)! })),
+  };
 }
