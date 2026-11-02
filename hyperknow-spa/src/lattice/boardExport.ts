@@ -198,6 +198,15 @@ function drawAnnots(ctx: CanvasRenderingContext2D, annots: BoardAnnot[], step: n
     // 直播聚光随当前快照导出;历史聚光不叠加,避免整页板书被旧圈注覆盖。
     if (an.transient && an.step !== step) continue;
     if (an.step > step) continue;
+    if (an.kind === 'highlight') {
+      // 荧光笔色块(与屏幕 .wb-annot.highlight 同色);旧实现在框顶画线,导出里读成删除线。
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = 'rgba(250, 209, 64, 0.42)';
+      ctx.fillRect(an.x - 3, an.y - 1, an.w + 6, an.h + 2);
+      ctx.restore();
+      continue;
+    }
     ctx.beginPath();
     if (an.kind === 'circle') {
       const rx = an.w / 2 - 3;
@@ -210,9 +219,10 @@ function drawAnnots(ctx: CanvasRenderingContext2D, annots: BoardAnnot[], step: n
       ctx.bezierCurveTo(cx + rx * 1.05, cy + ry * 0.6, cx + rx * 0.45, cy + ry * 1.1, cx - 1, cy + ry * 0.98);
       ctx.bezierCurveTo(cx - rx * 0.55, cy + ry * 1.08, cx - rx * 1.02, cy + ry * 0.5, cx - rx, cy + 1);
     } else {
+      // 下划线贴目标框下沿(框顶画线会压在字中间)。
       const w = an.w;
       const x = an.x;
-      const y = an.y;
+      const y = an.y + an.h;
       ctx.moveTo(x + 2, y + 3);
       ctx.quadraticCurveTo(x + w * 0.25, y + 6, x + w * 0.5, y + 3.5);
       ctx.quadraticCurveTo(x + w * 0.75, y + 1, x + w - 2, y + 4);

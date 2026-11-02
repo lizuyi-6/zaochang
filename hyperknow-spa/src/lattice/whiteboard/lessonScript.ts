@@ -61,6 +61,8 @@ export interface BoardAnnot {
   h: number;
   /** 直播聚光只在当前步保留,下一步变浅后移除;演示课批注保持原有持久语义。 */
   transient?: boolean;
+  /** 测量锚点:Board 渲染后按 DOM 实测目标文字/公式范围替换 x/y/w/h(估算值仅作回退与导出) */
+  target?: { itemId: string; lines?: number[] };
 }
 
 /** Hand-drawn Audience Type table. */

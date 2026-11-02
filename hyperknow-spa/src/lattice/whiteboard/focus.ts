@@ -8,10 +8,14 @@ interface Rect {
   y: number;
   w: number;
   h: number;
+  /** DOM 实测锚点(见 BoardAnnot.target);节点框由图布局精确给出,不需要 */
+  target?: { itemId: string; lines?: number[] };
 }
 
 interface TextLineBox extends Rect {
   key: string;
+  itemId: string;
+  lineIndex: number;
 }
 
 function decodeEntities(text: string): string {
@@ -42,6 +46,8 @@ function bulletRects(content: string, bodyItems: BoardItem[], bullet: number): R
     item.lines.forEach((line, lineIndex) => {
       const box: TextLineBox = {
         key: `${item.id}:${lineIndex}`,
+        itemId: item.id,
+        lineIndex,
         x: item.x,
         y: item.y + lineIndex * lineHeight,
         w: item.w ?? 320,
@@ -70,13 +76,20 @@ function bulletRects(content: string, bodyItems: BoardItem[], bullet: number): R
   for (const line of selected) {
     const prevGroup = groups.at(-1);
     const prevLine = prevGroup?.at(-1);
-    if (prevLine && prevLine.x === line.x && line.y <= prevLine.y + prevLine.h + 0.5) prevGroup!.push(line);
+    // 同一板书元素内相邻行才合并:实测锚点按元素查 DOM,不能跨元素
+    if (prevLine && prevLine.itemId === line.itemId && prevLine.x === line.x && line.y <= prevLine.y + prevLine.h + 0.5) prevGroup!.push(line);
     else groups.push([line]);
   }
   return groups.map((group) => {
     const first = group[0];
     const last = group[group.length - 1];
-    return { x: first.x, y: first.y, w: first.w, h: last.y + last.h - first.y };
+    return {
+      x: first.x,
+      y: first.y,
+      w: first.w,
+      h: last.y + last.h - first.y,
+      target: { itemId: first.itemId, lines: group.map((line) => line.lineIndex) },
+    };
   });
 }
 
@@ -118,13 +131,13 @@ function targetRects(
 
   if (action.type === 'formula') {
     const item = items.find((candidate) => candidate.step === stepNumber && candidate.formula);
-    return item ? [{ x: item.x, y: item.y, w: item.w ?? 320, h: item.h ?? 120 }] : [];
+    return item ? [{ x: item.x, y: item.y, w: item.w ?? 320, h: item.h ?? 120, target: { itemId: item.id } }] : [];
   }
   if (action.type === 'image') {
     const item = items.find((candidate) => candidate.step === stepNumber && candidate.image);
     if (!item) return [];
     const w = item.image?.width ?? item.w ?? 320;
-    return [{ x: item.x, y: item.y, w, h: item.h ?? 260 }];
+    return [{ x: item.x, y: item.y, w, h: item.h ?? 260, target: { itemId: item.id } }];
   }
   return [];
 }

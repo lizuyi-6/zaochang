@@ -298,6 +298,16 @@
 }
 
 .wb-annot { position: absolute; pointer-events: none; }
+/* 聚光高亮:荧光笔色块覆盖实测字形范围;multiply 让墨迹透出,扩 3px 留笔触余量 */
+.wb-annot.highlight {
+  background: rgba(250, 209, 64, 0.42);
+  box-shadow: 0 0 0 3px rgba(250, 209, 64, 0.42);
+  border-radius: 3px;
+  mix-blend-mode: multiply;
+}
+/* 聚光下划线:笔画贴在字形范围下沿,不随行高基线漂移(行内 svg 曾被基线推到字中间,读成删除线) */
+.wb-annot-underline-stroke { position: absolute; left: 0; top: 100%; margin-top: 1px; line-height: 0; }
+.wb-annot-underline-stroke svg { display: block; }
 
 @keyframes wb-highlight-wipe {
   from { clip-path: inset(0 100% 0 0); }

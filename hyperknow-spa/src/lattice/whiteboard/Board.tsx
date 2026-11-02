@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Sparkle, ZoomIn, X } from 'lucide-react';
 import {
   INK,
@@ -677,6 +677,7 @@ export const Board: React.FC<BoardProps> = ({
               return (
                 <div
                   key={item.id}
+                  data-wb-item={item.id}
                   className={`wb-item wb-image-card ready${isWriting ? ' writing' : ' drawn'}`}
                   style={{
                     left: item.x,
@@ -709,6 +710,7 @@ export const Board: React.FC<BoardProps> = ({
               return (
                 <div
                   key={item.id}
+                  data-wb-item={item.id}
                   className={`wb-item wb-formula-item${isWriting ? ' writing' : ' drawn'}`}
                   style={{ left: item.x, top: item.y, width: item.w ?? 320 }}
                 >
@@ -740,6 +742,7 @@ export const Board: React.FC<BoardProps> = ({
             return (
               <div
                 key={item.id}
+                data-wb-item={item.id}
                 className="wb-item"
                 style={{
                   left: item.x,
@@ -756,7 +759,7 @@ export const Board: React.FC<BoardProps> = ({
                   for (let k = 0; k < li; k++) before += flat.lines[k].chars.length;
                   const shownHere = Math.max(0, Math.min(line.chars.length, shown - before));
                   return (
-                    <span className="wb-line" key={li}>
+                    <span className="wb-line" key={li} data-line={li}>
                       {renderLine(line.chars, shownHere, isWriting, item)}
                     </span>
                   );
@@ -908,40 +911,113 @@ const TableBlock: React.FC<{ table: BoardTable; rowsShown: number; standard: boo
   );
 };
 
+type AnnotBox = { x: number; y: number; w: number; h: number };
+
+/**
+ * 按 an.target 实测目标在白板世界坐标里的真实范围:文字行用 Range 取字形范围(.wb-line 是块级,
+ * 元素框会是整栏宽),公式取 KaTeX 字形范围,图片取 <img>。以标注元素自身作参照换算
+ * (世界 = (屏幕差)/缩放 + offsetLeft),不依赖白板容器尺寸。测不到返回 null,调用方用估算框。
+ */
+function measureAnnotTarget(el: HTMLElement, an: BoardAnnot): AnnotBox | null {
+  const target = an.target;
+  if (!target || !el.offsetWidth) return null;
+  const board = el.parentElement;
+  const host = board?.querySelector<HTMLElement>(`[data-wb-item="${CSS.escape(target.itemId)}"]`);
+  if (!host) return null;
+  const rangeRect = (node: Node): DOMRect | null => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const r = range.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? r : null;
+  };
+  const rects: DOMRect[] = [];
+  if (target.lines?.length) {
+    for (const li of target.lines) {
+      const line = host.querySelector(`[data-line="${li}"]`);
+      const r = line ? rangeRect(line) : null;
+      if (r) rects.push(r);
+    }
+  } else {
+    const formula = host.querySelector('.katex-html') ?? host.querySelector('.katex');
+    const img = host.querySelector('img');
+    const r = formula ? rangeRect(formula) : img ? img.getBoundingClientRect() : rangeRect(host);
+    if (r && r.width > 0) rects.push(r);
+  }
+  if (!rects.length) return null;
+  const self = el.getBoundingClientRect();
+  const scale = self.width / el.offsetWidth;
+  if (!Number.isFinite(scale) || scale <= 0) return null;
+  const left = Math.min(...rects.map((r) => r.left));
+  const top = Math.min(...rects.map((r) => r.top));
+  const right = Math.max(...rects.map((r) => r.right));
+  const bottom = Math.max(...rects.map((r) => r.bottom));
+  return {
+    x: (left - self.left) / scale + el.offsetLeft,
+    y: (top - self.top) / scale + el.offsetTop,
+    w: (right - left) / scale,
+    h: (bottom - top) / scale,
+  };
+}
+
 const AnnotView: React.FC<{ an: BoardAnnot; animate: boolean; dimmed: boolean }> = ({ an, animate, dimmed }) => {
-  if (an.kind === 'highlight' || an.kind === 'underline') {
+  const ref = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState<AnnotBox | null>(null);
+  useLayoutEffect(() => {
+    if (!an.target) return;
+    const measure = () => {
+      const el = ref.current;
+      if (!el) return;
+      const box = measureAnnotTarget(el, an);
+      if (box) setMeasured((prev) => (prev && Math.abs(prev.x - box.x) < 0.5 && Math.abs(prev.y - box.y) < 0.5
+        && Math.abs(prev.w - box.w) < 0.5 && Math.abs(prev.h - box.h) < 0.5 ? prev : box));
+    };
+    measure();
+    // KaTeX 异步 chunk、手写字体加载完成后字形范围会变,补测两次。
+    const raf = requestAnimationFrame(measure);
+    const timer = window.setTimeout(measure, 700);
+    void document.fonts?.ready.then(measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [an]);
+  // 实测前先用估算框占位(不可见),避免估算位置闪现一条错位的线。
+  const pending = Boolean(an.target) && !measured;
+  const box = measured ?? an;
+  const base: React.CSSProperties = {
+    left: box.x,
+    top: box.y,
+    width: Math.max(1, box.w),
+    height: Math.max(1, box.h),
+    opacity: pending ? 0 : dimmed ? 0.22 : 1,
+    transition: 'opacity 450ms ease',
+  };
+  if (an.kind === 'highlight') {
+    // 荧光笔色块覆盖字形范围(multiply 混合保留文字可读),不是线:线会读成删除线。
     return (
       <div
-        className={`wb-annot ${an.kind}`}
-        style={{
-          left: an.x,
-          top: an.y,
-          width: an.w,
-          height: an.h,
-          opacity: dimmed ? 0.22 : 1,
-          transition: 'opacity 450ms ease',
-          animation: animate ? 'wb-highlight-wipe 0.55s ease-out forwards' : undefined,
-        }}
-      >
-        <BoardUnderline w={an.w} animate={animate} />
+        ref={ref}
+        className="wb-annot highlight"
+        style={{ ...base, animation: animate && !pending ? 'wb-highlight-wipe 0.55s ease-out forwards' : undefined }}
+      />
+    );
+  }
+  if (an.kind === 'underline') {
+    return (
+      <div ref={ref} className="wb-annot underline" style={base}>
+        <div className="wb-annot-underline-stroke">
+          <BoardUnderline w={Math.max(1, box.w)} animate={animate && !pending} />
+        </div>
       </div>
     );
   }
   if (an.kind === 'circle') {
     return (
-      <div
-        className="wb-annot circle"
-        style={{
-          left: an.x,
-          top: an.y,
-          width: an.w,
-          height: an.h,
-          transform: 'translate(-10px, -8px)',
-          opacity: dimmed ? 0.22 : 1,
-          transition: 'opacity 450ms ease',
-        }}
-      >
-        <BoardCircle w={an.w + 20} h={an.h + 16} animate={animate} />
+      // 偏移放在内层:测量以外层为参照,外层不能带 transform(getBoundingClientRect 含 transform、offsetLeft 不含)。
+      <div ref={ref} className="wb-annot circle" style={base}>
+        <div style={{ transform: 'translate(-10px, -8px)' }}>
+          <BoardCircle w={Math.max(1, box.w) + 20} h={Math.max(1, box.h) + 16} animate={animate && !pending} />
+        </div>
       </div>
     );
   }

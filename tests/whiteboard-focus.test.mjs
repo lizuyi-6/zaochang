@@ -148,6 +148,28 @@ test('client maps card bullet, diagram node, and formula focus to concrete trans
     { x: 780, y: 200, w: 320, h: 64, kind: 'underline', step: 5 },
   );
   assert.ok(annotations.every((annotation) => annotation.transient === true));
+  // 测量锚点:Board 按它实测字形范围再画(估算框会把高亮/下划线画成穿过文字的删除线)。
+  assert.deepEqual(bulletRect.target, { itemId: 'c1b', lines: [2] }, '要点聚光锚定到该要点所在元素与行');
+  assert.equal(diagramRect.target, undefined, '节点框由图布局精确给出,不需要 DOM 实测');
+  assert.deepEqual(annotations[2].target, { itemId: 'img4' });
+  assert.deepEqual(annotations[3].target, { itemId: 'f3' });
+});
+
+test('Board draws highlight as a marker band and underline below the measured glyph box', () => {
+  const board = readFileSync(new URL('../hyperknow-spa/src/lattice/whiteboard/Board.tsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../hyperknow-spa/src/lattice/whiteboard/whiteboard.css', import.meta.url), 'utf8');
+  const exporter = readFileSync(new URL('../hyperknow-spa/src/lattice/boardExport.ts', import.meta.url), 'utf8');
+  assert.match(board, /function measureAnnotTarget\(/, 'Board 必须按锚点实测目标范围');
+  assert.match(board, /data-wb-item=\{item\.id\}/);
+  assert.match(board, /data-line=\{li\}/);
+  assert.match(board, /range\.selectNodeContents\(node\)/, '文字行用 Range 取字形范围而非块级元素框');
+  // highlight 不再复用下划线笔画(那会画成穿过文字的线)
+  const highlightBranch = board.slice(board.indexOf("if (an.kind === 'highlight')"), board.indexOf("if (an.kind === 'underline')"));
+  assert.doesNotMatch(highlightBranch, /BoardUnderline/);
+  assert.match(css, /\.wb-annot\.highlight \{[^}]*background: rgba\(250, 209, 64/);
+  assert.match(css, /\.wb-annot-underline-stroke \{[^}]*top: 100%/, '下划线贴字形范围下沿');
+  assert.match(exporter, /ctx\.fillRect\(an\.x - 3, an\.y - 1, an\.w \+ 6, an\.h \+ 2\)/, '导出高亮为色块');
+  assert.match(exporter, /const y = an\.y \+ an\.h;/, '导出下划线贴框下沿');
 });
 
 test('client silently returns no rectangle for missing step, bullet, diagram node, or future target', () => {

@@ -267,3 +267,10 @@ CI 不安装 hyperknow-spa 依赖、不参与主站 tsc/eslint(tsconfig/eslint �
 - 证据(lt-merge 集成 worktree,Windows,Node 24.13.1):`npm test` exit 0 → tests 1046 / pass 1046 / fail 0 / cancelled 0 / skipped 0 / todo 0;`npx tsc --noEmit`、`npm run lint`、SPA app/node tsc、`npx oxlint src`、`git diff --check` 均 exit 0;`npm run db:generate` → No schema changes;`npm audit --omit=dev --audit-level=high` exit 0(2 个低危为 katex/mermaid,HEAD 同样存在);SPA 重建与已暂存产物零差异。
 - 已知:`tests/hosting-deployer-process.test.mjs` 的子进程用例在 Windows 上偶发失败(干净 HEAD 4 次中 3 次失败,与本批无关,CI 为 ubuntu)。
 - 未覆盖:真实 StepFun 模型下的 focus 遵循率、回忆题批改质量与按序号输出遵循率、错题回捞对讲稿质量的影响;真实浏览器中的聚光/相机/结课卡片/资料上传交互;生产 Worker 上大 PDF 的 CPU 时间;生产 D1 迁移 0044 未应用。
+
+## 2026-11-02 部署前真浏览器验收(聚光高亮/下划线修正)
+
+- 方法:分支构建后起真实 Wrangler 预览(tests/harness),无头 Chrome + CDP 驱动 dev-login 会员走完一节定制讲稿(卡片→流程图→公式→选择题→回忆题→收尾卡),逐步截图;另验建课页资料区、对话附件上传与"已读取"状态。
+- 发现并修正:`highlight`/`underline` 两种聚光此前从未在生产出现过(演示课只用 circle),上板后均画成**穿过文字中线的细线**(行内 svg 被基线推到字中间,宽度取整栏),读作删除线、语义相反;导出 `drawAnnots` 同样在框顶画线。现 focus 给每个矩形记录测量锚点 `target{itemId,lines?}`,Board 渲染后用 Range 实测字形范围(公式取 KaTeX 字形、图片取 img)再画:highlight 为荧光笔色块(multiply 混合)、underline 贴字形下沿、circle 亦用实测框;实测前透明占位不闪现估算线。导出改为色块/下沿线。契约:`tests/whiteboard-focus.test.mjs` 新增锚点与渲染/导出两条。
+- 复验:修正后同一讲稿重跑,高亮色块与文字等宽、下划线位于公式下方、圈注正确;选择题错因解析、回忆题"部分正确"+缺失要点+提示、结课小结(0.5/2、两题结果与正确答案)均正常。
+- 未在浏览器验证:有课程上下文时结课卡片的掌握度等级与"下一讲"按钮(接口由 suite 11 覆盖)、移动端视口、真实 TTS 音频时序。自由讲座的选择题按 T3 设计不上报,回忆题批改仍会写一条无课程上下文的作答行(不参与任何课程掌握度,365 天清理)。
