@@ -1,5 +1,20 @@
 # 造场项目账本
 
+## 2026-11-02 见界借鉴 OpenMAIC:白板聚光/回忆题批改/学习进度/资料驱动/错题回捞/结课小结(已上线 `3d1f41c`,Worker 版本 `499edb2b-c87a-4815-98ef-683c14df8f6b`;真实 StepFun 模型下的效果与真机/移动端交互未实测)
+
+- **范围**(用户要求"规划后交给 Codex luna 高并发"):两波 7 个包并行开发 + 合并方审查合并。T1 聚光 `focus`;T2 `recall_check` + `POST /api/hyperknow/whiteboard/grade`(评分依据只取服务端讲稿);T3 迁移 0044(`hk_lecture_progress`/`hk_check_attempts`、白板会话加课程上下文列)+ 进度端点 + 课程旅程真实掌握度;T4 学员资料(txt/md/docx/pdf 经 `readOwnedCleanUpload` 进对话与建课,`unpdf@2.1.0`);W2-B 按要点序号批改 + 回忆题计入掌握度;W2-C 跨讲次错题回捞;W2-D 结课小结 `GET /api/hyperknow/progress/session`。细节见 LATTICE.md 2026-11-02 各节。
+- **上线过程**:
+  - 生产 D1 备份 `backups/pre-lattice-openmaic-20261102.sql`(integrity_check ok),副本上演练 0044:9 条语句、外键违规 0、既有行数不变(8 会员/105 白板会话/7 课程)、非法枚举被 CHECK 拒绝。确认线上旧代码对 `hk_whiteboard_sessions` 用显式列名插入,0044 对未部署前的旧 Worker 向后兼容。
+  - 生产执行 0044 → 新表/4 个索引/3 列在位、`foreign_key_check` 0 行 → 回填 `__drizzle_migrations`(LF sha256 `ef25c3c8…63ea5`,when `1793608364201`)→ 本地有序对账 45/45 无错位。
+  - 首次推送 `b5694e4` CI 失败(deploy 按设计跳过):`spa-typecheck` 在 CI 回退根 TypeScript 5.9,不按 `!result.graded` 收窄联合类型;本地门禁用的是 SPA 自带 TS 6 故本地绿。修复 + 门禁改为根/SPA 两版 TS 都跑(已用原错误代码证明新门禁本地即红),推 `3d1f41c`。
+  - release-gates run 41426312488 success → deploy-production run 41426742093 success(其中 `Verify migrations applied (fail-closed)`:"所有本地迁移均已应用到生产(数量+有序账目+created_at 逐位一致)")。
+- **证据**:
+  - 部署前真浏览器验收(Wrangler 预览 + 无头 Chrome + CDP):建课页资料区、对话附件上传→"已读取"、白板定制讲稿全流程(聚光/选择题错因/回忆题"部分正确"+缺失要点+提示/结课小结 0.5/2)。**验收发现 highlight/underline 聚光画成穿过文字的删除线**(两者此前从未在生产出现),修为按 DOM 实测字形范围绘制(荧光色块/下沿线),导出同修,复验截图正确。
+  - 线上冒烟(经 CF 边缘):三个新端点匿名 404→401 `auth_required`;agent 入场票会话下,0044 之前产生的白板会话结课小结 200(3 题)、陌生会话/课程 404 `target_not_found`、`/lattice/` 入口 `index-DMQrqHcb.js` 与构建一致;冒烟后已登出、令牌文件已删。
+  - 本地全量 `npm test` 1047 项 1046 pass;唯一失败为 Windows 专属的 `hosting-deployer-process` 子进程用例(干净 HEAD 同样 4 次失败 3 次,CI ubuntu 通过,已记入 CLAUDE.md)。CI 全量通过。
+- **未覆盖 / 已知**:真实 StepFun 模型的 focus 遵循率、批改质量与按序号输出遵循率、错题回捞对讲稿质量的影响;有课程上下文时结课卡片的掌握度/下一讲按钮未在浏览器点验(接口由 suite 11 覆盖);移动端视口与真机;生产 Worker 解析大 PDF 的 CPU 时间(扫描版 PDF 无 OCR);下一讲预热缓存 15 分钟内不含最新错题;自由讲座回忆题批改会写一条无课程上下文的作答行(不计入任何掌握度,365 天清理)。
+- **回滚**:代码 `wrangler rollback` 或 revert 后自动重部署;0044 只增不删,旧代码与新表/列兼容,回滚代码无需动 schema(迁移纪律禁止反向删除)。
+
 ## 2026-10-30 管理员直接开通账户 + 首次登录引导(唯一用户名/昵称)(已上线 `e760333`;线上「被引导会员」一环未实测,需真人开通一次)
 
 - **范围**(用户本轮选定:新增管理员直接开通;所有新注册账户都要引导,存量会员不受影响;唯一用户名 + 可重复昵称;简介/所在地/主页选填):
