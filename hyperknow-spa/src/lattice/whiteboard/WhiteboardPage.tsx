@@ -1061,8 +1061,11 @@ export const WhiteboardPage: React.FC<PageProps> = ({ set, state }) => {
 
           let feedbackText: string;
           if (!result || !result.graded) {
-            const reference = result && !result.graded ? result.reference_answer : s.awaitRecall.referenceAnswer;
-            const rubric = result && !result.graded ? result.rubric : s.awaitRecall.rubric;
+            // 用 `graded === false` 显式判别:CI 的 SPA 类型门禁回退到根 TypeScript 5.9,
+            // 它不会按 `!result.graded` 收窄联合类型(本地 SPA 自带的 TS 6 会)。
+            const unavailable = result && result.graded === false ? result : null;
+            const reference = unavailable ? unavailable.reference_answer : s.awaitRecall.referenceAnswer;
+            const rubric = unavailable ? unavailable.rubric : s.awaitRecall.rubric;
             feedbackText = `${L('Automatic grading was unavailable. Please self-check against the reference answer: ', '未能自动批改，请对照参考答案自评：')}${reference} ${L('Key points: ', '评分要点：')}${rubric.join('；')}`;
           } else {
             const verdictLabel = result.verdict === 'correct'
