@@ -79,6 +79,22 @@ test("回执不含学号与手机号", () => {
   assert.equal(body.includes("zhangsan@example.com"), true);
 });
 
+test("回执带笔试入口:text 版有纯链接,html 版有按钮和兜底链接", () => {
+  const parsed = normalizeAetherGuardSignup(VALID);
+  assert.equal(parsed.ok, true);
+  const receipt = renderAetherGuardReceipt(parsed.value);
+  const url = "https://tcnii2lehoms.feishu.cn/share/base/shrcnts2MqEefdrHLbqMkLmGGNg";
+  // text 版:链接必须原样出现(候选人在纯文本客户端也能拿到)
+  assert.ok(receipt.text.includes(url), "text 版必须含笔试链接原文");
+  assert.ok(receipt.text.includes("笔试"), "text 版要有笔试引导语");
+  // html 版:按钮是 <a href=链接> 的表格写法,且另有纯文本兜底链接
+  assert.ok(receipt.html.includes(`href="${url}"`), "html 版按钮必须链到笔试表单");
+  assert.ok(receipt.html.includes("进入笔试"), "html 版要有按钮文案");
+  assert.ok(receipt.html.includes("<br />" + url), "html 版要有按钮失效时的兜底链接");
+  // 引导内容放在信息摘要之后、审核结果提示之前(先给下一步,再给等待提示)
+  assert.ok(receipt.html.indexOf('href="' + url + '"') < receipt.html.indexOf("审核结果会通过本邮箱"));
+});
+
 test("HTML 转义报名者可控文本", () => {
   const parsed = normalizeAetherGuardSignup({ ...VALID, name: '<img src=x onerror="alert(1)">' });
   assert.equal(parsed.ok, true);
