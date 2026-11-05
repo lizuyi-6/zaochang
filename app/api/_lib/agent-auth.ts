@@ -77,6 +77,11 @@ export const AGENT_ADMIN_CAPABILITIES = [
   // 能力上不超出已开放的 invitations POST + mail-send POST;收件人只能是申请表里已有的邮箱。
   // 同路由的 POST(给任意邮箱直接发邀请)不在表内,人类专属。
   { method: "PATCH", pathname: "/api/admin/account-applications" },
+  // 笔试阅卷(管理台「笔试阅卷」分区的机器通道等价物)。
+  // PATCH = 人工定稿/改判(只写分数与备注);POST score = 按服务端评分点跑 AI 初评
+  // (模型调用有小时级限流,初评只出建议分,最终分仍以人工为准)。删除不可逆,不给 agent。
+  { method: "PATCH", pathname: "/api/admin/recruit/written-test" },
+  { method: "POST", pathname: "/api/admin/recruit/written-test/score" },
 ] as const;
 
 // agent 非 GET 请求的放行判定:两张能力表之并集精确命中(method+pathname)。

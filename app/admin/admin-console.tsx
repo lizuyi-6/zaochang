@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BarChart3, ClipboardList, Cloud, FileSearch, Flag, Gift, Home,
+  BarChart3, ClipboardList, Cloud, FileSearch, Flag, Gift, GraduationCap, Home,
   Lightbulb, MailPlus, RefreshCw, ScrollText, ShieldAlert, Ticket, UserPlus, Users,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -33,10 +33,11 @@ import { IncubationSection } from "./sections/incubation";
 import { InvitationsSection } from "./sections/invitations";
 import { MembersSection } from "./sections/members";
 import { RecruitSection } from "./sections/recruit";
+import { WrittenTestSection } from "./sections/written-test";
 import { ReportsRiskSection } from "./sections/reports-risk";
 import { ReviewSection } from "./sections/review";
 
-type SectionId = "inbox" | "review" | "reports" | "members" | "content" | "data" | "applications" | "invitations" | "hk-redeem" | "hosting" | "incubation" | "audit" | "recruit";
+type SectionId = "inbox" | "review" | "reports" | "members" | "content" | "data" | "applications" | "invitations" | "hk-redeem" | "hosting" | "incubation" | "audit" | "recruit" | "written-test";
 type Notice = { message: string; kind: "success" | "error" } | null;
 type MutationResult = Record<string, unknown>;
 
@@ -53,6 +54,7 @@ const sections: Array<{ id: SectionId; label: string; icon: typeof Home }> = [
   { id: "hosting", label: "托管授权", icon: Cloud },
   { id: "incubation", label: "孵化", icon: Lightbulb },
   { id: "recruit", label: "选拔", icon: MailPlus },
+  { id: "written-test", label: "笔试阅卷", icon: GraduationCap },
   { id: "audit", label: "审计", icon: ScrollText },
 ];
 const sectionIds = new Set<SectionId>(sections.map(({ id }) => id));
@@ -391,6 +393,7 @@ export function AdminConsole() {
           {section === "hosting" && <HostingGrantsSection grants={hostingGrants} draft={hostingGrantDraft} setDraft={setHostingGrantDraft} onSubmit={submitHostingGrant} onRevoke={revokeHostingGrant} busy={busy} />}
           {section === "incubation" && <IncubationSection projects={projects} stages={stages} onChange={changeProject} onSave={updateProject} busy={busy} />}
           {section === "recruit" && <RecruitSection refreshKey={sectionRefreshKey} busy={busy} onStatus={showStatus} />}
+          {section === "written-test" && <WrittenTestSection refreshKey={sectionRefreshKey} busy={busy} onStatus={showStatus} />}
           {section === "audit" && <AuditSection onStatus={showStatus} />}
         </div>
       </div>

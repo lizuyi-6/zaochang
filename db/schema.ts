@@ -4,6 +4,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -987,6 +988,87 @@ export const recruitCandidates = sqliteTable(
     index("recruit_candidates_stage_idx").on(table.stage),
     uniqueIndex("recruit_candidates_email_unique").on(table.email),
     check("recruit_candidates_stage_valid", sql`${table.stage} in ('applied', 'homework', 'group', 'final', 'admitted', 'rejected')`),
+  ],
+);
+
+// 见界创赛选拔笔试提交(管理台「笔试阅卷」分区)。
+// 一份提交 = 一行头部(source_record_id 是飞书记录 ID,唯一 → 收件幂等);
+// 逐题评分另存一张表,方便「只改一题」与分项统计,不用重写整包 JSON。
+// 注意:笔试表没有邮箱字段,所以这里不与 recruit_candidates 强关联——
+// 候选人环节推进仍走原「选拔」分区。
+export const recruitWrittenTests = sqliteTable(
+  "recruit_written_tests",
+  {
+    id: text("id").primaryKey(),
+    sourceRecordId: text("source_record_id").notNull(),
+    name: text("name").notNull(),
+    school: text("school").notNull().default(""),
+    contact: text("contact").notNull().default(""),
+    // 意向岗位是多选,存 JSON 数组字符串。
+    positions: text("positions").notNull().default("[]"),
+    competition: text("competition").notNull().default(""),
+    // 各题作答 / 附件元信息 / 四部分用时,都是 JSON 字符串(原样保存,便于重跑初评)。
+    answersJson: text("answers_json").notNull().default("{}"),
+    attachmentsJson: text("attachments_json").notNull().default("{}"),
+    timingsJson: text("timings_json").notNull().default("{}"),
+    integrityConfirmed: integer("integrity_confirmed").notNull().default(0),
+    // 硬判分(标准答案已知的单选)与 AI 初评分分开存:人工定稿写 manual_score。
+    hardScore: integer("hard_score").notNull().default(0),
+    hardScoreJson: text("hard_score_json").notNull().default("{}"),
+    flagsJson: text("flags_json").notNull().default("[]"),
+    // 分数允许小数(例如 4.5 / 8),用 real 而不是 integer。
+    aiScore: real("ai_score"),
+    aiGradedAt: text("ai_graded_at"),
+    manualScore: real("manual_score"),
+    status: text("status").notNull().default("pending"),
+    note: text("note").notNull().default(""),
+    gradedBy: text("graded_by").notNull().default(""),
+    submittedAt: text("submitted_at").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("recruit_written_tests_source_unique").on(table.sourceRecordId),
+    index("recruit_written_tests_status_idx").on(table.status),
+    check(
+      "recruit_written_tests_status_valid",
+      sql`${table.status} in ('pending','reviewing','done','flagged')`,
+    ),
+  ],
+);
+
+// 逐题评分行:AI 建议分 + 判据 + 引文,人工分数与备注单独一列(人工改判不覆盖 AI 记录)。
+export const recruitWrittenTestItems = sqliteTable(
+  "recruit_written_test_items",
+  {
+    id: text("id").primaryKey(),
+    submissionId: text("submission_id")
+      .notNull()
+      .references(() => recruitWrittenTests.id),
+    itemKey: text("item_key").notNull(),
+    label: text("label").notNull().default(""),
+    section: text("section").notNull().default(""),
+    maxScore: integer("max_score").notNull().default(0),
+    aiReasonsJson: text("ai_reasons_json").notNull().default("[]"),
+    aiEvidenceJson: text("ai_evidence_json").notNull().default("[]"),
+    aiUncertain: integer("ai_uncertain").notNull().default(0),
+    aiScore: real("ai_score"),
+    // pending=没跑过;graded=模型给了可用建议分;ungraded=跑过但输出不可用;manual=该题纯人工。
+    aiStatus: text("ai_status").notNull().default("pending"),
+    manualScore: real("manual_score"),
+    manualNote: text("manual_note").notNull().default(""),
+    gradedBy: text("graded_by").notNull().default(""),
+    gradedAt: text("graded_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("recruit_written_test_items_unique").on(table.submissionId, table.itemKey),
+    index("recruit_written_test_items_submission_idx").on(table.submissionId),
+    check(
+      "recruit_written_test_items_ai_status_valid",
+      sql`${table.aiStatus} in ('pending','graded','ungraded','manual')`,
+    ),
   ],
 );
 
