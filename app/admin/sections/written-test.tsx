@@ -10,6 +10,7 @@ import { adminErrorMessage, adminRequest, adminWriteInit } from "../admin-api";
 type Submission = {
   id: string;
   sourceRecordId: string;
+  signupReference: string;
   name: string;
   school: string;
   contact: string;
@@ -317,7 +318,8 @@ export function WrittenTestSection({
               <article key={entry.id} className={entry.id === selectedId ? "is-active" : ""}>
                 <div>
                   <strong>
-                    {entry.name} · {entry.school || "未填学校"}
+                    {entry.signupReference ? `#${entry.signupReference} · ` : ""}
+                    {entry.name || "待关联报名"} · {entry.school || "未填学校"}
                   </strong>
                   <small>
                     {formatTime(entry.submittedAt)} · {entry.positions.join("/") || "未选岗位"} · 硬判 {entry.hardScore}/4
@@ -341,7 +343,7 @@ export function WrittenTestSection({
             <div>
               <p className="admin-eyebrow">SUBMISSION</p>
               <h2>
-                {detail.submission.name} · {detail.submission.school || "未填学校"}
+                报名ID #{detail.submission.signupReference || "--------"} · {detail.submission.name || "待关联报名"} · {detail.submission.school || "未填学校"}
               </h2>
               <p>
                 {detail.submission.contact || "未留联系方式"} · {detail.submission.positions.join("/") || "未选岗位"} · 诚信确认

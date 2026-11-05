@@ -9,10 +9,12 @@
 // 2) 硬判只做「标准答案已知」的那几道单选,主观题一律留给模型初评 + 人工定稿,
 //    宁可少判也不误判——笔试还会在面试现场当面讲;
 // 3) 密钥比对复用 AetherGuard 那套 SHA-256 + 逐字节比较,不再写第二份。
+import { normalizeSignupReferenceInput } from "./aetherguard-signup.ts";
 import { WRITTEN_TEST_ITEMS, WRITTEN_TEST_SINGLE_CHOICE, writtenTestItem } from "./recruit-written-test-rubric.ts";
 
 export const WRITTEN_TEST_LIMITS = {
   sourceRecordId: 64,
+  signupRef: 32,
   name: 40,
   school: 120,
   contact: 40,
@@ -41,6 +43,12 @@ export type WrittenTestTimings = {
 
 export type WrittenTestSubmission = {
   sourceRecordId: string;
+  /** 考生在笔试表单里填的报名ID(报名回执邮件的「报名编号」,尾 8 位大写)。 */
+  signupRef: string;
+  /**
+   * 候选人身份由本地同步脚本按报名ID从报名表反查回填(工作流通道不带)。
+   * 空表示还没关联——阅卷台会显示「待关联」标记,不影响落库。
+   */
   name: string;
   school: string;
   contact: string;
@@ -196,9 +204,14 @@ export function normalizeWrittenTestSubmission(
     return { ok: false, error: "invalid_source_record_id" };
   }
 
-  const name = pick(raw, "name", "姓名");
-  if (!name || name.length > WRITTEN_TEST_LIMITS.name) return { ok: false, error: "invalid_name" };
+  // 报名ID 是唯一的身份入口(笔试表单第一题):缺它没法关联报名记录,直接拒收,
+  // 让飞书工作流日志大声报错——比悄悄落一份「不知道是谁的卷子」好。
+  const signupRefRaw = pick(raw, "signupRef", "signup_ref", "signupReference", "signup_reference", "报名ID", "报名编号");
+  const signupRef = normalizeSignupReferenceInput(signupRefRaw);
+  if (!signupRef || signupRef.length > WRITTEN_TEST_LIMITS.signupRef) return { ok: false, error: "invalid_signup_ref" };
 
+  // 身份字段不再由表单收集:来自同步脚本/历史数据的兼容通道,有就带上(收件后按报名ID反查覆盖)。
+  const name = pick(raw, "name").slice(0, WRITTEN_TEST_LIMITS.name);
   const school = pick(raw, "school", "学校、专业、年级", "学校专业年级").slice(0, WRITTEN_TEST_LIMITS.school);
   const contact = pick(raw, "contact", "手机或微信", "联系方式").slice(0, WRITTEN_TEST_LIMITS.contact);
   const competition = pick(raw, "competition", "做过的比赛或项目").slice(0, WRITTEN_TEST_LIMITS.competition);
@@ -251,6 +264,7 @@ export function normalizeWrittenTestSubmission(
     ok: true,
     value: {
       sourceRecordId,
+      signupRef,
       name,
       school,
       contact,

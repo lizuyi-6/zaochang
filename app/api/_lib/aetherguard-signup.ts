@@ -92,6 +92,14 @@ export function signupReference(recordId: string): string {
   return compact ? compact.slice(-8).toUpperCase() : "--------";
 }
 
+/**
+ * 考生在笔试表单里手敲的报名编号收拾成可比对形态:去分隔符/空白 + 大写。
+ * 不在这里截断长度——超长是输入错误,必须让调用方按上限拒收,不能悄悄截短成另一个编号。
+ */
+export function normalizeSignupReferenceInput(value: string): string {
+  return value.replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -121,6 +129,7 @@ export function renderAetherGuardReceipt(value: AetherGuardSignup): { subject: s
     "下一步:请完成笔试。",
     `笔试入口(复制到浏览器打开):${AETHERGUARD_WRITTEN_TEST_URL}`,
     "笔试里有需要上传文件的题目,建议在电脑上完成;提交后答案会直接进入我们的阅卷流程。",
+    `进入笔试时,在第一题填写你的报名编号:${reference}(笔试不再重复收集姓名、学校、联系方式)。`,
     "",
     "审核结果会通过本邮箱联系你，请留意收件与垃圾邮件箱。",
     "本邮件由系统自动发送，请勿直接回复。",
@@ -143,12 +152,14 @@ export function renderAetherGuardReceipt(value: AetherGuardSignup): { subject: s
     .join("");
 
   // 笔试按钮:邮件客户端经常禁用 <button>,用表格包 <a> 是兼容性最好的按钮写法;
-  // 下面再放一条纯文本链接兜底(按钮被拦时候选人仍能点到)。
+  // 下面再放一条纯文本链接兜底(按钮被拦时候选人仍能点到)。笔试表单只填报名编号,
+  // 不再重复收个人信息,所以编号必须跟着按钮一起出现。
   const writtenTestButton = [
     '<p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.7">下一步:请完成笔试。笔试里有需要上传文件的题目,建议在电脑上完成。</p>',
     '<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 12px"><tr><td style="background:#0f766e;border-radius:8px">',
     `<a href="${AETHERGUARD_WRITTEN_TEST_URL}" target="_blank" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:8px">进入笔试</a>`,
     "</td></tr></table>",
+    `<p style="margin:0 0 8px;color:#111827;font-size:15px;line-height:1.7">进入笔试时,在第一题填写你的<b>报名编号:${escapeHtml(reference)}</b>(笔试不再重复收集姓名、学校、联系方式)。</p>`,
     `<p style="margin:0 0 20px;color:#9ca3af;font-size:13px;line-height:1.7">按钮无法点击时，复制链接到浏览器打开：<br />${escapeHtml(AETHERGUARD_WRITTEN_TEST_URL)}</p>`,
   ].join("");
 

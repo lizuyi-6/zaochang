@@ -91,6 +91,9 @@ test("回执带笔试入口:text 版有纯链接,html 版有按钮和兜底链�
   assert.ok(receipt.html.includes(`href="${url}"`), "html 版按钮必须链到笔试表单");
   assert.ok(receipt.html.includes("进入笔试"), "html 版要有按钮文案");
   assert.ok(receipt.html.includes("<br />" + url), "html 版要有按钮失效时的兜底链接");
+  // 报名编号必须跟着按钮出现:笔试表单只填编号,不重复收个人信息
+  assert.ok(receipt.html.includes("报名编号:12345678"), "html 版要在按钮旁给出报名编号");
+  assert.ok(receipt.text.includes("报名编号:12345678"), "text 版也要给出报名编号");
   // 引导内容放在信息摘要之后、审核结果提示之前(先给下一步,再给等待提示)
   assert.ok(receipt.html.indexOf('href="' + url + '"') < receipt.html.indexOf("审核结果会通过本邮箱"));
 });

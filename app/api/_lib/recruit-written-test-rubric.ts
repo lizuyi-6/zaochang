@@ -51,33 +51,13 @@ export const WRITTEN_TEST_SINGLE_CHOICE = [
 
 export const WRITTEN_TEST_ITEMS: WrittenTestItemSpec[] = [
   {
-    key: "name",
-    label: "姓名",
-    sourceField: "姓名",
+    key: "signupRef",
+    label: "报名ID",
+    sourceField: "报名ID",
     section: "基本信息",
     maxScore: 0,
     kind: "info",
-    prompt: "考生姓名,用于对卷,不参与评分。",
-    rubric: [],
-  },
-  {
-    key: "school",
-    label: "学校、专业、年级",
-    sourceField: "学校、专业、年级",
-    section: "基本信息",
-    maxScore: 0,
-    kind: "info",
-    prompt: "学校 / 专业 / 年级,用于面试安排,不参与评分。",
-    rubric: [],
-  },
-  {
-    key: "contact",
-    label: "手机或微信",
-    sourceField: "手机或微信",
-    section: "基本信息",
-    maxScore: 0,
-    kind: "info",
-    prompt: "联系方式,用于面试通知,不参与评分。",
+    prompt: "报名回执邮件里的「报名编号」(8 位)。笔试表单不再重复收集姓名/学校/联系方式,身份由后端按报名ID反查报名记录回填。",
     rubric: [],
   },
   {
