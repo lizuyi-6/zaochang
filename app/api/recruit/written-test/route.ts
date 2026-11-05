@@ -17,14 +17,17 @@
 // 4) 作答原文原样保存(考生写的每一句话都要能被复核),不回显给客户端。
 import { env } from "cloudflare:workers";
 import { database, jsonError } from "../../_lib/community";
+import { sendSmtpMail } from "../../_lib/mail-send";
 import { enforceRateLimit, RateLimitError, requestActorKey } from "../../_lib/rate-limit";
 import { signupTokenMatches } from "../../_lib/aetherguard-signup";
+import { formatRecruitDateTime, renderAnswerReceived } from "../../_lib/recruit-email-templates";
 import { hardScoreWrittenTest, normalizeWrittenTestSubmission, parseWrittenTestBody } from "../../_lib/recruit-written-test";
 import { WRITTEN_TEST_ITEMS } from "../../_lib/recruit-written-test-rubric";
 
 export const dynamic = "force-dynamic";
 
 const TOKEN_HEADER = "x-recruit-token";
+const FROM_NAME = "AetherGuard 项目组";
 
 type ExistingRow = {
   id: string;
@@ -34,6 +37,7 @@ type ExistingRow = {
 
 type SignupMatch = {
   name: string;
+  email: string;
   grade: string;
   major: string;
   phone: string;
@@ -43,7 +47,7 @@ type SignupMatch = {
 async function lookupSignupByReference(db: D1Database, reference: string): Promise<SignupMatch | null> {
   const rows = await db
     .prepare(
-      `SELECT name, grade, major, phone FROM aetherguard_signups
+      `SELECT name, email, grade, major, phone FROM aetherguard_signups
        WHERE reference = ? ORDER BY submitted_at DESC LIMIT 2`,
     )
     .bind(reference)
@@ -186,6 +190,37 @@ export async function POST(request: Request) {
         .run();
     }
 
+    // 收题回执(06 号模板):只在这份卷子第一次入库时发,且必须能对上报名记录
+    // (笔试表单没有邮箱字段,地址来自报名库)。重复触发/同步脚本重跑都不重发;
+    // 发信失败不拒卷——卷子已经保住,回执可以让人工在阅卷台看到后补。
+    let receiptSent = false;
+    if (!existing && signup) {
+      const mailUser = secrets.AETHERGUARD_MAIL_USER ?? secrets.MAIL_USER;
+      const mailPass = secrets.AETHERGUARD_MAIL_PASS ?? secrets.MAIL_PASS;
+      const mailHost = secrets.AETHERGUARD_MAIL_HOST ?? secrets.MAIL_HOST_SMTP;
+      if (mailUser && mailPass && mailHost) {
+        try {
+          const receipt = renderAnswerReceived({
+            applyId: value.signupRef,
+            candidateName: name,
+            candidateEmail: signup.email,
+            position: value.positions.length ? value.positions.join("、") : "",
+            submitTime: formatRecruitDateTime(value.submittedAt),
+          });
+          await sendSmtpMail({ host: mailHost, port: 465, user: mailUser, pass: mailPass }, {
+            to: signup.email,
+            subject: receipt.subject,
+            html: receipt.html,
+            fromName: FROM_NAME,
+            messageId: `aetherguard-wt-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+          });
+          receiptSent = true;
+        } catch {
+          // 回执失败不影响收卷;响应里带 receiptSent=false 便于观察补发。
+        }
+      }
+    }
+
     return Response.json({
       ok: true,
       id: submissionId,
@@ -193,6 +228,7 @@ export async function POST(request: Request) {
       hardMaxScore: hard.maxScore,
       flags,
       signupMatched: Boolean(signup),
+      receiptSent,
       changed: changedKeys.length,
     });
   } catch (error) {

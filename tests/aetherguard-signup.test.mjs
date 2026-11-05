@@ -79,23 +79,28 @@ test("回执不含学号与手机号", () => {
   assert.equal(body.includes("zhangsan@example.com"), true);
 });
 
-test("回执带笔试入口:text 版有纯链接,html 版有按钮和兜底链接", () => {
+test("回执走 01 号模板:text 版有纯链接与编号,html 版有按钮、编号与兜底链接", () => {
   const parsed = normalizeAetherGuardSignup(VALID);
   assert.equal(parsed.ok, true);
-  const receipt = renderAetherGuardReceipt(parsed.value);
+  const receipt = renderAetherGuardReceipt(parsed.value, { now: new Date("2026-11-05T04:32:00Z") });
   const url = "https://tcnii2lehoms.feishu.cn/share/base/shrcnts2MqEefdrHLbqMkLmGGNg";
-  // text 版:链接必须原样出现(候选人在纯文本客户端也能拿到)
+  // 主题走模板口径,报名编号贯穿主题外的凭证与笔试引导
+  assert.ok(receipt.subject.includes("已收到你的报名"), "主题要是模板的报名确认口径");
+  // text 版:链接必须原样出现(候选人在纯文本客户端也能拿到),编号跟在笔试引导里
   assert.ok(receipt.text.includes(url), "text 版必须含笔试链接原文");
-  assert.ok(receipt.text.includes("笔试"), "text 版要有笔试引导语");
-  // html 版:按钮是 <a href=链接> 的表格写法,且另有纯文本兜底链接
+  assert.ok(receipt.text.includes("报名编号 12345678"), "text 版要给出报名编号");
+  assert.ok(receipt.text.includes("2026-11-05"), "text 版要给出提交时间(北京时间)");
+  // html 版:按钮链接到笔试表单,旁边给报名编号,另有兜底链接
   assert.ok(receipt.html.includes(`href="${url}"`), "html 版按钮必须链到笔试表单");
   assert.ok(receipt.html.includes("进入笔试"), "html 版要有按钮文案");
-  assert.ok(receipt.html.includes("<br />" + url), "html 版要有按钮失效时的兜底链接");
-  // 报名编号必须跟着按钮出现:笔试表单只填编号,不重复收个人信息
-  assert.ok(receipt.html.includes("报名编号:12345678"), "html 版要在按钮旁给出报名编号");
-  assert.ok(receipt.text.includes("报名编号:12345678"), "text 版也要给出报名编号");
-  // 引导内容放在信息摘要之后、审核结果提示之前(先给下一步,再给等待提示)
-  assert.ok(receipt.html.indexOf('href="' + url + '"') < receipt.html.indexOf("审核结果会通过本邮箱"));
+  assert.ok(receipt.html.includes(">12345678</span>"), "html 版要在按钮旁给出报名编号");
+  // 笔试入口放在凭证之后、隐私承诺之前(先给下一步,再给留存说明)
+  assert.ok(
+    receipt.html.indexOf('href="' + url + '"') < receipt.html.indexOf("个人信息只用于本次招聘"),
+    "笔试按钮要出现在隐私承诺段落之前",
+  );
+  // 模板进度轨道在,说明走的是模板而不是旧手写版式
+  assert.ok(receipt.html.includes("报名·审阅中") || receipt.html.includes("审阅中"), "html 版要有模板进度轨道");
 });
 
 test("HTML 转义报名者可控文本", () => {
@@ -104,6 +109,24 @@ test("HTML 转义报名者可控文本", () => {
   const receipt = renderAetherGuardReceipt(parsed.value);
   assert.equal(receipt.html.includes("<img src=x"), false);
   assert.equal(receipt.html.includes("&lt;img"), true);
+});
+
+test("收题回执(06 号模板):只含评阅信息,不含学号手机号", async () => {
+  const { renderAnswerReceived } = await import("../app/api/_lib/recruit-email-templates.ts");
+  const receipt = renderAnswerReceived({
+    applyId: "12345678",
+    candidateName: "张三",
+    candidateEmail: "zhangsan@example.com",
+    position: "商业计划书",
+    submitTime: "2026-11-05 12:07",
+  });
+  assert.ok(receipt.subject.includes("已收到你的笔试答卷"), "主题要是收题口径");
+  assert.ok(receipt.html.includes("12345678"), "凭证里要有报名编号");
+  assert.ok(receipt.html.includes("2026-11-05 12:07"), "要给出提交时间");
+  assert.ok(receipt.html.includes("商业计划书"), "要给出岗位");
+  const body = `${receipt.subject}\n${receipt.text}\n${receipt.html}`;
+  assert.equal(body.includes("2024123456"), false, "回执不含学号");
+  assert.equal(body.includes("13800001234"), false, "回执不含手机号");
 });
 
 test("共享密钥比对:空值一律不通过", async () => {
