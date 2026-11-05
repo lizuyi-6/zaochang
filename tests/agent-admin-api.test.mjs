@@ -18,7 +18,7 @@ const same = (list) => JSON.stringify([...list].sort((a, b) => a.pathname.locale
 
 // ---- 能力表内容逐字固定(扩面 = 显式改这里 + 改 agent-auth.ts,评审可见) ----
 
-test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / hk-redeem-codes POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH / mail-send POST / account-applications PATCH", () => {
+test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / hk-redeem-codes POST+PATCH / incubation PATCH / mail-files POST / mail-status POST / recruit-candidates POST+PATCH / mail-send POST / account-applications PATCH / recruit/written-test PATCH+score POST", () => {
   assert.equal(same(AGENT_ADMIN_CAPABILITIES), same([
     cap("PATCH", "/api/admin/moderation"),
     cap("POST", "/api/admin/invitations"),
@@ -32,6 +32,8 @@ test("admin 能力表:精确列名 moderation PATCH / invitations POST+PATCH / h
     cap("PATCH", "/api/admin/recruit-candidates"),
     cap("POST", "/api/admin/mail-send"),
     cap("PATCH", "/api/admin/account-applications"),
+    cap("PATCH", "/api/admin/recruit/written-test"),
+    cap("POST", "/api/admin/recruit/written-test/score"),
   ]));
 });
 
