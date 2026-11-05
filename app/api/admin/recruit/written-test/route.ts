@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 type SubmissionRow = {
   id: string;
   sourceRecordId: string;
+  signupReference: string;
   name: string;
   school: string;
   contact: string;
@@ -57,7 +58,7 @@ type ItemRow = {
   gradedAt: string | null;
 };
 
-const SUBMISSION_COLUMNS = `s.id, s.source_record_id AS sourceRecordId, s.name, s.school, s.contact,
+const SUBMISSION_COLUMNS = `s.id, s.source_record_id AS sourceRecordId, s.signup_reference AS signupReference, s.name, s.school, s.contact,
   s.positions, s.competition, s.answers_json AS answersJson, s.attachments_json AS attachmentsJson,
   s.timings_json AS timingsJson, s.integrity_confirmed AS integrityConfirmed, s.hard_score AS hardScore,
   s.hard_score_json AS hardScoreJson, s.flags_json AS flagsJson, s.ai_score AS aiScore,
@@ -80,6 +81,7 @@ function toSubmissionView(row: SubmissionRow) {
   return {
     id: row.id,
     sourceRecordId: row.sourceRecordId,
+    signupReference: row.signupReference,
     name: row.name,
     school: row.school,
     contact: row.contact,

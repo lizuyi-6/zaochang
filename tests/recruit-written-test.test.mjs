@@ -98,9 +98,7 @@ test("飞书字段映射:字段标题能对上稳定键,四部分用时单独登
 test("提交归一:驼峰键与飞书中文字段键等价,附件数组被拆成结构化条目", () => {
   const camel = normalizeWrittenTestSubmission({
     sourceRecordId: "rec123",
-    name: " 张三 ",
-    school: "测试大学 · 计算机 · 大三",
-    contact: "13800000000",
+    signupRef: " abcd1234 ",
     positions: ["商业计划书"],
     competition: "无",
     t1_1: "交一份一页简介",
@@ -110,8 +108,8 @@ test("提交归一:驼峰键与飞书中文字段键等价,附件数组被拆成
     attachments: { t2_1: [{ fileToken: "ft-1", name: "intro.pdf", size: 2048, text: "正文" }] },
   });
   assert.equal(camel.ok, true);
-  assert.equal(camel.value.name, "张三");
-  assert.equal(camel.value.answers.t1_1, "交一份一页简介");
+  assert.equal(camel.value.signupRef, "ABCD1234", "报名ID 归一成大写");
+  assert.equal(camel.value.name, "", "表单不再收集姓名");
   assert.deepEqual(camel.value.positions, ["商业计划书"]);
   assert.equal(camel.value.timings.part1, 30);
   assert.equal(camel.value.integrityConfirmed, true);
@@ -120,16 +118,14 @@ test("提交归一:驼峰键与飞书中文字段键等价,附件数组被拆成
 
   const chinese = normalizeWrittenTestSubmission({
     记录ID: "rec123",
-    姓名: "张三",
-    "学校、专业、年级": "测试大学 · 计算机 · 大三",
-    手机或微信: "13800000000",
+    报名ID: "abcd1234",
     意向岗位: ["商业计划书"],
     "1.1 任务卡": "交一份一页简介",
     "第一部分实际用时（分钟）": 30,
     诚信确认: ["我确认"],
   });
   assert.equal(chinese.ok, true);
-  assert.equal(chinese.value.name, "张三");
+  assert.equal(chinese.value.signupRef, "ABCD1234");
   assert.equal(chinese.value.answers.t1_1, "交一份一页简介");
   assert.equal(chinese.value.timings.part1, 30);
   assert.equal(chinese.value.integrityConfirmed, true);
@@ -138,13 +134,16 @@ test("提交归一:驼峰键与飞书中文字段键等价,附件数组被拆成
 test("提交归一:坏输入给稳定错误码,不留半个可用的提交", () => {
   assert.deepEqual(normalizeWrittenTestSubmission(null), { ok: false, error: "invalid_body" });
   assert.equal(normalizeWrittenTestSubmission({ name: "张三" }).error, "invalid_source_record_id");
-  assert.equal(normalizeWrittenTestSubmission({ sourceRecordId: "r", name: "" }).error, "invalid_name");
+  // 报名ID 是唯一身份入口:缺失/只有分隔符/超长都拒收
+  assert.equal(normalizeWrittenTestSubmission({ sourceRecordId: "r" }).error, "invalid_signup_ref");
+  assert.equal(normalizeWrittenTestSubmission({ sourceRecordId: "r", signupRef: "、、、," }).error, "invalid_signup_ref");
   assert.equal(
-    normalizeWrittenTestSubmission({ sourceRecordId: "r", name: "x".repeat(WRITTEN_TEST_LIMITS.name + 1) }).error,
-    "invalid_name",
+    normalizeWrittenTestSubmission({ sourceRecordId: "r", signupRef: "A".repeat(WRITTEN_TEST_LIMITS.signupRef + 1) }).error,
+    "invalid_signup_ref",
   );
   assert.equal(
-    normalizeWrittenTestSubmission({ sourceRecordId: "r".repeat(WRITTEN_TEST_LIMITS.sourceRecordId + 1), name: "张三" }).error,
+    normalizeWrittenTestSubmission({ sourceRecordId: "r".repeat(WRITTEN_TEST_LIMITS.sourceRecordId + 1), signupRef: "ABCD1234" })
+      .error,
     "invalid_source_record_id",
   );
 });
@@ -160,7 +159,7 @@ test("选项字母解析:带「B.」「B、」「B)」都能取出,空答案取�
 test("硬判:1.4 选对得分选错不得分,硬判总分上限 4", () => {
   const normalized = normalizeWrittenTestSubmission({
     sourceRecordId: "rec1",
-    name: "张三",
+    signupRef: "ABCD1234",
     t1_4_1: "B. 删到只剩这一页最重要的一个观点",
     t1_4_2: "C. 我们计划让见界帮乡村老师备课，目前正在调研从哪一步切入",
     t1_4_3: "A. 字号和行距调小，挤进一页",
@@ -178,7 +177,7 @@ test("硬判:1.4 选对得分选错不得分,硬判总分上限 4", () => {
 test("合规筛查:没勾诚信确认、2.2 超字数、漏答计分题都要被标出来", () => {
   const normalized = normalizeWrittenTestSubmission({
     sourceRecordId: "rec2",
-    name: "李四",
+    signupRef: "ABCD1234",
     t2_2: "一".repeat(80),
   });
   assert.equal(normalized.ok, true);
@@ -202,7 +201,7 @@ test("人工分归一:分数必须在题目满分之内,未知题键忽略,空�
 test("初评选题:只送主观题给模型,附件没字节的题退回人工", () => {
   const normalized = normalizeWrittenTestSubmission({
     sourceRecordId: "rec3",
-    name: "王五",
+    signupRef: "ABCD1234",
     t1_1: "交一份一页简介…",
     t1_4_1: "B. 删到只剩这一页最重要的一个观点",
     attachments: { t2_1: [{ fileToken: "ft-2", name: "intro.pdf", size: 10, text: "简介正文" }] },
@@ -220,7 +219,7 @@ test("初评选题:只送主观题给模型,附件没字节的题退回人工", 
 
   const withoutBytes = normalizeWrittenTestSubmission({
     sourceRecordId: "rec4",
-    name: "赵六",
+    signupRef: "ABCD1234",
     attachments: { t3_2: [{ fileToken: "ft-3", name: "deck.pdf", size: 10, text: "" }] },
   });
   const manualTarget = writtenTestGradeTargets(withoutBytes.value).find((target) => target.key === "t3_2");
@@ -275,7 +274,7 @@ test("表单通道:选项字段是数组展开片段时,单选题照样能判分
   const form = parseWrittenTestBody(
     [
       "sourceRecordId=rec5",
-      "name=%E5%BC%A0%E4%B8%89",
+      "signupRef=" + encodeURIComponent("abcd1234"),
       "t1_4_1=" + encodeURIComponent('["B. 删到只剩这一页最重要的一个观点"]'),
       "integrityConfirmed=" + encodeURIComponent('["我确认"]'),
     ].join("&"),

@@ -991,16 +991,45 @@ export const recruitCandidates = sqliteTable(
   ],
 );
 
+// AetherGuard 报名落库:报名工作流 POST 过来发回执的同时,把报名存一份在 D1。
+// 作用:笔试表单只收「报名ID」(reference),笔试收件时在这里反查身份回填——
+// 全程服务器间链动(飞书 → Worker → D1),不依赖本地机器,也不需要飞书 API 凭据。
+// 学号/手机号只进内部阅卷库,绝不进回执邮件(见 aetherguard-signup.ts 纪律 1)。
+export const aetherguardSignups = sqliteTable(
+  "aetherguard_signups",
+  {
+    id: text("id").primaryKey(),
+    recordId: text("record_id").notNull(),
+    // 对外报名编号:记录 ID 尾 8 位大写(与回执邮件展示一致),笔试凭它关联。
+    reference: text("reference").notNull(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    grade: text("grade").notNull(),
+    major: text("major").notNull(),
+    studentId: text("student_id").notNull().default(""),
+    phone: text("phone").notNull().default(""),
+    submittedAt: text("submitted_at").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("aetherguard_signups_record_unique").on(table.recordId),
+    index("aetherguard_signups_reference_idx").on(table.reference),
+  ],
+);
+
 // 见界创赛选拔笔试提交(管理台「笔试阅卷」分区)。
 // 一份提交 = 一行头部(source_record_id 是飞书记录 ID,唯一 → 收件幂等);
 // 逐题评分另存一张表,方便「只改一题」与分项统计,不用重写整包 JSON。
-// 注意:笔试表没有邮箱字段,所以这里不与 recruit_candidates 强关联——
-// 候选人环节推进仍走原「选拔」分区。
+// 身份字段(name/school/contact)由收件时按 signup_reference 反查报名库回填;
+// 查不到时保持为空并落合规旗标,人工核对后再补——绝不因为编号敲错丢一份卷子。
 export const recruitWrittenTests = sqliteTable(
   "recruit_written_tests",
   {
     id: text("id").primaryKey(),
     sourceRecordId: text("source_record_id").notNull(),
+    // 考生在笔试表单第一题手敲的报名ID(归一成大写后保存;空=旧数据)。
+    signupReference: text("signup_reference").notNull().default(""),
     name: text("name").notNull(),
     school: text("school").notNull().default(""),
     contact: text("contact").notNull().default(""),

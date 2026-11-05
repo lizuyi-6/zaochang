@@ -171,16 +171,15 @@ async function buildPayload(row) {
   }
 
   // 基本信息字段在 rubric 里也是 item,单独搬过去。
+  // 身份(name/school/contact)不再由表单收集:Worker 收件时按报名ID反查报名库回填。
   for (const item of WRITTEN_TEST_ITEMS) {
-    if (!["name", "school", "contact", "position", "competition"].includes(item.key)) continue;
+    if (!["signupRef", "position", "competition"].includes(item.key)) continue;
     const field = item.sourceField;
     const value = field ? row[field] : undefined;
     const flat = flatten(value);
     if (!flat) continue;
-    if (item.key === "position") payload.positions = [flat];
-    else if (item.key === "name") payload.name = flat;
-    else if (item.key === "school") payload.school = flat;
-    else if (item.key === "contact") payload.contact = flat;
+    if (item.key === "signupRef") payload.signupRef = flat;
+    else if (item.key === "position") payload.positions = [flat];
     else if (item.key === "competition") payload.competition = flat;
   }
 
@@ -222,12 +221,12 @@ async function main() {
   let failed = 0;
   for (const row of rows) {
     const payload = await buildPayload(row);
-    if (!payload.name) {
-      console.warn(`跳过 ${payload.sourceRecordId}:没有姓名`);
+    if (!payload.signupRef) {
+      console.warn(`跳过 ${payload.sourceRecordId}:没有报名ID`);
       continue;
     }
     if (DRY_RUN) {
-      console.log(`[dry-run] ${payload.sourceRecordId} ${payload.name}`, JSON.stringify(payload).slice(0, 200));
+      console.log(`[dry-run] ${payload.sourceRecordId} ${payload.signupRef}`, JSON.stringify(payload).slice(0, 200));
       ok += 1;
       continue;
     }
@@ -243,7 +242,7 @@ async function main() {
         failed += 1;
         continue;
       }
-      console.log(`已同步 ${payload.name}(${payload.sourceRecordId})硬判 ${body.hardScore}/${body.hardMaxScore}`);
+      console.log(`已同步 ${payload.signupRef}(${payload.sourceRecordId})硬判 ${body.hardScore}/${body.hardMaxScore}${body.signupMatched === false ? " [报名ID未匹配]" : ""}`);
       ok += 1;
     } catch (error) {
       console.error(`同步异常 ${payload.sourceRecordId}:${error instanceof Error ? error.message : error}`);
