@@ -5,6 +5,10 @@
 //   B. 本地脚本 scripts/written-test-sync.mjs → POST(带附件字节抽出的文本)
 // 两者都带同一个共享密钥头,Worker secret 是 RECRUIT_WRITTEN_TEST_TOKEN。
 //
+// 身份关联(报名ID → 报名记录):笔试表单不再收姓名/学校/联系方式,只收报名编号;
+// 这里按编号反查 aetherguard_signups(报名工作流发回执时落库的)回填身份。
+// 查不到不拒收——先把卷子存下来、落旗标让人工核对,绝不因为编号敲错丢一份卷子。
+//
 // 纪律(与 AetherGuard 回执接口同源):
 // 1) 先验密钥再解析字段:未授权调用不该拿到任何字段级错误反馈;
 // 2) 幂等靠 source_record_id(飞书记录 ID)唯一索引,重复提交/重跑脚本只更新不新增;
@@ -28,6 +32,25 @@ type ExistingRow = {
   attachmentsJson: string;
 };
 
+type SignupMatch = {
+  name: string;
+  grade: string;
+  major: string;
+  phone: string;
+};
+
+/** 按报名编号反查报名记录:恰好一条才算匹配,0 条/多条都不回填(人工核对)。 */
+async function lookupSignupByReference(db: D1Database, reference: string): Promise<SignupMatch | null> {
+  const rows = await db
+    .prepare(
+      `SELECT name, grade, major, phone FROM aetherguard_signups
+       WHERE reference = ? ORDER BY submitted_at DESC LIMIT 2`,
+    )
+    .bind(reference)
+    .all<SignupMatch>();
+  return rows.results?.length === 1 ? (rows.results[0] ?? null) : null;
+}
+
 export async function POST(request: Request) {
   try {
     const secrets = env as unknown as Record<string, string | undefined>;
@@ -47,14 +70,22 @@ export async function POST(request: Request) {
     const value = normalized.value;
     const hard = hardScoreWrittenTest(value);
 
+    // 身份回填:按报名ID反查报名库。匹配不到(敲错/报名还没落库)不拒收,
+    // 落旗标让阅卷人核对——卷子永远先保住。
+    const db = database();
+    const signup = await lookupSignupByReference(db, value.signupRef);
+    const name = signup?.name || value.name;
+    const school = signup ? `${signup.grade} · ${signup.major}` : value.school;
+    const contact = signup?.phone || value.contact;
+    const flags = signup ? hard.flags : [...hard.flags, `报名ID ${value.signupRef} 未匹配到报名记录,身份待人工核对`];
+
     const answersJson = JSON.stringify(value.answers);
     const attachmentsJson = JSON.stringify(value.attachments);
     const timingsJson = JSON.stringify(value.timings);
     const positionsJson = JSON.stringify(value.positions);
     const hardScoreJson = JSON.stringify(hard.items);
-    const flagsJson = JSON.stringify(hard.flags);
+    const flagsJson = JSON.stringify(flags);
 
-    const db = database();
     const existing = await db
       .prepare(
         `SELECT id, answers_json AS answersJson, attachments_json AS attachmentsJson
@@ -69,11 +100,12 @@ export async function POST(request: Request) {
     await db
       .prepare(
         `INSERT INTO recruit_written_tests (
-           id, source_record_id, name, school, contact, positions, competition,
+           id, source_record_id, signup_reference, name, school, contact, positions, competition,
            answers_json, attachments_json, timings_json, integrity_confirmed,
            hard_score, hard_score_json, flags_json, status, submitted_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(source_record_id) DO UPDATE SET
+           signup_reference = excluded.signup_reference,
            name = excluded.name,
            school = excluded.school,
            contact = excluded.contact,
@@ -86,15 +118,22 @@ export async function POST(request: Request) {
            hard_score = excluded.hard_score,
            hard_score_json = excluded.hard_score_json,
            flags_json = excluded.flags_json,
+           -- status 跟随旗标自愈:旗标清了要从 flagged 回到 pending,否则阅卷台会挂着
+           -- 一个没有旗标内容的「异常」角标;但人工推进过的(reviewing/done)不被重置。
+           status = CASE
+             WHEN recruit_written_tests.status IN ('flagged', 'pending') THEN excluded.status
+             ELSE recruit_written_tests.status
+           END,
            submitted_at = excluded.submitted_at,
            updated_at = CURRENT_TIMESTAMP`,
       )
       .bind(
         submissionId,
         value.sourceRecordId,
-        value.name,
-        value.school,
-        value.contact,
+        value.signupRef,
+        name,
+        school,
+        contact,
         positionsJson,
         value.competition,
         answersJson,
@@ -104,7 +143,7 @@ export async function POST(request: Request) {
         hard.score,
         hardScoreJson,
         flagsJson,
-        hard.flags.length ? "flagged" : "pending",
+        flags.length ? "flagged" : "pending",
         value.submittedAt,
       )
       .run();
@@ -152,7 +191,8 @@ export async function POST(request: Request) {
       id: submissionId,
       hardScore: hard.score,
       hardMaxScore: hard.maxScore,
-      flags: hard.flags,
+      flags,
+      signupMatched: Boolean(signup),
       changed: changedKeys.length,
     });
   } catch (error) {
