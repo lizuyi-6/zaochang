@@ -15,7 +15,7 @@ import { env } from "cloudflare:workers";
 import { database, jsonError } from "../../_lib/community";
 import { enforceRateLimit, RateLimitError, requestActorKey } from "../../_lib/rate-limit";
 import { signupTokenMatches } from "../../_lib/aetherguard-signup";
-import { hardScoreWrittenTest, normalizeWrittenTestSubmission } from "../../_lib/recruit-written-test";
+import { hardScoreWrittenTest, normalizeWrittenTestSubmission, parseWrittenTestBody } from "../../_lib/recruit-written-test";
 import { WRITTEN_TEST_ITEMS } from "../../_lib/recruit-written-test-rubric";
 
 export const dynamic = "force-dynamic";
@@ -35,8 +35,10 @@ export async function POST(request: Request) {
       return Response.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    const input = await request.json().catch(() => ({})) as Record<string, unknown>;
-    const normalized = normalizeWrittenTestSubmission(input);
+    const raw = await request.text().catch(() => "");
+    const parsed = parseWrittenTestBody(raw);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    const normalized = normalizeWrittenTestSubmission(parsed.value);
     if (!normalized.ok) return Response.json({ error: normalized.error }, { status: 400 });
 
     // 限流按来源 IP:一条提交不该反复刷,把接口当压测入口。

@@ -106,6 +106,56 @@ function pickOptions(raw: Record<string, unknown>, ...keys: string[]): string[] 
   return pickList(raw, ...keys);
 }
 
+/**
+ * 把「选项字段」的取值收拾成一个选项文本。
+ * 飞书工作流把 select 字段的 ref 展开后可能是:
+ *   "商业计划书" / ["商业计划书"] / [{"name":"商业计划书"}]
+ * 三种都要能认出来——单选题的判分要从答案开头取字母(「B. …」)。
+ */
+export function normalizeSelectionAnswer(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[")) return trimmed.replace(/^"|"$/g, "").trim();
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      const first = parsed[0];
+      if (typeof first === "string" && first.trim()) return first.trim();
+      if (first && typeof first === "object") {
+        const object = first as Record<string, unknown>;
+        const name = text(object.name ?? object.text ?? object.value ?? object.id);
+        if (name) return name.trim();
+      }
+    }
+  } catch {
+    // 不是合法 JSON:按字符串清理(去掉方括号与首尾引号)。
+  }
+  return trimmed.replace(/^\[|\]$/g, "").replace(/^"|"$/g, "").trim();
+}
+
+/**
+ * 收件载荷解析:飞书工作流走表单编码(JSON 手拼会被数组字段展开破坏),
+ * 本地同步脚本走 JSON。两种都支持,谁先能用算谁。
+ */
+export function parseWrittenTestBody(raw: string): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: false, error: "invalid_body" };
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { ok: true, value: parsed as Record<string, unknown> };
+    }
+  } catch {
+    // 继续按表单解析。
+  }
+  const params = new URLSearchParams(trimmed);
+  const value: Record<string, unknown> = {};
+  for (const [key, entry] of params.entries()) {
+    if (value[key] === undefined) value[key] = entry;
+  }
+  if (!Object.keys(value).length) return { ok: false, error: "invalid_body" };
+  return { ok: true, value };
+}
+
 function pickAttachments(raw: Record<string, unknown>, key: string): WrittenTestAttachment[] {
   const nested = raw.attachments;
   const source =
@@ -152,14 +202,20 @@ export function normalizeWrittenTestSubmission(
   const school = pick(raw, "school", "学校、专业、年级", "学校专业年级").slice(0, WRITTEN_TEST_LIMITS.school);
   const contact = pick(raw, "contact", "手机或微信", "联系方式").slice(0, WRITTEN_TEST_LIMITS.contact);
   const competition = pick(raw, "competition", "做过的比赛或项目").slice(0, WRITTEN_TEST_LIMITS.competition);
-  const positions = pickOptions(raw, "positions", "position", "意向岗位").slice(0, WRITTEN_TEST_LIMITS.positions);
+  const positions = pickOptions(raw, "positions", "position", "意向岗位")
+    .map((entry) => normalizeSelectionAnswer(entry))
+    .filter(Boolean)
+    .slice(0, WRITTEN_TEST_LIMITS.positions);
 
   const answers: Record<string, string> = {};
   const attachments: Record<string, WrittenTestAttachment[]> = {};
+  const choiceKeys = new Set<string>(WRITTEN_TEST_SINGLE_CHOICE.map((choice) => choice.key));
   for (const item of WRITTEN_TEST_ITEMS) {
     // 不计分的信息题(姓名/学校/用时/诚信)各有专属字段,不再重复塞进作答表。
     if (item.kind === "info") continue;
-    const answer = pick(raw, item.key, item.label, item.sourceField);
+    const rawAnswer = pick(raw, item.key, item.label, item.sourceField);
+    // 单选题的取值可能是数组展开后的片段,收拾成一条选项文本再判分。
+    const answer = choiceKeys.has(item.key) ? normalizeSelectionAnswer(rawAnswer) : rawAnswer;
     if (answer) answers[item.key] = answer.slice(0, WRITTEN_TEST_LIMITS.answer);
     const files = pickAttachments(raw, item.key);
     if (files.length) attachments[item.key] = files;
@@ -178,10 +234,10 @@ export function normalizeWrittenTestSubmission(
   };
 
   const integrityRaw = raw.integrityConfirmed ?? raw.integrity_confirmed ?? raw.integrity ?? raw["诚信确认"];
-  // 飞书里「诚信确认」是单选,值是数组;工作流通道可能给字符串或布尔。
+  // 飞书里「诚信确认」是单选,值可能是数组/数组展开片段;工作流通道也可能给字符串或布尔。
   const integrityText = Array.isArray(integrityRaw)
-    ? integrityRaw.map((entry) => text(entry)).filter(Boolean).join(" ")
-    : text(integrityRaw);
+    ? integrityRaw.map((entry) => normalizeSelectionAnswer(text(entry))).filter(Boolean).join(" ")
+    : normalizeSelectionAnswer(text(integrityRaw));
   const integrityConfirmed =
     integrityRaw === true ||
     integrityRaw === 1 ||
