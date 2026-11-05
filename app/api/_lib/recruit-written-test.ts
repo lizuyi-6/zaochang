@@ -23,6 +23,8 @@ export const WRITTEN_TEST_LIMITS = {
   attachmentText: 60000,
   attachmentName: 200,
   fileToken: 200,
+  /** 图片 base64 的传输上限(字符数),约 9MB 原始字节;超出直接不带,落人工评。 */
+  attachmentB64: 12_000_000,
   positions: 8,
 } as const;
 
@@ -32,6 +34,11 @@ export type WrittenTestAttachment = {
   size: number | null;
   /** 本地脚本抽出的附件文本;为空表示还没拿到字节(纯人工评)。 */
   text: string;
+  /** 图片字节的位置:同步脚本带上 base64 后,收件路由写入 R2 并回填此键。 */
+  r2Key?: string;
+  mime?: string;
+  /** 仅传输用:同步脚本带来的图片 base64;入库前必须剥离,绝不写进 D1。 */
+  b64?: string;
 };
 
 export type WrittenTestTimings = {
@@ -181,8 +188,82 @@ function pickAttachments(raw: Record<string, unknown>, key: string): WrittenTest
     if (!fileToken && !name) continue;
     const size = pickNumber(value, "size", "fileSize");
     const body = pick(value, "text", "extractedText", "content").slice(0, WRITTEN_TEST_LIMITS.attachmentText);
-    out.push({ fileToken: fileToken.slice(0, WRITTEN_TEST_LIMITS.fileToken), name, size, text: body });
+    const file: WrittenTestAttachment = { fileToken: fileToken.slice(0, WRITTEN_TEST_LIMITS.fileToken), name, size, text: body };
+    const mime = pick(value, "mime", "mimeType", "mediaType").slice(0, 100);
+    if (mime) file.mime = mime;
+    const r2Key = pick(value, "r2Key", "r2_key").slice(0, 300);
+    if (r2Key) file.r2Key = r2Key;
+    const b64 = pick(value, "b64", "base64", "data");
+    if (b64 && b64.length <= WRITTEN_TEST_LIMITS.attachmentB64) file.b64 = b64;
+    out.push(file);
     if (out.length >= 5) break;
+  }
+  return out;
+}
+
+/**
+ * 图片附件入库计划:挑出带 base64 且还没写进 R2 的图片,给出确定性对象键。
+ * 键含 recordId + fileToken:同一附件重复同步会覆盖同一键,天然幂等。
+ * 返回的 bytes 是纯函数解码结果(base64 → Uint8Array),路由只负责 put。
+ */
+export function attachmentUploadPlan(
+  attachments: Record<string, WrittenTestAttachment[]>,
+  recordId: string,
+): Array<{ itemKey: string; index: number; r2Key: string; mime: string; bytes: Uint8Array }> {
+  const plan: Array<{ itemKey: string; index: number; r2Key: string; mime: string; bytes: Uint8Array }> = [];
+  for (const [itemKey, files] of Object.entries(attachments)) {
+    files.forEach((file, index) => {
+      if (!file.b64 || file.r2Key) return;
+      const mime = /^image\/(png|jpeg|webp|gif)$/.test(file.mime ?? "") ? (file.mime as string) : sniffImageMime(file.b64, file.name);
+      if (!mime) return;
+      let bytes: Uint8Array;
+      try {
+        const binary = atob(file.b64);
+        bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      } catch {
+        return;
+      }
+      const tokenPart = (file.fileToken || `${itemKey}-${index}`).replace(/[^0-9a-zA-Z-]/g, "").slice(0, 40) || `${itemKey}-${index}`;
+      const extension = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : mime === "image/gif" ? "gif" : "jpg";
+      plan.push({
+        itemKey,
+        index,
+        r2Key: `written-test/${recordId}/${tokenPart}.${extension}`,
+        mime,
+        bytes,
+      });
+    });
+  }
+  return plan;
+}
+
+/** 从 base64 魔数或文件名后缀认图片类型;认不出返回空(不瞎猜)。 */
+export function sniffImageMime(b64: string, name: string): string {
+  const header = b64.slice(0, 16);
+  if (header.startsWith("iVBORw0KGgo")) return "image/png";
+  if (header.startsWith("/9j/")) return "image/jpeg";
+  if (header.startsWith("UklGR")) return "image/webp";
+  if (header.startsWith("R0lGOD")) return "image/gif";
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  return "";
+}
+
+/** 剥离传输字段(b64):返回可直接 JSON.stringify 进 D1 的附件表。 */
+export function stripTransportFields(
+  attachments: Record<string, WrittenTestAttachment[]>,
+): Record<string, WrittenTestAttachment[]> {
+  const out: Record<string, WrittenTestAttachment[]> = {};
+  for (const [key, files] of Object.entries(attachments)) {
+    out[key] = files.map((file) => {
+      const clean = { ...file } as WrittenTestAttachment;
+      delete clean.b64;
+      return clean;
+    });
   }
   return out;
 }
