@@ -14,8 +14,10 @@ import {
 import {
   WRITTEN_TEST_LIMITS,
   hardScoreWrittenTest,
+  normalizeSelectionAnswer,
   normalizeWrittenTestManualPatch,
   normalizeWrittenTestSubmission,
+  parseWrittenTestBody,
   writtenTestOptionLetter,
 } from "../app/api/_lib/recruit-written-test.ts";
 import {
@@ -38,19 +40,42 @@ test("评分口径:题目 key / label / 飞书字段标题都不重复", () => {
   assert.equal(new Set(fields).size, fields.length, "飞书字段标题重复");
 });
 
-test("评分口径:计分题都要有评分点,hard 题必须写死标准答案", () => {
+test("评分口径:计分题都要有评分点,评分点分值之和恒等于满分,hard 题必须写死标准答案", () => {
   for (const item of WRITTEN_TEST_ITEMS) {
     if (item.maxScore <= 0) continue;
-    assert.ok(item.rubric.every((point) => point.trim().length > 0), `${item.key} 有空评分点`);
-    assert.equal(new Set(item.rubric).size, item.rubric.length, `${item.key} 评分点重复`);
+    assert.ok(item.rubric.every((point) => point.text.trim().length > 0), `${item.key} 有空评分点`);
+    assert.ok(
+      item.rubric.every((point) => Number.isFinite(point.score) && point.score > 0),
+      `${item.key} 有非正分值的评分点`,
+    );
+    assert.equal(
+      new Set(item.rubric.map((point) => point.text)).size,
+      item.rubric.length,
+      `${item.key} 评分点重复`,
+    );
+    const weightSum = item.rubric.reduce((sum, point) => sum + point.score, 0);
+    assert.equal(weightSum, item.maxScore, `${item.key} 评分点分值之和(${weightSum})≠满分(${item.maxScore})`);
     if (item.kind === "hard") {
       assert.ok(item.rubric.length >= 1, `${item.key} 评分点为空`);
       assert.ok(item.correctOption, `${item.key} 缺标准答案`);
       assert.equal(item.maxScore, 1, "单选每题 1 分");
       continue;
     }
-    assert.ok(item.rubric.length >= 2, `${item.key} 评分点少于 2 条`);
+    assert.ok(item.rubric.length >= 1, `${item.key} 评分点为空`);
   }
+});
+
+test("评分口径:1.2 必须给「提到改口原因」留分(周五下午开会过材料是可答信息)", () => {
+  const item = writtenTestItem("t1_2");
+  assert.ok(item.rubric.some((point) => point.text.includes("原因") && point.score === 1));
+});
+
+test("评分口径:4.1 的「第一三段未动」和「三处大白话」分值与内部标准一致(2/3)", () => {
+  const item = writtenTestItem("t4_1");
+  const untouched = item.rubric.find((point) => point.text.includes("第一段和第三段"));
+  const jargon = item.rubric.find((point) => point.text.includes("SSE"));
+  assert.equal(untouched.score, 2);
+  assert.equal(jargon.score, 3);
 });
 
 test("评分口径:1.4 四道情景单选的标准答案与试卷一致(B/C/B/B)", () => {
@@ -222,4 +247,45 @@ test("初评提示词:评分点来自服务端,考生作答被标成不可信数
   assert.match(prompt.user, /不可信数据/);
   assert.match(prompt.user, /交一份一页简介/);
   assert.ok(prompt.user.includes("不超过 6 行"), "评分点必须在提示词里");
+});
+
+test("载荷解析:JSON 与表单编码两种形状都要能收(飞书工作流走表单,本地脚本走 JSON)", () => {
+  const json = parseWrittenTestBody(JSON.stringify({ sourceRecordId: "rec1", name: "张三" }));
+  assert.equal(json.ok, true);
+  assert.equal(json.value.name, "张三");
+
+  const form = parseWrittenTestBody("sourceRecordId=rec1&name=%E5%BC%A0%E4%B8%89&t1_1=%E4%BA%A4%E4%B8%80%E4%BB%BD");
+  assert.equal(form.ok, true);
+  assert.equal(form.value.sourceRecordId, "rec1");
+  assert.equal(form.value.name, "张三");
+  assert.equal(form.value.t1_1, "交一份");
+
+  assert.equal(parseWrittenTestBody("").ok, false);
+  assert.equal(parseWrittenTestBody("   ").ok, false);
+});
+
+test("选项取值:数组展开的三种形状都要收拾成同一条选项文本", () => {
+  assert.equal(normalizeSelectionAnswer("B. 删到只剩这一页最重要的一个观点"), "B. 删到只剩这一页最重要的一个观点");
+  assert.equal(normalizeSelectionAnswer('["B. 删到只剩这一页最重要的一个观点"]'), "B. 删到只剩这一页最重要的一个观点");
+  assert.equal(normalizeSelectionAnswer('[{"name":"B. 删到只剩这一页最重要的一个观点"}]'), "B. 删到只剩这一页最重要的一个观点");
+  assert.equal(normalizeSelectionAnswer("商业计划书"), "商业计划书");
+});
+
+test("表单通道:选项字段是数组展开片段时,单选题照样能判分、诚信确认照样认得出", () => {
+  const form = parseWrittenTestBody(
+    [
+      "sourceRecordId=rec5",
+      "name=%E5%BC%A0%E4%B8%89",
+      "t1_4_1=" + encodeURIComponent('["B. 删到只剩这一页最重要的一个观点"]'),
+      "integrityConfirmed=" + encodeURIComponent('["我确认"]'),
+    ].join("&"),
+  );
+  assert.equal(form.ok, true);
+  const normalized = normalizeWrittenTestSubmission(form.value);
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.value.answers.t1_4_1, "B. 删到只剩这一页最重要的一个观点");
+  assert.equal(normalized.value.integrityConfirmed, true);
+  const hard = hardScoreWrittenTest(normalized.value);
+  assert.equal(hard.score, 1, "选对 B 要给分");
+  assert.ok(!hard.flags.some((flag) => flag.includes("诚信确认")), "勾了确认就不该再报警");
 });
