@@ -21,7 +21,13 @@ import { sendSmtpMail } from "../../_lib/mail-send";
 import { enforceRateLimit, RateLimitError, requestActorKey } from "../../_lib/rate-limit";
 import { signupTokenMatches } from "../../_lib/aetherguard-signup";
 import { formatRecruitDateTime, renderAnswerReceived } from "../../_lib/recruit-email-templates";
-import { hardScoreWrittenTest, normalizeWrittenTestSubmission, parseWrittenTestBody } from "../../_lib/recruit-written-test";
+import {
+  attachmentUploadPlan,
+  hardScoreWrittenTest,
+  normalizeWrittenTestSubmission,
+  parseWrittenTestBody,
+  stripTransportFields,
+} from "../../_lib/recruit-written-test";
 import { WRITTEN_TEST_ITEMS } from "../../_lib/recruit-written-test-rubric";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +80,28 @@ export async function POST(request: Request) {
     const value = normalized.value;
     const hard = hardScoreWrittenTest(value);
 
+    // 图片附件落 R2:同步脚本带来的 base64 只在这一步转成对象,键按记录+fileToken
+    // 幂等(重跑同步覆盖同一键);R2 挂了不拒卷,只是这题退回人工评。
+    const bucket = (env as unknown as { UPLOADS?: R2Bucket }).UPLOADS;
+    let imagesStored = 0;
+    if (bucket) {
+      for (const plan of attachmentUploadPlan(value.attachments, value.sourceRecordId)) {
+        try {
+          await bucket.put(plan.r2Key, plan.bytes);
+          const files = value.attachments[plan.itemKey];
+          const file = files?.[plan.index];
+          if (file) {
+            file.r2Key = plan.r2Key;
+            file.mime = plan.mime;
+            imagesStored += 1;
+          }
+        } catch {
+          // 放弃这一张:没有 r2Key,初评自然落回人工。
+        }
+      }
+    }
+    const storableAttachments = stripTransportFields(value.attachments);
+
     // 身份回填:按报名ID反查报名库。匹配不到(敲错/报名还没落库)不拒收,
     // 落旗标让阅卷人核对——卷子永远先保住。
     const db = database();
@@ -84,7 +112,7 @@ export async function POST(request: Request) {
     const flags = signup ? hard.flags : [...hard.flags, `报名ID ${value.signupRef} 未匹配到报名记录,身份待人工核对`];
 
     const answersJson = JSON.stringify(value.answers);
-    const attachmentsJson = JSON.stringify(value.attachments);
+    const attachmentsJson = JSON.stringify(storableAttachments);
     const timingsJson = JSON.stringify(value.timings);
     const positionsJson = JSON.stringify(value.positions);
     const hardScoreJson = JSON.stringify(hard.items);
@@ -204,7 +232,6 @@ export async function POST(request: Request) {
             applyId: value.signupRef,
             candidateName: name,
             candidateEmail: signup.email,
-            position: value.positions.length ? value.positions.join("、") : "",
             submitTime: formatRecruitDateTime(value.submittedAt),
           });
           await sendSmtpMail({ host: mailHost, port: 465, user: mailUser, pass: mailPass }, {
@@ -229,6 +256,7 @@ export async function POST(request: Request) {
       flags,
       signupMatched: Boolean(signup),
       receiptSent,
+      imagesStored,
       changed: changedKeys.length,
     });
   } catch (error) {

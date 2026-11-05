@@ -30,7 +30,17 @@ async function throwForStatus(scope: string, endpoint: string, response: Respons
   throw new HyperknowUpstreamError("ai_upstream_error", 503);
 }
 
-export type LlmMessage = { role: "system" | "user" | "assistant"; content: string };
+/** 多模态消息段:文本与图片(chat/completions 的 content parts 形态)。 */
+export type LlmContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+export type LlmMessage = { role: "system" | "user" | "assistant"; content: string | LlmContentPart[] };
+
+/** 消息里是否带多模态段:有的话只能走 chat/completions 通道(Messages 协议不收图片)。 */
+export function hasLlmContentParts(messages: LlmMessage[]): boolean {
+  return messages.some((message) => Array.isArray(message.content));
+}
 
 export type ChatOptions = {
   model?: string;
@@ -50,7 +60,9 @@ export function formatMessagesForMessagesApi(messages: LlmMessage[]): { systemPr
     if (msg.role === "system") {
       systemPrompt += (systemPrompt ? "\n\n" : "") + msg.content;
     } else {
-      formatted.push({ role: msg.role === "assistant" ? "assistant" : "user", content: msg.content });
+      // 多模态段消息不会走到这里(chat() 对它们直走 chat/completions),防御性跳过。
+    if (Array.isArray(msg.content)) continue;
+    formatted.push({ role: msg.role === "assistant" ? "assistant" : "user", content: msg.content });
     }
   }
   if (formatted.length === 0 || formatted[0].role !== "user") {
@@ -100,10 +112,14 @@ async function postChatCompletions(
   const config = resolveConfigOrThrow();
   const endpoint = chatCompletionsEndpoint(config.baseUrl);
   const sysJson = options.jsonMode ? "\nIMPORTANT: You must output ONLY a valid JSON object matching the requested schema. No other text." : "";
-  const formattedMessages = messages.map((m, idx) => ({
-    role: m.role,
-    content: idx === 0 && m.role === "system" ? m.content + sysJson : m.content,
-  }));
+  const formattedMessages = messages.map((m, idx) => {
+    // 多模态段数组原样透传;system 纯文本时才追加 JSON 指令。
+    if (Array.isArray(m.content)) return { role: m.role, content: m.content };
+    return {
+      role: m.role,
+      content: idx === 0 && m.role === "system" ? m.content + sysJson : m.content,
+    };
+  });
 
   const primaryModel = normalizeModelAlias(options.model || config.model);
   const candidateModels = [primaryModel];
@@ -246,7 +262,9 @@ export async function* streamChatOpenAI(messages: LlmMessage[], options: ChatOpt
 // (如报 404/503 或未开 messages 接口),无缝切换走 chat/completions。
 export async function chat(messages: LlmMessage[], options: ChatOptions & { jsonMode?: boolean } = {}): Promise<string> {
   const config = resolveConfigOrThrow();
-  if (config.baseUrl.includes("/chat/completions")) {
+  // 带图片的多模态消息跳过 Messages 协议(它不收 image 段),直接走 chat/completions;
+  // 也不走「空正文回退」里的二次尝试路径以外的东西——失败就抛,由调用方落 ungraded。
+  if (config.baseUrl.includes("/chat/completions") || hasLlmContentParts(messages)) {
     return postChatCompletions(messages, options);
   }
 

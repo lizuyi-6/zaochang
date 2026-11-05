@@ -236,9 +236,9 @@ export const WRITTEN_TEST_ITEMS: WrittenTestItemSpec[] = [
     sourceField: "3.1 手绘草图",
     section: "第三部分",
     maxScore: 5,
-    kind: "manual",
+    kind: "attachment",
     prompt:
-      "手绘草图(拍照上传):看是否画了每一页的大致布局(方框 + 标题),页数与最终 PPT 是否对得上,是否体现了每页一个观点的思路。v1 人工判。",
+      "手绘草图(拍照上传):看是否画了每一页的大致布局(方框 + 标题),页数与最终 PPT 是否对得上,是否体现了每页一个观点的思路。图片由视觉模型给建议分,人工定稿。",
     rubric: [
       { text: "每页都有大致布局(方框 + 标题),不是随手涂鸦", score: 3 },
       { text: "能看出思考过程:有改过、划掉或标注的痕迹(交成品截图、或明显照着成品描的,给 0–1 分并在面试追问)", score: 2 },

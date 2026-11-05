@@ -146,22 +146,31 @@ async function buildPayload(row) {
         if (flat) answers[key] = flat;
         continue;
       }
-      // 附件字段:下载 → 抽文本。
+      // 附件字段:下载 → 抽文本;图片类字节转 base64 随载荷上传,由收件路由写 R2 供视觉初评。
       const files = [];
       for (const entry of value) {
         const fileToken = String(entry?.file_token ?? "");
         const name = String(entry?.name ?? "");
         if (!fileToken && !name) continue;
         let text = "";
+        let mime = "";
+        let b64 = "";
         if (fileToken) {
           const path = downloadAttachment(recordId, fileToken, join(WORK_DIR, "attachments", recordId));
           if (path) {
             const bytes = new Uint8Array(readFileSync(path));
-            const extracted = await extractMaterialText(name || path, mediaTypeOf(name || path), bytes);
+            mime = mediaTypeOf(name || path);
+            const extracted = await extractMaterialText(name || path, mime, bytes);
             if (extracted.ok) text = extracted.text;
+            if (mime.startsWith("image/") && bytes.byteLength <= 8 * 1024 * 1024) {
+              b64 = Buffer.from(bytes).toString("base64");
+            }
           }
         }
-        files.push({ fileToken, name, size: entry?.size ?? null, text });
+        const file = { fileToken, name, size: entry?.size ?? null, text };
+        if (mime) file.mime = mime;
+        if (b64) file.b64 = b64;
+        files.push(file);
       }
       if (files.length) attachments[key] = files;
       continue;

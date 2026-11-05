@@ -13,15 +13,19 @@ import {
 } from "../app/api/_lib/recruit-written-test-rubric.ts";
 import {
   WRITTEN_TEST_LIMITS,
+  attachmentUploadPlan,
   hardScoreWrittenTest,
   normalizeSelectionAnswer,
   normalizeWrittenTestManualPatch,
   normalizeWrittenTestSubmission,
   parseWrittenTestBody,
+  sniffImageMime,
+  stripTransportFields,
   writtenTestOptionLetter,
 } from "../app/api/_lib/recruit-written-test.ts";
 import {
   buildWrittenTestGradePrompt,
+  buildWrittenTestGradeUserParts,
   parseWrittenTestGrade,
   writtenTestGradeTargets,
 } from "../app/api/_lib/recruit-written-test-grader.ts";
@@ -287,4 +291,99 @@ test("表单通道:选项字段是数组展开片段时,单选题照样能判分
   const hard = hardScoreWrittenTest(normalized.value);
   assert.equal(hard.score, 1, "选对 B 要给分");
   assert.ok(!hard.flags.some((flag) => flag.includes("诚信确认")), "勾了确认就不该再报警");
+});
+
+// ---- 图片附件:传输字段、R2 入库计划、视觉初评目标 ----
+
+const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PwWvWQAAAABJRU5ErkJggg==";
+
+test("图片附件:归一收下 mime/r2Key/b64,超限 base64 直接丢弃", () => {
+  const normalized = normalizeWrittenTestSubmission({
+    sourceRecordId: "recImg",
+    signupRef: "ABCD1234",
+    attachments: {
+      t3_1: [
+        { fileToken: "ftok1", name: "草.png", size: 12, text: "", mime: "image/png", b64: PNG_B64 },
+        { fileToken: "ftok2", name: "big.jpg", size: 99, text: "", mime: "image/jpeg", b64: "A".repeat(WRITTEN_TEST_LIMITS.attachmentB64 + 1) },
+      ],
+    },
+  });
+  assert.equal(normalized.ok, true);
+  const files = normalized.value.attachments.t3_1;
+  assert.equal(files.length, 2);
+  assert.equal(files[0].mime, "image/png");
+  assert.equal(files[0].b64, PNG_B64);
+  assert.equal(files[1].b64, undefined, "超限的 base64 不能进载荷");
+});
+
+test("sniffImageMime:魔数优先,后缀兜底,认不出返回空", () => {
+  assert.equal(sniffImageMime(PNG_B64, "any.bin"), "image/png");
+  assert.equal(sniffImageMime("/9j/4AAQSkZJRgABAQ", "a.bin"), "image/jpeg");
+  assert.equal(sniffImageMime("", "photo.JPG"), "image/jpeg");
+  assert.equal(sniffImageMime("AAAA", "file.txt"), "");
+});
+
+test("attachmentUploadPlan:只挑待上传的图片,键幂等,base64 可解码", () => {
+  const attachments = normalizeWrittenTestSubmission({
+    sourceRecordId: "recPlan",
+    signupRef: "ABCD1234",
+    attachments: {
+      t3_1: [
+        { fileToken: "ftokOk", name: "a.png", size: 1, text: "", b64: PNG_B64 },
+        { fileToken: "ftokText", name: "doc.pdf", size: 1, text: "正文", mime: "application/pdf" },
+        { fileToken: "ftokDone", name: "b.png", size: 1, text: "", mime: "image/png", r2Key: "written-test/recPlan/ftokDone.png" },
+        { fileToken: "ftokBad", name: "c.bin", size: 1, text: "", b64: "!!不是base64!!", mime: "image/png" },
+      ],
+    },
+  }).value.attachments;
+  const plan = attachmentUploadPlan(attachments, "recPlan");
+  assert.equal(plan.length, 1, "只计划未入 R2 的图片");
+  assert.equal(plan[0].r2Key, "written-test/recPlan/ftokOk.png");
+  assert.equal(plan[0].mime, "image/png");
+  const head = String.fromCharCode(...plan[0].bytes.subarray(0, 4));
+  assert.equal(head, "\x89PNG", "bytes 是真解码结果");
+});
+
+test("stripTransportFields:b64 必须被剥掉,r2Key/mime 保留", () => {
+  const attachments = {
+    t3_1: [{ fileToken: "f", name: "a.png", size: 1, text: "", mime: "image/png", b64: PNG_B64, r2Key: "k" }],
+  };
+  const clean = stripTransportFields(attachments);
+  assert.equal(clean.t3_1[0].b64, undefined);
+  assert.equal(clean.t3_1[0].r2Key, "k");
+  assert.equal(clean.t3_1[0].mime, "image/png");
+});
+
+test("视觉初评:带 r2Key 的图片题可送模型,纯文本附件规则不变", () => {
+  const withImage = normalizeWrittenTestSubmission({
+    sourceRecordId: "recV",
+    signupRef: "ABCD1234",
+    attachments: { t3_1: [{ fileToken: "f", name: "a.jpg", size: 1, text: "", mime: "image/jpeg", r2Key: "written-test/recV/f.jpg" }] },
+  }).value;
+  const targets = writtenTestGradeTargets(withImage, ["t3_1"]);
+  assert.equal(targets[0].manualReason, "", "有图就该送初评,不该落人工");
+  assert.deepEqual(targets[0].imageKeys, ["written-test/recV/f.jpg"]);
+
+  const noImage = normalizeWrittenTestSubmission({
+    sourceRecordId: "recV2",
+    signupRef: "ABCD1234",
+    attachments: { t3_1: [{ fileToken: "f", name: "a.jpg", size: 1, text: "" }] },
+  }).value;
+  const manual = writtenTestGradeTargets(noImage, ["t3_1"]);
+  assert.ok(manual[0].manualReason.includes("人工评"), "没字节也没图 → 人工");
+});
+
+test("视觉提示词:imageCount>0 时带图片规则与 attached_images;消息段是 text+image_url", () => {
+  const spec = writtenTestItem("t3_1");
+  const prompt = buildWrittenTestGradePrompt(spec, "", 2);
+  assert.ok(prompt.system.includes("2 张考生上传的图片"), "system 要说明图片数量");
+  assert.ok(prompt.user.includes("attached_images"), "user 要声明图片段存在");
+
+  const parts = buildWrittenTestGradeUserParts(prompt.user, [
+    { mime: "image/jpeg", base64: "/9j/4AAQ", name: "k" },
+  ]);
+  assert.equal(parts.length, 2);
+  assert.equal(parts[0].type, "text");
+  assert.equal(parts[1].type, "image_url");
+  assert.equal(parts[1].image_url.url, "data:image/jpeg;base64,/9j/4AAQ");
 });
