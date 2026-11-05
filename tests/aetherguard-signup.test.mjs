@@ -111,20 +111,19 @@ test("HTML 转义报名者可控文本", () => {
   assert.equal(receipt.html.includes("&lt;img"), true);
 });
 
-test("收题回执(06 号模板):只含评阅信息,不含学号手机号", async () => {
+test("收题回执(06 号模板):只含评阅信息,不含岗位/学号/手机号", async () => {
   const { renderAnswerReceived } = await import("../app/api/_lib/recruit-email-templates.ts");
   const receipt = renderAnswerReceived({
     applyId: "12345678",
     candidateName: "张三",
     candidateEmail: "zhangsan@example.com",
-    position: "商业计划书",
     submitTime: "2026-11-05 12:07",
   });
   assert.ok(receipt.subject.includes("已收到你的笔试答卷"), "主题要是收题口径");
   assert.ok(receipt.html.includes("12345678"), "凭证里要有报名编号");
   assert.ok(receipt.html.includes("2026-11-05 12:07"), "要给出提交时间");
-  assert.ok(receipt.html.includes("商业计划书"), "要给出岗位");
   const body = `${receipt.subject}\n${receipt.text}\n${receipt.html}`;
+  assert.equal(body.includes("商业计划书"), false, "报名/收题邮件不出现岗位");
   assert.equal(body.includes("2024123456"), false, "回执不含学号");
   assert.equal(body.includes("13800001234"), false, "回执不含手机号");
 });
