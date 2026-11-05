@@ -118,6 +118,12 @@ export async function POST(request: Request) {
            hard_score = excluded.hard_score,
            hard_score_json = excluded.hard_score_json,
            flags_json = excluded.flags_json,
+           -- status 跟随旗标自愈:旗标清了要从 flagged 回到 pending,否则阅卷台会挂着
+           -- 一个没有旗标内容的「异常」角标;但人工推进过的(reviewing/done)不被重置。
+           status = CASE
+             WHEN recruit_written_tests.status IN ('flagged', 'pending') THEN excluded.status
+             ELSE recruit_written_tests.status
+           END,
            submitted_at = excluded.submitted_at,
            updated_at = CURRENT_TIMESTAMP`,
       )
