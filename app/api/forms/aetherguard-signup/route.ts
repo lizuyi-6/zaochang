@@ -12,7 +12,8 @@
 // 「重发回执」变成不可能);落库本身按 record_id upsert,重复触发只更新不重复插。
 import { env } from "cloudflare:workers";
 import { database, jsonError } from "../../_lib/community";
-import { sendSmtpMail } from "../../_lib/mail-send";
+import { sendRecruitMail } from "../../_lib/mail-rotation";
+import { mailboxPool } from "../../_lib/mail-rotation-policy";
 import { enforceRateLimit, RateLimitError, requestActorKey } from "../../_lib/rate-limit";
 import {
   normalizeAetherGuardSignup,
@@ -42,10 +43,7 @@ export async function POST(request: Request) {
     // 一条报名只该对应一封回执;限流按来源 IP 计数,防止表单被脚本刷成发信器。
     await enforceRateLimit(await requestActorKey(request, "aetherguard-signup"), 20, 60 * 60);
 
-    const user = secrets.AETHERGUARD_MAIL_USER ?? secrets.MAIL_USER;
-    const pass = secrets.AETHERGUARD_MAIL_PASS ?? secrets.MAIL_PASS;
-    const host = secrets.AETHERGUARD_MAIL_HOST ?? secrets.MAIL_HOST_SMTP;
-    if (!user || !pass || !host) {
+    if (!mailboxPool(secrets).length) {
       return Response.json({ error: "mail_not_configured" }, { status: 503 });
     }
 
@@ -85,22 +83,28 @@ export async function POST(request: Request) {
       .run();
 
     const receipt = renderAetherGuardReceipt(value);
-    try {
-      await sendSmtpMail({ host, port: 465, user, pass }, {
-        to: value.email,
-        subject: receipt.subject,
-        html: receipt.html,
-        fromName: FROM_NAME,
-        messageId: `aetherguard-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
-      });
-    } catch (error) {
+    // 走轮换池:品牌发件箱被风控时自动落到通用发件箱,每次尝试都留痕。
+    const delivery = await sendRecruitMail({
+      kind: "signup_receipt",
+      reference,
+      to: value.email,
+      subject: receipt.subject,
+      html: receipt.html,
+      fromName: FROM_NAME,
+      messageIdPrefix: "aetherguard",
+    });
+    if (!delivery.sent) {
       return Response.json(
-        { error: "mail_send_failed", detail: String(error instanceof Error ? error.message : error).slice(0, 160) },
+        {
+          error: "mail_send_failed",
+          detail: delivery.failure ? `${delivery.failure.kind}:${delivery.failure.code}` : "no_mailbox_available",
+          attempts: delivery.attempts,
+        },
         { status: 502 },
       );
     }
 
-    return Response.json({ ok: true, reference });
+    return Response.json({ ok: true, reference, mailbox: delivery.mailbox });
   } catch (error) {
     if (error instanceof RateLimitError) {
       return Response.json({ error: error.code }, { status: error.status });

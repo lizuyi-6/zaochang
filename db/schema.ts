@@ -1066,6 +1066,33 @@ export const recruitWrittenTests = sqliteTable(
   ],
 );
 
+// 发信留痕:每次投递尝试一行(成功与失败都记),既是补发依据,也是邮箱轮换的冷却状态来源。
+// 2026-11-05 腾讯企业邮把 AetherGuard 发件箱以 535「system busy」临时风控,
+// 之后王娜等 13 位候选人的回执全部没发出且无人察觉——这张表就是为了让这种事可被发现。
+export const mailDeliveries = sqliteTable(
+  "mail_deliveries",
+  {
+    id: text("id").primaryKey(),
+    // 业务类型:signup_receipt(报名回执) / answer_receipt(收题回执)。
+    kind: text("kind").notNull(),
+    // 报名编号:补发与核对按它关联业务记录。
+    reference: text("reference").notNull().default(""),
+    toEmail: text("to_email").notNull(),
+    // 实际使用的发件箱(邮箱池里的 id,例如 aetherguard / zaochang)。
+    mailbox: text("mailbox").notNull(),
+    // sent | failed;失败时 errorCode 记录 SMTP 应答码(如 smtp_auth_pass_535)。
+    status: text("status").notNull(),
+    errorCode: text("error_code").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("mail_deliveries_created_idx").on(table.createdAt),
+    index("mail_deliveries_mailbox_idx").on(table.mailbox, table.createdAt),
+    index("mail_deliveries_reference_idx").on(table.reference),
+    check("mail_deliveries_status_valid", sql`${table.status} in ('sent','failed')`),
+  ],
+);
+
 // 逐题评分行:AI 建议分 + 判据 + 引文,人工分数与备注单独一列(人工改判不覆盖 AI 记录)。
 export const recruitWrittenTestItems = sqliteTable(
   "recruit_written_test_items",
