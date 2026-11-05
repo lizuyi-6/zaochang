@@ -17,7 +17,7 @@
 // 4) 作答原文原样保存(考生写的每一句话都要能被复核),不回显给客户端。
 import { env } from "cloudflare:workers";
 import { database, jsonError } from "../../_lib/community";
-import { sendSmtpMail } from "../../_lib/mail-send";
+import { sendRecruitMail } from "../../_lib/mail-rotation";
 import { enforceRateLimit, RateLimitError, requestActorKey } from "../../_lib/rate-limit";
 import { signupTokenMatches } from "../../_lib/aetherguard-signup";
 import { formatRecruitDateTime, renderAnswerReceived } from "../../_lib/recruit-email-templates";
@@ -222,30 +222,26 @@ export async function POST(request: Request) {
     // (笔试表单没有邮箱字段,地址来自报名库)。重复触发/同步脚本重跑都不重发;
     // 发信失败不拒卷——卷子已经保住,回执可以让人工在阅卷台看到后补。
     let receiptSent = false;
+    let receiptMailbox = "";
     if (!existing && signup) {
-      const mailUser = secrets.AETHERGUARD_MAIL_USER ?? secrets.MAIL_USER;
-      const mailPass = secrets.AETHERGUARD_MAIL_PASS ?? secrets.MAIL_PASS;
-      const mailHost = secrets.AETHERGUARD_MAIL_HOST ?? secrets.MAIL_HOST_SMTP;
-      if (mailUser && mailPass && mailHost) {
-        try {
-          const receipt = renderAnswerReceived({
-            applyId: value.signupRef,
-            candidateName: name,
-            candidateEmail: signup.email,
-            submitTime: formatRecruitDateTime(value.submittedAt),
-          });
-          await sendSmtpMail({ host: mailHost, port: 465, user: mailUser, pass: mailPass }, {
-            to: signup.email,
-            subject: receipt.subject,
-            html: receipt.html,
-            fromName: FROM_NAME,
-            messageId: `aetherguard-wt-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
-          });
-          receiptSent = true;
-        } catch {
-          // 回执失败不影响收卷;响应里带 receiptSent=false 便于观察补发。
-        }
-      }
+      const receipt = renderAnswerReceived({
+        applyId: value.signupRef,
+        candidateName: name,
+        candidateEmail: signup.email,
+        submitTime: formatRecruitDateTime(value.submittedAt),
+      });
+      // 走轮换池:品牌发件箱被风控时自动落到通用发件箱;失败不拒卷。
+      const delivery = await sendRecruitMail({
+        kind: "answer_receipt",
+        reference: value.signupRef,
+        to: signup.email,
+        subject: receipt.subject,
+        html: receipt.html,
+        fromName: FROM_NAME,
+        messageIdPrefix: "aetherguard-wt",
+      });
+      receiptSent = delivery.sent;
+      receiptMailbox = delivery.mailbox;
     }
 
     return Response.json({
@@ -256,6 +252,7 @@ export async function POST(request: Request) {
       flags,
       signupMatched: Boolean(signup),
       receiptSent,
+      receiptMailbox,
       imagesStored,
       changed: changedKeys.length,
     });
