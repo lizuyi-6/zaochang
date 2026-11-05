@@ -204,7 +204,6 @@ export async function POST(request: Request) {
             applyId: value.signupRef,
             candidateName: name,
             candidateEmail: signup.email,
-            position: value.positions.length ? value.positions.join("、") : "",
             submitTime: formatRecruitDateTime(value.submittedAt),
           });
           await sendSmtpMail({ host: mailHost, port: 465, user: mailUser, pass: mailPass }, {
