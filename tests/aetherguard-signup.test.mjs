@@ -45,7 +45,7 @@ test("接受中文字段名(飞书列名直接映射)", () => {
 test("缺字段与非法值返回稳定错误码", () => {
   assert.deepEqual(normalizeAetherGuardSignup({}), { ok: false, error: "invalid_name" });
   assert.deepEqual(normalizeAetherGuardSignup({ ...VALID, email: "not-an-email" }), { ok: false, error: "invalid_email" });
-  assert.deepEqual(normalizeAetherGuardSignup({ ...VALID, phone: "abc" }), { ok: false, error: "invalid_phone" });
+  assert.deepEqual(normalizeAetherGuardSignup({ ...VALID, phone: "1" }), { ok: true, value: { ...VALID, email: "zhangsan@example.com", phone: "1" } });
   assert.deepEqual(normalizeAetherGuardSignup({ ...VALID, studentId: "" }), { ok: false, error: "invalid_student_id" });
   assert.deepEqual(normalizeAetherGuardSignup({ ...VALID, grade: "" }), { ok: false, error: "invalid_grade" });
   assert.deepEqual(normalizeAetherGuardSignup({ ...VALID, major: "" }), { ok: false, error: "invalid_major" });

@@ -7,6 +7,7 @@ import { oidcDiscoveryDocument } from "../app/api/_lib/oauth-discovery";
 import { mcpResourceMetadata, oauthAuthorizationServerMetadata } from "../app/api/_lib/oauth-resource";
 import { runPurgeRegistry } from "../app/api/_lib/purge";
 import { cleanupOrphanedHyperknowImages } from "../app/api/_lib/purge/hyperknow-images";
+import { retryUnsentRecruitMail } from "../app/api/_lib/mail-watchdog";
 import { scheduledPurgePlan } from "./purge-schedule";
 import { isAgentWriteAllowed, isValidAgentToken, parseBearerToken } from "../app/api/_lib/agent-auth";
 import { isUserApiKeyBearer, isUserKeyCapabilityAllowed } from "../app/api/_lib/user-api-key";
@@ -63,11 +64,26 @@ const worker = {
     // Generated-image cleanup retries every 15 minutes; unrelated retention purges stay
     // on their existing six-hour cadence.
     if (purgePlan.retention) await runPurgeRegistry(env.DB);
-    if (!purgePlan.hyperknowImages) return;
-    if (env.UPLOADS) {
-      await cleanupOrphanedHyperknowImages(env.DB, env.UPLOADS);
-    } else {
-      console.error("[cron-purge] failed hyperknow-images: UPLOADS binding unavailable");
+    if (purgePlan.hyperknowImages) {
+      if (env.UPLOADS) {
+        await cleanupOrphanedHyperknowImages(env.DB, env.UPLOADS);
+      } else {
+        console.error("[cron-purge] failed hyperknow-images: UPLOADS binding unavailable");
+      }
+    }
+    // 报名/收题回执补发:只补有失败留痕、且还没有 sent 的编号;失败不拖垮清理任务。
+    if (purgePlan.recruitMail) {
+      try {
+        const summary = await retryUnsentRecruitMail(
+          env.DB,
+          env as unknown as Record<string, string | undefined>,
+        );
+        if (summary.signup.retried || summary.answer.retried) {
+          console.log("[cron-recruit-mail]", JSON.stringify(summary));
+        }
+      } catch (error) {
+        console.error("[cron-recruit-mail] failed", error);
+      }
     }
   },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
