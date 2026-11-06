@@ -156,7 +156,9 @@ export async function POST(request: Request) {
              WHEN recruit_written_tests.status IN ('flagged', 'pending') THEN excluded.status
              ELSE recruit_written_tests.status
            END,
-           submitted_at = excluded.submitted_at,
+           -- 提交时间以首次入库为准:同步脚本重跑(补附件)不带 submittedAt,
+           -- 覆盖会把所有人的交卷时间刷成「同步时刻」,阅卷台排序和用时全乱。
+           submitted_at = recruit_written_tests.submitted_at,
            updated_at = CURRENT_TIMESTAMP`,
       )
       .bind(
