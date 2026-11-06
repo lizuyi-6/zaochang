@@ -45,14 +45,15 @@ export async function sendRecruitMail(input: {
   html: string;
   fromName: string;
   messageIdPrefix: string;
-}): Promise<SendResult> {
-  const secrets = env as unknown as Record<string, string | undefined>;
+}, options: { db?: D1Database; secrets?: Record<string, string | undefined> } = {}): Promise<SendResult> {
+  // cron 补发没有请求上下文,显式把 env 传进来;路由调用保持原样。
+  const secrets = options.secrets ?? (env as unknown as Record<string, string | undefined>);
   const pool = mailboxPool(secrets);
   if (!pool.length) {
     return { sent: false, mailbox: "", attempts: [], failure: { kind: "transient", code: "mail_not_configured" } };
   }
 
-  const db = database();
+  const db = options.db ?? database();
   const cooling = await recentCoolingMailboxes(db);
   const attempts: MailAttempt[] = [];
 

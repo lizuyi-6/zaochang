@@ -21,7 +21,6 @@ export const AETHERGUARD_SIGNUP_LIMITS = {
 } as const;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^[0-9+\-() ]{6,20}$/;
 
 export type AetherGuardSignup = {
   recordId: string;
@@ -69,7 +68,10 @@ export function normalizeAetherGuardSignup(
   if (!studentId || studentId.length > AETHERGUARD_SIGNUP_LIMITS.studentId) {
     return { ok: false, error: "invalid_student_id" };
   }
-  if (!PHONE_PATTERN.test(phone)) return { ok: false, error: "invalid_phone" };
+  // 手机号只做长度上限,不做格式硬判:它只是内部联系字段,格式不对不该拖住回执。
+  // 2026-11-05 事故:有人在手机号里填了「1」,整条报名被 400 拒收,飞书自动化
+  // 节点直接失败,连 mail_deliveries 都没有一行——轮换根本没机会执行。
+  if (phone.length > AETHERGUARD_SIGNUP_LIMITS.phone) return { ok: false, error: "invalid_phone" };
 
   return { ok: true, value: { recordId, name, email, grade, major, studentId, phone } };
 }

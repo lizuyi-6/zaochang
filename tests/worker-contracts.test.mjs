@@ -753,9 +753,9 @@ test("scheduled purge plan: 15-minute image cleanup and six-hour retention cron 
   const config = readFileSync(new URL("../wrangler.prod.jsonc", import.meta.url), "utf8");
   assert.ok(config.includes(`"${RETENTION_PURGE_CRON}"`));
   assert.ok(config.includes(`"${HYPERKNOW_IMAGE_CLEANUP_CRON}"`));
-  assert.deepEqual(scheduledPurgePlan(HYPERKNOW_IMAGE_CLEANUP_CRON), { retention: false, hyperknowImages: true });
-  assert.deepEqual(scheduledPurgePlan(RETENTION_PURGE_CRON), { retention: true, hyperknowImages: true });
-  assert.deepEqual(scheduledPurgePlan("unexpected cron"), { retention: false, hyperknowImages: false });
+  assert.deepEqual(scheduledPurgePlan(HYPERKNOW_IMAGE_CLEANUP_CRON), { retention: false, hyperknowImages: true, recruitMail: true });
+  assert.deepEqual(scheduledPurgePlan(RETENTION_PURGE_CRON), { retention: true, hyperknowImages: true, recruitMail: false });
+  assert.deepEqual(scheduledPurgePlan("unexpected cron"), { retention: false, hyperknowImages: false, recruitMail: false });
 });
 
 // ---- OIDC discovery(轻量模块,worker 不再加载完整 provider)----

@@ -41,7 +41,9 @@ export async function POST(request: Request) {
     if (!normalized.ok) return Response.json({ error: normalized.error }, { status: 400 });
 
     // 一条报名只该对应一封回执;限流按来源 IP 计数,防止表单被脚本刷成发信器。
-    await enforceRateLimit(await requestActorKey(request, "aetherguard-signup"), 20, 60 * 60);
+    // 上限放到 120/h:飞书自动化的出网 IP 是共享的,一次宣讲会/集中提交很容易冲过
+    // 20 条,超额会让后面的报名直接 429——连库都不落,回执更没机会发。
+    await enforceRateLimit(await requestActorKey(request, "aetherguard-signup"), 120, 60 * 60);
 
     if (!mailboxPool(secrets).length) {
       return Response.json({ error: "mail_not_configured" }, { status: 503 });
