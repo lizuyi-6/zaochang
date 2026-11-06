@@ -394,16 +394,22 @@ export function WrittenTestSection({
                       </div>
                     </div>
 
-                    {item.answer ? <p className="admin-record-list"><small>{item.answer}</small></p> : null}
-                    {item.attachments.length ? (
-                      <p className="admin-muted">
-                        {item.attachments.map((file) => (
-                          <span key={file.fileToken || file.name} style={{ display: "inline-flex", alignItems: "center", gap: 5, marginRight: 10 }}>
-                            <FileText size={12} /> {file.name}
-                            {file.text ? "（已抽文本）" : "（未抽文本）"}
-                          </span>
-                        ))}
-                      </p>
+                    {item.answer ? <div className="admin-written-answer">{item.answer}</div> : null}
+                    {item.attachments.map((file) => (
+                      <details key={file.fileToken || file.name} className="admin-written-file" open={!item.answer}>
+                        <summary>
+                          <FileText size={12} /> {file.name}
+                          {file.text ? `（${file.text.length} 字）` : "（未抽文本）"}
+                        </summary>
+                        {file.text ? (
+                          <div className="admin-written-answer">{file.text}</div>
+                        ) : (
+                          <p className="admin-muted">这份附件没抽到可读文本，请在飞书里打开原件。</p>
+                        )}
+                      </details>
+                    ))}
+                    {item.maxScore > 0 && !item.answer && !item.attachments.length ? (
+                      <p className="admin-muted">未同步到作答：附件题需要跑一次同步脚本，或直接在飞书看原件。</p>
                     ) : null}
 
                     {item.aiReasons.length ? (

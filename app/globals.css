@@ -920,6 +920,31 @@ div.sakura-qr-stage { cursor: default; }
 .admin-panel > h3 { font-size: 12px; margin: 16px 0 8px; }
 .admin-preview-close { flex: 0 0 auto; white-space: nowrap; }
 .admin-record-list p.admin-application-intro { color: var(--ink); font-size: 10px; white-space: pre-wrap; }
+/* 阅卷台:作答原文与附件抽出的正文。保留原换行,长文档限高滚动,别把整页顶开。 */
+.admin-written-answer {
+  background: var(--paper);
+  border-left: 2px solid var(--line);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 6px 0;
+  max-height: 320px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+.admin-written-file { margin: 6px 0; }
+.admin-written-file > summary {
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 10px;
+  gap: 6px;
+  padding: 2px 0;
+}
+.admin-written-file[open] > summary { color: var(--ink); }
 @media (max-width: 1020px) {
   .admin-recruit-two-col { grid-template-columns: 1fr; }
   .admin-template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
